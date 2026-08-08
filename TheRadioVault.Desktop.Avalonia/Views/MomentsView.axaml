@@ -1,0 +1,148 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.MomentsView">
+  <Grid>
+    <Grid Margin="{StaticResource RvPagePadding}" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="14">
+      <StackPanel Spacing="3" Margin="0,0,0,2">
+        <TextBlock Text="Moments" Classes="display-title" />
+        <TextBlock Text="Save, annotate and revisit exact points in the archive." Classes="muted" FontSize="12" />
+      </StackPanel>
+      <Border Grid.Row="1" Classes="card" Padding="12">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+          <TextBox Classes="search-box" PlaceholderText="Search saved Moments"
+                   Text="{Binding SearchText, Mode=TwoWay}">
+            <TextBox.InnerLeftContent>
+              <Border Width="34" Height="42" Margin="-4,0,2,0">
+                <TextBlock Text="⌕" FontFamily="Segoe UI Symbol" FontSize="22" FontWeight="SemiBold"
+                           Foreground="{DynamicResource RvMutedTextBrush}"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+            </TextBox.InnerLeftContent>
+            <TextBox.InnerRightContent>
+              <Button IsVisible="{Binding HasActiveSearch}" Classes="ghost icon-button compact-action"
+                      Content="×" Command="{Binding ClearSearchCommand}" ToolTip.Tip="Clear search" />
+            </TextBox.InnerRightContent>
+          </TextBox>
+          <Button Grid.Column="1" Content="Save current position" Classes="primary"
+                  Command="{Binding CreateCurrentCommand}" ToolTip.Tip="{Binding CreateCurrentText}" />
+        </Grid>
+      </Border>
+
+      <TextBlock Grid.Row="2" Text="{Binding StatusText}" Classes="muted" FontSize="12" />
+
+      <Grid Grid.Row="3" ColumnDefinitions="1.25*,420" ColumnSpacing="16">
+        <Border Classes="card" Padding="0">
+          <Grid>
+            <ListBox IsVisible="{Binding HasItems}" Classes="library-list" Margin="8"
+                     ItemsSource="{Binding Items}" SelectedItem="{Binding SelectedMoment, Mode=TwoWay}">
+              <ListBox.ItemTemplate>
+                <DataTemplate>
+                  <Border Padding="12,10">
+                    <Grid ColumnDefinitions="72,*,100" ColumnSpacing="12">
+                      <Border Background="{DynamicResource RvAccentSubtleBrush}" CornerRadius="9"
+                              Padding="8" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding PositionText}" HorizontalAlignment="Center"
+                                   FontSize="11" FontWeight="Bold" Foreground="{DynamicResource RvAccentBrush}" />
+                      </Border>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding BroadcastText}" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Notes}" Classes="subtle" FontSize="10"
+                                   TextTrimming="CharacterEllipsis" IsVisible="{Binding HasNotes}" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="{Binding CollectionText}" Classes="muted" FontSize="10"
+                                   HorizontalAlignment="Right" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding DateText}" Classes="subtle" FontSize="9" HorizontalAlignment="Right" />
+                      </StackPanel>
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ListBox.ItemTemplate>
+            </ListBox>
+
+            <StackPanel IsVisible="{Binding !HasItems}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Margin="30" Spacing="9">
+              <Border Width="58" Height="58" CornerRadius="17" Background="{DynamicResource RvAccentMutedSubtleBrush}"
+                      HorizontalAlignment="Center">
+                <Grid Width="28" Height="28" HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <Path Data="M5,3 L19,3 L19,25 L12,20 L5,25 Z" Stretch="Uniform"
+                        Stroke="{DynamicResource RvMomentBrush}" StrokeThickness="2" StrokeJoin="Round" />
+                  <Ellipse Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                           Fill="{DynamicResource RvSurfaceBrush}" Stroke="{DynamicResource RvMomentBrush}" StrokeThickness="1.6" />
+                  <Path Data="M20,18 L20,21 L23,22" Width="6" Height="6" Stretch="Uniform"
+                        HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,2,2"
+                        Stroke="{DynamicResource RvMomentBrush}" StrokeThickness="1.4" StrokeLineCap="Round" />
+                </Grid>
+              </Border>
+              <TextBlock Text="No saved Moments" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" />
+              <TextBlock Text="Play a broadcast, then save the current position when something matters."
+                         Classes="muted" FontSize="11" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <Border Grid.Column="1" Classes="card" Padding="0" ClipToBounds="True">
+          <Grid>
+            <ScrollViewer IsVisible="{Binding HasSelection}">
+              <StackPanel>
+                <Border Background="{DynamicResource RvSurfaceRaisedBrush}"
+                        BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1"
+                        CornerRadius="11,11,0,0" Padding="20">
+                  <StackPanel Spacing="8">
+                    <Border Classes="accent-pill" HorizontalAlignment="Left">
+                      <TextBlock Text="{Binding SelectedMoment.PositionText}" FontSize="10" FontWeight="Bold"
+                                 Foreground="{DynamicResource RvAccentBrush}" />
+                    </Border>
+                    <TextBlock Text="{Binding SelectedMoment.BroadcastText}" FontSize="18" FontWeight="Bold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding SelectedMoment.CollectionText}" Classes="muted" FontSize="11" />
+                  </StackPanel>
+                </Border>
+
+                <StackPanel Margin="20" Spacing="14">
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="Title" Classes="eyebrow" />
+                    <TextBox Classes="search-box" Text="{Binding EditorTitle, Mode=TwoWay}" PlaceholderText="Moment title" />
+                  </StackPanel>
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="Notes" Classes="eyebrow" />
+                    <TextBox Classes="search-box" Text="{Binding EditorNotes, Mode=TwoWay}"
+                             PlaceholderText="Add context, a quote, or why this point matters"
+                             AcceptsReturn="True" TextWrapping="Wrap" MinHeight="150" />
+                  </StackPanel>
+                  <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                    <Button Content="Jump to Moment" Classes="primary" Command="{Binding JumpCommand}" />
+                    <Button Grid.Column="1" Content="Save" Classes="secondary" Command="{Binding SaveCommand}" />
+                    <Button Grid.Column="2" Content="⋯" Classes="secondary icon-button" ToolTip.Tip="More actions">
+                      <Button.Flyout>
+                        <MenuFlyout>
+                          <MenuItem Header="Delete Moment" Command="{Binding DeleteCommand}" />
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
+                  </Grid>
+                </StackPanel>
+              </StackPanel>
+            </ScrollViewer>
+
+            <StackPanel IsVisible="{Binding !HasSelection}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                        Margin="28" Spacing="8">
+              <Grid Width="28" Height="28" HorizontalAlignment="Center">
+                <Path Data="M5,3 L19,3 L19,25 L12,20 L5,25 Z" Stretch="Uniform"
+                      Stroke="{DynamicResource RvMomentBrush}" StrokeThickness="2" StrokeJoin="Round" />
+                <Ellipse Width="10" Height="10" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                         Fill="{DynamicResource RvSurfaceBrush}" Stroke="{DynamicResource RvMomentBrush}" StrokeThickness="1.6" />
+                <Path Data="M20,18 L20,21 L23,22" Width="6" Height="6" Stretch="Uniform"
+                      HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,2,2"
+                      Stroke="{DynamicResource RvMomentBrush}" StrokeThickness="1.4" StrokeLineCap="Round" />
+              </Grid>
+              <TextBlock Text="Select a Moment" FontWeight="SemiBold" HorizontalAlignment="Center" />
+              <TextBlock Text="Its title, notes and playback action will appear here."
+                         Classes="muted" FontSize="11" HorizontalAlignment="Center" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
+    </Grid>
+  </Grid>
+</UserControl>

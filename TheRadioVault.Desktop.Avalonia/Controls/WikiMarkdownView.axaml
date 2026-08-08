@@ -1,0 +1,14 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Controls.WikiMarkdownView">
+  <Grid ColumnDefinitions="190,20,*">
+    <Border Padding="0,2,14,2" BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,1,0"
+            IsVisible="{Binding HasContents, RelativeSource={RelativeSource AncestorType=UserControl}}">
+      <StackPanel Spacing="7">
+        <TextBlock Text="CONTENTS" Classes="eyebrow" />
+        <StackPanel x:Name="ContentsHost" Spacing="2" />
+      </StackPanel>
+    </Border>
+    <StackPanel x:Name="ArticleHost" Grid.Column="2" Spacing="11" />
+  </Grid>
+</UserControl>

@@ -1,0 +1,367 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.TranscriptsView">
+  <UserControl.Styles>
+    <!-- Text actions must size to their labels; the shared icon-only style is not appropriate here. -->
+    <Style Selector="Button.transcript-action">
+      <Setter Property="MinHeight" Value="32" />
+      <Setter Property="Height" Value="32" />
+      <Setter Property="Padding" Value="11,5" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid Margin="{StaticResource RvPagePadding}" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="12">
+    <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="13" Margin="0,0,0,2">
+      <Border Width="46" Height="46" CornerRadius="12"
+              Background="{DynamicResource RvAccentSubtleBrush}">
+        <Path Width="26" Height="26" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
+              Stroke="{DynamicResource RvAccentMutedBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+              Data="M12,3 C9.8,3 8,4.8 8,7 L8,12 C8,14.2 9.8,16 12,16 C14.2,16 16,14.2 16,12 L16,7 C16,4.8 14.2,3 12,3 Z M5,11 C5,15.4 8.1,19 12,19 C15.9,19 19,15.4 19,11 M12,19 L12,22 M8.5,22 L15.5,22" />
+      </Border>
+      <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+        <TextBlock Text="Transcription studio" Classes="display-title" />
+        <TextBlock Text="Research workspace for creating transcripts and correcting wording or speakers."
+                   Classes="muted" FontSize="12" />
+      </StackPanel>
+      <Button Grid.Column="2" Content="Back to Research" Classes="secondary" Command="{Binding OpenResearchCommand}"
+              VerticalAlignment="Center" />
+    </Grid>
+
+    <Border Grid.Row="1" Classes="card" Padding="16">
+      <Grid RowDefinitions="Auto,Auto" RowSpacing="12">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+          <StackPanel Spacing="5">
+            <TextBlock Text="CURRENT BROADCAST" Classes="eyebrow" />
+            <TextBlock Text="{Binding CurrentBroadcastText}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding EngineStatus}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+          </StackPanel>
+          <Button Grid.Column="1" Content="Transcription setup" Classes="secondary transcript-action"
+                  Command="{Binding OpenSettingsCommand}" VerticalAlignment="Top" />
+        </Grid>
+
+        <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="14">
+          <TextBlock Text="To change the current broadcast, choose one in the Library or play a phrase from a saved transcript."
+                     Classes="subtle" FontSize="10" TextWrapping="Wrap" VerticalAlignment="Center" />
+          <WrapPanel Grid.Column="1" ItemSpacing="8" LineSpacing="8" HorizontalAlignment="Right">
+            <Button Content="{Binding CurrentTranscriptionActionText}" Classes="primary transcript-action"
+                    Command="{Binding TranscribeCurrentCommand}"
+                    ToolTip.Tip="Full broadcasts use continuous transcription for reliable long-form timestamps" />
+            <Button Content="Five-minute sample" Classes="secondary transcript-action" Command="{Binding TranscribeSampleCommand}"
+                    ToolTip.Tip="Transcribe five minutes from the current playback position" />
+            <Button Content="{Binding BatchBuilderActionText}" Classes="secondary transcript-action"
+                    Command="{Binding ToggleBatchBuilderCommand}" />
+          </WrapPanel>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2" ColumnDefinitions="*,Auto" ColumnSpacing="10">
+      <TextBlock Text="{Binding StatusText}" Classes="muted" FontSize="11" VerticalAlignment="Center"
+                 TextTrimming="CharacterEllipsis" />
+      <Button Grid.Column="1" Content="Refresh page" Classes="ghost transcript-action" Command="{Binding RefreshCommand}" />
+    </Grid>
+
+    <Border Grid.Row="3" Classes="card" Padding="14" IsVisible="{Binding IsBatchBuilderOpen}">
+      <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel Spacing="2">
+            <TextBlock Text="Create a transcription batch" FontSize="15" FontWeight="SemiBold" />
+            <TextBlock Text="Choose a show and optional date range, preview what will be added, then start the queue."
+                       Classes="muted" FontSize="10" TextWrapping="Wrap" />
+          </StackPanel>
+          <Button Grid.Column="1" Content="Start batch" Classes="primary transcript-action"
+                  Command="{Binding StartBatchCommand}" VerticalAlignment="Center" />
+        </Grid>
+
+        <WrapPanel Grid.Row="1" ItemSpacing="8" LineSpacing="8">
+          <ComboBox Width="190" ItemsSource="{Binding BatchCollections}"
+                    SelectedItem="{Binding SelectedBatchCollection, Mode=TwoWay}" PlaceholderText="Show">
+            <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" /></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+          <ComboBox Width="125" ItemsSource="{Binding BatchYears}"
+                    SelectedItem="{Binding SelectedBatchYear, Mode=TwoWay}" PlaceholderText="Year">
+            <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Display}" /></DataTemplate></ComboBox.ItemTemplate>
+          </ComboBox>
+          <DatePicker Width="155" SelectedDate="{Binding BatchFromDate, Mode=TwoWay}"
+                      DayVisible="True" MonthVisible="True" YearVisible="True" />
+          <DatePicker Width="155" SelectedDate="{Binding BatchToDate, Mode=TwoWay}"
+                      DayVisible="True" MonthVisible="True" YearVisible="True" />
+          <Button Content="Preview selection" Classes="secondary transcript-action" Command="{Binding PreviewBatchCommand}" />
+          <TextBlock Text="{Binding BatchPreviewText}" Classes="muted" FontSize="10"
+                     VerticalAlignment="Center" TextWrapping="Wrap" MaxWidth="360" />
+        </WrapPanel>
+
+        <ListBox Grid.Row="2" ItemsSource="{Binding BatchPreview}" IsVisible="{Binding HasBatchPreview}"
+                 MaxHeight="92" Classes="library-list">
+          <ListBox.ItemTemplate>
+            <DataTemplate>
+              <Grid ColumnDefinitions="110,115,*,165" ColumnSpacing="8" Margin="9,5">
+                <TextBlock Text="{Binding Show}" FontSize="10" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="1" Text="{Binding DateDisplay}" FontSize="10" Classes="muted" />
+                <TextBlock Grid.Column="2" Text="{Binding Title}" FontSize="10" TextTrimming="CharacterEllipsis" />
+                <TextBlock Grid.Column="3" Text="{Binding SelectionState}" FontSize="9" Classes="subtle"
+                           HorizontalAlignment="Right" />
+              </Grid>
+            </DataTemplate>
+          </ListBox.ItemTemplate>
+        </ListBox>
+      </Grid>
+    </Border>
+
+    <TabControl Grid.Row="4">
+      <TabItem Header="Transcript review">
+        <Grid ColumnDefinitions="310,*" ColumnSpacing="14" Margin="0,8,0,0">
+          <Border Classes="card" Padding="0">
+            <Grid RowDefinitions="Auto,*">
+              <Border Padding="14,11" Background="{DynamicResource RvSurfaceRaisedBrush}"
+                      BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="Saved transcripts" FontWeight="SemiBold" />
+                  <TextBlock Text="Choose a broadcast to read or edit its transcript." Classes="muted" FontSize="10" />
+                </StackPanel>
+              </Border>
+              <Grid Grid.Row="1">
+                <ListBox IsVisible="{Binding HasTranscripts}" Margin="8" Classes="library-list"
+                         ItemsSource="{Binding Transcripts}" SelectedItem="{Binding SelectedTranscriptSummary, Mode=TwoWay}">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Border Padding="12,10">
+                        <StackPanel Spacing="4">
+                          <TextBlock Text="{Binding EpisodeTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Show}" FontSize="10" Classes="muted" />
+                          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                            <TextBlock Text="{Binding AirDateDisplay}" FontSize="10" Classes="subtle" />
+                            <TextBlock Grid.Column="1" Text="{Binding SpeakersDisplay}" FontSize="9" Classes="subtle" />
+                          </Grid>
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel IsVisible="{Binding !HasTranscripts}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                            Margin="24" Spacing="8">
+                  <TextBlock Text="No transcripts yet" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                  <TextBlock Text="Configure transcription, choose a broadcast and start with a five-minute sample."
+                             Classes="muted" FontSize="11" TextAlignment="Center" TextWrapping="Wrap" MaxWidth="250" />
+                </StackPanel>
+              </Grid>
+            </Grid>
+          </Border>
+
+          <Border Grid.Column="1" Classes="card" Padding="0" ClipToBounds="True">
+            <Grid RowDefinitions="Auto,Auto,*,Auto">
+              <Border IsVisible="{Binding HasSelectedTranscript}" Padding="14,11"
+                      Background="{DynamicResource RvSurfaceRaisedBrush}"
+                      BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1">
+                <Grid RowDefinitions="Auto,Auto" RowSpacing="9">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding SelectedTranscriptSummary.EpisodeTitle}" FontWeight="SemiBold"
+                               FontSize="15" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding SelectedTranscriptSummary.EngineDisplay}" Classes="muted" FontSize="10" />
+                  </StackPanel>
+                  <WrapPanel Grid.Row="1" ItemSpacing="7" LineSpacing="7">
+                    <Button Content="Play selected phrase" Classes="primary transcript-action"
+                            Command="{Binding PlaySelectedSegmentCommand}"
+                            ToolTip.Tip="Load this broadcast and play from the selected phrase" />
+                    <Button Content="Export TXT" Classes="secondary transcript-action" Command="{Binding ExportTextCommand}"
+                            ToolTip.Tip="Export a readable transcript" />
+                    <Button Content="Export SRT" Classes="secondary transcript-action" Command="{Binding ExportSrtCommand}"
+                            ToolTip.Tip="Export SubRip subtitles" />
+                    <Button Content="Export VTT" Classes="secondary transcript-action" Command="{Binding ExportVttCommand}"
+                            ToolTip.Tip="Export WebVTT captions" />
+                  </WrapPanel>
+                </Grid>
+              </Border>
+
+              <Border Grid.Row="1" IsVisible="{Binding HasSelectedTranscript}" Padding="12,8"
+                      BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1">
+                <Grid RowDefinitions="Auto,Auto" RowSpacing="6">
+                  <TextBox PlaceholderText="Search wording or speaker names"
+                           Text="{Binding TranscriptSearchText, Mode=TwoWay}" />
+                  <Grid Grid.Row="1" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                    <TextBlock Text="{Binding SearchMatchText}" Classes="muted" FontSize="10" VerticalAlignment="Center" />
+                    <WrapPanel Grid.Column="1" ItemSpacing="6">
+                      <Button Content="Previous match" Classes="ghost transcript-action" Command="{Binding PreviousMatchCommand}" />
+                      <Button Content="Next match" Classes="ghost transcript-action" Command="{Binding NextMatchCommand}" />
+                    </WrapPanel>
+                  </Grid>
+                </Grid>
+              </Border>
+
+              <ListBox Grid.Row="2" IsVisible="{Binding HasSegments}" Margin="8" Classes="library-list"
+                       ItemsSource="{Binding SelectedTranscript.Segments}" SelectedItem="{Binding SelectedSegment, Mode=TwoWay}">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Border Padding="11,8">
+                      <Grid ColumnDefinitions="58,105,*,90" ColumnSpacing="9">
+                        <TextBlock Text="{Binding TimeDisplay}" FontWeight="Bold" FontSize="11"
+                                   Foreground="{DynamicResource RvAccentMutedBrush}" />
+                        <TextBlock Grid.Column="1" Text="{Binding DisplaySpeaker}" Classes="muted" FontSize="10"
+                                   TextTrimming="CharacterEllipsis" />
+                        <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" FontSize="12" />
+                        <TextBlock Grid.Column="3" Text="{Binding ReviewStateDisplay}" FontSize="9" Classes="subtle"
+                                   HorizontalAlignment="Right" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+
+              <Border Grid.Row="3" IsVisible="{Binding HasSelectedSegment}" Padding="14,11"
+                      Background="{DynamicResource RvSurfaceRaisedBrush}"
+                      BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,1,0,0">
+                <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="8">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="Review selected phrase" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding SelectedPhraseStatus}" Classes="muted" FontSize="10" />
+                  </StackPanel>
+                  <WrapPanel Grid.Row="1" ItemSpacing="6" LineSpacing="6">
+                    <Button Content="{Binding ReviewActionText}" Classes="secondary transcript-action"
+                            Command="{Binding TogglePhraseReviewCommand}" />
+                    <Button Content="Split phrase" Classes="secondary transcript-action" Command="{Binding SplitPhraseCommand}"
+                            ToolTip.Tip="Split at the nearest middle word and timestamp" />
+                    <Button Content="Merge next" Classes="secondary transcript-action" Command="{Binding MergeNextPhraseCommand}"
+                            ToolTip.Tip="Available for consecutive phrases by the same speaker" />
+                  </WrapPanel>
+
+                  <TextBox Grid.Row="2" Text="{Binding PhraseEditorText, Mode=TwoWay}" AcceptsReturn="True"
+                           TextWrapping="Wrap" MinHeight="58" MaxHeight="92" PlaceholderText="Correct the selected phrase" />
+
+                  <Grid Grid.Row="3" ColumnDefinitions="*,220" ColumnSpacing="8">
+                    <TextBox Text="{Binding SpeakerEditorName, Mode=TwoWay}" PlaceholderText="Speaker name" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding SpeakerCandidates}"
+                              SelectedItem="{Binding SelectedSpeakerCandidate, Mode=TwoWay}"
+                              PlaceholderText="People in this broadcast">
+                      <ComboBox.ItemTemplate>
+                        <DataTemplate><TextBlock Text="{Binding Display}" TextTrimming="CharacterEllipsis" /></DataTemplate>
+                      </ComboBox.ItemTemplate>
+                    </ComboBox>
+                  </Grid>
+                  <WrapPanel Grid.Row="4" ItemSpacing="7" LineSpacing="7" HorizontalAlignment="Right">
+                    <Button Content="Confirm voice" Classes="secondary transcript-action" Command="{Binding ConfirmSpeakerCommand}"
+                            ToolTip.Tip="Apply this name to the speaker and remember their voice locally" />
+                    <Button Content="Clear name" Classes="ghost transcript-action" Command="{Binding ClearSpeakerCommand}" />
+                    <Button Content="Save wording" Classes="primary transcript-action" Command="{Binding SavePhraseCommand}" />
+                  </WrapPanel>
+                </Grid>
+              </Border>
+
+              <StackPanel Grid.RowSpan="4" IsVisible="{Binding !HasSelectedTranscript}"
+                          HorizontalAlignment="Center" VerticalAlignment="Center" Margin="28" Spacing="8">
+                <TextBlock Text="Select a transcript" FontWeight="SemiBold" HorizontalAlignment="Center" />
+                <TextBlock Text="Timed phrases, speaker review and exports will appear here."
+                           Classes="muted" FontSize="11" HorizontalAlignment="Center" />
+              </StackPanel>
+            </Grid>
+          </Border>
+        </Grid>
+      </TabItem>
+
+      <TabItem Header="Transcription activity">
+        <Border Classes="card" Padding="14" Margin="0,8,0,0">
+          <Grid RowDefinitions="Auto,*" RowSpacing="12">
+            <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+              <StackPanel Spacing="2">
+                <TextBlock Text="Individual transcription jobs" FontSize="15" FontWeight="SemiBold" />
+                <TextBlock Text="Select a job below to pause, resume, retry or cancel it."
+                           Classes="muted" FontSize="10" />
+              </StackPanel>
+              <WrapPanel Grid.Row="1" ItemSpacing="7" LineSpacing="7">
+                <Button Content="Pause selected" Classes="secondary transcript-action" Command="{Binding PauseSelectedJobCommand}" />
+                <Button Content="Resume selected" Classes="secondary transcript-action" Command="{Binding ResumeSelectedJobCommand}" />
+                <Button Content="Retry selected" Classes="secondary transcript-action" Command="{Binding RetrySelectedJobCommand}" />
+                <Button Content="Cancel selected" Classes="secondary transcript-action" Command="{Binding CancelSelectedJobCommand}" />
+              </WrapPanel>
+            </Grid>
+            <Grid Grid.Row="1">
+              <ListBox IsVisible="{Binding HasJobs}" ItemsSource="{Binding Jobs}"
+                       SelectedItem="{Binding SelectedJob, Mode=TwoWay}" Classes="library-list">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="110,82,110,*,150" ColumnSpacing="10" Margin="10,7">
+                      <TextBlock Text="{Binding StateDisplay}" FontWeight="SemiBold" />
+                      <TextBlock Grid.Column="1" Text="{Binding ProgressDisplay}" Classes="muted" />
+                      <TextBlock Grid.Column="2" Text="{Binding RangeDisplay}" Classes="muted" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="3" Text="{Binding Message}" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="4" Text="{Binding RequestedDisplay}" Classes="subtle" FontSize="10"
+                                 HorizontalAlignment="Right" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock IsVisible="{Binding !HasJobs}" Text="No transcription jobs have been run yet."
+                         Classes="muted" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Center" />
+            </Grid>
+          </Grid>
+        </Border>
+      </TabItem>
+
+      <TabItem Header="Batch runs">
+        <Grid ColumnDefinitions="350,*" ColumnSpacing="12" Margin="0,8,0,0">
+          <Border Classes="card" Padding="10">
+            <Grid>
+              <ListBox ItemsSource="{Binding Batches}" SelectedItem="{Binding SelectedBatch, Mode=TwoWay}"
+                       IsVisible="{Binding HasBatches}" Classes="library-list">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="*,76" ColumnSpacing="8" Margin="9,7">
+                      <StackPanel Spacing="3">
+                        <TextBlock Text="{Binding Name}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding CountDisplay}" Classes="muted" FontSize="9" />
+                        <TextBlock Text="{Binding EstimateDisplay}" Classes="subtle" FontSize="9" />
+                        <ProgressBar Value="{Binding ProgressPercent}" Minimum="0" Maximum="100" Height="3" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" Spacing="2" HorizontalAlignment="Right">
+                        <TextBlock Text="{Binding State}" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Right" />
+                        <TextBlock Text="{Binding ProgressDisplay}" Classes="subtle" FontSize="10" HorizontalAlignment="Right" />
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <TextBlock Text="No batch runs yet. Choose New batch above." IsVisible="{Binding !HasBatches}"
+                         Classes="muted" FontSize="10" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+
+          <Border Grid.Column="1" Classes="card" Padding="14">
+            <Grid RowDefinitions="Auto,*" RowSpacing="10">
+              <Grid RowDefinitions="Auto,Auto" RowSpacing="8">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="{Binding SelectedBatch.SelectionLabel}" FontSize="15" FontWeight="SemiBold"
+                             TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding SelectedBatch.IssueDisplay}" Classes="muted" FontSize="10" />
+                </StackPanel>
+                <WrapPanel Grid.Row="1" ItemSpacing="7" LineSpacing="7">
+                  <Button Content="Move higher" Classes="ghost transcript-action" Command="{Binding MoveBatchItemUpCommand}" />
+                  <Button Content="Move lower" Classes="ghost transcript-action" Command="{Binding MoveBatchItemDownCommand}" />
+                  <Button Content="Pause batch" Classes="secondary transcript-action" Command="{Binding PauseBatchCommand}" />
+                  <Button Content="Resume batch" Classes="secondary transcript-action" Command="{Binding ResumeBatchCommand}" />
+                  <Button Content="Retry failed" Classes="secondary transcript-action" Command="{Binding RetryFailedBatchCommand}" />
+                  <Button Content="Cancel batch" Classes="secondary transcript-action" Command="{Binding CancelBatchCommand}" />
+                </WrapPanel>
+              </Grid>
+              <ListBox Grid.Row="1" ItemsSource="{Binding BatchItems}" SelectedItem="{Binding SelectedBatchItem, Mode=TwoWay}"
+                       IsVisible="{Binding HasBatchItems}" Classes="library-list">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="42,105,105,*,95,170" ColumnSpacing="7" Margin="8,6">
+                      <TextBlock Text="{Binding PositionDisplay}" Classes="subtle" FontSize="9" />
+                      <TextBlock Grid.Column="1" Text="{Binding Show}" FontSize="9" FontWeight="SemiBold"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="2" Text="{Binding DateDisplay}" Classes="muted" FontSize="9" />
+                      <TextBlock Grid.Column="3" Text="{Binding Title}" FontSize="10" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="4" Text="{Binding ProgressDisplay}" FontSize="9" HorizontalAlignment="Right" />
+                      <TextBlock Grid.Column="5" Text="{Binding DetailDisplay}" Classes="subtle" FontSize="9"
+                                 TextTrimming="CharacterEllipsis" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </Grid>
+          </Border>
+        </Grid>
+      </TabItem>
+    </TabControl>
+  </Grid>
+</UserControl>

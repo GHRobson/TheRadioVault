@@ -1,0 +1,23 @@
+{
+  "buildIdentity": "0.32.0-alpha1-buildfix5-avalonia-startup-hardening",
+  "foundationVersion": "0.32-alpha1-buildfix5",
+  "avaloniaVersion": "12.1.0",
+  "targetFramework": "net8.0",
+  "defaultDesktopShell": "avalonia",
+  "canonicalExecutable": "TheRadioVault.exe",
+  "wpfReferenceExecutable": "TheRadioVault.WpfReference.exe",
+  "sharedSolutionLaunchProfile": true,
+  "noPowerShellNormalLaunch": true,
+  "localLibraryReadOnly": true,
+  "dashboardVerticalSlice": true,
+  "libraryVerticalSlice": true,
+  "playbackMigrated": false,
+  "remoteClientMigrated": false,
+  "databaseSchema": 45,
+  "lanCapabilityGeneration": 14,
+  "apiVersion": "v1",
+  "runtimeCompilationPendingWindowsGate": true,
+  "windowsCompileRepair": "buildfix5-visible-asynchronous-startup-and-failure-reporting",
+  "visibleStartupWindow": true,
+  "startupFailureLog": "%APPDATA%\\TheRadioVault\\avalonia-startup-failure.log"
+}

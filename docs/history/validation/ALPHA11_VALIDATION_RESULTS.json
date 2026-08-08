@@ -1,0 +1,67 @@
+{
+  "targetVersion": "0.28.0-alpha11-canonical-library-cutover",
+  "databaseSchema": 45,
+  "generatedAtUtc": "2026-07-20T21:42:13.465478+00:00",
+  "baseline": {
+    "file": "TheRadioVault-v0.28.0-alpha10-guarded-adoption-buildfix1-source(2).zip",
+    "sha256": "981017d151d72df5d861c60c7df05c06d5d9aaf26c0a52d1c07d9715ed405ac5",
+    "expectedSha256": "981017d151d72df5d861c60c7df05c06d5d9aaf26c0a52d1c07d9715ed405ac5",
+    "matched": true
+  },
+  "evidence": {
+    "file": "RadioVault-Library-Truth-GRAHAM-PC-2026-07-20-2103.trvtruth",
+    "sha256": "905d69e8979a1dfafa036ee78c344d1da72fbedb9fa28a4bf6b9a451b095346d",
+    "counts": {
+      "visibleBroadcastGroups": 4330,
+      "adoptedBroadcasts": 4305,
+      "heldGroups": 25,
+      "reviewRecommended": 15,
+      "blocked": 10,
+      "recordings": 6736,
+      "coverageRows": 7106,
+      "physicalFiles": 7169
+    }
+  },
+  "checks": [
+    {
+      "name": "canonical SQL projection",
+      "result": "pass",
+      "detail": "2 synthetic truth groups projected as 2 unique broadcasts"
+    },
+    {
+      "name": "adopted multipart playback plan",
+      "result": "pass",
+      "detail": "2 ordered segments, 2200 ms logical duration"
+    },
+    {
+      "name": "held direct-coverage playback plan",
+      "result": "pass",
+      "detail": "1 deterministic preferred segment"
+    },
+    {
+      "name": "desktop evidence counts",
+      "result": "pass",
+      "detail": "4330/4305/25/6736/7106/7169"
+    },
+    {
+      "name": "C# structural scan",
+      "result": "pass",
+      "detail": "202 files"
+    },
+    {
+      "name": "XML/XAML parse",
+      "result": "pass",
+      "detail": "37 files"
+    },
+    {
+      "name": "MainWindow event references",
+      "result": "pass",
+      "detail": "220 references"
+    },
+    {
+      "name": "Windows WPF compile",
+      "result": "not_run",
+      "detail": "No .NET SDK, MSBuild or C# compiler in generation environment"
+    }
+  ]
+}

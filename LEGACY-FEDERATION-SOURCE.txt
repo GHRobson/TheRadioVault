@@ -1,0 +1,15 @@
+Radio Vault 1.0 networking boundary
+===================================
+
+The embedded Radio Vault Anywhere web/PWA server is active again.
+
+Native Avalonia federation remains postponed until after 1.0:
+- no desktop remote-client mode;
+- no LAN discovery;
+- no desktop pairing;
+- no remote Library cache;
+- no desktop-to-desktop streaming;
+- no device ownership or handoff.
+
+The old federation source remains in this archive as reference material, but
+none of its client-side services are linked into the active Avalonia project.

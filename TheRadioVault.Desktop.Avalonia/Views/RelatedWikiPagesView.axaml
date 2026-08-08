@@ -1,0 +1,30 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.RelatedWikiPagesView"
+             IsVisible="{Binding HasPages}">
+  <Border Classes="card-raised" Padding="13">
+    <StackPanel Spacing="8">
+      <Grid ColumnDefinitions="*,Auto">
+        <StackPanel Spacing="2">
+          <TextBlock Text="Related Explore pages" FontSize="16" FontWeight="SemiBold" />
+          <TextBlock Text="Related people, shows, topics and history" Classes="muted" FontSize="10" />
+        </StackPanel>
+        <TextBlock Grid.Column="1" Text="W" Foreground="{DynamicResource RvWikiBrush}" FontSize="20" FontWeight="Bold" />
+      </Grid>
+      <ItemsControl ItemsSource="{Binding Pages}">
+        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+        <ItemsControl.ItemTemplate>
+          <DataTemplate>
+            <Button Classes="secondary" Margin="0,0,6,6" Padding="10,6"
+                    Command="{Binding $parent[UserControl].DataContext.OpenCommand}" CommandParameter="{Binding}">
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                <TextBlock Text="{Binding PageType}" Foreground="{DynamicResource RvWikiBrush}" FontSize="9" VerticalAlignment="Center" />
+              </StackPanel>
+            </Button>
+          </DataTemplate>
+        </ItemsControl.ItemTemplate>
+      </ItemsControl>
+    </StackPanel>
+  </Border>
+</UserControl>

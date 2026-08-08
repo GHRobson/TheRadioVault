@@ -1,0 +1,22 @@
+{
+  "buildIdentity": "0.32.0-alpha4-buildfix2-library-row-polish-responsive-overscroll",
+  "foundationVersion": "0.32-alpha4-buildfix2-library-row-polish-responsive-overscroll",
+  "avaloniaVersion": "12.1.0",
+  "naudioVersion": "2.3.0",
+  "targetFramework": "net8.0",
+  "databaseSchema": 45,
+  "lanCapabilityGeneration": 14,
+  "defaultDesktopShell": "avalonia",
+  "designSystem": "radio-vault-avalonia-v1",
+  "playbackMigrated": true,
+  "favouriteActionsMigrated": true,
+  "queueMigrated": true,
+  "momentsMigrated": true,
+  "elasticOverscroll": true,
+  "elasticOverscrollStabilized": true,
+  "reducedMotionAware": true,
+  "remoteClientMigrated": false,
+  "elasticOverscrollDirectTracking": true,
+  "expandableShowNavigation": true,
+  "libraryCollectionFiltering": true
+}

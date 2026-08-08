@@ -1,0 +1,1675 @@
+diff -ruN alpha5/ALPHA6_ADOPTION_PREVIEW_STATIC_VALIDATION.md alpha6/ALPHA6_ADOPTION_PREVIEW_STATIC_VALIDATION.md
+--- alpha5/ALPHA6_ADOPTION_PREVIEW_STATIC_VALIDATION.md	1970-01-01 00:00:00.000000000 +0000
++++ alpha6/ALPHA6_ADOPTION_PREVIEW_STATIC_VALIDATION.md	2026-07-19 18:36:11.823269756 +0000
+@@ -0,0 +1,26 @@
++# Alpha6 adoption-preview static validation
++
++Target version: `0.28.0-alpha6-adoption-preview`  
++Database schema: **42**  
++Library Truth export schema: **4**
++
++## Checks completed in the packaging environment
++
++- Version markers agree across `VERSION.txt`, the desktop project and Parser V3.
++- All **192 C# files** pass lexical delimiter/string/comment balance checks.
++- All **37 XAML/project XML files** parse successfully.
++- The Library Truth window has no duplicate control names or missing event handlers.
++- All **95 registered smoke-test names** are unique and every method-group registration resolves to a test method.
++- Schema 42 SQL creates `library_truth_coverages` and `library_truth_adoption_previews` successfully.
++- Representative coverage/adoption insert, filter, summary and cascade-cleanup SQL was executed successfully with SQLite.
++- The new engine code contains no `INSERT`, `UPDATE` or `DELETE` operation against live `episodes` or `media_files` rows.
++- New global filters are applied through the existing canonical-broadcast filter contract for recordings, coverage rows and adoption previews.
++- `ALPHA6_CHANGESET.patch` applies cleanly to the packaged alpha5 baseline with `patch --dry-run -p1`.
++
++## Expected full-desktop shape
++
++The confirmed alpha5 export implies **7,096 direct recording-segment coverage rows** before inferred relationships. Alpha6 should add approximately **10 review-only same-date coverage rows** and exactly **4,330 adoption-preview rows**. The complete Windows run remains the authority for the final totals.
++
++## Environment limitation
++
++The packaging environment has no .NET 8 SDK or PowerShell runtime. Compilation, `validate-source.ps1`, the 95 smoke tests and the full 7,169-file corpus run must therefore be completed on the user's Windows development machine before alpha6 is promoted.
+diff -ruN alpha5/ARCHITECTURE.md alpha6/ARCHITECTURE.md
+--- alpha5/ARCHITECTURE.md	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/ARCHITECTURE.md	2026-07-19 18:17:19.037708350 +0000
+@@ -1,18 +1,17 @@
+-# v0.28.0-alpha5 Library Truth architecture
++# v0.28.0-alpha6 Library Truth architecture
+ 
+-The Library Truth Engine remains a non-destructive shadow system with three primary layers:
++The proven Broadcast → Recording → Physical File shadow model is unchanged. Alpha6 adds two evidence-bearing planning layers:
+ 
+-1. **Canonical Broadcast** — show, date and slot identity.
+-2. **Recording** — a complete capture, alternate encode, multipart assembly, partial capture, clip, damaged file, or unresolved recording family.
+-3. **Physical File** — the actual file location and preservation evidence.
++1. **Recording Segment → Broadcast Coverage**
++   - Every standalone recording produces one direct coverage row.
++   - Every multipart recording produces one ordered row per known segment.
++   - Same-date equivalent and composite-slot relationships produce inferred rows marked `requires_review`.
++   - Coverage offsets and source media IDs are persisted and exported.
+ 
+-Alpha5 refines the filename-family stage introduced in alpha4:
++2. **Guarded Adoption Preview**
++   - One plan is persisted for every canonical broadcast.
++   - A provisional survivor is chosen deterministically from the live episode contributing the most physical files, with the lowest episode ID as a tie-break.
++   - The plan counts future canonical, recording, coverage and file-link writes plus redundant live rows that would consolidate.
++   - Ready broadcasts are marked prepared; review and blocked broadcasts remain held.
+ 
+-- source naming style, explicit V1/V2 tokens, meaningful residual filename text, encoding markers and extension still define recording lineage;
+-- attached A/B markers are removed before date normalisation so `...2002a` and `...2002b` remain siblings;
+-- safe segment annotations such as `partial` and `ph` are treated as properties of a segment rather than separate recording families;
+-- programme markers such as FNR and Eddie Trunk remain lineage/evidence tokens;
+-- bare trailing numbers become parts only when siblings establish a contiguous 1..N sequence;
+-- the effective promoted position is projected back into the file-level shadow model and export.
+-
+-All output remains in the schema-41 `library_truth_*` shadow tables. No live-library adoption is enabled.
++The preview is not executable. A later milestone must add transactional state preservation, backup verification, rollback ledgers and explicit user approval before any live adoption route exists.
+diff -ruN alpha5/BUILDING.md alpha6/BUILDING.md
+--- alpha5/BUILDING.md	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/BUILDING.md	2026-07-19 18:17:19.024477941 +0000
+@@ -1,8 +1,8 @@
+-# Building v0.28.0-alpha5
++# Building v0.28.0-alpha6
+ 
+-1. Install Visual Studio 2022 with **.NET desktop development** and the .NET 8 SDK.
+-2. Open `TheRadioVault.sln`.
+-3. Build `Release | Any CPU`, or run `build.ps1` for the self-contained Windows x64 publish.
+-4. Run `release-gate.ps1`; it performs source validation, smoke tests and release build checks.
++1. Open `TheRadioVault.sln` in Visual Studio 2022 with the .NET 8 SDK installed.
++2. Restore NuGet packages.
++3. Build the solution in Release or Debug configuration.
++4. Run `TheRadioVault.Tests` or execute `release-gate.ps1` from PowerShell.
+ 
+-Alpha5 retains database schema 41. Effective promoted part numbers are stored in the existing Library Truth shadow columns, so no live data migration is performed.
++Alpha6 upgrades the database to schema 42. Initialization creates a pre-upgrade SQLite backup before adding the shadow-only `library_truth_coverages` and `library_truth_adoption_previews` tables. No live episode or media-file schema is migrated for adoption.
+diff -ruN alpha5/CHANGELOG.md alpha6/CHANGELOG.md
+--- alpha5/CHANGELOG.md	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/CHANGELOG.md	2026-07-19 18:17:19.093066782 +0000
+@@ -1,9 +1,17 @@
+-# v0.28.0-alpha5 — Multipart Family Corrections
++# v0.28.0-alpha6 — Adoption Preview
+ 
+-- Normalised attached A/B segment suffixes after date tokens.
+-- Removed safe segment annotations (`partial`, `partially`, `ph`) from multipart family identity only.
+-- Preserved programme-specific filename evidence including FNR and Eddie Trunk.
+-- Reassembled the 2002-10-31, 2003-10-20 and 2003-11-10 desktop regression families.
+-- Persisted context-promoted bare-number part positions and totals into Library Truth file rows and exports.
+-- Added focused parser, recording-planner and export regressions.
+-- Kept live-library adoption disabled.
++## Added
++
++- Persisted Recording Segment → Broadcast Coverage evidence.
++- Direct coverage rows for standalone and multipart recording segments.
++- Review-only same-date equivalent and composite-slot coverage rows with offsets.
++- Per-broadcast guarded adoption previews and operation totals.
++- Coverage Evidence and Adoption Preview tabs in the Library Truth window.
++- Schema-4 Library Truth exports containing coverage and preview data.
++- Database schema 42 and upgrade tests.
++
++## Safety
++
++- No live adoption route exists.
++- Review-recommended and blocked broadcasts remain held.
++- No episode, media file, playback, favourite, research or transcript data is changed.
+diff -ruN alpha5/ENGINEERING.md alpha6/ENGINEERING.md
+--- alpha5/ENGINEERING.md	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/ENGINEERING.md	2026-07-19 18:17:19.051183032 +0000
+@@ -1,19 +1,16 @@
+-# v0.28.0-alpha5 engineering status
++# v0.28.0-alpha6 engineering status
+ 
+-The complete alpha4 desktop export validated the broad corrections but exposed three over-separated multipart families and one file-row projection inconsistency. Alpha5 addresses only those findings.
++Alpha5 was confirmed against all 7,169 desktop files with no unexpected identity or structure movement. Alpha6 therefore freezes parser and recording-family behaviour and concentrates on adoption preparation.
+ 
+ Implemented:
+ 
+-- attached A/B suffix normalisation before date removal;
+-- safe multipart annotation normalisation for `partial`, `partially` and `ph`;
+-- retention of programme-specific lineage such as FNR and Eddie Trunk;
+-- recording-planner effective part assignments projected into shadow file rows;
+-- file-level evidence and change summaries for promoted bare-number sequences;
+-- regression tests for all confirmed alpha4 desktop failures.
++- schema 42 coverage and adoption-preview tables;
++- direct coverage rows for every recording segment;
++- review-only equivalent/composite same-date coverage rows;
++- deterministic provisional survivor selection;
++- future-operation counts without live writes;
++- coverage and adoption-preview UI tabs;
++- schema-4 `.trvtruth` export fields;
++- smoke tests for direct coverage, composite boundaries, non-destructive previews and schema upgrades.
+ 
+-Still deliberately deferred:
+-
+-- live canonical adoption;
+-- destructive duplicate cleanup;
+-- segment-level audio continuity analysis;
+-- persisted many-to-many Recording Segment → Broadcast Coverage records.
++The .NET solution still requires validation on Windows because the packaging environment does not include the .NET 8 SDK.
+diff -ruN alpha5/LIBRARY_TRUTH_ALPHA6_VALIDATION.md alpha6/LIBRARY_TRUTH_ALPHA6_VALIDATION.md
+--- alpha5/LIBRARY_TRUTH_ALPHA6_VALIDATION.md	1970-01-01 00:00:00.000000000 +0000
++++ alpha6/LIBRARY_TRUTH_ALPHA6_VALIDATION.md	2026-07-19 18:17:19.137941759 +0000
+@@ -0,0 +1,17 @@
++# v0.28.0-alpha6 Library Truth validation
++
++## Required Windows validation
++
++1. Build the full solution with the .NET 8 SDK.
++2. Run all smoke tests.
++3. Start Radio Vault and confirm schema 42 initialization succeeds.
++4. Build the full desktop shadow library.
++5. Confirm the established alpha5 corpus totals remain stable.
++6. Open Coverage Evidence and verify direct segment rows and review-only same-date links.
++7. Open Adoption Preview and verify one row per canonical broadcast.
++8. Export a `.trvtruth` report and upload it for corpus comparison.
++9. Confirm the live episode count, playback state, favourites, research and transcripts are unchanged.
++
++## Expected full-corpus shape
++
++Based on the confirmed alpha5 export, alpha6 should produce approximately 7,096 direct segment rows plus 10 review-only inferred coverage rows, and 4,330 adoption-preview rows. Exact totals must be verified by the application export rather than assumed.
+diff -ruN alpha5/LIBRARY_TRUTH_ENGINE.md alpha6/LIBRARY_TRUTH_ENGINE.md
+--- alpha5/LIBRARY_TRUTH_ENGINE.md	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/LIBRARY_TRUTH_ENGINE.md	2026-07-19 18:17:19.108673238 +0000
+@@ -1,28 +1,27 @@
+ # Library Truth Engine — Parser V3
+ 
+-Parser V3 is the alpha5 shadow interpretation pipeline. It does not replace the live library parser and cannot modify episodes or files.
++Parser V3 is the alpha6 shadow interpretation pipeline. It does not replace the live library parser and cannot modify episodes or files.
+ 
+ ## Pipeline
+ 
+ 1. Read the physical file inventory and preservation evidence.
+ 2. Learn folder-level show/date conventions.
+-3. Parse show, date, slot, explicit multipart markers and headline evidence.
+-4. Analyse filename-family lineage and numeric ambiguity.
+-5. Normalise safe multipart suffixes without erasing programme identity.
+-6. Assemble recordings inside family boundaries.
+-7. Promote bare 1..N sequences only with sibling evidence and project effective parts to file rows.
+-8. Rank complete, alternate, multipart, partial, fragment and damaged recordings.
+-9. Audit suspicious duration/programme clusters and same-date coverage.
+-10. Calculate conservative adoption readiness and export the shadow report.
++3. Parse show, date, slot, multipart and headline evidence.
++4. Assemble filename-family-safe recording variants.
++5. Rank complete, alternate, multipart, partial, fragment and damaged recordings.
++6. Audit suspicious duration/programme families and cross-identity audio conflicts.
++7. Persist direct Recording Segment → Broadcast Coverage rows.
++8. Persist review-only equivalent/composite same-date coverage evidence.
++9. Calculate conservative readiness without changing the 15 review and 10 blocked desktop cases.
++10. Persist one deterministic, non-executable adoption preview per canonical broadcast.
++11. Export files, broadcasts, recordings, coverage, previews, years and conflicts.
+ 
+-## Alpha5 safeguards
++## Alpha6 safeguards
+ 
+-- V1 and V2 never share a multipart assembly.
+-- Long `Ron and Fez` and short `R&F` segment families are not cross-filled automatically.
+-- `R&F-10-31-2002a/b` forms one two-part recording.
+-- `RaF1020-Part2-ph` remains with its sibling parts.
+-- `RaF1110-Part3-partial` remains with its sibling parts.
+-- FNR/Eddie Trunk evidence is preserved.
+-- `09 17th, Jan 2008.m4a` remains a track-index case.
+-- `20011123 R&F 1.mp3` remains standalone without sibling evidence.
+-- Context-confirmed bare-number rows display their effective Part 1/Part 2 positions.
++- All alpha5 multipart-family corrections remain active.
++- V1/V2 and source-style lineages remain separate.
++- Direct coverage never changes canonical identity.
++- Inferred cross-slot coverage always requires review.
++- Provisional survivor selection is deterministic and explicitly non-authoritative.
++- Adoption previews cannot execute writes.
++- The live library remains unchanged.
+diff -ruN alpha5/README.md alpha6/README.md
+--- alpha5/README.md	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/README.md	2026-07-19 18:17:19.012255186 +0000
+@@ -1,24 +1,12 @@
+-# Radio Vault v0.28.0-alpha5 — Multipart Family Corrections
++# Radio Vault v0.28.0-alpha6 — Adoption Preview
+ 
+-Version: `0.28.0-alpha5-multipart-family-corrections`  
+-Status: shadow-only Library Truth analysis; no live-library adoption or file changes.
++Version: `0.28.0-alpha6-adoption-preview`
+ 
+-## Purpose
++Alpha6 builds on the full-corpus-confirmed alpha5 Library Truth baseline. It remains completely shadow-only, but now persists two structures needed before any live migration can be designed safely:
+ 
+-Alpha5 is the focused correction pass derived from the complete alpha4 desktop export. It preserves alpha4’s conservative source and variant boundaries while preventing harmless multipart suffixes from fragmenting one recording family.
++- Recording Segment → Broadcast Coverage evidence for every recording and multipart segment.
++- A deterministic per-broadcast adoption preview showing the provisional survivor, preserved files, recording rows, coverage rows, file reassignments and redundant live episode rows that a later transactional migration would need to handle.
+ 
+-## Alpha5 changes
++Same-date Standard recordings that appear to duplicate or combine named broadcast slots are represented as review-only coverage evidence. The existing 15 review-recommended and 10 blocked desktop cases remain held rather than being silently adopted.
+ 
+-- Attached date suffixes such as `10-31-2002a/b` now share one multipart family.
+-- Segment quality/state suffixes such as `-partial` and `-ph` no longer create separate recording lineages.
+-- Programme evidence such as FNR and Eddie Trunk remains meaningful and is not stripped.
+-- Context-confirmed bare `1..N` sequences now persist their effective part number and total into file-level shadow rows and exports.
+-- New regressions cover the three alpha4 desktop family splits and the promoted-part display inconsistency.
+-
+-## Safety
+-
+-The Library Truth Engine remains non-destructive. It writes only to the shadow `library_truth_*` tables and exports audit data. It does not update episodes, playback state, research, transcripts, moments, or physical files.
+-
+-## Build
+-
+-Open `TheRadioVault.sln` in Visual Studio 2022 with .NET 8 desktop development installed, or run `build.ps1` from PowerShell. Run `release-gate.ps1` before distributing a build.
++There is no live adoption command in this build. Episodes, playback state, favourites, research, transcripts and audio files are never modified by Library Truth.
+diff -ruN alpha5/RELEASE_BASELINE.md alpha6/RELEASE_BASELINE.md
+--- alpha5/RELEASE_BASELINE.md	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/RELEASE_BASELINE.md	2026-07-19 18:17:19.064409914 +0000
+@@ -1,7 +1,7 @@
+-# v0.28.0-alpha5 development baseline
++# v0.28.0-alpha6 development baseline
+ 
+-Current version: `0.28.0-alpha5-multipart-family-corrections`
++Current version: `0.28.0-alpha6-adoption-preview`
+ 
+-Baseline: the known-working v0.28.0-alpha4 source plus corrections derived from `RadioVault-Library-Truth-GRAHAM-PC-2026-07-19-1750.trvtruth`.
++Source baseline: the full-corpus-confirmed `0.28.0-alpha5-multipart-family-corrections` build.
+ 
+-This remains a shadow-analysis release. Adoption must stay disabled until a fresh full desktop export confirms that the three fragmented multipart families are repaired, promoted part rows display correctly, and alpha4’s conservative V1/V2 and source-style boundaries remain intact.
++Alpha6 must preserve the alpha5 corpus totals and all parser/recording safeguards while adding only shadow coverage and preview rows. Live adoption remains disabled.
+diff -ruN alpha5/RELEASE_CHECKLIST.md alpha6/RELEASE_CHECKLIST.md
+--- alpha5/RELEASE_CHECKLIST.md	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/RELEASE_CHECKLIST.md	2026-07-19 18:17:19.078617962 +0000
+@@ -1,16 +1,13 @@
+-# v0.28.0-alpha5 Multipart Family Corrections checklist
++# v0.28.0-alpha6 Adoption Preview checklist
+ 
+-- [ ] Application reports `0.28.0-alpha5-multipart-family-corrections`.
+-- [ ] `release-gate.ps1` passes.
+-- [ ] Existing library opens without migration errors.
+-- [ ] Library Truth completes over the full 7,169-file desktop archive.
+-- [ ] `R&F-10-31-2002a/b` is one complete two-part recording.
+-- [ ] `RaF1020-Part2-ph` remains with parts 3–6.
+-- [ ] `RaF1110-Part3-partial` remains with parts 1, 2 and 4.
+-- [ ] The five context-confirmed bare-number sets display distinct effective part numbers and totals.
+-- [ ] V1/V2 and long-name/short-name families remain separated.
+-- [ ] `09 17th, Jan 2008.m4a` is not Part 9.
+-- [ ] `20011123 R&F 1.mp3` remains a standalone ambiguity.
+-- [ ] FNR/Eddie Trunk suspicious-duration review remains active.
+-- [ ] No episodes, playback, research, transcripts, moments or physical files are modified.
+-- [ ] Export a new `.trvtruth` for comparison before baseline promotion.
++- [ ] Application reports `0.28.0-alpha6-adoption-preview`.
++- [ ] Database initializes or upgrades to schema 42 with a pre-upgrade backup.
++- [ ] Full solution builds on .NET 8.
++- [ ] All smoke tests pass.
++- [ ] Desktop Library Truth scan still reports 7,169 files and 4,330 canonical broadcasts.
++- [ ] Adoption states remain 4,305 ready, 15 review recommended and 10 blocked unless new corpus evidence explains a change.
++- [ ] Every recording has at least one direct coverage row.
++- [ ] The known same-date audit produces review-only equivalent/composite coverage rows.
++- [ ] Exactly one adoption preview exists per canonical broadcast.
++- [ ] No Library Truth action changes episodes, playback, favourites, research, transcripts or files.
++- [ ] Exported `.trvtruth` uses schema version 4 and includes coverage and adoption-preview sections.
+diff -ruN alpha5/RELEASE_NOTES_0.28.0_ALPHA6.md alpha6/RELEASE_NOTES_0.28.0_ALPHA6.md
+--- alpha5/RELEASE_NOTES_0.28.0_ALPHA6.md	1970-01-01 00:00:00.000000000 +0000
++++ alpha6/RELEASE_NOTES_0.28.0_ALPHA6.md	2026-07-19 18:17:19.123804101 +0000
+@@ -0,0 +1,9 @@
++# Radio Vault v0.28.0-alpha6 — Adoption Preview
++
++Alpha6 converts the confirmed Library Truth shadow model into a migration-design dataset without enabling migration.
++
++Every recording now exports explicit segment coverage. Same-date Standard captures that appear to duplicate one named slot or combine two named slots receive review-only cross-broadcast coverage rows with duration-derived offsets.
++
++Every canonical broadcast also receives a persisted adoption preview. It shows the provisional live episode survivor, files that would move, recording and coverage rows that would be written, and redundant live episode rows that would eventually consolidate. Ready broadcasts are prepared; review and blocked broadcasts stay held.
++
++Nothing in alpha6 can alter the live library.
+diff -ruN alpha5/ROADMAP.md alpha6/ROADMAP.md
+--- alpha5/ROADMAP.md	2026-07-19 17:16:57.000000000 +0000
++++ alpha6/ROADMAP.md	2026-07-19 18:17:20.810898339 +0000
+@@ -4,8 +4,9 @@
+ 2. **alpha2 — Corpus corrections (completed):** date and show parsing fixes from the first export.
+ 3. **alpha3 — Recording Structure & Merge Audit (completed):** recording roles, preferred-capture ranking, duplicate/conflict audit and readiness summary.
+ 4. **alpha4 — Recording Integrity:** filename-family-safe multipart assembly, numeric ambiguity, suspicious duration/programme clusters and same-date coverage audit.
+-5. **alpha5 — Multipart Family Corrections (current):** repair safe suffix over-separation and persist context-promoted file-level part positions before baseline promotion.
+-6. **alpha6 — Full-corpus confirmation and adoption preparation:** compare the next desktop truth export with alpha4, refine any remaining false positives and design persisted Recording Segment → Broadcast Coverage evidence.
+-7. **Later adoption milestone:** only after the shadow model is proven against desktop and laptop archives.
++5. **alpha5 — Multipart Family Corrections (completed):** repaired safe suffix over-separation, persisted context-promoted part positions and passed the complete 7,169-file desktop corpus.
++6. **alpha6 — Coverage Evidence & Adoption Preview (current):** persist Recording Segment → Broadcast Coverage evidence and one guarded, non-executable adoption preview per canonical broadcast.
++7. **alpha7 — Transaction and state-preservation design:** design backup verification, survivor-state merging, rollback ledgers and explicit approval without yet enabling broad adoption.
++8. **Later adoption milestone:** only after desktop and laptop truth exports, transaction simulations and rollback tests pass.
+ 
+ Major feature expansion remains frozen while the Library Truth Engine is being established.
+diff -ruN alpha5/TheRadioVault/LibraryTruthWindow.xaml alpha6/TheRadioVault/LibraryTruthWindow.xaml
+--- alpha5/TheRadioVault/LibraryTruthWindow.xaml	2026-07-19 15:29:00.000000000 +0000
++++ alpha6/TheRadioVault/LibraryTruthWindow.xaml	2026-07-19 18:30:05.211169961 +0000
+@@ -1,7 +1,7 @@
+ <Window x:Class="TheRadioVault.LibraryTruthWindow"
+         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+-        Title="Library Truth recording structure audit" Width="1540" Height="940"
++        Title="Library Truth adoption preparation" Width="1540" Height="940"
+         MinWidth="1120" MinHeight="720" WindowStartupLocation="CenterOwner"
+         Background="{DynamicResource WindowBrush}" Loaded="Window_Loaded">
+  <Grid Margin="22">
+@@ -9,7 +9,7 @@
+   <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+    <StackPanel>
+-    <TextBlock Text="Library Truth recording structure audit" Foreground="{DynamicResource TextBrush}" FontSize="27" FontWeight="SemiBold"/>
++    <TextBlock Text="Library Truth adoption preparation" Foreground="{DynamicResource TextBrush}" FontSize="27" FontWeight="SemiBold"/>
+     <TextBlock x:Name="SubtitleText" Foreground="{DynamicResource MutedBrush}" Margin="0,6,0,0"/>
+    </StackPanel>
+    <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+@@ -111,6 +111,52 @@
+      </Border>
+     </Grid>
+    </TabItem>
++   <TabItem Header="Coverage evidence">
++    <Grid Margin="0,12,0,0">
++     <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
++     <DataGrid x:Name="CoveragesGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
++               SelectionChanged="CoveragesGrid_SelectionChanged" EnableRowVirtualization="True" EnableColumnVirtualization="True"
++               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
++      <DataGrid.Columns>
++       <DataGridTextColumn Header="Guard" Binding="{Binding ReviewDisplay}" Width="145"/>
++       <DataGridTextColumn Header="Coverage" Binding="{Binding CoverageKind}" Width="180"/>
++       <DataGridTextColumn Header="Source broadcast" Binding="{Binding SourceDisplay}" Width="*" MinWidth="250"/>
++       <DataGridTextColumn Header="Recording" Binding="{Binding RecordingKey}" Width="145"/>
++       <DataGridTextColumn Header="Segment" Binding="{Binding SegmentDisplay}" Width="125"/>
++       <DataGridTextColumn Header="Target broadcast" Binding="{Binding TargetDisplay}" Width="*" MinWidth="250"/>
++       <DataGridTextColumn Header="Covered duration" Binding="{Binding DurationDisplay}" Width="115"/>
++       <DataGridTextColumn Header="Confidence" Binding="{Binding ConfidenceScore}" Width="90"/>
++      </DataGrid.Columns>
++     </DataGrid>
++     <Border Grid.Row="1" Background="{DynamicResource InsetBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,14,0,0">
++      <StackPanel><TextBlock Text="RECORDING SEGMENT → BROADCAST COVERAGE" Foreground="{DynamicResource MutedBrush}" FontSize="10" FontWeight="SemiBold"/><TextBlock x:Name="CoverageEvidenceText" Text="Select a coverage row to inspect its source, target, offsets and guard evidence." Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/></StackPanel>
++     </Border>
++    </Grid>
++   </TabItem>
++   <TabItem Header="Adoption preview">
++    <Grid Margin="0,12,0,0">
++     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
++     <Border Background="{DynamicResource InsetBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12">
++      <TextBlock x:Name="AdoptionPlanSummaryText" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Text="Loading the guarded adoption preview…"/>
++     </Border>
++     <DataGrid Grid.Row="1" x:Name="AdoptionPreviewGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
++               SelectionChanged="AdoptionPreviewGrid_SelectionChanged" EnableRowVirtualization="True" EnableColumnVirtualization="True"
++               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
++      <DataGrid.Columns>
++       <DataGridTextColumn Header="Plan" Binding="{Binding EligibilityDisplay}" Width="95"/>
++       <DataGridTextColumn Header="Current state" Binding="{Binding AdoptionState}" Width="160"/>
++       <DataGridTextColumn Header="Canonical broadcast" Binding="{Binding BroadcastDisplay}" Width="*" MinWidth="270"/>
++       <DataGridTextColumn Header="Planned action" Binding="{Binding PlannedAction}" Width="*" MinWidth="340"/>
++       <DataGridTextColumn Header="Provisional survivor" Binding="{Binding SurvivorDisplay}" Width="170"/>
++       <DataGridTextColumn Header="Shadow structure" Binding="{Binding StructureDisplay}" Width="260"/>
++       <DataGridTextColumn Header="Future operations" Binding="{Binding OperationsDisplay}" Width="230"/>
++      </DataGrid.Columns>
++     </DataGrid>
++     <Border Grid.Row="2" Background="{DynamicResource InsetBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,14,0,0">
++      <StackPanel><TextBlock Text="STRUCTURAL PLAN AND EXECUTION GUARDS" Foreground="{DynamicResource MutedBrush}" FontSize="10" FontWeight="SemiBold"/><TextBlock x:Name="AdoptionPreviewEvidenceText" Text="Select a broadcast preview to inspect its provisional survivor and migration guards." Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/></StackPanel>
++     </Border>
++    </Grid>
++   </TabItem>
+    <TabItem Header="Adoption audit">
+     <Grid Margin="0,12,0,0">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+diff -ruN alpha5/TheRadioVault/LibraryTruthWindow.xaml.cs alpha6/TheRadioVault/LibraryTruthWindow.xaml.cs
+--- alpha5/TheRadioVault/LibraryTruthWindow.xaml.cs	2026-07-19 17:16:34.000000000 +0000
++++ alpha6/TheRadioVault/LibraryTruthWindow.xaml.cs	2026-07-19 18:32:18.870839666 +0000
+@@ -12,7 +12,7 @@
+         _engine = engine ?? throw new ArgumentNullException(nameof(engine));
+         _summary = summary;
+         InitializeComponent();
+-        SubtitleText.Text = $"Parser {summary.ParserVersion} · completed {summary.CompletedDisplay} · shadow-only recording structure audit";
++        SubtitleText.Text = $"Parser {summary.ParserVersion} · completed {summary.CompletedDisplay} · shadow-only coverage and adoption preparation";
+         PhysicalCountText.Text = summary.PhysicalFiles.ToString("N0");
+         CurrentCountText.Text = summary.CurrentBroadcasts.ToString("N0");
+         ProposedCountText.Text = summary.ProposedBroadcasts.ToString("N0");
+@@ -46,10 +46,12 @@
+         var generation = Interlocked.Increment(ref _loadGeneration);
+         var filter = (FilterCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "all";
+         var search = SearchText.Text.Trim();
+-        StatusText.Text = "Loading recording structure and adoption evidence in the background…";
++        StatusText.Text = "Loading recording structure, coverage evidence and the guarded adoption preview…";
+         FilesGrid.IsEnabled = false;
+         RecordingsGrid.IsEnabled = false;
+         BroadcastsGrid.IsEnabled = false;
++        CoveragesGrid.IsEnabled = false;
++        AdoptionPreviewGrid.IsEnabled = false;
+         YearsGrid.IsEnabled = false;
+         ConflictsGrid.IsEnabled = false;
+         try
+@@ -58,26 +60,36 @@
+             var recordingsTask = Task.Run(() => _engine.GetRecordings(search: search, filter: filter));
+             var broadcastsTask = Task.Run(() => _engine.GetBroadcasts(filter));
+             var adoptionTask = Task.Run(_engine.GetAdoptionSummary);
++            var coverageTask = Task.Run(() => _engine.GetCoverages(search, filter));
++            var previewTask = Task.Run(() => _engine.GetAdoptionPreviews(filter, search));
++            var planTask = Task.Run(_engine.GetAdoptionPlanSummary);
+             var yearsTask = Task.Run(_engine.GetYears);
+             var conflictsTask = Task.Run(_engine.GetConflicts);
+-            await Task.WhenAll(filesTask, recordingsTask, broadcastsTask, adoptionTask, yearsTask, conflictsTask);
++            await Task.WhenAll(filesTask, recordingsTask, broadcastsTask, adoptionTask, coverageTask, previewTask, planTask, yearsTask, conflictsTask);
+             if (generation != Volatile.Read(ref _loadGeneration)) return;
+ 
+             var files = filesTask.Result;
+             var recordings = recordingsTask.Result;
+             var broadcasts = broadcastsTask.Result;
+             var adoption = adoptionTask.Result;
++            var coverages = coverageTask.Result;
++            var previews = previewTask.Result;
++            var plan = planTask.Result;
+             var years = yearsTask.Result;
+             var conflicts = conflictsTask.Result;
+ 
+             FilesGrid.ItemsSource = files;
+             RecordingsGrid.ItemsSource = recordings;
+             BroadcastsGrid.ItemsSource = broadcasts;
++            CoveragesGrid.ItemsSource = coverages;
++            AdoptionPreviewGrid.ItemsSource = previews;
+             YearsGrid.ItemsSource = years;
+             ConflictsGrid.ItemsSource = conflicts;
+             FilesGrid.SelectedIndex = files.Count > 0 ? 0 : -1;
+             RecordingsGrid.SelectedIndex = recordings.Count > 0 ? 0 : -1;
+             BroadcastsGrid.SelectedIndex = broadcasts.Count > 0 ? 0 : -1;
++            CoveragesGrid.SelectedIndex = coverages.Count > 0 ? 0 : -1;
++            AdoptionPreviewGrid.SelectedIndex = previews.Count > 0 ? 0 : -1;
+ 
+             ReadyCountText.Text = adoption.AdoptionReadyTotal.ToString("N0");
+             RecommendedCountText.Text = adoption.ReviewRecommendedBroadcasts.ToString("N0");
+@@ -88,8 +100,14 @@
+                 $"{adoption.ReviewRecommendedBroadcasts:N0} groups deserve a focused structure check and {adoption.BlockedBroadcasts:N0} remain blocked.\n\n" +
+                 $"Recording roles: {adoption.PartialRecordings:N0} partial/incomplete captures, {adoption.FragmentRecordings:N0} short clips, " +
+                 $"{adoption.TruncatedRecordings:N0} likely truncated files. {adoption.SuspiciousMergeGroups:N0} suspicious merge groups and " +
+-                $"{adoption.CrossIdentityConflicts:N0} cross-identity audio conflicts are preserved for audit. Nothing is adopted or deleted in alpha5.";
+-            StatusText.Text = $"Showing {files.Count:N0} physical files, {recordings.Count:N0} recording roles, {broadcasts.Count:N0} canonical broadcasts, {years.Count:N0} year summaries and {conflicts.Count:N0} blocking audio conflicts. The live library is unchanged.";
++                $"{adoption.CrossIdentityConflicts:N0} cross-identity audio conflicts are preserved for audit. Nothing is adopted, hidden or deleted in alpha6.";
++            AdoptionPlanSummaryText.Text =
++                $"Alpha6 prepared {plan.PreviewBroadcasts:N0} per-broadcast plans: {plan.EligibleBroadcasts:N0} are structurally prepared, " +
++                $"{plan.ReviewBroadcasts:N0} remain held for review and {plan.BlockedBroadcasts:N0} remain blocked. " +
++                $"A later transactional migration would write {plan.CanonicalBroadcastWrites:N0} canonical broadcasts, {plan.RecordingWrites:N0} recordings, " +
++                $"{plan.CoverageWrites:N0} coverage rows and {plan.FileLinkWrites:N0} media-file links while consolidating {plan.LiveEpisodeRowsToConsolidate:N0} redundant live episode rows. " +
++                "These counts are a persisted preview only; there is no adoption command in this build.";
++            StatusText.Text = $"Showing {files.Count:N0} physical files, {recordings.Count:N0} recording roles, {coverages.Count:N0} coverage rows, {broadcasts.Count:N0} canonical broadcasts and {previews.Count:N0} adoption previews. The live library is unchanged.";
+         }
+         catch (Exception ex)
+         {
+@@ -103,6 +121,8 @@
+                 FilesGrid.IsEnabled = true;
+                 RecordingsGrid.IsEnabled = true;
+                 BroadcastsGrid.IsEnabled = true;
++                CoveragesGrid.IsEnabled = true;
++                AdoptionPreviewGrid.IsEnabled = true;
+                 YearsGrid.IsEnabled = true;
+                 ConflictsGrid.IsEnabled = true;
+             }
+@@ -138,6 +158,20 @@
+             : "Select a broadcast to inspect why its files belong together and whether it is safe to adopt.";
+     }
+ 
++    private void CoveragesGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
++    {
++        CoverageEvidenceText.Text = CoveragesGrid.SelectedItem is LibraryTruthCoverageView item
++            ? $"{item.Evidence}\n\nSource: {item.SourceBroadcastKey}\nRecording: {item.RecordingKey}\n{item.SegmentDisplay} · {item.DurationDisplay}\nTarget: {item.TargetBroadcastKey}\nCoverage type: {item.CoverageKind} · confidence {item.ConfidenceScore}%\nPhysical media IDs: {item.MediaFileIds}\nGuard: {item.ReviewDisplay}"
++            : "Select a coverage row to inspect its source, target, offsets and guard evidence.";
++    }
++
++    private void AdoptionPreviewGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
++    {
++        AdoptionPreviewEvidenceText.Text = AdoptionPreviewGrid.SelectedItem is LibraryTruthAdoptionPreviewView item
++            ? $"{item.Evidence}\n\nCanonical broadcast: {item.CanonicalKey}\nPlanned action: {item.PlannedAction}\nProvisional survivor: {item.SurvivorDisplay}\nCurrent episode IDs: {item.CurrentEpisodeIds}\nFiles that would move to the survivor: {item.ReassignFileCount:N0}\nFuture write count: {item.PlannedWriteCount:N0}\nGuard: {item.GuardReason}"
++            : "Select a broadcast preview to inspect its provisional survivor and migration guards.";
++    }
++
+     private void ExportReport_Click(object sender, RoutedEventArgs e)
+     {
+         var dialog = new SaveFileDialog
+@@ -150,7 +184,7 @@
+         try
+         {
+             _engine.ExportLatest(dialog.FileName, AppVersionService.Version);
+-            MessageBox.Show(this, "The recording-structure and adoption-readiness report was exported.", "Library Truth Engine", MessageBoxButton.OK, MessageBoxImage.Information);
++            MessageBox.Show(this, "The recording, coverage and adoption-preview report was exported.", "Library Truth Engine", MessageBoxButton.OK, MessageBoxImage.Information);
+         }
+         catch (Exception ex)
+         {
+diff -ruN alpha5/TheRadioVault/MainWindow.xaml alpha6/TheRadioVault/MainWindow.xaml
+--- alpha5/TheRadioVault/MainWindow.xaml	2026-07-19 15:29:08.000000000 +0000
++++ alpha6/TheRadioVault/MainWindow.xaml	2026-07-19 18:15:40.813241105 +0000
+@@ -826,7 +826,7 @@
+          </StackPanel>
+          <StackPanel x:Name="SettingsLibraryTruthSection" Visibility="Collapsed">
+           <TextBlock Text="Library Truth Engine" Foreground="{DynamicResource TextBrush}" FontSize="22" FontWeight="SemiBold"/>
+-          <TextBlock Text="Rebuild Radio Vault’s understanding of the physical archive in a separate shadow index. Parser V3 uses filename evidence, folder conventions, multipart structure and preservation fingerprints without changing the live library." Foreground="{DynamicResource MutedBrush}" Margin="0,6,0,22" TextWrapping="Wrap" MaxWidth="900" HorizontalAlignment="Left"/>
++          <TextBlock Text="Rebuild Radio Vault’s understanding of the physical archive in a separate shadow index. Parser V3 now persists recording-segment coverage and a guarded adoption preview alongside filename, folder, multipart and preservation evidence without changing the live library." Foreground="{DynamicResource MutedBrush}" Margin="0,6,0,22" TextWrapping="Wrap" MaxWidth="900" HorizontalAlignment="Left"/>
+           <UniformGrid Columns="5" Margin="0,0,0,20">
+            <Border Style="{StaticResource DashboardCard}" Margin="0,0,8,0"><StackPanel><TextBlock Text="PHYSICAL FILES" Foreground="{DynamicResource MutedBrush}" FontSize="10"/><TextBlock x:Name="TruthPhysicalFilesText" Text="0" Foreground="{DynamicResource TextBrush}" FontSize="22" FontWeight="SemiBold"/></StackPanel></Border>
+            <Border Style="{StaticResource DashboardCard}" Margin="0,0,8,0"><StackPanel><TextBlock Text="LIVE BROADCASTS" Foreground="{DynamicResource MutedBrush}" FontSize="10"/><TextBlock x:Name="TruthCurrentBroadcastsText" Text="0" Foreground="{DynamicResource TextBrush}" FontSize="22" FontWeight="SemiBold"/></StackPanel></Border>
+@@ -837,7 +837,7 @@
+           <Border Background="{DynamicResource InsetBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="15" MaxWidth="900" HorizontalAlignment="Left">
+            <StackPanel>
+             <TextBlock x:Name="TruthStatusText" Text="No shadow library has been built yet." Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+-            <TextBlock Text="Alpha1 is comparison-only. It cannot adopt changes, merge broadcasts, rename files, quarantine duplicates or alter playback and research data." Foreground="{DynamicResource MutedBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,7,0,0"/>
++            <TextBlock Text="Alpha6 remains shadow-only. It can preview survivor selection and future migration operations, but it cannot adopt changes, merge live broadcasts, rename files, quarantine duplicates or alter playback, research and transcript data." Foreground="{DynamicResource MutedBrush}" FontSize="12" TextWrapping="Wrap" Margin="0,7,0,0"/>
+            </StackPanel>
+           </Border>
+           <WrapPanel Margin="0,16,0,0">
+@@ -847,7 +847,7 @@
+           </WrapPanel>
+           <Separator Margin="0,24"/>
+           <TextBlock Text="WHAT PARSER V3 RECORDS" Foreground="{DynamicResource MutedBrush}" FontSize="11" FontWeight="SemiBold"/>
+-          <TextBlock Text="Every proposed show, date, slot and segment assignment retains its evidence and confidence. Unknown is a valid result: Radio Vault will not invent a date merely to make a file fit." Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,7,0,0" MaxWidth="900" HorizontalAlignment="Left"/>
++          <TextBlock Text="Every proposed show, date, slot, recording segment, coverage link and adoption-plan step retains its evidence and confidence. Unknown is a valid result: Radio Vault will not invent a date or silently execute a migration merely to make the archive fit." Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,7,0,0" MaxWidth="900" HorizontalAlignment="Left"/>
+          </StackPanel>
+          <StackPanel x:Name="SettingsPlaybackSection" Visibility="Collapsed">
+           <TextBlock Text="Playback" Foreground="{DynamicResource TextBrush}" FontSize="22" FontWeight="SemiBold"/>
+diff -ruN alpha5/TheRadioVault/TheRadioVault.csproj alpha6/TheRadioVault/TheRadioVault.csproj
+--- alpha5/TheRadioVault/TheRadioVault.csproj	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/TheRadioVault/TheRadioVault.csproj	2026-07-19 18:06:00.224267415 +0000
+@@ -9,10 +9,10 @@
+     <ImplicitUsings>disable</ImplicitUsings>
+     <AssemblyName>TheRadioVault</AssemblyName>
+     <RootNamespace>TheRadioVault</RootNamespace>
+-    <Version>0.28.0-alpha5-multipart-family-corrections</Version>
++    <Version>0.28.0-alpha6-adoption-preview</Version>
+     <AssemblyVersion>0.28.0.0</AssemblyVersion>
+     <FileVersion>0.28.0.0</FileVersion>
+-    <InformationalVersion>0.28.0-alpha5-multipart-family-corrections</InformationalVersion>
++    <InformationalVersion>0.28.0-alpha6-adoption-preview</InformationalVersion>
+   </PropertyGroup>
+   <ItemGroup>
+     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.7" />
+diff -ruN alpha5/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs alpha6/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+--- alpha5/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs	2026-07-19 17:04:59.000000000 +0000
++++ alpha6/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs	2026-07-19 18:15:57.151069954 +0000
+@@ -12,7 +12,7 @@
+ /// </summary>
+ public sealed class LibraryTruthParser
+ {
+-    public const string CurrentVersion = "0.28.0-alpha5-multipart-family-corrections-v3";
++    public const string CurrentVersion = "0.28.0-alpha6-adoption-preview-v3";
+ 
+     private static readonly Regex IsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})[\s._-]+(?<month>\d{1,2})[\s._-]+(?<day>\d{1,2})(?!\d)");
+     private static readonly Regex CompactIsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})(?<month>\d{2})(?<day>\d{2})(?!\d)");
+@@ -489,7 +489,7 @@
+             return new MultipartDetection(part, 2, "Part", match.Value, "Recognised a trailing A/B segment marker.");
+         }
+ 
+-        // Alpha5 still does not promote a bare trailing number at file-parse time.
++        // Alpha6 still does not promote a bare trailing number at file-parse time.
+         // A lone "... 1" is frequently a track or version marker. The shadow
+         // recording planner may promote 1,2,... only when sibling filenames
+         // establish a contiguous multipart convention within one family.
+diff -ruN alpha5/TheRadioVault.Core/LibraryTruth/LibraryTruthRecordingStructure.cs alpha6/TheRadioVault.Core/LibraryTruth/LibraryTruthRecordingStructure.cs
+--- alpha5/TheRadioVault.Core/LibraryTruth/LibraryTruthRecordingStructure.cs	2026-07-19 17:04:59.000000000 +0000
++++ alpha6/TheRadioVault.Core/LibraryTruth/LibraryTruthRecordingStructure.cs	2026-07-19 18:15:57.151807447 +0000
+@@ -21,7 +21,7 @@
+     string EncodingKey);
+ 
+ /// <summary>
+-/// Alpha5 filename-family evidence used only by the shadow Library Truth engine.
++/// Alpha6 filename-family evidence used only by the shadow Library Truth engine.
+ /// It deliberately separates source/variant lineages before multipart segments
+ /// are assembled, and leaves lone trailing numbers ambiguous until sibling
+ /// filenames establish a contiguous sequence.
+diff -ruN alpha5/TheRadioVault.Data/Database/SqliteDatabase.cs alpha6/TheRadioVault.Data/Database/SqliteDatabase.cs
+--- alpha5/TheRadioVault.Data/Database/SqliteDatabase.cs	2026-07-19 14:19:01.000000000 +0000
++++ alpha6/TheRadioVault.Data/Database/SqliteDatabase.cs	2026-07-19 17:59:51.631530522 +0000
+@@ -9,7 +9,7 @@
+ /// </summary>
+ public sealed class SqliteDatabase
+ {
+-    public const int CurrentSchemaVersion = 41;
++    public const int CurrentSchemaVersion = 42;
+ 
+     private readonly object _initializationGate = new();
+     private bool _initialized;
+@@ -506,6 +506,51 @@
+             );
+             CREATE INDEX IF NOT EXISTS ix_library_truth_conflicts_run
+                 ON library_truth_conflicts(run_id,evidence_strength DESC);
++
++            CREATE TABLE IF NOT EXISTS library_truth_coverages (
++                id INTEGER PRIMARY KEY AUTOINCREMENT,
++                run_id INTEGER NOT NULL REFERENCES library_truth_runs(id) ON DELETE CASCADE,
++                source_broadcast_key TEXT NOT NULL,
++                recording_key TEXT NOT NULL,
++                segment_number INTEGER NOT NULL DEFAULT 1,
++                segment_total INTEGER NULL,
++                target_broadcast_key TEXT NOT NULL,
++                coverage_kind TEXT NOT NULL DEFAULT 'Direct segment',
++                start_offset_ms INTEGER NOT NULL DEFAULT 0,
++                end_offset_ms INTEGER NOT NULL DEFAULT 0,
++                confidence_score INTEGER NOT NULL DEFAULT 0,
++                requires_review INTEGER NOT NULL DEFAULT 0,
++                media_file_ids_json TEXT NOT NULL DEFAULT '[]',
++                evidence TEXT NOT NULL DEFAULT '',
++                UNIQUE(run_id,recording_key,segment_number,target_broadcast_key,coverage_kind)
++            );
++            CREATE INDEX IF NOT EXISTS ix_library_truth_coverages_recording
++                ON library_truth_coverages(run_id,recording_key,segment_number);
++            CREATE INDEX IF NOT EXISTS ix_library_truth_coverages_target
++                ON library_truth_coverages(run_id,target_broadcast_key,requires_review);
++
++            CREATE TABLE IF NOT EXISTS library_truth_adoption_previews (
++                id INTEGER PRIMARY KEY AUTOINCREMENT,
++                run_id INTEGER NOT NULL REFERENCES library_truth_runs(id) ON DELETE CASCADE,
++                canonical_key TEXT NOT NULL,
++                adoption_state TEXT NOT NULL,
++                planned_action TEXT NOT NULL DEFAULT '',
++                provisional_episode_id INTEGER NULL,
++                current_episode_count INTEGER NOT NULL DEFAULT 0,
++                current_episode_ids_json TEXT NOT NULL DEFAULT '[]',
++                media_file_count INTEGER NOT NULL DEFAULT 0,
++                recording_count INTEGER NOT NULL DEFAULT 0,
++                coverage_count INTEGER NOT NULL DEFAULT 0,
++                retire_episode_count INTEGER NOT NULL DEFAULT 0,
++                reassign_file_count INTEGER NOT NULL DEFAULT 0,
++                planned_write_count INTEGER NOT NULL DEFAULT 0,
++                eligible_for_guarded_adoption INTEGER NOT NULL DEFAULT 0,
++                guard_reason TEXT NOT NULL DEFAULT '',
++                evidence TEXT NOT NULL DEFAULT '',
++                UNIQUE(run_id,canonical_key)
++            );
++            CREATE INDEX IF NOT EXISTS ix_library_truth_adoption_previews_state
++                ON library_truth_adoption_previews(run_id,eligible_for_guarded_adoption,adoption_state);
+             """;
+         command.ExecuteNonQuery();
+     }
+@@ -550,6 +595,12 @@
+                 ON episode_tags(tag_id,episode_id);
+             CREATE INDEX IF NOT EXISTS ix_library_truth_recordings_role
+                 ON library_truth_recordings(run_id,role,is_preferred_candidate);
++            CREATE INDEX IF NOT EXISTS ix_library_truth_coverages_recording
++                ON library_truth_coverages(run_id,recording_key,segment_number);
++            CREATE INDEX IF NOT EXISTS ix_library_truth_coverages_target
++                ON library_truth_coverages(run_id,target_broadcast_key,requires_review);
++            CREATE INDEX IF NOT EXISTS ix_library_truth_adoption_previews_state
++                ON library_truth_adoption_previews(run_id,eligible_for_guarded_adoption,adoption_state);
+             """;
+         command.ExecuteNonQuery();
+     }
+diff -ruN alpha5/TheRadioVault.Services/Models/LibraryTruthModels.cs alpha6/TheRadioVault.Services/Models/LibraryTruthModels.cs
+--- alpha5/TheRadioVault.Services/Models/LibraryTruthModels.cs	2026-07-19 15:24:58.000000000 +0000
++++ alpha6/TheRadioVault.Services/Models/LibraryTruthModels.cs	2026-07-19 18:18:33.733693263 +0000
+@@ -116,6 +116,77 @@
+     public string DurationRatioDisplay => DurationRatio <= 0 ? "Unknown coverage" : $"{DurationRatio:P0} of longest recording";
+ }
+ 
++
++
++public sealed record LibraryTruthCoverageView(
++    long Id,
++    string SourceBroadcastKey,
++    string RecordingKey,
++    int SegmentNumber,
++    int? SegmentTotal,
++    string TargetBroadcastKey,
++    string CoverageKind,
++    long StartOffsetMs,
++    long EndOffsetMs,
++    int ConfidenceScore,
++    bool RequiresReview,
++    string MediaFileIds,
++    string Evidence)
++{
++    public string SegmentDisplay => SegmentTotal.HasValue
++        ? $"Segment {Math.Max(1, SegmentNumber)} of {SegmentTotal.Value}"
++        : $"Segment {Math.Max(1, SegmentNumber)}";
++    public string DurationDisplay => EndOffsetMs <= StartOffsetMs
++        ? "Unknown duration"
++        : TimeSpan.FromMilliseconds(EndOffsetMs - StartOffsetMs).ToString(@"h\:mm\:ss");
++    public string SourceDisplay => SourceBroadcastKey.Replace("|", " · ", StringComparison.Ordinal);
++    public string TargetDisplay => TargetBroadcastKey.Replace("|", " · ", StringComparison.Ordinal);
++    public string ReviewDisplay => RequiresReview ? "Review before adoption" : "Direct evidence";
++}
++
++public sealed record LibraryTruthAdoptionPreviewView(
++    long Id,
++    string CanonicalKey,
++    string AdoptionState,
++    string PlannedAction,
++    long? ProvisionalEpisodeId,
++    int CurrentEpisodeCount,
++    string CurrentEpisodeIds,
++    int MediaFileCount,
++    int RecordingCount,
++    int CoverageCount,
++    int RetireEpisodeCount,
++    int ReassignFileCount,
++    int PlannedWriteCount,
++    bool EligibleForGuardedAdoption,
++    string GuardReason,
++    string Evidence)
++{
++    public string BroadcastDisplay => CanonicalKey.Replace("|", " · ", StringComparison.Ordinal);
++    public string SurvivorDisplay => ProvisionalEpisodeId.HasValue
++        ? $"Episode {ProvisionalEpisodeId.Value:N0} (preview only)"
++        : "No provisional survivor";
++    public string StructureDisplay => $"{MediaFileCount:N0} files · {RecordingCount:N0} recordings · {CoverageCount:N0} coverage rows";
++    public string OperationsDisplay => $"{PlannedWriteCount:N0} planned writes · {RetireEpisodeCount:N0} live rows would consolidate";
++    public string EligibilityDisplay => EligibleForGuardedAdoption ? "Prepared" : "Held";
++}
++
++public sealed record LibraryTruthAdoptionPlanSummary(
++    int PreviewBroadcasts,
++    int EligibleBroadcasts,
++    int ReviewBroadcasts,
++    int BlockedBroadcasts,
++    int CanonicalBroadcastWrites,
++    int RecordingWrites,
++    int CoverageWrites,
++    int FileLinkWrites,
++    int LiveEpisodeRowsToConsolidate,
++    int ProvisionalSurvivorSelections)
++{
++    public static LibraryTruthAdoptionPlanSummary Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
++    public string SummaryDisplay => $"{EligibleBroadcasts:N0} prepared · {ReviewBroadcasts:N0} review held · {BlockedBroadcasts:N0} blocked";
++}
++
+ public sealed record LibraryTruthAdoptionSummary(
+     int ReadyBroadcasts,
+     int ReadyWithRecordingChoice,
+@@ -167,7 +238,7 @@
+ 
+ public sealed class LibraryTruthExportReport
+ {
+-    public int SchemaVersion { get; set; } = 3;
++    public int SchemaVersion { get; set; } = 4;
+     public string AppVersion { get; set; } = string.Empty;
+     public DateTimeOffset ExportedAt { get; set; } = DateTimeOffset.UtcNow;
+     public LibraryTruthRunSummary Summary { get; set; } = LibraryTruthRunSummary.Empty;
+@@ -177,4 +248,7 @@
+     public IReadOnlyList<LibraryTruthRecordingView> Recordings { get; set; } = Array.Empty<LibraryTruthRecordingView>();
+     public IReadOnlyList<LibraryTruthYearView> Years { get; set; } = Array.Empty<LibraryTruthYearView>();
+     public IReadOnlyList<LibraryTruthConflictView> Conflicts { get; set; } = Array.Empty<LibraryTruthConflictView>();
++    public LibraryTruthAdoptionPlanSummary AdoptionPlan { get; set; } = LibraryTruthAdoptionPlanSummary.Empty;
++    public IReadOnlyList<LibraryTruthCoverageView> Coverages { get; set; } = Array.Empty<LibraryTruthCoverageView>();
++    public IReadOnlyList<LibraryTruthAdoptionPreviewView> AdoptionPreviews { get; set; } = Array.Empty<LibraryTruthAdoptionPreviewView>();
+ }
+diff -ruN alpha5/TheRadioVault.Services/Services/LibraryTruthEngine.cs alpha6/TheRadioVault.Services/Services/LibraryTruthEngine.cs
+--- alpha5/TheRadioVault.Services/Services/LibraryTruthEngine.cs	2026-07-19 17:15:38.000000000 +0000
++++ alpha6/TheRadioVault.Services/Services/LibraryTruthEngine.cs	2026-07-19 18:33:29.243148122 +0000
+@@ -8,7 +8,7 @@
+ 
+ /// <summary>
+ /// Builds a non-destructive shadow interpretation of the physical archive.
+-/// Alpha5 audits recording structure and adoption readiness without updating episodes, playback, research, transcripts, or files.
++/// Alpha6 audits recording structure, persists segment-to-broadcast coverage evidence, and prepares a guarded adoption preview without updating episodes, playback, research, transcripts, or files.
+ /// </summary>
+ public sealed class LibraryTruthEngine
+ {
+@@ -58,11 +58,11 @@
+             }
+ 
+             cancellationToken.ThrowIfCancellationRequested();
+-            progress?.Report((78, "Constructing canonical broadcasts and recording relationships…"));
++            progress?.Report((78, "Constructing canonical broadcasts, recordings and coverage relationships…"));
+             var analysis = AnalyseGroups(interpretations);
+             cancellationToken.ThrowIfCancellationRequested();
+ 
+-            progress?.Report((85, "Writing the shadow index without changing the live library…"));
++            progress?.Report((85, "Writing coverage evidence and the adoption preview without changing the live library…"));
+             var summary = StoreRun(runId, startedAt, interpretations, analysis, cancellationToken);
+             progress?.Report((100, summary.Message));
+             return new LibraryTruthRunResult(summary);
+@@ -304,6 +304,123 @@
+         return result;
+     }
+ 
++    public IReadOnlyList<LibraryTruthCoverageView> GetCoverages(
++        string? search = null,
++        string? filter = null,
++        bool reviewOnly = false,
++        int limit = 50000)
++    {
++        var run = GetLatestCompletedRunId();
++        if (run == 0) return Array.Empty<LibraryTruthCoverageView>();
++        var result = new List<LibraryTruthCoverageView>();
++        using var connection = _database.OpenConnection();
++        using var command = connection.CreateCommand();
++        var filterSql = BroadcastFilterSql(filter, "b");
++        command.CommandText = $"""
++            SELECT c.id,c.source_broadcast_key,c.recording_key,c.segment_number,c.segment_total,c.target_broadcast_key,
++                   c.coverage_kind,c.start_offset_ms,c.end_offset_ms,c.confidence_score,c.requires_review,
++                   c.media_file_ids_json,c.evidence
++              FROM library_truth_coverages c
++              JOIN library_truth_broadcasts b
++                ON b.run_id=c.run_id AND b.canonical_key=c.source_broadcast_key
++             WHERE c.run_id=$run
++               {filterSql}
++               AND ($reviewOnly=0 OR c.requires_review=1)
++               AND ($search='' OR lower(c.source_broadcast_key) LIKE $like OR lower(c.target_broadcast_key) LIKE $like
++                    OR lower(c.recording_key) LIKE $like OR lower(c.coverage_kind) LIKE $like OR lower(c.evidence) LIKE $like)
++             ORDER BY c.requires_review DESC,c.source_broadcast_key,c.recording_key,c.segment_number,c.target_broadcast_key
++             LIMIT $limit
++            """;
++        command.Parameters.AddWithValue("$run", run);
++        command.Parameters.AddWithValue("$reviewOnly", reviewOnly ? 1 : 0);
++        var normalizedSearch = (search ?? string.Empty).Trim().ToLowerInvariant();
++        command.Parameters.AddWithValue("$search", normalizedSearch);
++        command.Parameters.AddWithValue("$like", $"%{normalizedSearch}%");
++        command.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 50000));
++        using var reader = command.ExecuteReader();
++        while (reader.Read())
++        {
++            result.Add(new LibraryTruthCoverageView(
++                reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetInt32(3),
++                reader.IsDBNull(4) ? null : reader.GetInt32(4), reader.GetString(5), reader.GetString(6),
++                reader.GetInt64(7), reader.GetInt64(8), reader.GetInt32(9), reader.GetInt64(10) != 0,
++                FormatMediaIds(reader.GetString(11)), reader.GetString(12)));
++        }
++        return result;
++    }
++
++    public IReadOnlyList<LibraryTruthAdoptionPreviewView> GetAdoptionPreviews(
++        string? filter = null,
++        string? search = null,
++        int limit = 50000)
++    {
++        var run = GetLatestCompletedRunId();
++        if (run == 0) return Array.Empty<LibraryTruthAdoptionPreviewView>();
++        var result = new List<LibraryTruthAdoptionPreviewView>();
++        using var connection = _database.OpenConnection();
++        using var command = connection.CreateCommand();
++        var filterSql = BroadcastFilterSql(filter, "b");
++        command.CommandText = $"""
++            SELECT p.id,p.canonical_key,p.adoption_state,p.planned_action,p.provisional_episode_id,p.current_episode_count,
++                   p.current_episode_ids_json,p.media_file_count,p.recording_count,p.coverage_count,p.retire_episode_count,
++                   p.reassign_file_count,p.planned_write_count,p.eligible_for_guarded_adoption,p.guard_reason,p.evidence
++              FROM library_truth_adoption_previews p
++              JOIN library_truth_broadcasts b
++                ON b.run_id=p.run_id AND b.canonical_key=p.canonical_key
++             WHERE p.run_id=$run
++               {filterSql}
++               AND ($search='' OR lower(p.canonical_key) LIKE $like OR lower(p.planned_action) LIKE $like
++                    OR lower(p.guard_reason) LIKE $like OR lower(p.evidence) LIKE $like)
++             ORDER BY p.eligible_for_guarded_adoption ASC,
++                      CASE p.adoption_state WHEN 'Blocked' THEN 0 WHEN 'Review recommended' THEN 1 ELSE 2 END,
++                      p.canonical_key
++             LIMIT $limit
++            """;
++        command.Parameters.AddWithValue("$run", run);
++        var normalizedSearch = (search ?? string.Empty).Trim().ToLowerInvariant();
++        command.Parameters.AddWithValue("$search", normalizedSearch);
++        command.Parameters.AddWithValue("$like", $"%{normalizedSearch}%");
++        command.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 50000));
++        using var reader = command.ExecuteReader();
++        while (reader.Read())
++        {
++            result.Add(new LibraryTruthAdoptionPreviewView(
++                reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3),
++                reader.IsDBNull(4) ? null : reader.GetInt64(4), reader.GetInt32(5), FormatMediaIds(reader.GetString(6)),
++                reader.GetInt32(7), reader.GetInt32(8), reader.GetInt32(9), reader.GetInt32(10), reader.GetInt32(11),
++                reader.GetInt32(12), reader.GetInt64(13) != 0, reader.GetString(14), reader.GetString(15)));
++        }
++        return result;
++    }
++
++    public LibraryTruthAdoptionPlanSummary GetAdoptionPlanSummary()
++    {
++        var run = GetLatestCompletedRunId();
++        if (run == 0) return LibraryTruthAdoptionPlanSummary.Empty;
++        using var connection = _database.OpenConnection();
++        using var command = connection.CreateCommand();
++        command.CommandText = """
++            SELECT COUNT(*),
++                   SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN 1 ELSE 0 END),
++                   SUM(CASE WHEN adoption_state='Review recommended' THEN 1 ELSE 0 END),
++                   SUM(CASE WHEN adoption_state='Blocked' THEN 1 ELSE 0 END),
++                   SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN 1 ELSE 0 END),
++                   SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN recording_count ELSE 0 END),
++                   SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN coverage_count ELSE 0 END),
++                   SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN media_file_count ELSE 0 END),
++                   SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN retire_episode_count ELSE 0 END),
++                   SUM(CASE WHEN eligible_for_guarded_adoption=1 AND provisional_episode_id IS NOT NULL THEN 1 ELSE 0 END)
++              FROM library_truth_adoption_previews
++             WHERE run_id=$run
++            """;
++        command.Parameters.AddWithValue("$run", run);
++        using var reader = command.ExecuteReader();
++        if (!reader.Read()) return LibraryTruthAdoptionPlanSummary.Empty;
++        return new LibraryTruthAdoptionPlanSummary(
++            SafeInt(reader, 0), SafeInt(reader, 1), SafeInt(reader, 2), SafeInt(reader, 3), SafeInt(reader, 4),
++            SafeInt(reader, 5), SafeInt(reader, 6), SafeInt(reader, 7), SafeInt(reader, 8), SafeInt(reader, 9));
++    }
++
+     public void ExportLatest(string path, string appVersion)
+     {
+         ArgumentException.ThrowIfNullOrWhiteSpace(path);
+@@ -317,7 +434,10 @@
+             Broadcasts = GetBroadcasts(limit: 50000),
+             Recordings = GetRecordings(limit: 50000),
+             Years = GetYears(),
+-            Conflicts = GetConflicts()
++            Conflicts = GetConflicts(),
++            AdoptionPlan = GetAdoptionPlanSummary(),
++            Coverages = GetCoverages(limit: 50000),
++            AdoptionPreviews = GetAdoptionPreviews(limit: 50000)
+         };
+         var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+         if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+@@ -527,9 +647,18 @@
+                 suspiciousMerge, durationSpread, broadcastConflicts.Length));
+         }
+ 
+-        var coverageAuditedGroups = ApplySameDateCoverageAudit(groups);
+-        var years = BuildYearAnalyses(interpretations, coverageAuditedGroups, splitEpisodes);
+-        return new GroupAnalysis(coverageAuditedGroups, splitEpisodes, conflictMediaIds, conflicts, years, effectivePartAssignments);
++        var coverageAudit = ApplySameDateCoverageAudit(groups);
++        var directCoverages = BuildDirectCoverageEvidence(coverageAudit.Broadcasts, effectivePartAssignments);
++        var coverages = directCoverages.Concat(coverageAudit.InferredCoverages)
++            .OrderBy(x => x.SourceBroadcastKey, StringComparer.OrdinalIgnoreCase)
++            .ThenBy(x => x.RecordingKey, StringComparer.OrdinalIgnoreCase)
++            .ThenBy(x => x.SegmentNumber)
++            .ThenBy(x => x.TargetBroadcastKey, StringComparer.OrdinalIgnoreCase)
++            .ToArray();
++        var adoptionPreviews = BuildAdoptionPreviews(coverageAudit.Broadcasts, coverages);
++        var years = BuildYearAnalyses(interpretations, coverageAudit.Broadcasts, splitEpisodes);
++        return new GroupAnalysis(coverageAudit.Broadcasts, splitEpisodes, conflictMediaIds, conflicts, years,
++            effectivePartAssignments, coverages, adoptionPreviews);
+     }
+ 
+     private static IReadOnlyList<ConflictAnalysis> BuildCrossIdentityConflicts(
+@@ -967,10 +1096,69 @@
+         return evidence;
+     }
+ 
+-    private static IReadOnlyList<BroadcastAnalysis> ApplySameDateCoverageAudit(
++    private static IReadOnlyList<SegmentCoverageAnalysis> BuildDirectCoverageEvidence(
++        IReadOnlyList<BroadcastAnalysis> broadcasts,
++        IReadOnlyDictionary<long, EffectivePartAssignment> effectivePartAssignments)
++    {
++        var result = new List<SegmentCoverageAnalysis>();
++        foreach (var broadcast in broadcasts)
++        {
++            var filesByMediaId = broadcast.Files.ToDictionary(x => x.Input.MediaFileId);
++            foreach (var recording in broadcast.Recordings)
++            {
++                var recordingFiles = recording.MediaFileIds
++                    .Where(filesByMediaId.ContainsKey)
++                    .Select(mediaId => filesByMediaId[mediaId])
++                    .ToArray();
++                if (recordingFiles.Length == 0) continue;
++
++                var segmentGroups = recordingFiles
++                    .GroupBy(file =>
++                    {
++                        if (effectivePartAssignments.TryGetValue(file.Input.MediaFileId, out var effective))
++                            return Math.Max(1, effective.PartNumber);
++                        return recording.IsMultipart ? Math.Max(1, file.PartNumber) : 1;
++                    })
++                    .OrderBy(x => x.Key)
++                    .ToArray();
++                var segmentTotal = recording.IsMultipart
++                    ? recording.ExpectedParts
++                    : 1;
++                var offset = 0L;
++                foreach (var segment in segmentGroups)
++                {
++                    var mediaIds = segment.Select(x => x.Input.MediaFileId).ToHashSet();
++                    var duration = segment.Max(x => Math.Max(0, x.Input.DurationMs));
++                    var end = duration > 0 ? offset + duration : offset;
++                    var kind = recording.IsMultipart ? "Direct multipart segment" : "Direct recording";
++                    var totalText = segmentTotal.HasValue ? $" of {segmentTotal.Value}" : string.Empty;
++                    var evidence = $"Recording {recording.RecordingKey.Split('|').Last()} directly belongs to {broadcast.CanonicalKey}. " +
++                                   $"Segment {segment.Key}{totalText} is supported by {mediaIds.Count:N0} physical file location(s).";
++                    result.Add(new SegmentCoverageAnalysis(
++                        broadcast.CanonicalKey,
++                        recording.RecordingKey,
++                        segment.Key,
++                        segmentTotal,
++                        broadcast.CanonicalKey,
++                        kind,
++                        offset,
++                        end,
++                        recording.ConfidenceScore,
++                        false,
++                        mediaIds,
++                        evidence));
++                    offset = end;
++                }
++            }
++        }
++        return result;
++    }
++
++    private static CoverageAuditResult ApplySameDateCoverageAudit(
+         IReadOnlyList<BroadcastAnalysis> broadcasts)
+     {
+         var updated = broadcasts.ToDictionary(x => x.CanonicalKey, StringComparer.OrdinalIgnoreCase);
++        var inferredCoverages = new List<SegmentCoverageAnalysis>();
+         var dated = broadcasts.Where(x => x.Files.FirstOrDefault()?.AirDate is not null)
+             .GroupBy(x => new
+             {
+@@ -989,10 +1177,14 @@
+                 {
+                     var preferred = sibling.Recordings.FirstOrDefault(x => x.IsPreferredCandidate)
+                                     ?? sibling.Recordings.OrderByDescending(x => x.DurationMs).FirstOrDefault();
+-                    return (Broadcast: sibling, Duration: preferred?.DurationMs ?? 0L);
+-                }).Where(x => x.Duration > 0).ToArray();
++                    return (Broadcast: sibling, Recording: preferred, Duration: preferred?.DurationMs ?? 0L);
++                }).Where(x => x.Duration > 0 && x.Recording is not null)
++                  .OrderBy(x => SlotOrder(x.Broadcast.Files[0].CanonicalSlot))
++                  .ThenBy(x => x.Broadcast.CanonicalKey, StringComparer.OrdinalIgnoreCase)
++                  .ToArray();
+ 
+                 string? riskReason = null;
++                List<SegmentCoverageAnalysis>? proposedCoverage = null;
+                 foreach (var recording in standard.Recordings.Where(x => x.DurationMs > TimeSpan.FromMinutes(30).TotalMilliseconds))
+                 {
+                     var equivalent = siblingDurations.FirstOrDefault(x =>
+@@ -1000,6 +1192,22 @@
+                     if (equivalent.Broadcast is not null)
+                     {
+                         riskReason = $"A Standard recording ({TimeSpan.FromMilliseconds(recording.DurationMs):h\\:mm\\:ss}) matches the {DisplaySlot(equivalent.Broadcast)} broadcast on the same date and should be represented as an alternate encode or coverage link rather than a third canonical broadcast.";
++                        proposedCoverage = new List<SegmentCoverageAnalysis>
++                        {
++                            new(
++                                standard.CanonicalKey,
++                                recording.RecordingKey,
++                                1,
++                                1,
++                                equivalent.Broadcast.CanonicalKey,
++                                "Same-date equivalent",
++                                0,
++                                recording.DurationMs,
++                                92,
++                                true,
++                                recording.MediaFileIds,
++                                $"The full Standard recording duration matches the preferred {DisplaySlot(equivalent.Broadcast)} recording within one percent and two minutes. Confirm the relationship before adoption.")
++                        };
+                         break;
+                     }
+ 
+@@ -1009,12 +1217,42 @@
+                         var combined = siblingDurations[left].Duration + siblingDurations[right].Duration;
+                         if (!DurationsApproximatelyEqual(recording.DurationMs, combined, 120_000, 0.01)) continue;
+                         riskReason = $"A Standard recording ({TimeSpan.FromMilliseconds(recording.DurationMs):h\\:mm\\:ss}) matches the combined {DisplaySlot(siblingDurations[left].Broadcast)} and {DisplaySlot(siblingDurations[right].Broadcast)} broadcasts. Model segment-to-broadcast coverage instead of preserving a third canonical Standard broadcast.";
++                        proposedCoverage = new List<SegmentCoverageAnalysis>
++                        {
++                            new(
++                                standard.CanonicalKey,
++                                recording.RecordingKey,
++                                1,
++                                2,
++                                siblingDurations[left].Broadcast.CanonicalKey,
++                                "Composite slot coverage",
++                                0,
++                                siblingDurations[left].Duration,
++                                88,
++                                true,
++                                recording.MediaFileIds,
++                                $"The first inferred range matches the preferred {DisplaySlot(siblingDurations[left].Broadcast)} recording duration. The boundary is duration-derived and requires confirmation."),
++                            new(
++                                standard.CanonicalKey,
++                                recording.RecordingKey,
++                                2,
++                                2,
++                                siblingDurations[right].Broadcast.CanonicalKey,
++                                "Composite slot coverage",
++                                siblingDurations[left].Duration,
++                                combined,
++                                88,
++                                true,
++                                recording.MediaFileIds,
++                                $"The second inferred range matches the preferred {DisplaySlot(siblingDurations[right].Broadcast)} recording duration. The boundary is duration-derived and requires confirmation.")
++                        };
+                         break;
+                     }
+                     if (riskReason is not null) break;
+                 }
+ 
+                 if (riskReason is null) continue;
++                if (proposedCoverage is not null) inferredCoverages.AddRange(proposedCoverage);
+                 var state = standard.AdoptionState == "Blocked" ? "Blocked" : "Review recommended";
+                 var reason = AppendSentence(standard.AdoptionReason, riskReason);
+                 updated[standard.CanonicalKey] = standard with
+@@ -1028,9 +1266,84 @@
+             }
+         }
+ 
+-        return broadcasts.Select(x => updated[x.CanonicalKey]).ToArray();
++        return new CoverageAuditResult(
++            broadcasts.Select(x => updated[x.CanonicalKey]).ToArray(),
++            inferredCoverages);
+     }
+ 
++    private static IReadOnlyList<AdoptionPreviewAnalysis> BuildAdoptionPreviews(
++        IReadOnlyList<BroadcastAnalysis> broadcasts,
++        IReadOnlyList<SegmentCoverageAnalysis> coverages)
++    {
++        var coverageBySource = coverages
++            .GroupBy(x => x.SourceBroadcastKey, StringComparer.OrdinalIgnoreCase)
++            .ToDictionary(x => x.Key, x => x.ToArray(), StringComparer.OrdinalIgnoreCase);
++        var result = new List<AdoptionPreviewAnalysis>(broadcasts.Count);
++        foreach (var broadcast in broadcasts)
++        {
++            var episodeGroups = broadcast.Files
++                .GroupBy(x => x.Input.CurrentEpisodeId)
++                .OrderByDescending(x => x.Count())
++                .ThenBy(x => x.Key)
++                .ToArray();
++            long? provisionalEpisodeId = episodeGroups.Length == 0 ? null : episodeGroups[0].Key;
++            var currentEpisodeIds = episodeGroups.Select(x => x.Key).OrderBy(x => x).ToArray();
++            var reassignFiles = provisionalEpisodeId.HasValue
++                ? broadcast.Files.Count(x => x.Input.CurrentEpisodeId != provisionalEpisodeId.Value)
++                : broadcast.Files.Length;
++            var retireEpisodes = Math.Max(0, currentEpisodeIds.Length - 1);
++            var sourceCoverageCount = coverageBySource.TryGetValue(broadcast.CanonicalKey, out var sourceCoverage)
++                ? sourceCoverage.Length
++                : 0;
++            var eligible = broadcast.AdoptionState is "Ready" or "Ready with recording choice";
++            var plannedAction = !eligible
++                ? broadcast.AdoptionState == "Blocked"
++                    ? "Hold until blocking identity evidence is resolved"
++                    : "Hold for focused recording or coverage review"
++                : currentEpisodeIds.Length > 1
++                    ? $"Consolidate {currentEpisodeIds.Length:N0} live episode rows beneath one canonical broadcast"
++                    : broadcast.Files.Any(x => x.HasMeaningfulChange)
++                        ? "Re-key the existing live episode and attach canonical recording structure"
++                        : broadcast.Recordings.Count > 1 || sourceCoverageCount > 1
++                            ? "Attach ranked recordings and explicit coverage to the existing broadcast"
++                            : "Attach canonical recording structure to the existing broadcast";
++            var plannedWriteCount = 1 + broadcast.Files.Length + broadcast.Recordings.Count + sourceCoverageCount + retireEpisodes;
++            var guardReason = eligible
++                ? "Prepared for a later transactional migration only after backup, state-preservation and rollback guards pass. Alpha6 cannot execute this plan."
++                : broadcast.AdoptionReason;
++            var evidence = $"Preview selects {(provisionalEpisodeId.HasValue ? $"live episode {provisionalEpisodeId.Value:N0}" : "no live episode")} as the provisional survivor using the largest physical-file contribution, then the lowest ID as a deterministic tie-break. " +
++                           $"It would preserve {broadcast.Files.Length:N0} media-file link(s), create {broadcast.Recordings.Count:N0} recording row(s), persist {sourceCoverageCount:N0} coverage row(s), and consolidate {retireEpisodes:N0} redundant live episode row(s). " +
++                           "This is planning evidence only; no live rows are updated, hidden or deleted.";
++            result.Add(new AdoptionPreviewAnalysis(
++                broadcast.CanonicalKey,
++                broadcast.AdoptionState,
++                plannedAction,
++                provisionalEpisodeId,
++                currentEpisodeIds,
++                broadcast.Files.Length,
++                broadcast.Recordings.Count,
++                sourceCoverageCount,
++                retireEpisodes,
++                reassignFiles,
++                plannedWriteCount,
++                eligible,
++                guardReason,
++                evidence));
++        }
++        return result;
++    }
++
++    private static int SlotOrder(string? canonicalSlot)
++        => (canonicalSlot ?? string.Empty).Trim().ToUpperInvariant() switch
++        {
++            "MORNING" => 10,
++            "MIDDAY" => 20,
++            "AFTERNOON" => 30,
++            "EVENING" => 40,
++            "OPIERADIO" => 50,
++            _ => 100
++        };
++
+     private static string DisplaySlot(BroadcastAnalysis broadcast)
+     {
+         var display = broadcast.Files.FirstOrDefault()?.BroadcastSlot;
+@@ -1094,7 +1407,7 @@
+         using (var deleteFiles = connection.CreateCommand())
+         {
+             deleteFiles.Transaction = transaction;
+-            deleteFiles.CommandText = "DELETE FROM library_truth_files WHERE run_id=$run; DELETE FROM library_truth_recordings WHERE run_id=$run; DELETE FROM library_truth_broadcasts WHERE run_id=$run; DELETE FROM library_truth_years WHERE run_id=$run; DELETE FROM library_truth_conflicts WHERE run_id=$run;";
++            deleteFiles.CommandText = "DELETE FROM library_truth_coverages WHERE run_id=$run; DELETE FROM library_truth_adoption_previews WHERE run_id=$run; DELETE FROM library_truth_files WHERE run_id=$run; DELETE FROM library_truth_recordings WHERE run_id=$run; DELETE FROM library_truth_broadcasts WHERE run_id=$run; DELETE FROM library_truth_years WHERE run_id=$run; DELETE FROM library_truth_conflicts WHERE run_id=$run;";
+             deleteFiles.Parameters.AddWithValue("$run", runId);
+             deleteFiles.ExecuteNonQuery();
+         }
+@@ -1277,6 +1590,65 @@
+             }
+         }
+ 
++        using var insertCoverage = connection.CreateCommand();
++        insertCoverage.Transaction = transaction;
++        insertCoverage.CommandText = """
++            INSERT INTO library_truth_coverages(
++                run_id,source_broadcast_key,recording_key,segment_number,segment_total,target_broadcast_key,
++                coverage_kind,start_offset_ms,end_offset_ms,confidence_score,requires_review,media_file_ids_json,evidence)
++            VALUES($run,$source,$recording,$segment,$total,$target,$kind,$start,$end,$confidence,$review,$media,$evidence)
++            """;
++        foreach (var coverage in analysis.Coverages)
++        {
++            insertCoverage.Parameters.Clear();
++            insertCoverage.Parameters.AddWithValue("$run", runId);
++            insertCoverage.Parameters.AddWithValue("$source", coverage.SourceBroadcastKey);
++            insertCoverage.Parameters.AddWithValue("$recording", coverage.RecordingKey);
++            insertCoverage.Parameters.AddWithValue("$segment", coverage.SegmentNumber);
++            insertCoverage.Parameters.AddWithValue("$total", coverage.SegmentTotal ?? (object)DBNull.Value);
++            insertCoverage.Parameters.AddWithValue("$target", coverage.TargetBroadcastKey);
++            insertCoverage.Parameters.AddWithValue("$kind", coverage.CoverageKind);
++            insertCoverage.Parameters.AddWithValue("$start", coverage.StartOffsetMs);
++            insertCoverage.Parameters.AddWithValue("$end", coverage.EndOffsetMs);
++            insertCoverage.Parameters.AddWithValue("$confidence", coverage.ConfidenceScore);
++            insertCoverage.Parameters.AddWithValue("$review", coverage.RequiresReview ? 1 : 0);
++            insertCoverage.Parameters.AddWithValue("$media", JsonSerializer.Serialize(coverage.MediaFileIds.OrderBy(x => x), _json));
++            insertCoverage.Parameters.AddWithValue("$evidence", coverage.Evidence);
++            insertCoverage.ExecuteNonQuery();
++        }
++
++        using var insertPreview = connection.CreateCommand();
++        insertPreview.Transaction = transaction;
++        insertPreview.CommandText = """
++            INSERT INTO library_truth_adoption_previews(
++                run_id,canonical_key,adoption_state,planned_action,provisional_episode_id,current_episode_count,
++                current_episode_ids_json,media_file_count,recording_count,coverage_count,retire_episode_count,
++                reassign_file_count,planned_write_count,eligible_for_guarded_adoption,guard_reason,evidence)
++            VALUES($run,$key,$state,$action,$survivor,$currentCount,$currentIds,$files,$recordings,$coverages,
++                   $retire,$reassign,$writes,$eligible,$guard,$evidence)
++            """;
++        foreach (var preview in analysis.AdoptionPreviews)
++        {
++            insertPreview.Parameters.Clear();
++            insertPreview.Parameters.AddWithValue("$run", runId);
++            insertPreview.Parameters.AddWithValue("$key", preview.CanonicalKey);
++            insertPreview.Parameters.AddWithValue("$state", preview.AdoptionState);
++            insertPreview.Parameters.AddWithValue("$action", preview.PlannedAction);
++            insertPreview.Parameters.AddWithValue("$survivor", preview.ProvisionalEpisodeId ?? (object)DBNull.Value);
++            insertPreview.Parameters.AddWithValue("$currentCount", preview.CurrentEpisodeIds.Count);
++            insertPreview.Parameters.AddWithValue("$currentIds", JsonSerializer.Serialize(preview.CurrentEpisodeIds, _json));
++            insertPreview.Parameters.AddWithValue("$files", preview.MediaFileCount);
++            insertPreview.Parameters.AddWithValue("$recordings", preview.RecordingCount);
++            insertPreview.Parameters.AddWithValue("$coverages", preview.CoverageCount);
++            insertPreview.Parameters.AddWithValue("$retire", preview.RetireEpisodeCount);
++            insertPreview.Parameters.AddWithValue("$reassign", preview.ReassignFileCount);
++            insertPreview.Parameters.AddWithValue("$writes", preview.PlannedWriteCount);
++            insertPreview.Parameters.AddWithValue("$eligible", preview.EligibleForGuardedAdoption ? 1 : 0);
++            insertPreview.Parameters.AddWithValue("$guard", preview.GuardReason);
++            insertPreview.Parameters.AddWithValue("$evidence", preview.Evidence);
++            insertPreview.ExecuteNonQuery();
++        }
++
+         using var insertConflict = connection.CreateCommand();
+         insertConflict.Transaction = transaction;
+         insertConflict.CommandText = """
+@@ -1329,7 +1701,8 @@
+         var ready = analysis.Broadcasts.Count(x => x.AdoptionState is "Ready" or "Ready with recording choice");
+         var reviewRecommended = analysis.Broadcasts.Count(x => x.AdoptionState == "Review recommended");
+         var blocked = analysis.Broadcasts.Count(x => x.AdoptionState == "Blocked");
+-        var message = $"Shadow library built from {interpretations.Count:N0} physical files: {analysis.Broadcasts.Count:N0} canonical broadcasts; {ready:N0} adoption-ready, {reviewRecommended:N0} review recommended and {blocked:N0} blocked. {unknown:N0} dates remain unresolved. The live library was not changed.";
++        var inferredCoverage = analysis.Coverages.Count(x => x.RequiresReview);
++        var message = $"Shadow library built from {interpretations.Count:N0} physical files: {analysis.Broadcasts.Count:N0} canonical broadcasts; {ready:N0} adoption-ready, {reviewRecommended:N0} review recommended and {blocked:N0} blocked. {analysis.Coverages.Count:N0} segment coverage rows and {analysis.AdoptionPreviews.Count:N0} non-destructive adoption previews were persisted; {inferredCoverage:N0} coverage rows require confirmation. {unknown:N0} dates remain unresolved. The live library was not changed.";
+ 
+         using (var updateRun = connection.CreateCommand())
+         {
+@@ -1465,6 +1838,19 @@
+         }
+     }
+ 
++    private static string FormatMediaIds(string json)
++    {
++        try
++        {
++            var ids = JsonSerializer.Deserialize<long[]>(json) ?? Array.Empty<long>();
++            return ids.Length == 0 ? "None" : string.Join(", ", ids.Select(x => x.ToString("N0")));
++        }
++        catch
++        {
++            return json;
++        }
++    }
++
+     private static int SafeInt(SqliteDataReader reader, int ordinal)
+         => reader.IsDBNull(ordinal) ? 0 : Convert.ToInt32(reader.GetValue(ordinal));
+ 
+@@ -1526,6 +1912,37 @@
+         long MedianDurationMs,
+         IReadOnlySet<string> ProgrammeTokens);
+     private sealed record SuspiciousMergeAssessment(bool IsSuspicious, string Reason);
++    private sealed record SegmentCoverageAnalysis(
++        string SourceBroadcastKey,
++        string RecordingKey,
++        int SegmentNumber,
++        int? SegmentTotal,
++        string TargetBroadcastKey,
++        string CoverageKind,
++        long StartOffsetMs,
++        long EndOffsetMs,
++        int ConfidenceScore,
++        bool RequiresReview,
++        IReadOnlySet<long> MediaFileIds,
++        string Evidence);
++    private sealed record CoverageAuditResult(
++        IReadOnlyList<BroadcastAnalysis> Broadcasts,
++        IReadOnlyList<SegmentCoverageAnalysis> InferredCoverages);
++    private sealed record AdoptionPreviewAnalysis(
++        string CanonicalKey,
++        string AdoptionState,
++        string PlannedAction,
++        long? ProvisionalEpisodeId,
++        IReadOnlyList<long> CurrentEpisodeIds,
++        int MediaFileCount,
++        int RecordingCount,
++        int CoverageCount,
++        int RetireEpisodeCount,
++        int ReassignFileCount,
++        int PlannedWriteCount,
++        bool EligibleForGuardedAdoption,
++        string GuardReason,
++        string Evidence);
+     private sealed record BroadcastAnalysis(
+         string CanonicalKey,
+         LibraryTruthInterpretation[] Files,
+@@ -1569,5 +1986,7 @@
+         IReadOnlySet<long> ConflictingIdentityMediaIds,
+         IReadOnlyList<ConflictAnalysis> Conflicts,
+         IReadOnlyList<YearAnalysis> Years,
+-        IReadOnlyDictionary<long, EffectivePartAssignment> EffectivePartAssignments);
++        IReadOnlyDictionary<long, EffectivePartAssignment> EffectivePartAssignments,
++        IReadOnlyList<SegmentCoverageAnalysis> Coverages,
++        IReadOnlyList<AdoptionPreviewAnalysis> AdoptionPreviews);
+ }
+diff -ruN alpha5/TheRadioVault.Tests/Program.cs alpha6/TheRadioVault.Tests/Program.cs
+--- alpha5/TheRadioVault.Tests/Program.cs	2026-07-19 17:16:34.000000000 +0000
++++ alpha6/TheRadioVault.Tests/Program.cs	2026-07-19 18:25:19.083049092 +0000
+@@ -59,6 +59,8 @@
+     ("Library Truth flags repeated programme-specific duration clusters", LibraryTruthFlagsProgrammeSpecificDurationClusters),
+     ("Library Truth detects composite AM and PM coverage", LibraryTruthDetectsCompositeCoverage),
+     ("Library Truth detects same-date cross-slot equivalents", LibraryTruthDetectsCrossSlotEquivalent),
++    ("Library Truth persists direct recording segment coverage", LibraryTruthPersistsDirectSegmentCoverage),
++    ("Library Truth prepares guarded adoption plans without live writes", LibraryTruthPreparesGuardedAdoptionPreview),
+     ("Research audit catches show guest", ResearchAuditCatchesShowGuest),
+     ("Research audit marks safe repairs", ResearchAuditMarksSafeRepairs),
+     ("Web query filters favourites", WebQueryFiltersFavourites),
+@@ -97,8 +99,8 @@
+     ("Web client registers secure offline shell", WebClientRegistersSecureOfflineShell),
+     ("Web client caches downloaded artwork", WebClientCachesDownloadedArtwork),
+     ("Secure web options carry certificate material", SecureWebOptionsCarryCertificateMaterial),
+-    ("Schema 41 includes Library Truth recording audit tables", Schema41IncludesLibraryTruthAuditTables),
+-    ("Schema 41 upgrades Library Truth schema 40 safely", Schema41UpgradesLibraryTruthSchema40Safely),
++    ("Schema 42 includes Library Truth coverage and adoption-preview tables", Schema42IncludesLibraryTruthCoverageTables),
++    ("Schema 42 upgrades Library Truth schema 41 safely", Schema42UpgradesLibraryTruthSchema41Safely),
+     ("Whisper configuration exposes model capabilities", WhisperConfigurationExposesModelCapabilities),
+     ("Transcription ranges have stable display text", TranscriptionRangesHaveStableDisplayText),
+     ("Transcription jobs preserve worker options", TranscriptionJobsPreserveWorkerOptions),
+@@ -965,6 +967,13 @@
+         Equal("Review recommended", standard.AdoptionState);
+         True(standard.AdoptionReason.Contains("combined", StringComparison.OrdinalIgnoreCase));
+         True(engine.GetBroadcasts().Where(x => x.BroadcastSlot != "Standard").All(x => x.AdoptionState == "Ready"));
++        var inferred = engine.GetCoverages(reviewOnly: true).OrderBy(x => x.SegmentNumber).ToArray();
++        Equal(2, inferred.Length);
++        True(inferred.All(x => x.CoverageKind == "Composite slot coverage"));
++        Equal(0L, inferred[0].StartOffsetMs);
++        Equal(inferred[0].EndOffsetMs, inferred[1].StartOffsetMs);
++        True(inferred.All(x => x.SourceBroadcastKey.Contains("|STANDARD", StringComparison.OrdinalIgnoreCase)));
++        True(inferred.Select(x => x.TargetBroadcastKey).Distinct(StringComparer.OrdinalIgnoreCase).Count() == 2);
+     });
+ }
+ 
+@@ -980,9 +989,84 @@
+         var standard = engine.GetBroadcasts().Single(x => x.BroadcastSlot == "Standard");
+         Equal("Review recommended", standard.AdoptionState);
+         True(standard.AdoptionReason.Contains("alternate encode", StringComparison.OrdinalIgnoreCase));
++        var inferred = engine.GetCoverages(reviewOnly: true).Single();
++        Equal("Same-date equivalent", inferred.CoverageKind);
++        True(inferred.TargetBroadcastKey.Contains("|MORNING", StringComparison.OrdinalIgnoreCase));
+     });
+ }
+ 
++static void LibraryTruthPersistsDirectSegmentCoverage()
++{
++    RunLibraryTruthScenario("Ron & Fez", new[]
++    {
++        ("R&F-10-31-2002a.mp3", "2002-10-31", "", (long)TimeSpan.FromHours(2).TotalMilliseconds, "COVERAGE-A"),
++        ("R&F-10-31-2002b.mp3", "2002-10-31", "", (long)TimeSpan.FromHours(1.8).TotalMilliseconds, "COVERAGE-B")
++    }, engine =>
++    {
++        var direct = engine.GetCoverages().OrderBy(x => x.SegmentNumber).ToArray();
++        Equal(2, direct.Length);
++        Equal(1, direct[0].SegmentNumber);
++        Equal(2, direct[1].SegmentNumber);
++        Equal((int?)2, direct[0].SegmentTotal);
++        Equal(direct[0].EndOffsetMs, direct[1].StartOffsetMs);
++        True(direct.All(x => x.SourceBroadcastKey == x.TargetBroadcastKey));
++        True(direct.All(x => !x.RequiresReview));
++    });
++}
++
++static void LibraryTruthPreparesGuardedAdoptionPreview()
++{
++    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
++    Directory.CreateDirectory(directory);
++    var databasePath = Path.Combine(directory, "truth-alpha6-adoption.sqlite");
++    try
++    {
++        var database = new SqliteDatabase(databasePath);
++        database.Initialize();
++        using (var connection = database.OpenConnection())
++        {
++            using var command = connection.CreateCommand();
++            command.CommandText = """
++                INSERT OR IGNORE INTO collections(name,sort_name) VALUES('Ron & Fez','Ron and Fez');
++                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
++                VALUES('D:\Radio\Alpha6',(SELECT id FROM collections WHERE name='Ron & Fez'),1,1);
++                INSERT INTO episodes(collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid)
++                VALUES((SELECT id FROM collections WHERE name='Ron & Fez'),'2005-05-12','High','First','Unplayed',$now,$now,'ALPHA6-A');
++                INSERT INTO episodes(collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid)
++                VALUES((SELECT id FROM collections WHERE name='Ron & Fez'),'2005-05-12','High','Second','Unplayed',$now,$now,'ALPHA6-B');
++                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
++                VALUES((SELECT id FROM episodes WHERE broadcast_uid='ALPHA6-A'),'D:\Radio\Alpha6\a.mp3','R&F 05-12-2005.mp3',1000,$now,0,$now,10800000,'ALPHA6-ONE','AvailableOffline',1);
++                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
++                VALUES((SELECT id FROM episodes WHERE broadcast_uid='ALPHA6-B'),'D:\Radio\Alpha6\b.mp3','Ron and Fez_ 2005-05-12.mp3',1200,$now,0,$now,10810000,'ALPHA6-TWO','AvailableOffline',1);
++                """;
++            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
++            command.ExecuteNonQuery();
++        }
++
++        var engine = new LibraryTruthEngine(database);
++        engine.BuildShadowIndex();
++        var preview = engine.GetAdoptionPreviews().Single();
++        True(preview.EligibleForGuardedAdoption);
++        Equal(2, preview.CurrentEpisodeCount);
++        Equal(1, preview.RetireEpisodeCount);
++        Equal(1, preview.ReassignFileCount);
++        True(preview.ProvisionalEpisodeId.HasValue);
++        True(preview.GuardReason.Contains("cannot execute", StringComparison.OrdinalIgnoreCase));
++        var summary = engine.GetAdoptionPlanSummary();
++        Equal(1, summary.EligibleBroadcasts);
++        Equal(1, summary.LiveEpisodeRowsToConsolidate);
++
++        using var verify = database.OpenConnection();
++        using var count = verify.CreateCommand();
++        count.CommandText = "SELECT COUNT(*) FROM episodes";
++        Equal(2L, Convert.ToInt64(count.ExecuteScalar()));
++    }
++    finally
++    {
++        try { Directory.Delete(directory, true); } catch { }
++    }
++}
++
+ static void RunLibraryTruthScenario(
+     string collection,
+     IReadOnlyList<(string Filename, string Date, string Slot, long DurationMs, string PartialHash)> files,
+@@ -990,7 +1074,7 @@
+ {
+     var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+     Directory.CreateDirectory(directory);
+-    var databasePath = Path.Combine(directory, "truth-alpha5.sqlite");
++    var databasePath = Path.Combine(directory, "truth-alpha6.sqlite");
+     try
+     {
+         var database = new SqliteDatabase(databasePath);
+@@ -1002,7 +1086,7 @@
+                                 "INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled) " +
+                                 "VALUES($root,(SELECT id FROM collections WHERE name=$collection),1,1);";
+             setup.Parameters.AddWithValue("$collection", collection);
+-            setup.Parameters.AddWithValue("$root", @"D:\Radio\Alpha5");
++            setup.Parameters.AddWithValue("$root", @"D:\Radio\Alpha6");
+             setup.ExecuteNonQuery();
+ 
+             for (var index = 0; index < files.Count; index++)
+@@ -1019,8 +1103,8 @@
+                 insert.Parameters.AddWithValue("$date", file.Date);
+                 insert.Parameters.AddWithValue("$title", file.Filename);
+                 insert.Parameters.AddWithValue("$slot", file.Slot);
+-                insert.Parameters.AddWithValue("$uid", $"ALPHA5-{index}-{Guid.NewGuid():N}");
+-                insert.Parameters.AddWithValue("$path", Path.Combine(@"D:\Radio\Alpha5", file.Filename));
++                insert.Parameters.AddWithValue("$uid", $"ALPHA6-{index}-{Guid.NewGuid():N}");
++                insert.Parameters.AddWithValue("$path", Path.Combine(@"D:\Radio\Alpha6", file.Filename));
+                 insert.Parameters.AddWithValue("$filename", file.Filename);
+                 insert.Parameters.AddWithValue("$size", Math.Max(1000, file.DurationMs / 10));
+                 insert.Parameters.AddWithValue("$duration", file.DurationMs);
+@@ -1576,11 +1660,11 @@
+     Equal("ABCDEF", options.RootCertificateThumbprint);
+ }
+ 
+-static void Schema41UpgradesLibraryTruthSchema40Safely()
++static void Schema42UpgradesLibraryTruthSchema41Safely()
+ {
+     var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+     Directory.CreateDirectory(directory);
+-    var path = Path.Combine(directory, "schema40.sqlite");
++    var path = Path.Combine(directory, "schema41.sqlite");
+     try
+     {
+         using (var legacy = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
+@@ -1588,7 +1672,7 @@
+             legacy.Open();
+             using var command = legacy.CreateCommand();
+             command.CommandText = """
+-                PRAGMA user_version=40;
++                PRAGMA user_version=41;
+                 CREATE TABLE library_truth_runs (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     started_at TEXT NOT NULL,
+@@ -1649,13 +1733,16 @@
+         using var connection = database.OpenConnection();
+         using var version = connection.CreateCommand();
+         version.CommandText = "PRAGMA user_version";
+-        Equal(41L, Convert.ToInt64(version.ExecuteScalar()));
++        Equal(42L, Convert.ToInt64(version.ExecuteScalar()));
+         using var columns = connection.CreateCommand();
+         columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_recordings') WHERE name IN ('role','completeness_score','preferred_score','duration_ratio','is_preferred_candidate','review_reason')";
+         Equal(6L, Convert.ToInt64(columns.ExecuteScalar()));
+         using var index = connection.CreateCommand();
+         index.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='ix_library_truth_recordings_role'";
+         Equal(1L, Convert.ToInt64(index.ExecuteScalar()));
++        using var alpha6Tables = connection.CreateCommand();
++        alpha6Tables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_coverages','library_truth_adoption_previews')";
++        Equal(2L, Convert.ToInt64(alpha6Tables.ExecuteScalar()));
+     }
+     finally
+     {
+@@ -1663,7 +1750,7 @@
+     }
+ }
+ 
+-static void Schema41IncludesLibraryTruthAuditTables()
++static void Schema42IncludesLibraryTruthCoverageTables()
+ {
+     var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+     Directory.CreateDirectory(directory);
+@@ -1675,7 +1762,7 @@
+         using var connection = database.OpenConnection();
+         using var version = connection.CreateCommand();
+         version.CommandText = "PRAGMA user_version";
+-        Equal(41L, Convert.ToInt64(version.ExecuteScalar()));
++        Equal(42L, Convert.ToInt64(version.ExecuteScalar()));
+         using var qualityTable = connection.CreateCommand();
+         qualityTable.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='research_quality_actions'";
+         Equal(1L, Convert.ToInt64(qualityTable.ExecuteScalar()));
+@@ -1716,8 +1803,14 @@
+         truthFileColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_files') WHERE name='recording_key'";
+         Equal(1L, Convert.ToInt64(truthFileColumns.ExecuteScalar()));
+         using var truthAuditTables = connection.CreateCommand();
+-        truthAuditTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_years','library_truth_conflicts')";
+-        Equal(2L, Convert.ToInt64(truthAuditTables.ExecuteScalar()));
++        truthAuditTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_years','library_truth_conflicts','library_truth_coverages','library_truth_adoption_previews')";
++        Equal(4L, Convert.ToInt64(truthAuditTables.ExecuteScalar()));
++        using var truthCoverageColumns = connection.CreateCommand();
++        truthCoverageColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_coverages') WHERE name IN ('recording_key','segment_number','target_broadcast_key','coverage_kind','start_offset_ms','end_offset_ms','requires_review','media_file_ids_json')";
++        Equal(8L, Convert.ToInt64(truthCoverageColumns.ExecuteScalar()));
++        using var truthPreviewColumns = connection.CreateCommand();
++        truthPreviewColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_adoption_previews') WHERE name IN ('canonical_key','planned_action','provisional_episode_id','current_episode_ids_json','coverage_count','planned_write_count','eligible_for_guarded_adoption','guard_reason')";
++        Equal(8L, Convert.ToInt64(truthPreviewColumns.ExecuteScalar()));
+         using var truthRecordingColumns = connection.CreateCommand();
+         truthRecordingColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_recordings') WHERE name IN ('role','completeness_score','preferred_score','duration_ratio','is_preferred_candidate','review_reason')";
+         Equal(6L, Convert.ToInt64(truthRecordingColumns.ExecuteScalar()));
+diff -ruN alpha5/VERSION.txt alpha6/VERSION.txt
+--- alpha5/VERSION.txt	2026-07-19 17:09:03.000000000 +0000
++++ alpha6/VERSION.txt	2026-07-19 18:06:00.223729687 +0000
+@@ -1 +1 @@
+-0.28.0-alpha5-multipart-family-corrections
++0.28.0-alpha6-adoption-preview
+diff -ruN alpha5/validate-source.ps1 alpha6/validate-source.ps1
+--- alpha5/validate-source.ps1	2026-07-19 17:15:07.000000000 +0000
++++ alpha6/validate-source.ps1	2026-07-19 18:24:40.915732855 +0000
+@@ -111,8 +111,8 @@
+ }
+ 
+ $schemaText = Get-Content (Join-Path $root "TheRadioVault.Data\Database\SqliteDatabase.cs") -Raw
+-if ($schemaText -notmatch 'CurrentSchemaVersion\s*=\s*41') {
+-    Add-ValidationError "v0.28 alpha5 Library Truth releases must use database schema 41."
++if ($schemaText -notmatch 'CurrentSchemaVersion\s*=\s*42') {
++    Add-ValidationError "v0.28 alpha6 Library Truth releases must use database schema 42."
+ }
+ foreach ($columnName in @('requires_review','review_category','recommended_action','decision_source')) {
+     if ($schemaText -notmatch [regex]::Escape($columnName)) {
+@@ -130,17 +130,17 @@
+ if ($schemaText -notmatch 'CREATE TABLE IF NOT EXISTS preservation_scan_runs') {
+     Add-ValidationError "Preserved schema-39 preservation scan ledger is missing."
+ }
+-foreach ($truthTable in @('library_truth_runs','library_truth_files','library_truth_recordings','library_truth_broadcasts','library_truth_years','library_truth_conflicts')) {
++foreach ($truthTable in @('library_truth_runs','library_truth_files','library_truth_recordings','library_truth_broadcasts','library_truth_years','library_truth_conflicts','library_truth_coverages','library_truth_adoption_previews')) {
+     if ($schemaText -notmatch ('CREATE TABLE IF NOT EXISTS ' + [regex]::Escape($truthTable))) {
+-        Add-ValidationError "Schema 41 Library Truth table is missing: $truthTable"
++        Add-ValidationError "Schema 42 Library Truth table is missing: $truthTable"
+     }
+ }
+ if ($schemaText -notmatch 'recording_key TEXT NOT NULL DEFAULT' -or $schemaText -notmatch 'ix_library_truth_files_run_recording') {
+-    Add-ValidationError "Schema 41 must assign physical-file shadow rows to recording families."
++    Add-ValidationError "Schema 42 must assign physical-file shadow rows to recording families."
+ }
+ foreach ($auditColumn in @('adoption_state','preferred_recording_key','suspicious_merge','duration_spread_ratio','cross_identity_conflict_count','role','completeness_score','preferred_score','duration_ratio','is_preferred_candidate')) {
+     if ($schemaText -notmatch [regex]::Escape($auditColumn)) {
+-        Add-ValidationError "Schema 41 Library Truth recording-audit column is missing: $auditColumn"
++        Add-ValidationError "Schema 42 Library Truth recording-audit column is missing: $auditColumn"
+     }
+ }
+ if ($schemaText -notmatch 'CREATE TABLE IF NOT EXISTS research_import_changes') {
+@@ -204,7 +204,7 @@
+ }
+ 
+ $testText = Get-Content (Join-Path $root "TheRadioVault.Tests\Program.cs") -Raw
+-foreach ($testCapability in @('Background jobs cancel safely','Background jobs dispose safely while running','Web API exposes change feed','Web API requests job cancellation','Web server stop is idempotent','Web shell reports configured app version','Schema 41 includes Library Truth recording audit tables','Schema 41 upgrades Library Truth schema 40 safely')) {
++foreach ($testCapability in @('Background jobs cancel safely','Background jobs dispose safely while running','Web API exposes change feed','Web API requests job cancellation','Web server stop is idempotent','Web shell reports configured app version','Schema 42 includes Library Truth coverage and adoption-preview tables','Schema 42 upgrades Library Truth schema 41 safely')) {
+     if ($testText -notmatch [regex]::Escape($testCapability)) {
+         Add-ValidationError "Phoenix 4 capability test is missing: $testCapability"
+     }
+@@ -302,7 +302,7 @@
+     -not (Test-Path (Join-Path $root "TheRadioVault\TranscriptionRequestWindow.xaml.cs"))) {
+     Add-ValidationError "The local transcription request window is missing."
+ }
+-foreach ($testCapability in @('Schema 41 includes Library Truth recording audit tables','Whisper configuration exposes model capabilities','Transcription ranges have stable display text','Transcription jobs preserve worker options','Transcript repository round-trips timed segments','Transcript packages reject overlapping segments','Transcript exchange protects broadcast identity','Speaker confirmations accumulate cross-broadcast voice evidence','Transcript packages preserve speaker assignments','Transcript quality collapses music runs','Portable metadata removes private paths','Transcript v3 packages are compressed')) {
++foreach ($testCapability in @('Schema 42 includes Library Truth coverage and adoption-preview tables','Whisper configuration exposes model capabilities','Transcription ranges have stable display text','Transcription jobs preserve worker options','Transcript repository round-trips timed segments','Transcript packages reject overlapping segments','Transcript exchange protects broadcast identity','Speaker confirmations accumulate cross-broadcast voice evidence','Transcript packages preserve speaker assignments','Transcript quality collapses music runs','Portable metadata removes private paths','Transcript v3 packages are compressed')) {
+     if ($testText -notmatch [regex]::Escape($testCapability)) {
+         Add-ValidationError "Transcription foundation capability test is missing: $testCapability"
+     }
+@@ -564,17 +564,17 @@
+ $truthText = (Get-Content (Join-Path $root 'TheRadioVault.Core\LibraryTruth\LibraryTruthParser.cs') -Raw) + "`n" +
+              (Get-Content (Join-Path $root 'TheRadioVault.Core\LibraryTruth\LibraryTruthRecordingStructure.cs') -Raw) + "`n" +
+              (Get-Content (Join-Path $root 'TheRadioVault.Services\Services\LibraryTruthEngine.cs') -Raw)
+-foreach ($capability in @('LibraryTruthContextAnalyzer','LibraryTruthRecordingStructure','AmbiguousTrailingNumber','AttachedLetterPart','BenignMultipartAnnotation','EffectivePartAssignments','CanonicalBroadcastKey','BuildRecordingFamilies','ApplySameDateCoverageAudit','BuildCrossIdentityConflicts','ClassifyRecordingRole','PreferredRecordingScore','DetectSuspiciousMerge','GetAdoptionSummary','GetYears','GetConflicts','library_truth_recordings','recordingKeyByMediaFile','The live library was not changed')) {
++foreach ($capability in @('LibraryTruthContextAnalyzer','LibraryTruthRecordingStructure','AmbiguousTrailingNumber','AttachedLetterPart','BenignMultipartAnnotation','EffectivePartAssignments','CanonicalBroadcastKey','BuildRecordingFamilies','BuildDirectCoverageEvidence','ApplySameDateCoverageAudit','BuildAdoptionPreviews','BuildCrossIdentityConflicts','ClassifyRecordingRole','PreferredRecordingScore','DetectSuspiciousMerge','GetAdoptionSummary','GetCoverages','GetAdoptionPreviews','GetAdoptionPlanSummary','GetYears','GetConflicts','library_truth_recordings','library_truth_coverages','library_truth_adoption_previews','recordingKeyByMediaFile','The live library was not changed')) {
+     if ($truthText -notmatch [regex]::Escape($capability)) {
+         Add-ValidationError "Library Truth capability is missing: $capability"
+     }
+ }
+-foreach ($marker in @('SettingsLibraryTruthSection','Build shadow library','Physical files','Recording roles','Canonical broadcasts','Adoption audit','Export analysis report')) {
++foreach ($marker in @('SettingsLibraryTruthSection','Build shadow library','Physical files','Recording roles','Canonical broadcasts','Coverage evidence','Adoption preview','Adoption audit','Export analysis report')) {
+     if ($mainWindowXamlText -notmatch [regex]::Escape($marker) -and $allSourceText -notmatch [regex]::Escape($marker)) {
+         Add-ValidationError "Library Truth UI marker is missing: $marker"
+     }
+ }
+-foreach ($testCapability in @('Library Truth recovers AFRO short dates from folder context','Library Truth recognises Bennington OR slot','Library Truth keeps parent show for AFRO format broadcasts','Library Truth recovers compact RaF month day from year folder','Library Truth learns year from labelled year folders','Library Truth parses indexed named-month dates','Library Truth does not confuse source indices with years','Library Truth distinguishes explicit and ambiguous multipart markers','Library Truth protects leading track and lone version numbers','Library Truth keeps variant and source filename families separate','Library Truth normalises safe multipart family suffixes','Library Truth reassembles annotated multipart families','Library Truth assembles Roman multipart files into one broadcast','Library Truth preserves genuinely unknown dates','Library Truth shadow index separates broadcasts recordings and files','Library Truth treats alternate recordings as normal structure','Library Truth keeps identical audio with conflicting dates separate','Library Truth groups exact unknown physical copies','Library Truth separates full captures from multipart assemblies','Library Truth classifies truncated recordings and ranks a preferred capture','Library Truth compares multipart coverage with a full capture','Library Truth flags suspicious substantial merges','Library Truth propagates strong cross-date audio conflicts','Library Truth produces adoption and year audit summaries','Library Truth assembles variant multipart families without cross-pairing','Library Truth promotes bare multipart numbers only with sibling evidence','Library Truth flags repeated programme-specific duration clusters','Library Truth detects composite AM and PM coverage','Library Truth detects same-date cross-slot equivalents','Schema 41 includes Library Truth recording audit tables','Schema 41 upgrades Library Truth schema 40 safely')) {
++foreach ($testCapability in @('Library Truth recovers AFRO short dates from folder context','Library Truth recognises Bennington OR slot','Library Truth keeps parent show for AFRO format broadcasts','Library Truth recovers compact RaF month day from year folder','Library Truth learns year from labelled year folders','Library Truth parses indexed named-month dates','Library Truth does not confuse source indices with years','Library Truth distinguishes explicit and ambiguous multipart markers','Library Truth protects leading track and lone version numbers','Library Truth keeps variant and source filename families separate','Library Truth normalises safe multipart family suffixes','Library Truth reassembles annotated multipart families','Library Truth assembles Roman multipart files into one broadcast','Library Truth preserves genuinely unknown dates','Library Truth shadow index separates broadcasts recordings and files','Library Truth treats alternate recordings as normal structure','Library Truth keeps identical audio with conflicting dates separate','Library Truth groups exact unknown physical copies','Library Truth separates full captures from multipart assemblies','Library Truth classifies truncated recordings and ranks a preferred capture','Library Truth compares multipart coverage with a full capture','Library Truth flags suspicious substantial merges','Library Truth propagates strong cross-date audio conflicts','Library Truth produces adoption and year audit summaries','Library Truth assembles variant multipart families without cross-pairing','Library Truth promotes bare multipart numbers only with sibling evidence','Library Truth flags repeated programme-specific duration clusters','Library Truth detects composite AM and PM coverage','Library Truth detects same-date cross-slot equivalents','Library Truth persists direct recording segment coverage','Library Truth prepares guarded adoption plans without live writes','Schema 42 includes Library Truth coverage and adoption-preview tables','Schema 42 upgrades Library Truth schema 41 safely')) {
+     if ($testText -notmatch [regex]::Escape($testCapability)) {
+         Add-ValidationError "Library Truth test is missing: $testCapability"
+     }
+@@ -582,7 +582,7 @@
+ 
+ foreach ($testCapability in @('Parser accepts variable-width US dates','OpieRadio is a separate broadcast slot','Explicit filename show overrides folder')) {
+     if ($testText -notmatch [regex]::Escape($testCapability)) {
+-        Add-ValidationError "Alpha5 archive identity test is missing: $testCapability"
++        Add-ValidationError "Alpha6 archive identity test is missing: $testCapability"
+     }
+ }
+ 
+@@ -592,4 +592,4 @@
+     exit 1
+ }
+ 
+-Write-Host "Source validation passed: version, responsive large-library research reconciliation, archive identity/parser safeguards, portable restore state, Phoenix boundaries, playback/API contracts, schema 41, Library Truth multipart-family correction and adoption auditing, preservation manifests, deep scans, cross-PC comparison, transcript quality, speaker identity, voice memory, XAML, handlers, bindings, source hygiene and database connection policy." -ForegroundColor Green
++Write-Host "Source validation passed: version, responsive large-library research reconciliation, archive identity/parser safeguards, portable restore state, Phoenix boundaries, playback/API contracts, schema 42, Library Truth coverage evidence and guarded adoption previewing, preservation manifests, deep scans, cross-PC comparison, transcript quality, speaker identity, voice memory, XAML, handlers, bindings, source hygiene and database connection policy." -ForegroundColor Green

@@ -1,0 +1,526 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.DesktopToolsView">
+  <Grid Margin="{StaticResource RvPagePadding}" ColumnDefinitions="210,*" ColumnSpacing="22">
+    <Border Classes="card" Padding="10" VerticalAlignment="Top">
+      <StackPanel Spacing="4">
+        <TextBlock Text="SETTINGS" FontSize="10" FontWeight="Bold" Classes="muted" Margin="10,7,10,8" />
+        <ItemsControl ItemsSource="{Binding Sections}">
+          <ItemsControl.ItemTemplate>
+            <DataTemplate>
+              <Border Classes="settings-section-frame" Classes.selected="{Binding IsSelected}">
+                <Button Classes="settings-section-button" Command="{Binding SelectCommand}">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Description}" FontSize="9" Classes="muted" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Button>
+              </Border>
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+      </StackPanel>
+    </Border>
+
+    <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Classes="page-scroll-root">
+      <StackPanel Spacing="18" Margin="0,0,4,28">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel Spacing="3">
+            <TextBlock Text="Settings" Classes="display-title" />
+            <TextBlock Text="{Binding SelectedSectionTitle}" FontSize="17" FontWeight="SemiBold" Margin="0,7,0,0" />
+            <TextBlock Text="{Binding SelectedSectionDescription}" Classes="muted" FontSize="11" />
+          </StackPanel>
+          <Button Grid.Column="1" Content="↻" Classes="ghost icon-button" Command="{Binding RefreshCommand}" ToolTip.Tip="Refresh settings" />
+        </Grid>
+
+        <Border Classes="card" Padding="13">
+          <TextBlock Text="{Binding StatusText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+        </Border>
+
+        <!-- Archive -->
+        <StackPanel IsVisible="{Binding IsArchiveSection}" Spacing="18">
+
+          <Border Background="{DynamicResource RvAccentSubtleBrush}" CornerRadius="12" Padding="14">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+              <StackPanel Spacing="3">
+                <TextBlock Text="SERVER-OWNED ARCHIVE" Classes="eyebrow" />
+                <TextBlock Text="{Binding ConnectedAccess.ActiveServerName}" FontWeight="SemiBold" />
+                <TextBlock Text="Folders, Archive Health and scans below come from the active server. This client never opens or changes the archive database directly."
+                           FontSize="10" TextWrapping="Wrap" />
+              </StackPanel>
+              <TextBlock Grid.Column="1" Text="{Binding ConnectedAccess.ActiveServerLocation}" FontSize="10" VerticalAlignment="Center" />
+            </Grid>
+          </Border>
+
+          <Border Classes="card">
+            <Grid ColumnDefinitions="170,*" ColumnSpacing="22">
+              <Border Width="170" Height="142" CornerRadius="15" Background="{DynamicResource RvAccentSubtleBrush}">
+                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="4">
+                  <TextBlock Text="{Binding HealthScoreText}" FontSize="40" FontWeight="Bold" Foreground="{DynamicResource RvAccentBrush}" />
+                  <TextBlock Text="{Binding HealthLabel}" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding HealthIssuesText}" FontSize="10" Classes="muted" />
+                </StackPanel>
+              </Border>
+              <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="11">
+                <TextBlock Text="Archive Health" Classes="section-title" />
+                <TextBlock Text="{Binding HealthBreakdown}" Classes="muted" TextWrapping="Wrap" />
+                <TextBlock Text="Checks Collection, Metadata, Research and Preservation without changing the archive."
+                           Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                <Button Content="Analyse archive" Classes="primary" Command="{Binding AnalyseHealthCommand}"
+                        HorizontalAlignment="Left" IsVisible="{Binding CanAnalyseHealth}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Border Classes="card">
+            <StackPanel Spacing="14">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="9">
+                <StackPanel Spacing="3">
+                  <TextBlock Text="Library folders" Classes="section-title" />
+                  <TextBlock Text="Choose the archive roots Radio Vault scans. Removing a registration never deletes audio files."
+                             Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                  <TextBlock Text="Add, enable or remove folder locations in Radio Vault Server settings on the computer that owns the archive drives."
+                             Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="Scan Library now" Classes="secondary" Command="{Binding ScanLibraryCommand}" IsVisible="{Binding CanScanLibrary}" />
+                <Button Grid.Column="2" Content="Add folder" Classes="primary" Command="{Binding AddFolderCommand}" IsVisible="{Binding CanManageLibrary}" />
+              </Grid>
+              <Border Classes="card-raised" Padding="12">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding LibraryScanStatusText}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding LibraryScanResultText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <TextBlock Grid.Column="1" Text="MANUAL LOCAL SCAN" Classes="eyebrow" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+              <ListBox ItemsSource="{Binding LibraryFolders}" SelectedItem="{Binding SelectedFolder, Mode=TwoWay}"
+                       IsVisible="{Binding HasFolders}" Background="Transparent" BorderThickness="0" MaxHeight="270">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Border Classes="card-raised" Padding="13" Margin="0,0,0,7">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <StackPanel Spacing="4">
+                          <TextBlock Text="{Binding Path}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                          <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="{Binding AssignmentDisplayName}" Classes="muted" FontSize="10" />
+                            <TextBlock Text="Recursive" Classes="muted" FontSize="10" IsVisible="{Binding Recursive}" />
+                            <TextBlock Text="Enabled" Foreground="{DynamicResource RvSuccessBrush}" FontSize="10" IsVisible="{Binding Enabled}" />
+                            <TextBlock Text="Disabled" Foreground="{DynamicResource RvWarningBrush}" FontSize="10" IsVisible="{Binding !Enabled}" />
+                          </StackPanel>
+                        </StackPanel>
+                        <TextBlock Grid.Column="1" Text="{Binding LastScanAt}" Classes="muted" FontSize="9" VerticalAlignment="Center" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+              <WrapPanel IsVisible="{Binding CanManageLibrary}" ItemSpacing="8" LineSpacing="8">
+                <Button Content="Enable or disable selected" Classes="secondary" Command="{Binding ToggleFolderCommand}" />
+                <Button Content="Remove selected registration" Classes="secondary" Command="{Binding RemoveFolderCommand}" />
+              </WrapPanel>
+              <TextBlock IsVisible="{Binding !HasFolders}" Text="No Library folders are registered on this installation." Classes="muted" />
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card">
+            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+              <StackPanel Spacing="3">
+                <TextBlock Text="Backup and recovery" Classes="section-title" />
+                <TextBlock Text="Create a portable database and artwork backup, or restore a guarded .trvbackup package. Audio files are not included."
+                           Classes="muted" FontSize="11" TextWrapping="Wrap" />
+              </StackPanel>
+              <Button Grid.Column="1" Content="Create backup" Classes="primary" Command="{Binding CreateBackupCommand}" IsVisible="{Binding CanManageLibrary}" />
+              <Button Grid.Column="2" Content="Restore backup…" Classes="secondary" Command="{Binding RestoreBackupCommand}" IsVisible="{Binding CanManageLibrary}" />
+            </Grid>
+          </Border>
+        </StackPanel>
+
+        <!-- Playback -->
+        <StackPanel IsVisible="{Binding IsPlaybackSection}" Spacing="18">
+          <Border Classes="card">
+            <StackPanel Spacing="17">
+              <StackPanel Spacing="3">
+                <TextBlock Text="Playback controls" Classes="section-title" />
+                <TextBlock Text="Choose the skip intervals used by the persistent player and the remaining-time threshold for natural completion."
+                           Classes="muted" FontSize="11" TextWrapping="Wrap" />
+              </StackPanel>
+              <Grid ColumnDefinitions="180,220" RowDefinitions="Auto,Auto,Auto" RowSpacing="12" ColumnSpacing="18">
+                <TextBlock Text="Skip back" VerticalAlignment="Center" />
+                <ComboBox Grid.Column="1" ItemsSource="{Binding PlaybackIntervalOptions}" SelectedItem="{Binding SkipBackSeconds, Mode=TwoWay}" Classes="filter-box" />
+                <TextBlock Grid.Row="1" Text="Skip forward" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="1" Grid.Column="1" ItemsSource="{Binding PlaybackIntervalOptions}" SelectedItem="{Binding SkipForwardSeconds, Mode=TwoWay}" Classes="filter-box" />
+                <TextBlock Grid.Row="2" Text="Completion threshold" VerticalAlignment="Center" />
+                <ComboBox Grid.Row="2" Grid.Column="1" ItemsSource="{Binding CompletionThresholdOptions}" SelectedItem="{Binding CompletionThresholdSeconds, Mode=TwoWay}" Classes="filter-box" />
+              </Grid>
+              <CheckBox Content="Ask before resetting a completed broadcast to unplayed" IsChecked="{Binding ConfirmResetToUnplayed, Mode=TwoWay}" />
+              <Button Content="Save playback settings" Classes="primary" Command="{Binding SavePlaybackCommand}" HorizontalAlignment="Left" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Appearance -->
+        <StackPanel IsVisible="{Binding IsAppearanceSection}" Spacing="18">
+          <Border Classes="card">
+            <Grid ColumnDefinitions="*,230" ColumnSpacing="22">
+              <StackPanel Spacing="4">
+                <TextBlock Text="Theme" Classes="section-title" />
+                <TextBlock Text="Follow the system setting or keep Radio Vault in light or dark mode. The Radio Vault yellow accent remains consistent."
+                           Classes="muted" FontSize="11" TextWrapping="Wrap" />
+              </StackPanel>
+              <ComboBox Grid.Column="1" ItemsSource="{Binding ThemeModes}" SelectedItem="{Binding SelectedThemeMode, Mode=TwoWay}" Classes="filter-box" />
+            </Grid>
+          </Border>
+        </StackPanel>
+
+
+
+
+        <!-- Server connection -->
+        <StackPanel IsVisible="{Binding IsConnectedSection}" Spacing="18">
+          <Border Classes="card">
+            <StackPanel Spacing="16">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Server used by this client" Classes="section-title" />
+                  <TextBlock Text="Radio Vault Client always connects to the separate Radio Vault Server app. That server can be on this computer or another computer on your network."
+                             Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                </StackPanel>
+                <Border Grid.Column="1" Background="{Binding ConnectedAccess.ConnectionStateBrush}" CornerRadius="999" Padding="12,6" VerticalAlignment="Top">
+                  <StackPanel Orientation="Horizontal" Spacing="6">
+                    <TextBlock Text="{Binding ConnectedAccess.StateLabel}" FontWeight="Bold" FontSize="10" Foreground="#101318" />
+                    <TextBlock Text="·" FontWeight="Bold" FontSize="10" Foreground="#101318" />
+                    <TextBlock Text="{Binding ConnectedAccess.ActiveConnectionLabel}" FontWeight="Bold" FontSize="10" Foreground="#101318" />
+                  </StackPanel>
+                </Border>
+              </Grid>
+
+              <Border Background="{DynamicResource RvAccentSubtleBrush}" CornerRadius="12" Padding="16">
+                <StackPanel Spacing="11">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="CURRENT SERVER" Classes="eyebrow" />
+                      <TextBlock Text="{Binding ConnectedAccess.ActiveServerName}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding ConnectedAccess.ActiveConnectionExplanation}" FontSize="10" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Border Grid.Column="1" Classes="card-raised" Padding="12,8" VerticalAlignment="Center">
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="LOCATION" Classes="eyebrow" />
+                        <TextBlock Text="{Binding ConnectedAccess.ActiveServerLocation}" FontWeight="SemiBold" />
+                      </StackPanel>
+                    </Border>
+                  </Grid>
+                  <Border Height="1" Background="{DynamicResource RvBorderBrush}" />
+                  <Grid ColumnDefinitions="110,*" ColumnSpacing="10">
+                    <TextBlock Text="Server address" Classes="muted" FontSize="10" />
+                    <TextBlock Grid.Column="1" Text="{Binding ConnectedAccess.ActiveServerAddress}" FontSize="10" TextWrapping="Wrap" />
+                  </Grid>
+                  <TextBlock Text="{Binding ConnectedAccess.ConnectionStatusText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding ConnectedAccess.ConnectionDetailText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding ConnectedAccess.RemoteLibrarySummary}" FontSize="10" TextWrapping="Wrap" />
+                  <TextBlock Text="{Binding ConnectedAccess.ReconnectScheduleText}" Classes="muted" FontSize="10" IsVisible="{Binding ConnectedAccess.HasReconnectSchedule}" />
+                  <TextBlock Text="{Binding ConnectedAccess.OperationText}" Foreground="{DynamicResource RvAccentBrush}" FontSize="10" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+
+              <Border Classes="card-raised" Padding="14">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="Server on this computer" FontWeight="SemiBold" />
+                    <TextBlock Text="Choose this when Radio Vault Client and Radio Vault Server are installed on the same computer. No pairing is required."
+                               Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="Use this computer" Classes="secondary" Command="{Binding ConnectedAccess.UseLocalCommand}" VerticalAlignment="Center" />
+                </Grid>
+              </Border>
+
+              <Border Classes="card-raised" Padding="14">
+                <StackPanel Spacing="12">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Server on another computer (optional)" FontWeight="SemiBold" />
+                      <TextBlock Text="Find Servers only looks for servers on other computers. It will not list the server already running on this computer."
+                                 Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                      <TextBlock Text="On the other computer, open Radio Vault Server settings, allow remote native clients and create a pairing code."
+                                 Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Find servers" Classes="primary" Command="{Binding ConnectedAccess.DiscoverCommand}" VerticalAlignment="Center" />
+                  </Grid>
+
+                  <StackPanel Spacing="11" IsVisible="{Binding ConnectedAccess.HasServers}">
+                    <Border Height="1" Background="{DynamicResource RvBorderBrush}" />
+                    <TextBlock Text="Discovered servers" FontWeight="SemiBold" />
+                    <ComboBox ItemsSource="{Binding ConnectedAccess.Servers}"
+                              SelectedItem="{Binding ConnectedAccess.SelectedServer, Mode=TwoWay}"
+                              DisplayMemberBinding="{Binding DisplayText}"
+                              Classes="filter-box" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                      <TextBox PlaceholderText="Six-digit pairing code" MaxLength="6"
+                               Text="{Binding ConnectedAccess.PairingCode, Mode=TwoWay}" />
+                      <Button Grid.Column="1" Content="Pair and use server" Classes="primary" Command="{Binding ConnectedAccess.PairCommand}" />
+                    </Grid>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <Border Classes="card-raised" Padding="14" IsVisible="{Binding ConnectedAccess.HasSavedServer}">
+                <StackPanel Spacing="12">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="SAVED SERVER ON ANOTHER COMPUTER" Classes="eyebrow" />
+                    <TextBlock Text="{Binding ConnectedAccess.SavedServerName}" FontWeight="SemiBold" FontSize="16" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ConnectedAccess.SavedServerAddress}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ConnectedAccess.RestartNotice}" FontSize="10" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <WrapPanel ItemSpacing="8" LineSpacing="8">
+                    <Button Content="Use this server" Classes="primary" Command="{Binding ConnectedAccess.UseServerCommand}" />
+                    <Button Content="Test connection" Classes="secondary" Command="{Binding ConnectedAccess.TestCommand}" />
+                    <Button Content="Reconnect" Classes="secondary" Command="{Binding ConnectedAccess.ReconnectCommand}" />
+                    <Button Content="Forget server" Classes="danger" Command="{Binding ConnectedAccess.ForgetCommand}" />
+                  </WrapPanel>
+                </StackPanel>
+              </Border>
+
+              <TextBlock Text="The active server owns the Library, search, playback state, queue, moments, transcripts, research and Radio Vault Web. Changing servers takes effect after Radio Vault restarts."
+                         Classes="muted" FontSize="10" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Radio Vault Web -->
+        <StackPanel IsVisible="{Binding IsAnywhereSection}" Spacing="18">
+          <Border Classes="card">
+            <StackPanel Spacing="14">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Radio Vault Web — hosted by the server" Classes="section-title" />
+                  <TextBlock Text="Use Radio Vault in a browser on a phone, tablet or another computer. Radio Vault Client displays the connection controls here, but the active server hosts it."
+                             Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                </StackPanel>
+                <Border Grid.Column="1" Background="{DynamicResource RvAccentSubtleBrush}" CornerRadius="999" Padding="12,6" VerticalAlignment="Top">
+                  <TextBlock Text="{Binding AnywhereSnapshot.RunningLabel}" FontWeight="Bold" FontSize="10" />
+                </Border>
+                <Border Grid.Column="2" Background="{DynamicResource RvAccentSubtleBrush}" CornerRadius="999" Padding="12,6" VerticalAlignment="Top">
+                  <TextBlock Text="{Binding AnywhereSnapshot.SecurityLabel}" FontWeight="Bold" FontSize="10" />
+                </Border>
+              </Grid>
+              <Border Classes="card-raised" Padding="12">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="HOSTED BY" Classes="eyebrow" />
+                    <TextBlock Text="{Binding ConnectedAccess.ActiveServerName}" FontWeight="SemiBold" FontSize="16" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding ConnectedAccess.ActiveServerLocation}" Classes="muted" FontSize="10" />
+                    <TextBlock Text="{Binding AnywhereSnapshot.StatusText}" FontWeight="SemiBold" TextWrapping="Wrap" Margin="0,5,0,0" />
+                    <TextBlock Text="{Binding AnywhereSnapshot.DetailText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Top">
+                    <TextBlock Text="SERVER ADDRESS" Classes="eyebrow" />
+                    <TextBlock Text="{Binding ConnectedAccess.ActiveServerAddress}" FontSize="10" TextWrapping="Wrap" MaxWidth="260" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+              <Border Background="{DynamicResource RvAccentSubtleBrush}" CornerRadius="12" Padding="12">
+                <TextBlock Text="Radio Vault Web keeps running with Radio Vault Server. Closing the client does not stop it. Start, stop, port and security settings belong to the server app on the computer shown above."
+                           FontSize="10" TextWrapping="Wrap" />
+              </Border>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card" IsVisible="{Binding AnywhereCanManage}">
+            <StackPanel Spacing="14">
+              <TextBlock Text="Hosting" Classes="section-title" />
+              <CheckBox Content="Enable Radio Vault Web" IsChecked="{Binding AnywhereEnabled, Mode=TwoWay}" />
+              <CheckBox Content="Start automatically with Radio Vault" IsChecked="{Binding AnywhereStartAutomatically, Mode=TwoWay}" />
+              <Grid ColumnDefinitions="190,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="14" RowSpacing="11">
+                <TextBlock Text="Server name" VerticalAlignment="Center" />
+                <TextBox Grid.Column="1" Text="{Binding AnywhereServerName, Mode=TwoWay}" />
+                <TextBlock Grid.Row="1" Text="HTTP port" VerticalAlignment="Center" />
+                <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding AnywhereHttpPort, Mode=TwoWay}" />
+                <CheckBox Grid.Row="2" Grid.ColumnSpan="2" Content="Use secure HTTPS access" IsChecked="{Binding AnywhereSecureAccess, Mode=TwoWay}" />
+                <TextBlock Grid.Row="3" Text="HTTPS port" VerticalAlignment="Center" />
+                <TextBox Grid.Row="3" Grid.Column="1" Text="{Binding AnywhereHttpsPort, Mode=TwoWay}" />
+              </Grid>
+              <WrapPanel ItemSpacing="8" LineSpacing="8">
+                <Button Content="Save settings" Classes="primary" Command="{Binding SaveAnywhereCommand}" />
+                <Button Content="Start" Classes="secondary" Command="{Binding StartAnywhereCommand}" />
+                <Button Content="Stop" Classes="secondary" Command="{Binding StopAnywhereCommand}" />
+              </WrapPanel>
+            </StackPanel>
+          </Border>
+
+          <Border Classes="card">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="22">
+              <StackPanel Spacing="14">
+                <TextBlock Text="Connect a phone to Radio Vault Web" Classes="section-title" />
+                <TextBlock Text="Scan the QR code with the phone's camera while it is on the same network as the server, or copy the private link."
+                           Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Private Web address" Classes="muted" FontSize="10" />
+                  <TextBlock Text="{Binding AnywhereAccessUrl}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  <TextBlock Text="The Web address will appear after this client refreshes its connection to an updated server."
+                             Classes="muted" FontSize="10" TextWrapping="Wrap"
+                             IsVisible="{Binding !AnywhereQrCode.IsAvailable}" />
+                </StackPanel>
+                <WrapPanel ItemSpacing="8" LineSpacing="8">
+                  <Button Content="Open Web" Classes="primary" Command="{Binding OpenAnywhereLinkCommand}" />
+                  <Button Content="Copy phone link" Classes="secondary" Command="{Binding CopyAnywhereLinkCommand}" />
+                </WrapPanel>
+                <StackPanel IsVisible="{Binding AnywhereSnapshot.IsSecure}" Spacing="6">
+                  <TextBlock Text="First-time phone HTTPS setup" Classes="muted" FontSize="10" />
+                  <TextBlock Text="{Binding AnywhereSetupUrl}" TextWrapping="Wrap" />
+                  <WrapPanel ItemSpacing="8" LineSpacing="8">
+                    <Button Content="Open phone HTTPS setup" Classes="secondary" Command="{Binding OpenAnywhereSetupCommand}" />
+                    <Button Content="Reset certificates" Classes="secondary" Command="{Binding ResetAnywhereCertificatesCommand}" IsVisible="{Binding AnywhereCanManage}" />
+                  </WrapPanel>
+                </StackPanel>
+              </StackPanel>
+
+              <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top">
+                <TextBlock Text="SCAN TO OPEN WEB" Classes="eyebrow" HorizontalAlignment="Center"
+                           IsVisible="{Binding AnywhereQrCode.IsAvailable}" />
+                <Border Background="#FFFFFF" CornerRadius="12" Padding="10" IsVisible="{Binding AnywhereQrCode.IsAvailable}">
+                  <ItemsControl ItemsSource="{Binding AnywhereQrCode.Rows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <ItemsControl ItemsSource="{Binding Cells}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate><Border Width="4" Height="4" Background="{Binding Fill}" /></DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Border>
+                <TextBlock Text="FIRST-TIME HTTPS SETUP" Classes="eyebrow" HorizontalAlignment="Center"
+                           IsVisible="{Binding AnywhereSetupQrCode.IsAvailable}" />
+                <Border Background="#FFFFFF" CornerRadius="10" Padding="8" HorizontalAlignment="Center"
+                        IsVisible="{Binding AnywhereSetupQrCode.IsAvailable}">
+                  <ItemsControl ItemsSource="{Binding AnywhereSetupQrCode.Rows}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <ItemsControl ItemsSource="{Binding Cells}">
+                          <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+                          </ItemsControl.ItemsPanel>
+                          <ItemsControl.ItemTemplate>
+                            <DataTemplate><Border Width="3" Height="3" Background="{Binding Fill}" /></DataTemplate>
+                          </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </Border>
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <Border Classes="card">
+            <StackPanel Spacing="12">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                <StackPanel Spacing="3">
+                  <TextBlock Text="Connection check" Classes="section-title" />
+                  <TextBlock Text="Checks that Radio Vault Web can be reached on the active server and verifies its secure connection."
+                             Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="Run check" Classes="secondary" Command="{Binding DiagnoseAnywhereCommand}" />
+              </Grid>
+              <ItemsControl ItemsSource="{Binding AnywhereDiagnostics}" IsVisible="{Binding HasAnywhereDiagnostics}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <TextBlock Text="{Binding}" Margin="0,3,0,0" TextWrapping="Wrap" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Transcription -->
+        <StackPanel IsVisible="{Binding IsTranscriptionSection}" Spacing="18">
+          <Border Classes="card">
+            <StackPanel Spacing="16">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                <StackPanel Spacing="4">
+                  <TextBlock Text="Server transcription" Classes="section-title" />
+                  <TextBlock Text="{Binding TranscriptionStatusText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                  <TextBlock Text="The active Radio Vault Server owns Whisper, VAD, diarization, models and every transcription job. Closing this client does not interrupt server work."
+                             Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                </StackPanel>
+                <Border Grid.Column="1" Background="{DynamicResource RvAccentSubtleBrush}" CornerRadius="999" Padding="12,6" VerticalAlignment="Top">
+                  <TextBlock Text="SERVER OWNED" FontWeight="Bold" FontSize="10" />
+                </Border>
+              </Grid>
+
+              <Border Classes="card-raised" Padding="14">
+                <Grid ColumnDefinitions="150,*,Auto" ColumnSpacing="10">
+                  <TextBlock Text="Recommended model" VerticalAlignment="Center" />
+                  <ComboBox Grid.Column="1" ItemsSource="{Binding TranscriptionModelOptions}"
+                            SelectedItem="{Binding SelectedTranscriptionModel, Mode=TwoWay}"
+                            DisplayMemberBinding="{Binding Display}" Classes="filter-box" />
+                  <Button Grid.Column="2" Content="Install on server" Classes="primary"
+                          Command="{Binding InstallRecommendedTranscriptionCommand}"
+                          ToolTip.Tip="The active server downloads Whisper, VAD and multi-speaker models" />
+                </Grid>
+              </Border>
+
+              <StackPanel IsVisible="{Binding IsTranscriptionDownloadActive}" Spacing="8">
+                <ProgressBar Classes="thin" Maximum="100" Value="{Binding TranscriptionDownloadPercent}" IsIndeterminate="{Binding !HasTranscriptionDownloadPercent}" />
+                <Button Content="Cancel server setup" Classes="secondary" HorizontalAlignment="Left" Command="{Binding CancelTranscriptionDownloadCommand}" />
+              </StackPanel>
+
+              <Expander Header="Advanced server transcription settings">
+                <StackPanel Spacing="13" Margin="0,12,0,0">
+                  <TextBlock Text="These are paths on the active server computer. They are not paths on this client when the server is remote."
+                             Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                  <Grid ColumnDefinitions="150,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+                    <TextBlock Text="Executable" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="1" Text="{Binding TranscriptionExecutablePath, Mode=TwoWay}" />
+                    <TextBlock Grid.Row="1" Text="Model" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="1" Grid.Column="1" Text="{Binding TranscriptionModelPath, Mode=TwoWay}" />
+                    <TextBlock Grid.Row="2" Text="VAD model" VerticalAlignment="Center" />
+                    <TextBox Grid.Row="2" Grid.Column="1" Text="{Binding TranscriptionVadModelPath, Mode=TwoWay}" />
+                  </Grid>
+                  <Grid ColumnDefinitions="150,200,150,140" ColumnSpacing="10">
+                    <TextBlock Text="Language" VerticalAlignment="Center" />
+                    <ComboBox Grid.Column="1" ItemsSource="{Binding TranscriptionLanguageOptions}" SelectedItem="{Binding TranscriptionLanguage, Mode=TwoWay}" Classes="filter-box" />
+                    <TextBlock Grid.Column="2" Text="CPU threads" VerticalAlignment="Center" />
+                    <TextBox Grid.Column="3" Text="{Binding TranscriptionThreads, Mode=TwoWay}" />
+                  </Grid>
+                  <StackPanel Spacing="9">
+                    <CheckBox Content="Use GPU acceleration when supported" IsChecked="{Binding TranscriptionUseGpu, Mode=TwoWay}" />
+                    <CheckBox Content="Use voice activity detection for short samples when a VAD model is configured" IsChecked="{Binding TranscriptionUseVad, Mode=TwoWay}"
+                              ToolTip.Tip="Full broadcasts use continuous audio to prevent long sections of speech being skipped" />
+                    <CheckBox Content="Identify and separate multiple speakers automatically" IsChecked="{Binding TranscriptionMultiSpeakerDiarization, Mode=TwoWay}" />
+                    <CheckBox Content="Use show metadata, people and topics as vocabulary context" IsChecked="{Binding TranscriptionUseArchiveContext, Mode=TwoWay}" />
+                  </StackPanel>
+                  <Button Content="Save on server" Classes="primary" Command="{Binding SaveTranscriptionCommand}" HorizontalAlignment="Left" />
+                </StackPanel>
+              </Expander>
+            </StackPanel>
+          </Border>
+        </StackPanel>
+
+        <!-- Advanced -->
+        <StackPanel IsVisible="{Binding IsAdvancedSection}" Spacing="18">
+          <Border Classes="card">
+            <StackPanel Spacing="13">
+              <TextBlock Text="Application information" Classes="section-title" />
+              <Grid ColumnDefinitions="180,*" RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="9">
+                <TextBlock Text="Version" Classes="muted"/><TextBlock Grid.Column="1" Text="{Binding VersionText}" FontWeight="SemiBold"/>
+                <TextBlock Grid.Row="1" Text="Database schema" Classes="muted"/><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding DatabaseSchemaText}" FontWeight="SemiBold"/>
+                <TextBlock Grid.Row="2" Text="Server/client compatibility" Classes="muted"/><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ConnectedAccess.CapabilityGenerationText}" FontWeight="SemiBold"/>
+                <TextBlock Grid.Row="3" Text="Data folder" Classes="muted"/><TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding DataDirectoryText}" TextWrapping="Wrap"/>
+              </Grid>
+              <WrapPanel ItemSpacing="8" LineSpacing="8"><Button Content="Open app data" Classes="secondary" Command="{Binding OpenDataFolderCommand}"/><Button Content="Open diagnostic log" Classes="secondary" Command="{Binding OpenDiagnosticLogCommand}"/></WrapPanel>
+            </StackPanel>
+          </Border>
+          <Border Classes="card" Background="{DynamicResource RvWarningSubtleBrush}">
+            <StackPanel Spacing="5"><TextBlock Text="Advanced maintenance" FontWeight="SemiBold" Foreground="{DynamicResource RvWarningBrush}"/><TextBlock Text="Destructive repair, Library Truth adoption and specialist recovery remain guarded. Radio Vault does not run them without their existing previews and backups." Foreground="{DynamicResource RvWarningBrush}" FontSize="11" TextWrapping="Wrap"/></StackPanel>
+          </Border>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

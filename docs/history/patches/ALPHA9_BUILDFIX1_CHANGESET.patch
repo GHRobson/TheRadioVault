@@ -1,0 +1,220 @@
+diff --git a/ALPHA9_POLICY_REFINEMENT_BUILDFIX1_VALIDATION.md b/ALPHA9_POLICY_REFINEMENT_BUILDFIX1_VALIDATION.md
+new file mode 100644
+index 0000000..0a3aef9
+--- /dev/null
++++ b/ALPHA9_POLICY_REFINEMENT_BUILDFIX1_VALIDATION.md
+@@ -0,0 +1,22 @@
++# Alpha9 Conflict Policy Refinement buildfix1 validation
++
++Target version: `0.28.0-alpha9-policy-refinement-buildfix1`
++
++## Reported compiler failure
++
++Visual Studio reported six CS0165 errors for `requiresReview`, `selectedValue`, `classification`, `resolution`, `autoResolved` and `confidence` in `LibraryTruthConflictForensics.cs`. The Services assembly therefore did not build, causing three downstream CS0006 missing-metadata errors.
++
++## Correction
++
++The six result locals now begin with conservative unresolved/manual-review defaults. Field-specific branches and the shared ranking fallback continue to overwrite them on every intended runtime path. This is a compile-only definite-assignment correction; conflict policy output is unchanged.
++
++## Static checks
++
++- All six formerly uninitialized locals have explicit initializers.
++- The field-policy fall-through and shared ranking block are otherwise byte-for-byte unchanged.
++- Version markers agree at buildfix1.
++- Database schema remains 44 and export schema remains 6.
++- No committed or live adoption route was introduced.
++- ZIP integrity and extracted-tree reproduction were verified.
++
++Compilation, smoke tests and full-corpus rehearsal still require the user's Windows .NET 8 environment.
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index afef842..968877f 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,3 +1,19 @@
++# v0.28.0-alpha9 buildfix1 — Definite-assignment compile correction
++
++## Fixed
++
++- Initialized the conflict-policy result locals with conservative manual-review defaults before field-specific policy evaluation.
++- Clears the six CS0165 errors reported in `LibraryTruthConflictForensics.cs` and the three downstream CS0006 metadata-reference errors.
++
++## Unchanged
++
++- Conflict classification and deterministic policy behaviour.
++- Database schema 44 and Library Truth export schema 6.
++- Backup validation, disposable rehearsal transaction, integrity checks and mandatory rollback.
++- Live adoption remains disabled.
++
++---
++
+ # v0.28.0-alpha9 — Conflict Policy Refinement
+ 
+ ## Added
+diff --git a/LIBRARY_TRUTH_ALPHA9_VALIDATION.md b/LIBRARY_TRUTH_ALPHA9_VALIDATION.md
+index 716fecf..43f3a12 100644
+--- a/LIBRARY_TRUTH_ALPHA9_VALIDATION.md
++++ b/LIBRARY_TRUTH_ALPHA9_VALIDATION.md
+@@ -1,6 +1,8 @@
+ # Library Truth alpha9 full-corpus validation
+ 
+-Build and run `0.28.0-alpha9-policy-refinement` against the same 7,169-file GRAHAM-PC desktop library used for alpha5–alpha8.
++Build and run `0.28.0-alpha9-policy-refinement-buildfix1` against the same 7,169-file GRAHAM-PC desktop library used for alpha5–alpha8.
++
++Buildfix1 changes only local-variable initialization in the conflict-policy evaluator so Visual Studio can prove every result field is assigned. Expected corpus results and all safety invariants are unchanged.
+ 
+ ## Required invariants
+ 
+diff --git a/README.md b/README.md
+index 9846478..3ecf880 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,8 @@
+-# Radio Vault v0.28.0-alpha9 — Conflict Policy Refinement
++# Radio Vault v0.28.0-alpha9 buildfix1 — Conflict Policy Refinement
+ 
+-Version: `0.28.0-alpha9-policy-refinement`
++Version: `0.28.0-alpha9-policy-refinement-buildfix1`
++
++Buildfix1 corrects the C# definite-assignment failure in the alpha9 conflict-policy evaluator. It does not change any conflict policy, schema, rehearsal operation, rollback safeguard or live-library behaviour.
+ 
+ Alpha9 builds on the full-corpus-confirmed alpha8 conflict-forensics rehearsal. The accepted Broadcast → Recording → Physical File model, coverage evidence, adoption previews, validated backup, disposable transaction, integrity checks and mandatory rollback remain unchanged.
+ 
+diff --git a/RELEASE_BASELINE.md b/RELEASE_BASELINE.md
+index 53642db..44ef243 100644
+--- a/RELEASE_BASELINE.md
++++ b/RELEASE_BASELINE.md
+@@ -1,6 +1,6 @@
+-# v0.28.0-alpha9 development baseline
++# v0.28.0-alpha9 buildfix1 baseline
+ 
+-Current version: `0.28.0-alpha9-policy-refinement`
++Current version: `0.28.0-alpha9-policy-refinement-buildfix1`
+ 
+ Source baseline: the compiled and full-corpus-rehearsed `0.28.0-alpha8-conflict-forensics-buildfix2` build.
+ 
+diff --git a/RELEASE_CHECKLIST.md b/RELEASE_CHECKLIST.md
+index 8b13a1a..3cd5865 100644
+--- a/RELEASE_CHECKLIST.md
++++ b/RELEASE_CHECKLIST.md
+@@ -1,6 +1,6 @@
+ # v0.28.0-alpha9 Conflict Policy Refinement checklist
+ 
+-- [ ] Application reports `0.28.0-alpha9-policy-refinement`.
++- [ ] Application reports `0.28.0-alpha9-policy-refinement-buildfix1`.
+ - [ ] Database initializes or upgrades to schema 44 with a pre-upgrade backup.
+ - [ ] Full solution builds on .NET 8.
+ - [ ] All 98 smoke tests pass.
+diff --git a/RELEASE_NOTES_0.28.0_ALPHA9_BUILDFIX1.md b/RELEASE_NOTES_0.28.0_ALPHA9_BUILDFIX1.md
+new file mode 100644
+index 0000000..f759711
+--- /dev/null
++++ b/RELEASE_NOTES_0.28.0_ALPHA9_BUILDFIX1.md
+@@ -0,0 +1,17 @@
++# Radio Vault v0.28.0-alpha9 buildfix1 — Conflict Policy Refinement
++
++Version: `0.28.0-alpha9-policy-refinement-buildfix1`
++
++## Compile correction
++
++Visual Studio reported six CS0165 errors in `LibraryTruthConflictForensics.cs` because C# definite-assignment analysis could not prove that a field-specific policy branch which falls through to the shared ranking policy would assign every result local. The failed Services build then produced three cascading CS0006 errors in dependent projects.
++
++Buildfix1 initializes those result locals to conservative manual-review defaults before policy evaluation. Every normal policy path still overwrites the defaults exactly as before; the change only makes the existing control flow provably assigned to the compiler.
++
++## Unchanged behaviour
++
++- Alpha9 field-specific conflict policies are unchanged.
++- Database schema remains 44.
++- `.trvtruth` export schema remains 6.
++- Backup, disposable-clone transaction, exact operation checks, integrity checks and rollback verification are unchanged.
++- Live adoption remains disabled.
+diff --git a/TheRadioVault/TheRadioVault.csproj b/TheRadioVault/TheRadioVault.csproj
+index 2d240fe..40bd205 100644
+--- a/TheRadioVault/TheRadioVault.csproj
++++ b/TheRadioVault/TheRadioVault.csproj
+@@ -9,10 +9,10 @@
+     <ImplicitUsings>disable</ImplicitUsings>
+     <AssemblyName>TheRadioVault</AssemblyName>
+     <RootNamespace>TheRadioVault</RootNamespace>
+-    <Version>0.28.0-alpha9-policy-refinement</Version>
++    <Version>0.28.0-alpha9-policy-refinement-buildfix1</Version>
+     <AssemblyVersion>0.28.0.0</AssemblyVersion>
+     <FileVersion>0.28.0.0</FileVersion>
+-    <InformationalVersion>0.28.0-alpha9-policy-refinement</InformationalVersion>
++    <InformationalVersion>0.28.0-alpha9-policy-refinement-buildfix1</InformationalVersion>
+   </PropertyGroup>
+   <ItemGroup>
+     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.7" />
+diff --git a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+index 4a71d74..4ace3c3 100644
+--- a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
++++ b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+@@ -12,7 +12,7 @@ namespace TheRadioVault.Core.LibraryTruth;
+ /// </summary>
+ public sealed class LibraryTruthParser
+ {
+-    public const string CurrentVersion = "0.28.0-alpha9-policy-refinement-v3";
++    public const string CurrentVersion = "0.28.0-alpha9-policy-refinement-buildfix1-v3";
+ 
+     private static readonly Regex IsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})[\s._-]+(?<month>\d{1,2})[\s._-]+(?<day>\d{1,2})(?!\d)");
+     private static readonly Regex CompactIsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})(?<month>\d{2})(?<day>\d{2})(?!\d)");
+diff --git a/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs b/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
+index 6c55eda..e1a066d 100644
+--- a/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
++++ b/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
+@@ -262,12 +262,15 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+         if (!hasEmpty && normalizedGroups.Length == 1 && rawDistinct == 1) return null;
+ 
+         MetadataCandidate? selectedCandidate = null;
+-        string selectedValue;
+-        string classification;
+-        string resolution;
+-        bool autoResolved;
+-        bool requiresReview;
+-        int confidence;
++        // Keep conservative review defaults so field-policy branches that
++        // deliberately fall through to the shared ranking policy satisfy C#
++        // definite-assignment analysis without changing runtime behaviour.
++        string selectedValue = string.Empty;
++        string classification = "Genuine conflicting values";
++        string resolution = "manual_review";
++        bool autoResolved = false;
++        bool requiresReview = true;
++        int confidence = 20;
+ 
+         if (rule.Kind == MetadataFieldKind.Structural)
+         {
+diff --git a/VERSION.txt b/VERSION.txt
+index 9bc181b..fbbc255 100644
+--- a/VERSION.txt
++++ b/VERSION.txt
+@@ -1 +1 @@
+-0.28.0-alpha9-policy-refinement
++0.28.0-alpha9-policy-refinement-buildfix1
+diff --git a/validate-source.ps1 b/validate-source.ps1
+index c7295af..c40b665 100644
+--- a/validate-source.ps1
++++ b/validate-source.ps1
+@@ -23,6 +23,23 @@ if ($conflictForensicsText -notmatch '\?\s*values\.AsEnumerable\(\)\s*:\s*Enumer
+     Add-ValidationError "Alpha8 buildfix1 provenance expansion must use values.AsEnumerable() and Enumerable.Empty<ProvenanceSnapshot>()."
+ }
+ 
++# Alpha9 buildfix1: C# definite-assignment analysis cannot infer that a
++# field-policy branch which leaves handledByFieldPolicy false must enter the
++# shared fallback. Conservative defaults keep the existing runtime policy
++# unchanged while making every later read provably assigned.
++foreach ($requiredInitialization in @(
++    'string selectedValue = string.Empty;',
++    'string classification = "Genuine conflicting values";',
++    'string resolution = "manual_review";',
++    'bool autoResolved = false;',
++    'bool requiresReview = true;',
++    'int confidence = 20;'
++)) {
++    if ($conflictForensicsText -notmatch [regex]::Escape($requiredInitialization)) {
++        Add-ValidationError "Alpha9 buildfix1 conflict result initialization is missing: $requiredInitialization"
++    }
++}
++
+ # C# optional-parameter methods cannot be passed as zero-argument Task.Run method groups.
+ $libraryTruthWindowText = Get-Content (Join-Path $root "TheRadioVault\LibraryTruthWindow.xaml.cs") -Raw
+ if ($libraryTruthWindowText -match 'Task\.Run\(_rehearsal\.GetLatestItems\)') {

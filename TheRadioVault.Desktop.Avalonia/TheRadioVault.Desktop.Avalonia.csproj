@@ -1,0 +1,41 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>TheRadioVault.Desktop.Avalonia</RootNamespace>
+    <AssemblyName>TheRadioVault</AssemblyName>
+    <Product>The Radio Vault</Product>
+    <Version>0.35.0-alpha9-buildfix3</Version>
+    <AssemblyVersion>0.35.0.9</AssemblyVersion>
+    <FileVersion>0.35.0.9</FileVersion>
+    <InformationalVersion>0.35.0-alpha9-buildfix3</InformationalVersion>
+    <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
+    <ApplicationIcon Condition="!$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">Assets\RadioVault.ico</ApplicationIcon>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Avalonia" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.0" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
+  </ItemGroup>
+  <ItemGroup>
+    <AvaloniaResource Include="Assets\RadioVault-Logo.png" />
+    <ProjectReference Include="..\TheRadioVault.Application\TheRadioVault.Application.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Core\TheRadioVault.Core.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Data\TheRadioVault.Data.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Infrastructure\TheRadioVault.Infrastructure.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Services\TheRadioVault.Services.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Transcription\TheRadioVault.Transcription.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Presentation\TheRadioVault.Presentation.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Research\TheRadioVault.Research.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Web\TheRadioVault.Web.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Transcription\WindowsTranscriptionProcessController.cs" />
+    <Compile Remove="Transcription\NAudioTranscriptionAudioPreparer.cs" />
+    <Compile Remove="Diarization\SherpaOnnxMultiSpeakerDiarizationEngine.cs" />
+    <Compile Remove="Diarization\SherpaOnnxVoiceEmbeddingEngine.cs" />
+  </ItemGroup>
+</Project>

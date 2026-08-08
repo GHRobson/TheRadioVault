@@ -1,0 +1,313 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:TheRadioVault.Presentation.ViewModels"
+        xmlns:views="using:TheRadioVault.Desktop.Avalonia.Views"
+        x:Class="TheRadioVault.Desktop.Avalonia.Views.MainWindow"
+        Title="The Radio Vault"
+        Width="1440" Height="900" MinWidth="1100" MinHeight="700"
+        Background="{DynamicResource RvBackgroundBrush}"
+        WindowDecorations="BorderOnly"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="38"
+        KeyDown="MainWindow_OnKeyDown">
+  <Window.DataTemplates>
+    <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:LibraryViewModel}"><views:LibraryView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SearchViewModel}"><views:SearchView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:QueueViewModel}"><views:QueueView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:MomentsViewModel}"><views:MomentsView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:TranscriptsViewModel}"><views:TranscriptsView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:ResearchWorkspaceViewModel}"><views:ResearchWorkspaceView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:WikiViewModel}"><views:WikiView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:DownloadsViewModel}"><views:DownloadsView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:NowPlayingViewModel}"><views:NowPlayingView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:FullBroadcastInfoViewModel}"><views:FullBroadcastInfoView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:DesktopToolsViewModel}"><views:DesktopToolsView /></DataTemplate>
+  </Window.DataTemplates>
+
+  <Grid RowDefinitions="*,110" ColumnDefinitions="224,*">
+    <Border Grid.Row="0" Grid.Column="0"
+            Background="{DynamicResource RvShellBrush}"
+            BorderBrush="{DynamicResource RvBorderBrush}"
+              BorderThickness="0,0,1,0"
+              Padding="16,18,16,14">
+        <Grid RowDefinitions="Auto,*,Auto" RowSpacing="18">
+          <Grid PointerPressed="TitleBar_OnPointerPressed" ColumnDefinitions="Auto,*" ColumnSpacing="9">
+            <Image Width="36" Height="36" Source="/Assets/RadioVault-Logo.png"
+                   Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" />
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+              <TextBlock Text="THE RADIO VAULT" FontSize="14" FontWeight="Bold" />
+              <TextBlock Text="Broadcast archive" FontSize="10" Classes="muted" />
+            </StackPanel>
+          </Grid>
+
+          <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+            <ItemsControl ItemsSource="{Binding NavigationItems}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <StackPanel>
+                    <Border Classes="shell-nav-frame" Classes.selected="{Binding IsSelected}">
+                      <Button Classes="shell-nav-button"
+                              Command="{Binding SelectCommand}"
+                              ToolTip.Tip="{Binding Description}">
+                        <Grid ColumnDefinitions="30,*,Auto" ColumnSpacing="8">
+                          <Grid Width="24" Height="24" HorizontalAlignment="Center" VerticalAlignment="Center">
+                            <Path IsVisible="{Binding IsDashboardIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvStatBroadcastBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M4,12 L12,5 L20,12 M6.5,10.5 L6.5,20 L17.5,20 L17.5,10.5 M10,20 L10,14 L14,14 L14,20" />
+                            <Path IsVisible="{Binding IsSearchIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvSearchBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M10.5,4 A6.5,6.5 0 1 0 10.5,17 A6.5,6.5 0 1 0 10.5,4 M15.2,15.2 L20,20" />
+                            <Path IsVisible="{Binding IsLibraryIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvStatBroadcastBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M5,3 L19,3 L19,21 L5,21 Z M9,8 L15,8 M9,12 L15,12 M9,16 L15,16" />
+                            <Path IsVisible="{Binding IsFavouriteIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvStatFavouriteBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M12,20 L5.2,13.8 C2,10.8 3.7,6 7.5,6 C9.4,6 11,7.1 12,8.7 C13,7.1 14.6,6 16.5,6 C20.3,6 22,10.8 18.8,13.8 Z" />
+                            <Path IsVisible="{Binding IsMomentIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvMomentBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M6,3 L18,3 L18,21 L12,16.7 L6,21 Z" />
+                            <Path IsVisible="{Binding IsTranscriptsIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvTranscriptBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M12,3 C9.8,3 8,4.8 8,7 L8,12 C8,14.2 9.8,16 12,16 C14.2,16 16,14.2 16,12 L16,7 C16,4.8 14.2,3 12,3 Z M5,11 C5,15.4 8.1,19 12,19 C15.9,19 19,15.4 19,11 M12,19 L12,22 M8.5,22 L15.5,22" />
+                            <Path IsVisible="{Binding IsNowPlayingIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvStatProgressBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M8,5 L18,12 L8,19 Z" />
+                            <Path IsVisible="{Binding IsResearchIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvResearchBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M5,3 L15,3 L19,7 L19,20 L5,20 Z M15,3 L15,7 L19,7 M8,11 L16,11 M8,15 L14,15" />
+                            <Path IsVisible="{Binding IsWikiIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvWikiBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M4,5 C7,4 9.5,4.5 12,6 L12,20 C9.5,18.5 7,18 4,19 Z M20,5 C17,4 14.5,4.5 12,6 L12,20 C14.5,18.5 17,18 20,19 Z M7,9 L10,9 M14,9 L17,9 M7,12 L10,12 M14,12 L17,12" />
+                            <Path IsVisible="{Binding IsDownloadsIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvSettingsBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M12,3 L12,15 M8,11 L12,15 L16,11 M5,20 L19,20" />
+                            <Path IsVisible="{Binding IsSettingsIcon}" Width="24" Height="24" Stretch="None"
+                                  Stroke="{DynamicResource RvSettingsBrush}" StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round"
+                                  Data="M4,7 L20,7 M4,12 L20,12 M4,17 L20,17 M8,4 L8,10 M16,9 L16,15 M10,14 L10,20" />
+                          </Grid>
+                          <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                          <TextBlock Grid.Column="2" IsVisible="{Binding IsExpandable}" Text="{Binding ExpansionGlyph}"
+                                     FontSize="15" Classes="muted" VerticalAlignment="Center" />
+                        </Grid>
+                      </Button>
+                    </Border>
+
+                    <ItemsControl IsVisible="{Binding IsExpanded}" ItemsSource="{Binding Children}" Margin="20,0,0,5">
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                          <Border Classes="shell-nav-child-frame" Classes.selected="{Binding IsSelected}">
+                            <Button Classes="shell-nav-child-button"
+                                    Command="{Binding SelectCommand}"
+                                    ToolTip.Tip="{Binding Description}">
+                              <Grid ColumnDefinitions="13,*" ColumnSpacing="7">
+                                <TextBlock Text="•" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           FontSize="12" Foreground="{DynamicResource RvAccentBrush}" />
+                                <TextBlock Grid.Column="1" Text="{Binding Title}" FontSize="12" FontWeight="SemiBold"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                              </Grid>
+                            </Button>
+                          </Border>
+                        </DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+
+          <Border Grid.Row="2" IsVisible="{Binding Activity.IsVisible}"
+                  Margin="0,0,0,2" Padding="10,9,10,8" CornerRadius="9"
+                  Background="{DynamicResource RvSurfaceRaisedBrush}"
+                  BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1">
+            <StackPanel Spacing="6">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding Activity.Title}" FontSize="10" FontWeight="SemiBold"
+                           Foreground="{DynamicResource RvTextBrush}" TextWrapping="Wrap" />
+                <TextBlock IsVisible="{Binding Activity.HasDetail}" Text="{Binding Activity.Detail}"
+                           FontSize="9" Classes="muted" TextWrapping="Wrap" MaxHeight="30"
+                           TextTrimming="CharacterEllipsis" />
+              </StackPanel>
+              <ProgressBar Classes="thin" IsVisible="{Binding Activity.HasProgress}"
+                           Minimum="0" Maximum="100" Value="{Binding Activity.ProgressPercent}"
+                           Height="3" MinHeight="3" />
+              <TextBlock IsVisible="{Binding Activity.IsIndeterminate}" Text="Working…"
+                         Classes="muted" FontSize="9" />
+            </StackPanel>
+          </Border>
+        </Grid>
+      </Border>
+
+    <Grid Grid.Row="0" Grid.Column="1">
+      <Grid RowDefinitions="Auto,Auto,*">
+        <Border IsVisible="{Binding ShowPageHeader}"
+                Padding="28,17"
+                Background="{DynamicResource RvBackgroundBrush}"
+                BorderBrush="{DynamicResource RvBorderBrush}"
+                BorderThickness="0,0,0,1">
+          <StackPanel Spacing="2">
+            <TextBlock Text="{Binding PageTitle}" Classes="display-title" />
+            <TextBlock Text="{Binding PageDescription}" Classes="muted" FontSize="12"
+                       TextTrimming="CharacterEllipsis" MaxWidth="760" />
+          </StackPanel>
+        </Border>
+
+        <Border Grid.Row="1" IsVisible="{Binding HasNavigationError}"
+                Margin="20,14,20,0" Padding="14,11" CornerRadius="10"
+                Background="{DynamicResource RvAccentSubtleBrush}"
+                BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1">
+          <TextBlock Text="{Binding NavigationErrorText}" FontSize="11" TextWrapping="Wrap" />
+        </Border>
+
+        <ContentControl x:Name="PageContentControl" Grid.Row="2" Content="{Binding CurrentPage}" />
+            </Grid>
+
+      <Border Height="38" VerticalAlignment="Top" Margin="0,0,138,0"
+              Background="Transparent" PointerPressed="TitleBar_OnPointerPressed" />
+
+      <Border x:Name="PageScrollDivider" Height="38" VerticalAlignment="Top"
+              Background="{DynamicResource RvBackgroundBrush}" BorderBrush="{DynamicResource RvBorderBrush}"
+              BorderThickness="0,0,0,1" IsHitTestVisible="False" IsVisible="False" />
+
+      <Grid HorizontalAlignment="Right" VerticalAlignment="Top" Height="38"
+            ColumnDefinitions="46,46,46">
+        <Button Grid.Column="0" Classes="window-control" Click="MinimizeButton_OnClick" ToolTip.Tip="Minimize">
+          <Path Width="24" Height="24" Stretch="None" Stroke="{DynamicResource RvMutedTextBrush}"
+                StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Data="M6,15 L18,15" />
+        </Button>
+        <Button Grid.Column="1" Classes="window-control" Click="MaximizeButton_OnClick" ToolTip.Tip="Maximize or restore">
+          <Path Width="24" Height="24" Stretch="None" Stroke="{DynamicResource RvMutedTextBrush}"
+                StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Data="M6,6 L18,6 L18,18 L6,18 Z" />
+        </Button>
+        <Button Grid.Column="2" Classes="window-control close-window-control" Click="CloseButton_OnClick" ToolTip.Tip="Close">
+          <Path Width="24" Height="24" Stretch="None" Stroke="{DynamicResource RvMutedTextBrush}"
+                StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Data="M6,6 L18,18 M18,6 L6,18" />
+        </Button>
+      </Grid>
+    </Grid>
+
+    <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource RvShellBrush}"
+            BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,1,0,0"
+            Padding="18,12,18,18">
+      <Grid ColumnDefinitions="330,*,370" ColumnSpacing="22">
+        <Button Classes="ghost" Command="{Binding OpenNowPlayingCommand}"
+                HorizontalContentAlignment="Stretch" ToolTip.Tip="Open Now Playing">
+          <Grid ColumnDefinitions="64,*" ColumnSpacing="12">
+            <Border Width="64" Height="64" CornerRadius="11"
+                    Background="{DynamicResource RvAccentSubtleBrush}"
+                    BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1" ClipToBounds="True">
+              <Grid>
+                <ContentControl IsVisible="{Binding !Playback.HasArtwork}" Content="Radio mast"
+                                ContentTemplate="{StaticResource MissingArtworkIconTemplate}"
+                                Width="34" Height="34" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Image IsVisible="{Binding Playback.HasArtwork}"
+                       Source="{Binding Playback.ArtworkPath, Converter={StaticResource ArtworkPathToBitmapConverter}}"
+                       Stretch="UniformToFill" />
+              </Grid>
+            </Border>
+            <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+              <TextBlock Text="{Binding Playback.Title}" FontWeight="SemiBold" FontSize="13" TextTrimming="CharacterEllipsis" />
+              <TextBlock Text="{Binding Playback.Subtitle}" FontSize="10" Classes="muted" TextTrimming="CharacterEllipsis" />
+              <TextBlock IsVisible="{Binding Playback.IsPrimaryTransportLoading}" Text="{Binding Playback.StatusText}"
+                         FontSize="9" Foreground="{DynamicResource RvAccentBrush}" TextTrimming="CharacterEllipsis" />
+            </StackPanel>
+          </Grid>
+        </Button>
+
+        <Grid Grid.Column="1" RowDefinitions="Auto,Auto" RowSpacing="7" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
+            <Button Classes="ghost icon-button" Content="−15" Command="{Binding Playback.SkipBackCommand}" ToolTip.Tip="Skip back 15 seconds" />
+            <Button Classes="primary icon-button" Width="46" MinWidth="46" Height="46"
+                    Command="{Binding Playback.PlayPauseCommand}"
+                    ToolTip.Tip="{Binding Playback.PrimaryTransportToolTip}">
+              <Grid Width="25" Height="25">
+                <Path IsVisible="{Binding Playback.IsPrimaryTransportLoading}" Width="23" Height="23" Stretch="Uniform"
+                      Data="M12,3 A9,9 0 1 1 4.2,7.5" Stroke="{DynamicResource RvBackgroundBrush}" StrokeThickness="2.3"
+                      StrokeLineCap="Round" RenderTransformOrigin="50%,50%"
+                      HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <Path.RenderTransform><RotateTransform Angle="{Binding Playback.PrimaryTransportSpinnerAngle}" /></Path.RenderTransform>
+                </Path>
+                <TextBlock IsVisible="{Binding Playback.ShowLocalPlayPause}"
+                           Text="{Binding Playback.PlayPauseGlyph}" FontSize="17" FontWeight="Bold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Grid IsVisible="{Binding Playback.ShowMoveToThisDevice}" Width="25" Height="25"
+                      ToolTip.Tip="Move playback to this PC">
+                  <Path Width="25" Height="25" Stretch="None"
+                        Stroke="{DynamicResource RvBackgroundBrush}" StrokeThickness="1.8"
+                        StrokeLineCap="Round" StrokeJoin="Round"
+                        Data="M7,5 L20,5 L20,17 L7,17 M11,20 L16,20 M13.5,17 L13.5,20 M2,11 L13,11 M9.5,7.5 L13,11 L9.5,14.5" />
+                </Grid>
+              </Grid>
+            </Button>
+            <Button Classes="ghost icon-button" Content="+30" Command="{Binding Playback.SkipForwardCommand}" ToolTip.Tip="Skip forward 30 seconds" />
+          </StackPanel>
+          <Grid Grid.Row="1" ColumnDefinitions="48,*,48" ColumnSpacing="10" VerticalAlignment="Center" Margin="0,0,0,2">
+            <TextBlock Text="{Binding Playback.PositionText}" FontSize="9" Classes="muted" HorizontalAlignment="Right" />
+            <Slider x:Name="PlaybackSeekSlider" Grid.Column="1" Classes="playback-seek"
+                    Minimum="0" Maximum="{Binding Playback.DurationMs}" Value="{Binding Playback.PositionMs, Mode=OneWay}"
+                    IsEnabled="{Binding Playback.CanControlLocalTransport}" />
+            <TextBlock Grid.Column="2" Text="{Binding Playback.DurationText}" FontSize="9" Classes="muted" />
+          </Grid>
+        </Grid>
+
+        <Grid Grid.Column="2" RowDefinitions="Auto,Auto" RowSpacing="9" VerticalAlignment="Center">
+          <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Spacing="7">
+            <Button Classes="glyph-only icon-button mini-player-action favourite-action"
+                    Content="{Binding Playback}" ContentTemplate="{StaticResource FavouriteIconTemplate}"
+                    Command="{Binding Playback.ToggleFavouriteCommand}" ToolTip.Tip="{Binding Playback.FavouriteToolTip}" />
+            <Button Classes="glyph-only icon-button mini-player-action moment-action"
+                    Content="{Binding}" ContentTemplate="{StaticResource MomentIconTemplate}"
+                    Command="{Binding Moments.CreateCurrentCommand}" ToolTip.Tip="Save a Moment" />
+            <Button Classes="glyph-only icon-button mini-player-action"
+                    Command="{Binding NowPlaying.OpenFullInfoCommand}" ToolTip.Tip="Full broadcast information">
+              <Grid Width="19" Height="19">
+                <Ellipse Stroke="{DynamicResource RvTextBrush}" StrokeThickness="1.7" />
+                <TextBlock Text="i" FontSize="12" FontWeight="Bold"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />
+              </Grid>
+            </Button>
+            <Button Classes="glyph-only mini-player-action" MinWidth="54" Content="{Binding Playback.SpeedText}"
+                    Command="{Binding Playback.CycleSpeedCommand}" ToolTip.Tip="Change playback speed" />
+            <Button Classes="glyph-only icon-button mini-player-action" ToolTip.Tip="More playback actions">
+              <StackPanel Orientation="Horizontal" Spacing="3" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <Ellipse Width="3.5" Height="3.5" Fill="{DynamicResource RvMutedTextBrush}" />
+                <Ellipse Width="3.5" Height="3.5" Fill="{DynamicResource RvMutedTextBrush}" />
+                <Ellipse Width="3.5" Height="3.5" Fill="{DynamicResource RvMutedTextBrush}" />
+              </StackPanel>
+              <Button.Flyout>
+                <MenuFlyout>
+                  <MenuItem Header="Open Now Playing" Command="{Binding OpenNowPlayingCommand}" />
+                  <Separator />
+                  <MenuItem Header="Play next" Command="{Binding Playback.PlayNextCommand}" />
+                  <MenuItem Header="Add to queue" Command="{Binding Playback.AddToQueueCommand}" />
+                </MenuFlyout>
+              </Button.Flyout>
+            </Button>
+          </StackPanel>
+          <Grid Grid.Row="1" ColumnDefinitions="24,*" ColumnSpacing="10" VerticalAlignment="Center" Margin="0,0,2,2">
+            <Path Width="18" Height="18" Stretch="Uniform" Stroke="{DynamicResource RvMutedTextBrush}"
+                  StrokeThickness="1.7" StrokeLineCap="Round" StrokeJoin="Round"
+                  Data="M3,9 L6.5,9 L11,5.5 L11,18.5 L6.5,15 L3,15 Z M14,9 C15.8,10.5 15.8,13.5 14,15 M16.5,6.5 C20,9.5 20,14.5 16.5,17.5" />
+            <Slider Grid.Column="1" Classes="volume-slider" Minimum="0" Maximum="1"
+                    SmallChange="0.05" LargeChange="0.1" Value="{Binding Playback.Volume, Mode=TwoWay}"
+                    ToolTip.Tip="Volume" />
+          </Grid>
+        </Grid>
+      </Grid>
+    </Border>
+
+    <Border x:Name="ClosingOverlay" Grid.RowSpan="2" Grid.ColumnSpan="2" ZIndex="1000"
+            IsVisible="False" Background="#99000000">
+      <Border Classes="card-raised" Width="360" Padding="28" HorizontalAlignment="Center" VerticalAlignment="Center">
+        <StackPanel Spacing="14">
+          <TextBlock Text="Closing RadioVault" FontSize="20" FontWeight="SemiBold" HorizontalAlignment="Center" />
+          <TextBlock Text="Saving your listening position and closing Radio Vault safely…"
+                     Classes="muted" FontSize="11" TextAlignment="Center" TextWrapping="Wrap" />
+          <TextBlock Text="Finishing the current step…" Classes="muted" FontSize="10"
+                     HorizontalAlignment="Center" />
+        </StackPanel>
+      </Border>
+    </Border>
+  </Grid>
+</Window>

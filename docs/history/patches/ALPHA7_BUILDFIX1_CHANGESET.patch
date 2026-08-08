@@ -1,0 +1,179 @@
+diff --git a/ALPHA7_TRANSACTIONAL_REHEARSAL_BUILDFIX1_VALIDATION.md b/ALPHA7_TRANSACTIONAL_REHEARSAL_BUILDFIX1_VALIDATION.md
+new file mode 100644
+index 0000000..a8b5bac
+--- /dev/null
++++ b/ALPHA7_TRANSACTIONAL_REHEARSAL_BUILDFIX1_VALIDATION.md
+@@ -0,0 +1,18 @@
++# v0.28.0-alpha7 transactional rehearsal buildfix1 validation
++
++## Correction
++
++- Corrected CS1503 at `LibraryTruthWindow.xaml.cs` line 70.
++- Replaced `Task.Run(_rehearsal.GetLatestItems)` with `Task.Run(() => _rehearsal.GetLatestItems())` because `GetLatestItems` has the optional `limit` parameter.
++- Added a source-validation guard against reintroducing the invalid method-group call.
++
++## Static validation completed
++
++- Parsed all 37 project/XAML XML files successfully.
++- Confirmed `VERSION.txt`, project `Version` and `InformationalVersion` agree.
++- Confirmed the invalid method-group call is absent and the explicit lambda occurs exactly once.
++- Confirmed database schema remains 43 and Library Truth export schema remains 5.
++- Confirmed the buildfix patch applies cleanly to the original alpha7 source.
++- Confirmed no `bin`, `obj` or `.vs` directories are included.
++
++No Library Truth, adoption-preview, backup, transaction, rollback, state-preservation or live-library behaviour changed. Full compilation and smoke tests still require Windows with the .NET 8 SDK.
+diff --git a/ALPHA7_TRANSACTIONAL_REHEARSAL_STATIC_VALIDATION.md b/ALPHA7_TRANSACTIONAL_REHEARSAL_STATIC_VALIDATION.md
+index bc44fd8..fd9c87b 100644
+--- a/ALPHA7_TRANSACTIONAL_REHEARSAL_STATIC_VALIDATION.md
++++ b/ALPHA7_TRANSACTIONAL_REHEARSAL_STATIC_VALIDATION.md
+@@ -1,6 +1,6 @@
+ # Alpha7 transactional-rehearsal static validation
+ 
+-Target version: `0.28.0-alpha7-transactional-rehearsal`
++Target version: `0.28.0-alpha7-transactional-rehearsal-buildfix1`
+ 
+ The source package was checked structurally in the packaging environment:
+ 
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 98d1d05..1de62dc 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,4 +1,4 @@
+-# v0.28.0-alpha7 — Transactional Adoption Rehearsal
++# v0.28.0-alpha7 buildfix1 — Transactional Adoption Rehearsal
+ 
+ ## Added
+ 
+diff --git a/LIBRARY_TRUTH_ALPHA7_VALIDATION.md b/LIBRARY_TRUTH_ALPHA7_VALIDATION.md
+index bbcd6c9..5917632 100644
+--- a/LIBRARY_TRUTH_ALPHA7_VALIDATION.md
++++ b/LIBRARY_TRUTH_ALPHA7_VALIDATION.md
+@@ -1,6 +1,6 @@
+ # v0.28.0-alpha7 Library Truth validation
+ 
+-1. Build and launch `0.28.0-alpha7-transactional-rehearsal` over the accepted alpha6 database.
++1. Build and launch `0.28.0-alpha7-transactional-rehearsal-buildfix1` over the accepted alpha6 database.
+ 2. Confirm schema 43 initialization succeeds and creates a pre-upgrade backup.
+ 3. Confirm the latest Library Truth analysis still reports:
+    - 7,169 physical files
+diff --git a/README.md b/README.md
+index 037f078..d54acfb 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+-# Radio Vault v0.28.0-alpha7 — Transactional Adoption Rehearsal
++# Radio Vault v0.28.0-alpha7 buildfix1 — Transactional Adoption Rehearsal
+ 
+-Version: `0.28.0-alpha7-transactional-rehearsal`
++Version: `0.28.0-alpha7-transactional-rehearsal-buildfix1`
+ 
+ Alpha7 builds on the full-corpus-confirmed alpha6 Library Truth model. It keeps the Broadcast → Recording → Physical File, segment coverage and guarded adoption-preview data unchanged, then executes the planned structural and state-preservation operations only inside a disposable SQLite clone.
+ 
+diff --git a/RELEASE_BASELINE.md b/RELEASE_BASELINE.md
+index d1f9f6f..342eaae 100644
+--- a/RELEASE_BASELINE.md
++++ b/RELEASE_BASELINE.md
+@@ -1,6 +1,6 @@
+-# v0.28.0-alpha7 development baseline
++# v0.28.0-alpha7 buildfix1 development baseline
+ 
+-Current version: `0.28.0-alpha7-transactional-rehearsal`
++Current version: `0.28.0-alpha7-transactional-rehearsal-buildfix1`
+ 
+ Source baseline: the full-corpus-confirmed `0.28.0-alpha6-adoption-preview` build.
+ 
+diff --git a/RELEASE_CHECKLIST.md b/RELEASE_CHECKLIST.md
+index aa5693f..d138677 100644
+--- a/RELEASE_CHECKLIST.md
++++ b/RELEASE_CHECKLIST.md
+@@ -1,6 +1,6 @@
+ # v0.28.0-alpha7 Transactional Adoption Rehearsal checklist
+ 
+-- [ ] Application reports `0.28.0-alpha7-transactional-rehearsal`.
++- [ ] Application reports `0.28.0-alpha7-transactional-rehearsal-buildfix1`.
+ - [ ] Database initializes or upgrades to schema 43 with a pre-upgrade backup.
+ - [ ] Full solution builds on .NET 8.
+ - [ ] All smoke tests pass.
+diff --git a/RELEASE_NOTES_0.28.0_ALPHA7_BUILDFIX1.md b/RELEASE_NOTES_0.28.0_ALPHA7_BUILDFIX1.md
+new file mode 100644
+index 0000000..a9b8494
+--- /dev/null
++++ b/RELEASE_NOTES_0.28.0_ALPHA7_BUILDFIX1.md
+@@ -0,0 +1,7 @@
++# Radio Vault v0.28.0-alpha7 buildfix1
++
++Version: `0.28.0-alpha7-transactional-rehearsal-buildfix1`
++
++This buildfix corrects the Visual Studio compiler error CS1503 in `LibraryTruthWindow.xaml.cs`. `LibraryTruthAdoptionRehearsalService.GetLatestItems` accepts an optional `limit` parameter, so C# cannot infer it as a zero-argument `Task.Run` delegate when supplied as a bare method group. The UI loader now invokes it through `Task.Run(() => _rehearsal.GetLatestItems())`.
++
++No Library Truth, adoption-preview, backup, transaction, rollback, state-preservation, schema or export behaviour changed.
+diff --git a/TheRadioVault/LibraryTruthWindow.xaml.cs b/TheRadioVault/LibraryTruthWindow.xaml.cs
+index 22c049c..c3ca516 100644
+--- a/TheRadioVault/LibraryTruthWindow.xaml.cs
++++ b/TheRadioVault/LibraryTruthWindow.xaml.cs
+@@ -67,7 +67,7 @@ public partial class LibraryTruthWindow : Window
+             var previewTask = Task.Run(() => _engine.GetAdoptionPreviews(filter, search));
+             var planTask = Task.Run(_engine.GetAdoptionPlanSummary);
+             var rehearsalSummaryTask = Task.Run(_rehearsal.GetLatestSummary);
+-            var rehearsalItemsTask = Task.Run(_rehearsal.GetLatestItems);
++            var rehearsalItemsTask = Task.Run(() => _rehearsal.GetLatestItems());
+             var yearsTask = Task.Run(_engine.GetYears);
+             var conflictsTask = Task.Run(_engine.GetConflicts);
+             await Task.WhenAll(filesTask, recordingsTask, broadcastsTask, adoptionTask, coverageTask, previewTask, planTask, rehearsalSummaryTask, rehearsalItemsTask, yearsTask, conflictsTask);
+diff --git a/TheRadioVault/TheRadioVault.csproj b/TheRadioVault/TheRadioVault.csproj
+index f2d8e16..d817629 100644
+--- a/TheRadioVault/TheRadioVault.csproj
++++ b/TheRadioVault/TheRadioVault.csproj
+@@ -9,10 +9,10 @@
+     <ImplicitUsings>disable</ImplicitUsings>
+     <AssemblyName>TheRadioVault</AssemblyName>
+     <RootNamespace>TheRadioVault</RootNamespace>
+-    <Version>0.28.0-alpha7-transactional-rehearsal</Version>
++    <Version>0.28.0-alpha7-transactional-rehearsal-buildfix1</Version>
+     <AssemblyVersion>0.28.0.0</AssemblyVersion>
+     <FileVersion>0.28.0.0</FileVersion>
+-    <InformationalVersion>0.28.0-alpha7-transactional-rehearsal</InformationalVersion>
++    <InformationalVersion>0.28.0-alpha7-transactional-rehearsal-buildfix1</InformationalVersion>
+   </PropertyGroup>
+   <ItemGroup>
+     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.7" />
+diff --git a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+index 04c0f7f..c6c7114 100644
+--- a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
++++ b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+@@ -12,7 +12,7 @@ namespace TheRadioVault.Core.LibraryTruth;
+ /// </summary>
+ public sealed class LibraryTruthParser
+ {
+-    public const string CurrentVersion = "0.28.0-alpha7-transactional-rehearsal-v3";
++    public const string CurrentVersion = "0.28.0-alpha7-transactional-rehearsal-buildfix1-v3";
+ 
+     private static readonly Regex IsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})[\s._-]+(?<month>\d{1,2})[\s._-]+(?<day>\d{1,2})(?!\d)");
+     private static readonly Regex CompactIsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})(?<month>\d{2})(?<day>\d{2})(?!\d)");
+diff --git a/VERSION.txt b/VERSION.txt
+index cb2e19b..033e7e5 100644
+--- a/VERSION.txt
++++ b/VERSION.txt
+@@ -1 +1 @@
+-0.28.0-alpha7-transactional-rehearsal
++0.28.0-alpha7-transactional-rehearsal-buildfix1
+diff --git a/validate-source.ps1 b/validate-source.ps1
+index c4769cd..69cd4bc 100644
+--- a/validate-source.ps1
++++ b/validate-source.ps1
+@@ -7,6 +7,15 @@ function Add-ValidationError([string]$message) {
+     $errors.Add($message)
+ }
+ 
++# C# optional-parameter methods cannot be passed as zero-argument Task.Run method groups.
++$libraryTruthWindowText = Get-Content (Join-Path $root "TheRadioVault\LibraryTruthWindow.xaml.cs") -Raw
++if ($libraryTruthWindowText -match 'Task\.Run\(_rehearsal\.GetLatestItems\)') {
++    Add-ValidationError "LibraryTruthWindow must invoke GetLatestItems through an explicit lambda because the method has an optional limit parameter."
++}
++if ($libraryTruthWindowText -notmatch 'Task\.Run\(\(\)\s*=>\s*_rehearsal\.GetLatestItems\(\)\)') {
++    Add-ValidationError "The alpha7 rehearsal item load must use Task.Run(() => _rehearsal.GetLatestItems())."
++}
++
+ # Version drift is easy to introduce when packaging source builds.
+ $versionPath = Join-Path $root "VERSION.txt"
+ $projectPath = Join-Path $root "TheRadioVault\TheRadioVault.csproj"

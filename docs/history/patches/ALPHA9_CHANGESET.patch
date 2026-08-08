@@ -1,0 +1,765 @@
+diff --git a/ALPHA9_POLICY_REFINEMENT_STATIC_VALIDATION.md b/ALPHA9_POLICY_REFINEMENT_STATIC_VALIDATION.md
+new file mode 100644
+index 0000000..39c15fc
+--- /dev/null
++++ b/ALPHA9_POLICY_REFINEMENT_STATIC_VALIDATION.md
+@@ -0,0 +1,24 @@
++# Alpha9 Conflict Policy Refinement — static validation
++
++Target version: `0.28.0-alpha9-policy-refinement`
++
++Database schema: 44
++
++Library Truth export schema: 6
++Registered smoke tests: 98
++
++## Source checks completed
++
++- All 195 C# files were parsed with the C# tree-sitter grammar.
++- The only parser error remains the known embedded-JavaScript false positive in `TheRadioVault.Web/Services/LocalWebServer.cs`; all alpha9-modified C# files parse without errors.
++- All 37 XAML/project XML files parse successfully.
++- Version markers agree across `VERSION.txt`, the desktop project and Library Truth parser.
++- The new regression test is registered once and its method exists.
++- No database schema or export contract change was introduced.
++- No committed or live adoption command was introduced.
++
++## Full-corpus evidence used
++
++The alpha8 schema-6 export contains 15,346 forensic rows: 12,576 auto-resolved and 2,770 unresolved. Field-level analysis confirms the alpha9 rules target generated/structural false positives while leaving the expected 12 genuinely ambiguous/protected rows untouched.
++
++Compilation and execution of all smoke tests still require the user's Windows .NET 8 environment.
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+index 704d673..c276de7 100644
+--- a/ARCHITECTURE.md
++++ b/ARCHITECTURE.md
+@@ -1,6 +1,6 @@
+-# v0.28.0-alpha8 Library Truth architecture
++# v0.28.0-alpha9 Library Truth architecture
+ 
+-The proven Broadcast → Recording → Physical File model, segment coverage evidence, guarded adoption previews and alpha7 disposable transaction remain unchanged. Alpha8 adds a fourth shadow layer: **Field-Level Conflict Forensics**.
++The proven Broadcast → Recording → Physical File model, segment coverage evidence, guarded adoption previews and alpha7 disposable transaction remain unchanged. Alpha8 added **Field-Level Conflict Forensics**; alpha9 adds a conservative field-policy layer over that ledger.
+ 
+ 1. **Validated pre-rehearsal backup**
+    - An online SQLite backup is created before the rehearsal ledger is written.
+@@ -16,11 +16,14 @@ The proven Broadcast → Recording → Physical File model, segment coverage evi
+    - Media-file links and clearly mergeable user/research state are reassigned to the provisional survivor.
+    - Redundant episodes become mapped hidden aliases inside the clone rather than being deleted.
+ 
+-4. **Conflict forensics and merge policy**
++4. **Conflict forensics and field policy**
+    - Every meaningful episode-field or residual alias-reference difference becomes a forensic row.
+    - Candidate values, source episodes and matching research provenance are recorded.
+-   - Lossless or decisively evidenced cases receive deterministic rehearsal-only resolutions.
+-   - Every alternate is retained in evidence; genuinely comparable contradictions remain unresolved.
++   - Canonical structural identity may select an intentionally blank persisted value, including STANDARD slot.
++   - Recording-level labels are removed from canonical broadcast metadata but retained as forensic/recording evidence.
++   - Filename-derived titles, generated eras and artwork assets receive deterministic reversible policies.
++   - Episode-wide `user_modified` is not treated as field-level authority.
++   - Every alternate remains preserved; protected/manual contradictions remain unresolved.
+    - Provenance never transfers authority to a value it does not match.
+ 
+ 5. **Integrity and rollback proof**
+@@ -29,4 +32,4 @@ The proven Broadcast → Recording → Physical File model, segment coverage evi
+    - A deterministic fingerprint of every non-shadow table must match its pre-rehearsal fingerprint.
+    - Only shadow rehearsal summaries, per-broadcast results and forensic evidence persist.
+ 
+-There is still no live adoption route.
++There is still no committed or live adoption route.
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 659a4c3..afef842 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,3 +1,26 @@
++# v0.28.0-alpha9 — Conflict Policy Refinement
++
++## Added
++
++- Canonical STANDARD-slot handling when the persisted Library Truth slot is intentionally blank.
++- Field-specific policies for recording-level variants, filename-derived titles, generated era labels and artwork alternatives.
++- A regression scenario covering the real alpha8 false-positive conflict families.
++
++## Changed
++
++- Episode-wide `user_modified` is no longer treated as field-level veto evidence.
++- Recording/segment labels are cleared from the canonical broadcast metadata while remaining preserved in the forensic ledger.
++- Generated taxonomy and asset alternatives now receive deterministic, reversible winners instead of manual-review flags.
++
++## Safety
++
++- Database schema remains 44 and export schema remains 6.
++- All policy writes still occur only inside the disposable rehearsal transaction.
++- Mandatory backup validation, integrity checks and rollback fingerprint verification are unchanged.
++- No committed or live adoption command exists.
++
++---
++
+ # v0.28.0-alpha8 buildfix2 — Conflict Forensics UI compile correction
+ 
+ - Replaced the malformed multi-line interpolated raw string in `ConflictForensicsGrid_SelectionChanged` with conventional interpolated-string concatenation.
+diff --git a/ENGINEERING.md b/ENGINEERING.md
+index 47f26ef..f01464c 100644
+--- a/ENGINEERING.md
++++ b/ENGINEERING.md
+@@ -1,16 +1,16 @@
+-# v0.28.0-alpha8 engineering status
++# v0.28.0-alpha9 engineering status
+ 
+-Alpha7 proved the complete 4,305-broadcast adoption transaction, backup restore, state migration, SQLite integrity and exact rollback against the desktop library. It also exposed 7,165 coarse policy differences across 2,195 Ron & Fez broadcasts, but did not identify their fields or values.
++Alpha8 completed the full 4,305-broadcast rehearsal with exact structural operation counts, zero foreign-key violations, SQLite integrity `ok`, successful backup restore and an identical rollback fingerprint. It persisted 15,346 field/reference forensic rows, auto-resolved 12,576 and left 2,770 for review.
+ 
+-Alpha8 adds:
++Full-corpus analysis showed that most remaining reviews were policy false positives rather than genuine user decisions:
+ 
+-- schema 44 field-level conflict and provenance ledger;
+-- deterministic canonical-identity, normalization, populated-value, list-union, placeholder, manual-edit, protected-provenance and quality-ranking policies;
+-- preservation of every alternate value in exported forensic evidence;
+-- explicit unresolved-review classification when evidence is not decisive;
+-- headline-review and residual alias-reference forensics;
+-- per-broadcast and run-level auto-resolved, unresolved and alternate counts;
+-- Conflict Forensics UI and schema-6 `.trvtruth` export;
+-- regression coverage proving policy decisions are rolled back and the live metadata remains unchanged.
++- 1,605 canonical STANDARD-slot rows were unresolved because the persisted canonical slot is intentionally blank;
++- 887 generated broadcast-era label alternatives had no field-level manual/protected authority;
++- 137 artwork paths were asset alternatives rather than semantic contradictions;
++- 71 part/archive labels belonged at the Recording/Segment layer;
++- most of 59 remaining titles were filename-derived multipart labels;
++- episode-wide `user_modified` was incorrectly able to veto field-level quality ranking.
+ 
+-No committed adoption route exists. The next decision depends on the full desktop alpha8 rehearsal: only a small, intelligible unresolved set should advance to a committed disposable-clone trial.
++Alpha9 adds explicit policies for those families, retains every alternate and preserves field-level manual/protected authority. Schema 44, export schema 6, the disposable transaction and mandatory rollback remain unchanged.
++
++No committed adoption route exists. The full desktop alpha9 rehearsal must confirm that the unresolved set is small and intelligible before a committed disposable-clone trial begins.
+diff --git a/LIBRARY_TRUTH_ALPHA9_VALIDATION.md b/LIBRARY_TRUTH_ALPHA9_VALIDATION.md
+new file mode 100644
+index 0000000..716fecf
+--- /dev/null
++++ b/LIBRARY_TRUTH_ALPHA9_VALIDATION.md
+@@ -0,0 +1,53 @@
++# Library Truth alpha9 full-corpus validation
++
++Build and run `0.28.0-alpha9-policy-refinement` against the same 7,169-file GRAHAM-PC desktop library used for alpha5–alpha8.
++
++## Required invariants
++
++- 7,169 physical files.
++- 7,091 current live episode rows.
++- 4,330 proposed canonical broadcasts.
++- 4,305 adoption-ready, 15 review-recommended and 10 blocked.
++- 6,736 recording variants.
++- 7,106 coverage rows: 7,096 direct and 10 review-only.
++- 4,330 adoption previews.
++- Rehearsal structural counts remain exactly:
++  - 4,305 canonical writes
++  - 6,685 recording writes
++  - 7,035 segment writes
++  - 7,035 coverage writes
++  - 2,728 file reassignments
++  - 2,728 alias retirements
++- Zero foreign-key violations.
++- SQLite integrity `ok`.
++- Backup restore `ok`.
++- Source and rollback fingerprints identical.
++
++## Conflict-policy expectation
++
++Alpha8 recorded 2,770 unresolved rows. The accepted alpha8 export shows that alpha9 should deterministically remove:
++
++- 1,605 canonical STANDARD-slot false positives;
++- 887 generated broadcast-era alternatives;
++- 137 artwork asset alternatives;
++- 71 recording-level broadcast-variant labels;
++- 54 filename-title/decisive-title cases;
++- 4 station decisions previously blocked by episode-wide `user_modified`.
++
++The expected remainder is approximately **12 unresolved rows across 11 broadcasts**:
++
++- five genuinely comparable headline choices;
++- six genuinely comparable summaries;
++- one protected empty-versus-populated summary.
++
++Every resolved and unresolved alternate must remain present in the forensic ledger. Any materially different count must be explained by the exported field/classification distribution rather than accepted silently.
++
++## Procedure
++
++1. Build the complete solution and run the smoke tests.
++2. Open Library Truth and run a fresh full shadow analysis.
++3. Run **Run adoption rehearsal…**.
++4. Confirm rollback verification and all integrity checks.
++5. Export the schema-6 `.trvtruth`.
++6. Compare the export against `RadioVault-Library-Truth-GRAHAM-PC-2026-07-19-2334.trvtruth`.
++7. Do not introduce or run any committed/live adoption route.
+diff --git a/README.md b/README.md
+index 81e2d00..9846478 100644
+--- a/README.md
++++ b/README.md
+@@ -1,11 +1,11 @@
+-# Radio Vault v0.28.0-alpha8 buildfix2 — Conflict Forensics
++# Radio Vault v0.28.0-alpha9 — Conflict Policy Refinement
+ 
+-Version: `0.28.0-alpha8-conflict-forensics-buildfix2`
++Version: `0.28.0-alpha9-policy-refinement`
+ 
+-Alpha8 builds on the full-corpus-confirmed alpha7 transactional-rehearsal baseline. The accepted Broadcast → Recording → Physical File model, segment coverage, adoption previews, backup creation, integrity checks and mandatory rollback remain unchanged.
++Alpha9 builds on the full-corpus-confirmed alpha8 conflict-forensics rehearsal. The accepted Broadcast → Recording → Physical File model, coverage evidence, adoption previews, validated backup, disposable transaction, integrity checks and mandatory rollback remain unchanged.
+ 
+-The new conflict-forensics layer replaces alpha7's coarse metadata-conflict count with field-level evidence. During the disposable rehearsal, Radio Vault records every competing episode value, the source episode, research provenance, confidence, selected value, merge rule, preserved alternates and whether human review is still required.
++This milestone converts the large false-positive review set found by alpha8 into explicit field-specific policies. A blank persisted broadcast slot is now correctly recognised as canonical `STANDARD`; recording/segment labels no longer masquerade as broadcast-level variants; filename-derived multipart titles can be cleared or replaced by one descriptive title; generated era labels receive a deterministic preserved-alternate winner; and artwork conflicts retain the provisional survivor's asset while preserving every alternate path.
+ 
+-Deterministic policies cover canonical identity, equivalent formatting, empty-versus-populated values, mergeable people/source lists, specific values over placeholders, protected research provenance, manual edits and decisive quality differences. A value is never credited with provenance belonging to a different value. Genuinely comparable contradictions remain unresolved.
++Episode-wide `user_modified` remains weak evidence only. It no longer vetoes a field-level quality decision when there is no matching manual or protected provenance for that exact field. Protected/manual contradictions and genuinely comparable descriptive metadata still remain unresolved.
+ 
+-The rehearsal still runs only against a validated disposable SQLite clone and is always rolled back. The live library cannot be adopted in this build. Only shadow rehearsal summaries, per-broadcast results and the forensic ledger are persisted after rollback verification.
++All policy applications occur only inside the validated disposable rehearsal transaction and are always rolled back. The live library cannot be adopted in this build. Only shadow rehearsal summaries, per-broadcast results and the forensic ledger are persisted after rollback verification.
+diff --git a/RELEASE_BASELINE.md b/RELEASE_BASELINE.md
+index 763dfbd..53642db 100644
+--- a/RELEASE_BASELINE.md
++++ b/RELEASE_BASELINE.md
+@@ -1,9 +1,9 @@
+-# v0.28.0-alpha8 buildfix2 development baseline
++# v0.28.0-alpha9 development baseline
+ 
+-Current version: `0.28.0-alpha8-conflict-forensics-buildfix2`
++Current version: `0.28.0-alpha9-policy-refinement`
+ 
+-Source baseline: the full-corpus-confirmed `0.28.0-alpha7-transactional-rehearsal-buildfix1` build.
++Source baseline: the compiled and full-corpus-rehearsed `0.28.0-alpha8-conflict-forensics-buildfix2` build.
+ 
+-Alpha8 must preserve the accepted 7,169-file desktop Library Truth model, 4,330 canonical broadcasts, 7,106 coverage rows, 4,330 adoption previews and alpha7's exact 4,305-broadcast transaction/rollback behaviour. Its only new responsibility is to explain and classify field-level metadata/reference differences inside the disposable rehearsal.
++Alpha9 must preserve the accepted 7,169-file desktop Library Truth model, 4,330 canonical broadcasts, 7,106 coverage rows, 4,330 adoption previews and alpha7/alpha8 exact 4,305-broadcast transaction/rollback behaviour. Its responsibility is to remove false-positive manual reviews with conservative, field-specific deterministic policies while retaining all alternates and field-level authority.
+ 
+ Database schema: 44. Library Truth export schema: 6. Live adoption remains disabled.
+diff --git a/RELEASE_CHECKLIST.md b/RELEASE_CHECKLIST.md
+index b44071e..8b13a1a 100644
+--- a/RELEASE_CHECKLIST.md
++++ b/RELEASE_CHECKLIST.md
+@@ -1,18 +1,21 @@
+-# v0.28.0-alpha8 buildfix2 Conflict Forensics checklist
++# v0.28.0-alpha9 Conflict Policy Refinement checklist
+ 
+-- [ ] Application reports `0.28.0-alpha8-conflict-forensics-buildfix2`.
++- [ ] Application reports `0.28.0-alpha9-policy-refinement`.
+ - [ ] Database initializes or upgrades to schema 44 with a pre-upgrade backup.
+ - [ ] Full solution builds on .NET 8.
+-- [ ] All 97 smoke tests pass.
++- [ ] All 98 smoke tests pass.
+ - [ ] Desktop Library Truth remains at 7,169 files and 4,330 canonical broadcasts.
+ - [ ] Adoption states remain 4,305 ready, 15 review recommended and 10 blocked unless new evidence explains a change.
+ - [ ] Coverage remains 7,106 rows: 7,096 direct and 10 review-only.
+ - [ ] Exactly 4,330 adoption previews remain present.
+-- [ ] The rehearsal executes the same exact alpha7 structural operation counts.
+-- [ ] Every reported field/reference difference has candidate values, source episode evidence and a classification.
+-- [ ] Protected/manual provenance is used only when it matches the candidate value.
+-- [ ] Auto-resolved cases record their rule, selected value, confidence and preserved alternates.
+-- [ ] Comparable contradictions remain marked `Needs review` rather than receiving a silent winner.
++- [ ] The rehearsal executes the same exact structural operation counts as alpha7 and alpha8.
++- [ ] Canonical `STANDARD` slot rows are auto-resolved even though the persisted canonical value is blank.
++- [ ] Recording/segment labels are removed from broadcast-level `broadcast_variant` while preserved in the forensic ledger.
++- [ ] Filename-derived multipart titles are cleared or replaced by the sole descriptive title.
++- [ ] Generated broadcast-era alternatives receive a deterministic winner with all alternates preserved.
++- [ ] Artwork alternatives use the provisional survivor asset without being treated as semantic contradictions.
++- [ ] Episode-wide `user_modified` does not override field-level provenance policy.
++- [ ] Protected/manual contradictions remain marked `Needs review`.
+ - [ ] The retained backup reopens with SQLite integrity `ok`.
+ - [ ] Foreign-key violations are zero and SQLite integrity is `ok` before rollback.
+ - [ ] Source and post-rollback logical fingerprints are identical.
+diff --git a/RELEASE_NOTES_0.28.0_ALPHA9.md b/RELEASE_NOTES_0.28.0_ALPHA9.md
+new file mode 100644
+index 0000000..599b64f
+--- /dev/null
++++ b/RELEASE_NOTES_0.28.0_ALPHA9.md
+@@ -0,0 +1,22 @@
++# Radio Vault v0.28.0-alpha9 — Conflict Policy Refinement
++
++Version: `0.28.0-alpha9-policy-refinement`
++
++## Purpose
++
++Alpha8 proved the forensic ledger but surfaced 2,770 review rows, including 1,605 canonical STANDARD-slot false positives and large groups of generated taxonomy, asset and recording-level metadata that should not require human arbitration.
++
++Alpha9 applies conservative field-specific policies while preserving every alternate value and all matching provenance.
++
++## Policies
++
++- Blank persisted `broadcast_slot` is accepted as the canonical STANDARD representation when the canonical broadcast row exists.
++- Multipart/archive-capture labels are recognised as Recording/Segment evidence and cleared from broadcast-level `broadcast_variant`.
++- Filename-derived part/date titles are cleared when no descriptive title exists, or replaced by the sole descriptive title.
++- Generated `broadcast_era` alternatives receive a deterministic specificity-ranked winner.
++- Artwork alternatives retain the provisional survivor's asset and preserve all other paths.
++- Episode-wide `user_modified` is weak supporting evidence only; field-level manual/protected provenance remains authoritative.
++
++## Safety
++
++The validated backup, disposable clone, exact operation-count checks, foreign-key/integrity checks and mandatory rollback are unchanged. Database schema remains 44, export schema remains 6, and live adoption remains disabled.
+diff --git a/ROADMAP.md b/ROADMAP.md
+index 596b313..fa2e782 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -7,7 +7,8 @@
+ 5. **alpha5 — Multipart Family Corrections (completed):** repaired safe suffix over-separation and passed the complete 7,169-file desktop corpus.
+ 6. **alpha6 — Coverage Evidence & Adoption Preview (completed):** persisted segment coverage and 4,330 guarded adoption plans.
+ 7. **alpha7 — Transactional Rehearsal (completed):** validated backup, exact disposable transaction, state preservation, integrity checks and rollback across all 4,305 eligible broadcasts.
+-8. **alpha8 — Conflict Forensics (current):** classify every metadata/reference difference, preserve provenance and alternates, and reduce the unresolved policy set to genuinely ambiguous cases.
+-9. **Next adoption milestone:** committed adoption on a disposable database clone only after alpha8's unresolved set is small, explicit and explainable.
++8. **alpha8 — Conflict Forensics (completed):** persisted field-level values, provenance, classifications, selected values and preserved alternates.
++9. **alpha9 — Conflict Policy Refinement (current):** remove false-positive reviews for canonical STANDARD slots, recording-level labels, filename titles, generated eras and artwork assets while retaining manual/protected contradictions.
++10. **Next adoption milestone:** committed adoption on a disposable database clone only after alpha9 confirms a small, explicit unresolved set.
+ 
+ Major feature expansion remains frozen while the Library Truth Engine is being established.
+diff --git a/TheRadioVault/LibraryTruthWindow.xaml b/TheRadioVault/LibraryTruthWindow.xaml
+index af9b4c5..eba1071 100644
+--- a/TheRadioVault/LibraryTruthWindow.xaml
++++ b/TheRadioVault/LibraryTruthWindow.xaml
+@@ -184,7 +184,7 @@
+     <Grid Margin="0,12,0,0">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+      <Border Background="{DynamicResource InsetBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12">
+-      <TextBlock x:Name="ConflictForensicsSummaryText" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Text="Run the alpha8 adoption rehearsal to classify metadata differences and preserve their provenance."/>
++      <TextBlock x:Name="ConflictForensicsSummaryText" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Text="Run the alpha9 adoption rehearsal to classify metadata differences and preserve their provenance."/>
+      </Border>
+      <DataGrid Grid.Row="1" x:Name="ConflictForensicsGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
+                SelectionChanged="ConflictForensicsGrid_SelectionChanged" EnableRowVirtualization="True" EnableColumnVirtualization="True"
+diff --git a/TheRadioVault/LibraryTruthWindow.xaml.cs b/TheRadioVault/LibraryTruthWindow.xaml.cs
+index a467506..c8e6884 100644
+--- a/TheRadioVault/LibraryTruthWindow.xaml.cs
++++ b/TheRadioVault/LibraryTruthWindow.xaml.cs
+@@ -14,7 +14,7 @@ public partial class LibraryTruthWindow : Window
+         _rehearsal = rehearsal ?? throw new ArgumentNullException(nameof(rehearsal));
+         _summary = summary;
+         InitializeComponent();
+-        SubtitleText.Text = $"Parser {summary.ParserVersion} · completed {summary.CompletedDisplay} · alpha8 conflict forensics available";
++        SubtitleText.Text = $"Parser {summary.ParserVersion} · completed {summary.CompletedDisplay} · alpha9 conflict forensics available";
+         PhysicalCountText.Text = summary.PhysicalFiles.ToString("N0");
+         CurrentCountText.Text = summary.CurrentBroadcasts.ToString("N0");
+         ProposedCountText.Text = summary.ProposedBroadcasts.ToString("N0");
+@@ -114,19 +114,19 @@ public partial class LibraryTruthWindow : Window
+                 $"{adoption.ReviewRecommendedBroadcasts:N0} groups deserve a focused structure check and {adoption.BlockedBroadcasts:N0} remain blocked.\n\n" +
+                 $"Recording roles: {adoption.PartialRecordings:N0} partial/incomplete captures, {adoption.FragmentRecordings:N0} short clips, " +
+                 $"{adoption.TruncatedRecordings:N0} likely truncated files. {adoption.SuspiciousMergeGroups:N0} suspicious merge groups and " +
+-                $"{adoption.CrossIdentityConflicts:N0} cross-identity audio conflicts are preserved for audit. Alpha8 can rehearse field-level merge policies only inside a disposable clone; the live library remains unchanged.";
++                $"{adoption.CrossIdentityConflicts:N0} cross-identity audio conflicts are preserved for audit. Alpha9 can rehearse field-level merge policies only inside a disposable clone; the live library remains unchanged.";
+             AdoptionPlanSummaryText.Text =
+-                $"Alpha8 inherited {plan.PreviewBroadcasts:N0} per-broadcast plans: {plan.EligibleBroadcasts:N0} are structurally prepared, " +
++                $"Alpha9 inherited {plan.PreviewBroadcasts:N0} per-broadcast plans: {plan.EligibleBroadcasts:N0} are structurally prepared, " +
+                 $"{plan.ReviewBroadcasts:N0} remain held for review and {plan.BlockedBroadcasts:N0} remain blocked. " +
+                 $"A later transactional migration would write {plan.CanonicalBroadcastWrites:N0} canonical broadcasts, {plan.RecordingWrites:N0} recordings, " +
+                 $"{plan.CoverageWrites:N0} coverage rows and {plan.FileLinkWrites:N0} media-file links while consolidating {plan.LiveEpisodeRowsToConsolidate:N0} redundant live episode rows. " +
+                 "These counts now feed a disposable rehearsal transaction; there is still no live adoption command.";
+             RehearsalSummaryText.Text = rehearsalSummary.Id == 0
+-                ? "No transactional rehearsal has been run yet. Alpha8 will create and validate a pre-rehearsal backup, execute the migration and deterministic conflict policies against a disposable clone, run integrity checks, roll back, and compare logical fingerprints."
++                ? "No transactional rehearsal has been run yet. Alpha9 will create and validate a pre-rehearsal backup, execute the migration and deterministic conflict policies against a disposable clone, run integrity checks, roll back, and compare logical fingerprints."
+                 : $"{rehearsalSummary.Message}\n\n{rehearsalSummary.SummaryDisplay}. Backup validation: {rehearsalSummary.BackupRestoreCheck}. SQLite integrity: {rehearsalSummary.IntegrityCheck}. Completed {rehearsalSummary.CompletedDisplay}.";
+             ConflictForensicsSummaryText.Text = rehearsalSummary.Id == 0
+-                ? "Run the alpha8 adoption rehearsal to classify metadata differences, rank provenance, preserve every alternate and identify only the genuinely ambiguous remainder."
+-                : $"Alpha8 persisted {rehearsalSummary.MetadataConflicts:N0} field/reference forensic rows: {rehearsalSummary.AutoResolvedConflicts:N0} deterministic resolutions, {rehearsalSummary.UnresolvedConflicts:N0} requiring review and {rehearsalSummary.PreservedAlternates:N0} preserved alternates. No decision was committed to the live library.";
++                ? "Run the alpha9 adoption rehearsal to classify metadata differences, rank provenance, preserve every alternate and identify only the genuinely ambiguous remainder."
++                : $"Alpha9 persisted {rehearsalSummary.MetadataConflicts:N0} field/reference forensic rows: {rehearsalSummary.AutoResolvedConflicts:N0} deterministic resolutions, {rehearsalSummary.UnresolvedConflicts:N0} requiring review and {rehearsalSummary.PreservedAlternates:N0} preserved alternates. No decision was committed to the live library.";
+             StatusText.Text = $"Showing {files.Count:N0} physical files, {recordings.Count:N0} recording roles, {coverages.Count:N0} coverage rows, {broadcasts.Count:N0} canonical broadcasts and {previews.Count:N0} adoption previews, plus {rehearsalItems.Count:N0} rehearsal rows and {conflictForensics.Count:N0} field-level forensic rows. The live library is unchanged.";
+         }
+         catch (Exception ex)
+@@ -198,7 +198,7 @@ public partial class LibraryTruthWindow : Window
+     {
+         var confirmation = MessageBox.Show(
+             this,
+-            "Alpha8 will create a validated SQLite backup, execute the planned adoption and deterministic metadata policies only inside a disposable database clone, preserve all competing values in a forensic ledger, run integrity checks, and roll the transaction back.\n\nIt cannot change the live library. Continue?",
++            "Alpha9 will create a validated SQLite backup, execute the planned adoption and deterministic metadata policies only inside a disposable database clone, preserve all competing values in a forensic ledger, run integrity checks, and roll the transaction back.\n\nIt cannot change the live library. Continue?",
+             "Run adoption rehearsal",
+             MessageBoxButton.YesNo,
+             MessageBoxImage.Information);
+diff --git a/TheRadioVault/TheRadioVault.csproj b/TheRadioVault/TheRadioVault.csproj
+index a6a73f8..2d240fe 100644
+--- a/TheRadioVault/TheRadioVault.csproj
++++ b/TheRadioVault/TheRadioVault.csproj
+@@ -9,10 +9,10 @@
+     <ImplicitUsings>disable</ImplicitUsings>
+     <AssemblyName>TheRadioVault</AssemblyName>
+     <RootNamespace>TheRadioVault</RootNamespace>
+-    <Version>0.28.0-alpha8-conflict-forensics-buildfix2</Version>
++    <Version>0.28.0-alpha9-policy-refinement</Version>
+     <AssemblyVersion>0.28.0.0</AssemblyVersion>
+     <FileVersion>0.28.0.0</FileVersion>
+-    <InformationalVersion>0.28.0-alpha8-conflict-forensics-buildfix2</InformationalVersion>
++    <InformationalVersion>0.28.0-alpha9-policy-refinement</InformationalVersion>
+   </PropertyGroup>
+   <ItemGroup>
+     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.7" />
+diff --git a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+index 0d49968..4a71d74 100644
+--- a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
++++ b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+@@ -12,7 +12,7 @@ namespace TheRadioVault.Core.LibraryTruth;
+ /// </summary>
+ public sealed class LibraryTruthParser
+ {
+-    public const string CurrentVersion = "0.28.0-alpha8-conflict-forensics-buildfix2-v3";
++    public const string CurrentVersion = "0.28.0-alpha9-policy-refinement-v3";
+ 
+     private static readonly Regex IsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})[\s._-]+(?<month>\d{1,2})[\s._-]+(?<day>\d{1,2})(?!\d)");
+     private static readonly Regex CompactIsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})(?<month>\d{2})(?<day>\d{2})(?!\d)");
+diff --git a/TheRadioVault.Services/Services/LibraryTruthAdoptionRehearsalService.cs b/TheRadioVault.Services/Services/LibraryTruthAdoptionRehearsalService.cs
+index e81c55e..c4cec12 100644
+--- a/TheRadioVault.Services/Services/LibraryTruthAdoptionRehearsalService.cs
++++ b/TheRadioVault.Services/Services/LibraryTruthAdoptionRehearsalService.cs
+@@ -359,7 +359,7 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+         var outcome = unresolvedConflictCount > 0 || transcriptConflictCount > 0 ? "Needs review" : "Policy resolved";
+         var evidence = $"Disposable transaction created {canonicalWrites:N0} canonical row, {recordingWrites:N0} recording rows, {segmentWrites:N0} segment rows and {coverageWrites:N0} coverage rows. " +
+                        $"It reassigned {filesReassigned:N0} media-file links, migrated {stateRows:N0} losslessly mergeable state rows and retired {aliasesRetired:N0} redundant live rows as mapped hidden aliases. " +
+-                       $"Alpha8 classified {metadataConflictCount:N0} field/reference difference(s): {autoResolvedConflictCount:N0} were resolved deterministically, {unresolvedConflictCount:N0} still require review, and {preservedAlternateCount:N0} alternate values were preserved. " +
++                       $"Alpha9 classified {metadataConflictCount:N0} field/reference difference(s): {autoResolvedConflictCount:N0} were resolved deterministically, {unresolvedConflictCount:N0} still require review, and {preservedAlternateCount:N0} alternate values were preserved. " +
+                        $"{transcriptConflictCount:N0} additional transcript(s) require policy. Every change is rolled back.";
+ 
+         return new RehearsalItemResult(preview.CanonicalKey, survivor, aliases, filesReassigned, stateRows,
+@@ -549,7 +549,7 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+         using var command = connection.CreateCommand();
+         command.CommandText = """
+             INSERT INTO library_truth_rehearsal_runs(truth_run_id,started_at,status,backup_path,message)
+-            VALUES($truth,$started,'running',$backup,'Preparing disposable alpha8 conflict-forensics rehearsal.');
++            VALUES($truth,$started,'running',$backup,'Preparing disposable alpha9 conflict-forensics rehearsal.');
+             SELECT last_insert_rowid();
+             """;
+         command.Parameters.AddWithValue("$truth", truthRunId);
+@@ -593,7 +593,7 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+         command.Parameters.AddWithValue("$integrity", result.IntegrityCheck);
+         command.Parameters.AddWithValue("$backupCheck", backupRestoreCheck);
+         command.Parameters.AddWithValue("$verified", result.RollbackVerified ? 1 : 0);
+-        command.Parameters.AddWithValue("$message", $"Disposable adoption transaction completed for {result.EligibleBroadcasts:N0} broadcasts. Alpha8 classified {result.MetadataConflicts:N0} field/reference differences, resolved {result.AutoResolvedConflicts:N0} deterministically, preserved {result.PreservedAlternates:N0} alternates and left {result.UnresolvedConflicts:N0} for review. SQLite integrity and rollback fingerprint checks passed. The live library was not changed.");
++        command.Parameters.AddWithValue("$message", $"Disposable adoption transaction completed for {result.EligibleBroadcasts:N0} broadcasts. Alpha9 classified {result.MetadataConflicts:N0} field/reference differences, resolved {result.AutoResolvedConflicts:N0} deterministically, preserved {result.PreservedAlternates:N0} alternates and left {result.UnresolvedConflicts:N0} for review. SQLite integrity and rollback fingerprint checks passed. The live library was not changed.");
+         command.Parameters.AddWithValue("$id", reportId);
+         command.ExecuteNonQuery();
+     }
+diff --git a/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs b/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
+index 22b20cb..6c55eda 100644
+--- a/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
++++ b/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
+@@ -7,7 +7,7 @@ using TheRadioVault.Services.Models;
+ namespace TheRadioVault.Services.Services;
+ 
+ /// <summary>
+-/// Alpha8 field-level conflict forensics for the disposable adoption rehearsal.
++/// Alpha9 field-level conflict-policy refinement for the disposable adoption rehearsal.
+ /// The routines in this partial class only mutate the disposable clone. Their
+ /// decisions and all competing values are persisted back to the live database
+ /// as shadow evidence after rollback has been verified.
+@@ -37,6 +37,15 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+ 
+     private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
+     private static readonly Regex DateOnlyRegex = new(@"^(?:19|20)\d{2}[-_/ .]\d{1,2}[-_/ .]\d{1,2}$", RegexOptions.Compiled);
++    private static readonly Regex FilenamePartTitleRegex = new(
++        @"\b(?:pt|part)\.?\s*[-_]?\d+\b|\b\d+\s*of\s*\d+\b|[-_]pt\d+|\b128k\w*\b",
++        RegexOptions.Compiled | RegexOptions.IgnoreCase);
++    private static readonly Regex FilenameDateTitleRegex = new(
++        @"^(?:(?:mon|tue|wed|thu|fri|sat|sun)[a-z]*[-_ ]*)?(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|sept|oct|nov|dec)[a-z]*[-_ ]*\d{1,2}[-_ ]*\d{2,4}|\d{1,2}[-_/]\d{1,2}[-_/]\d{2,4})(?:[-_ ].*)?$",
++        RegexOptions.Compiled | RegexOptions.IgnoreCase);
++    private static readonly Regex RecordingLevelVariantRegex = new(
++        @"^(?:split )?archive recording(?: -)? part \d+(?: of \d+)?$|^archive part \d+$|^primary archive recording$|^(?:alternate )?archive[- ]only capture$",
++        RegexOptions.Compiled | RegexOptions.IgnoreCase);
+ 
+     public IReadOnlyList<LibraryTruthConflictForensic> GetLatestConflictForensics(int limit = 50000)
+     {
+@@ -266,7 +275,12 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+             selectedCandidate = candidates.FirstOrDefault(x => string.Equals(x.Normalized, NormalizeValue(rule.Column, selectedValue), StringComparison.Ordinal));
+             classification = "Canonical identity";
+             resolution = "use_canonical_identity";
+-            autoResolved = !string.IsNullOrWhiteSpace(selectedValue);
++            // An empty broadcast_slot is the persisted representation of the
++            // canonical STANDARD slot. The canonical row's existence, rather
++            // than string non-emptiness, determines whether this is resolved.
++            autoResolved = canonical.Exists &&
++                (string.Equals(rule.Column, "broadcast_slot", StringComparison.Ordinal) ||
++                 !string.IsNullOrWhiteSpace(selectedValue));
+             requiresReview = !autoResolved;
+             confidence = autoResolved ? 100 : 20;
+         }
+@@ -325,39 +339,113 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+                 .ThenByDescending(x => x.EpisodeId == survivorEpisodeId)
+                 .ThenBy(x => x.EpisodeId)
+                 .ToArray();
+-            var specific = representatives.Where(x => !IsGenericValue(rule.Column, x.Value)).ToArray();
+-            var authoritativePlaceholders = representatives.Any(x => IsGenericValue(rule.Column, x.Value) && (HasFieldLevelAuthority(x) || x.UserModified));
+-            if (specific.Length == 1 && representatives.Length > 1 && !authoritativePlaceholders)
++            var hasFieldAuthority = representatives.Any(HasFieldLevelAuthority);
++            var handledByFieldPolicy = false;
++
++            if (string.Equals(rule.Column, "broadcast_variant", StringComparison.Ordinal) &&
++                !hasFieldAuthority &&
++                representatives.All(x => IsRecordingLevelVariant(x.Value)))
++            {
++                // Multipart part labels and archive-capture labels describe the
++                // Recording/Segment layer, not the canonical Broadcast.
++                selectedCandidate = null;
++                selectedValue = string.Empty;
++                classification = "Recording-level variant";
++                resolution = "move_to_recording_evidence";
++                autoResolved = true;
++                requiresReview = false;
++                confidence = 99;
++                handledByFieldPolicy = true;
++            }
++            else if (string.Equals(rule.Column, "title", StringComparison.Ordinal) && !hasFieldAuthority)
++            {
++                var descriptive = representatives.Where(x => !IsFilenameDerivedTitle(x.Value)).ToArray();
++                var filenameDerived = representatives.Where(x => IsFilenameDerivedTitle(x.Value)).ToArray();
++                if (filenameDerived.Length > 0 && descriptive.Length <= 1)
++                {
++                    selectedCandidate = descriptive.Length == 1 ? descriptive[0] : null;
++                    selectedValue = selectedCandidate?.Value ?? string.Empty;
++                    classification = descriptive.Length == 1 ? "Descriptive title over filename" : "Filename-derived titles";
++                    resolution = descriptive.Length == 1 ? "prefer_descriptive_title" : "clear_filename_titles";
++                    autoResolved = true;
++                    requiresReview = false;
++                    confidence = descriptive.Length == 1 ? 96 : 98;
++                    handledByFieldPolicy = true;
++                }
++            }
++            else if (string.Equals(rule.Column, "artwork_path", StringComparison.Ordinal) && !hasFieldAuthority)
+             {
+-                selectedCandidate = specific[0];
++                // Artwork alternatives are assets, not semantic metadata
++                // contradictions. Keep the provisional survivor's asset where
++                // possible and preserve every alternate path in the ledger.
++                selectedCandidate = representatives.FirstOrDefault(x => x.EpisodeId == survivorEpisodeId) ?? representatives[0];
+                 selectedValue = selectedCandidate.Value;
+-                classification = "Specific over placeholder";
+-                resolution = "prefer_specific";
++                classification = "Survivor artwork";
++                resolution = "prefer_survivor_asset";
+                 autoResolved = true;
+                 requiresReview = false;
+-                confidence = 92;
++                confidence = 90;
++                handledByFieldPolicy = true;
+             }
+-            else
++            else if (string.Equals(rule.Column, "broadcast_era", StringComparison.Ordinal) && !hasFieldAuthority)
+             {
+-                selectedCandidate = representatives[0];
+-                var runnerUp = representatives.Length > 1 ? representatives[1] : null;
+-                var margin = runnerUp is null ? selectedCandidate.Score : selectedCandidate.Score - runnerUp.Score;
+-                var protectedWinner = selectedCandidate.Protected && (runnerUp is null || !runnerUp.Protected);
+-                var manualWinner = HasManualProvenance(selectedCandidate) && (runnerUp is null || !HasManualProvenance(runnerUp));
+-                var protectedConflict = representatives.Count(x => x.Protected) > 1;
+-                var manualConflict = representatives.Count(HasManualProvenance) > 1;
+-                var possibleLegacyManualEdit = representatives.Any(x => x.UserModified);
+-                var qualityWinner = margin >= 20 && !protectedConflict && !manualConflict && !possibleLegacyManualEdit;
+-                autoResolved = protectedWinner || manualWinner || qualityWinner;
+-                requiresReview = !autoResolved;
+-                selectedValue = autoResolved ? selectedCandidate.Value : string.Empty;
+-                classification = autoResolved
+-                    ? protectedWinner ? "Protected provenance winner" : manualWinner ? "Manual edit winner" : "Quality-ranked winner"
+-                    : "Genuine conflicting values";
+-                resolution = autoResolved
+-                    ? protectedWinner ? "prefer_protected" : manualWinner ? "prefer_manual" : "prefer_higher_quality"
+-                    : "manual_review";
+-                confidence = autoResolved ? Math.Clamp(70 + Math.Max(0, margin), 70, 99) : Math.Clamp(45 - Math.Max(0, margin), 20, 45);
++                // Existing era labels are generated descriptive taxonomy. They
++                // can be ranked deterministically without asking the user to
++                // arbitrate punctuation, station-name breadth or transition
++                // wording; all alternates remain preserved.
++                selectedCandidate = representatives
++                    .OrderByDescending(EraPolicyScore)
++                    .ThenByDescending(x => x.EpisodeId == survivorEpisodeId)
++                    .ThenBy(x => x.EpisodeId)
++                    .First();
++                selectedValue = selectedCandidate.Value;
++                classification = "Generated era winner";
++                resolution = "prefer_specific_generated_era";
++                autoResolved = true;
++                requiresReview = false;
++                confidence = 88;
++                handledByFieldPolicy = true;
++            }
++
++            if (!handledByFieldPolicy)
++            {
++                var specific = representatives.Where(x => !IsGenericValue(rule.Column, x.Value)).ToArray();
++                var authoritativePlaceholders = representatives.Any(x =>
++                    IsGenericValue(rule.Column, x.Value) && HasFieldLevelAuthority(x));
++                if (specific.Length == 1 && representatives.Length > 1 && !authoritativePlaceholders)
++                {
++                    selectedCandidate = specific[0];
++                    selectedValue = selectedCandidate.Value;
++                    classification = "Specific over placeholder";
++                    resolution = "prefer_specific";
++                    autoResolved = true;
++                    requiresReview = false;
++                    confidence = 92;
++                }
++                else
++                {
++                    selectedCandidate = representatives[0];
++                    var runnerUp = representatives.Length > 1 ? representatives[1] : null;
++                    var margin = runnerUp is null ? selectedCandidate.Score : selectedCandidate.Score - runnerUp.Score;
++                    var protectedWinner = selectedCandidate.Protected && (runnerUp is null || !runnerUp.Protected);
++                    var manualWinner = HasManualProvenance(selectedCandidate) && (runnerUp is null || !HasManualProvenance(runnerUp));
++                    var protectedConflict = representatives.Count(x => x.Protected) > 1;
++                    var manualConflict = representatives.Count(HasManualProvenance) > 1;
++                    // user_modified is episode-wide and cannot veto a
++                    // field-level decision when no matching manual/protected
++                    // provenance exists for this field.
++                    var qualityWinner = margin >= 20 && !protectedConflict && !manualConflict;
++                    autoResolved = protectedWinner || manualWinner || qualityWinner;
++                    requiresReview = !autoResolved;
++                    selectedValue = autoResolved ? selectedCandidate.Value : string.Empty;
++                    classification = autoResolved
++                        ? protectedWinner ? "Protected provenance winner" : manualWinner ? "Manual edit winner" : "Quality-ranked winner"
++                        : "Genuine conflicting values";
++                    resolution = autoResolved
++                        ? protectedWinner ? "prefer_protected" : manualWinner ? "prefer_manual" : "prefer_higher_quality"
++                        : "manual_review";
++                    confidence = autoResolved ? Math.Clamp(70 + Math.Max(0, margin), 70, 99) : Math.Clamp(45 - Math.Max(0, margin), 20, 45);
++                }
+             }
+         }
+ 
+@@ -575,8 +663,8 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+         command.Parameters.AddWithValue("$key", canonicalKey);
+         using var reader = command.ExecuteReader();
+         return reader.Read()
+-            ? new CanonicalIdentity(reader.GetInt64(0).ToString(CultureInfo.InvariantCulture), reader.GetString(1), reader.GetString(2))
+-            : new CanonicalIdentity(string.Empty, string.Empty, string.Empty);
++            ? new CanonicalIdentity(reader.GetInt64(0).ToString(CultureInfo.InvariantCulture), reader.GetString(1), reader.GetString(2), true)
++            : new CanonicalIdentity(string.Empty, string.Empty, string.Empty, false);
+     }
+ 
+     private static string NormalizeValue(string field, string value)
+@@ -617,6 +705,37 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+             .ToArray();
+     }
+ 
++    private static bool IsFilenameDerivedTitle(string value)
++    {
++        var trimmed = value.Trim();
++        if (trimmed.Length == 0) return false;
++        return FilenamePartTitleRegex.IsMatch(trimmed) || FilenameDateTitleRegex.IsMatch(trimmed);
++    }
++
++    private static bool IsRecordingLevelVariant(string value)
++        => RecordingLevelVariantRegex.IsMatch(NormalizeText(value));
++
++    private static int EraPolicyScore(MetadataCandidate candidate)
++    {
++        var normalized = NormalizeText(candidate.Value);
++        var score = candidate.Score;
++        if (normalized.Contains("transition", StringComparison.Ordinal) ||
++            normalized.Contains("final", StringComparison.Ordinal) ||
++            normalized.Contains("early", StringComparison.Ordinal) ||
++            normalized.Contains("late", StringComparison.Ordinal) ||
++            normalized.Contains("dual-show", StringComparison.Ordinal))
++            score += 12;
++        if (normalized.Contains("wjfk", StringComparison.Ordinal) ||
++            normalized.Contains("wnew", StringComparison.Ordinal) ||
++            normalized.Contains("virus", StringComparison.Ordinal) ||
++            normalized.Contains("opie & anthony", StringComparison.Ordinal) ||
++            normalized.Contains("raw dog", StringComparison.Ordinal) ||
++            normalized.Contains("xm 202", StringComparison.Ordinal))
++            score += 8;
++        score += Math.Min(8, normalized.Length / 24);
++        return score;
++    }
++
+     private static bool IsGenericValue(string field, string value)
+     {
+         var normalized = NormalizeText(value);
+@@ -713,7 +832,7 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+ 
+     private enum MetadataFieldKind { Structural, Text, List }
+     private sealed record MetadataFieldRule(string Column, string DisplayName, MetadataFieldKind Kind);
+-    private sealed record CanonicalIdentity(string CollectionId, string AirDate, string BroadcastSlot)
++    private sealed record CanonicalIdentity(string CollectionId, string AirDate, string BroadcastSlot, bool Exists)
+     {
+         public string ValueFor(string field) => field switch
+         {
+diff --git a/TheRadioVault.Tests/Program.cs b/TheRadioVault.Tests/Program.cs
+index 09845c7..aa830c3 100644
+--- a/TheRadioVault.Tests/Program.cs
++++ b/TheRadioVault.Tests/Program.cs
+@@ -63,6 +63,7 @@ var tests = new (string Name, Action Run)[]
+     ("Library Truth prepares guarded adoption plans without live writes", LibraryTruthPreparesGuardedAdoptionPreview),
+     ("Library Truth rehearses adoption on a disposable clone and verifies rollback", LibraryTruthRehearsalRollsBackDisposableClone),
+     ("Library Truth classifies metadata conflicts and preserves alternates", LibraryTruthClassifiesMetadataConflicts),
++    ("Library Truth refines generated metadata policies", LibraryTruthRefinesGeneratedMetadataPolicies),
+     ("Research audit catches show guest", ResearchAuditCatchesShowGuest),
+     ("Research audit marks safe repairs", ResearchAuditMarksSafeRepairs),
+     ("Web query filters favourites", WebQueryFiltersFavourites),
+@@ -1223,6 +1224,75 @@ static void LibraryTruthClassifiesMetadataConflicts()
+     }
+ }
+ 
++
++static void LibraryTruthRefinesGeneratedMetadataPolicies()
++{
++    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
++    var backupDirectory = Path.Combine(directory, "Backups");
++    Directory.CreateDirectory(backupDirectory);
++    var databasePath = Path.Combine(directory, "truth-alpha9-policies.sqlite");
++    try
++    {
++        var database = new SqliteDatabase(databasePath);
++        database.Initialize();
++        using (var connection = database.OpenConnection())
++        {
++            using var setup = connection.CreateCommand();
++            setup.CommandText = """
++                INSERT INTO collections(name,sort_name) VALUES('Ron & Fez','Ron & Fez');
++                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
++                VALUES('D:\Radio\Alpha9',(SELECT id FROM collections WHERE name='Ron & Fez'),1,1);
++                INSERT INTO episodes(
++                    collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_slot,broadcast_uid,
++                    artwork_path,edition,broadcast_variant,broadcast_era,metadata_confidence,user_modified)
++                VALUES(
++                    (SELECT id FROM collections WHERE name='Ron & Fez'),'2003-10-03','High','FriOct032003-pt1','Unplayed',$now,$now,
++                    'Evening show','ALPHA9-A','D:\Artwork\old.jpg','Commercial-free','Archive part 2','WJFK Washington era',40,1);
++                INSERT INTO episodes(
++                    collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_slot,broadcast_uid,
++                    artwork_path,edition,broadcast_variant,broadcast_era,metadata_confidence,user_modified)
++                VALUES(
++                    (SELECT id FROM collections WHERE name='Ron & Fez'),'2003-10-03','High','WJFK evening show — Friday, 3 October 2003','Unplayed',$now,$now,
++                    '','ALPHA9-B','D:\Artwork\survivor.jpg','WJFK-FM (106.7, Washington, D.C.)','Primary archive recording','WJFK Washington/Fairfax era',85,0);
++                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
++                VALUES((SELECT id FROM episodes WHERE broadcast_uid='ALPHA9-A'),'D:\Radio\Alpha9\a.mp3','FriOct032003-pt1.mp3',1000,$now,0,$now,5400000,'ALPHA9-ONE','AvailableOffline',1);
++                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
++                VALUES((SELECT id FROM episodes WHERE broadcast_uid='ALPHA9-B'),'D:\Radio\Alpha9\b.mp3','Ron and Fez_ 2003-10-03.mp3',1200,$now,0,$now,10800000,'ALPHA9-TWO','AvailableOffline',1);
++                INSERT INTO research_field_provenance(episode_id,field_name,value_text,source_kind,source_label,confidence,evidence_count,protected,active,created_at)
++                VALUES((SELECT id FROM episodes WHERE broadcast_uid='ALPHA9-B'),'station','WJFK-FM (106.7, Washington, D.C.)','research_pack','Verified station evidence',95,3,0,1,$now);
++                """;
++            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
++            setup.ExecuteNonQuery();
++        }
++
++        var engine = new LibraryTruthEngine(database);
++        engine.BuildShadowIndex();
++        var rehearsal = new LibraryTruthAdoptionRehearsalService(database);
++        var summary = rehearsal.Run(backupDirectory);
++        var conflicts = rehearsal.GetLatestConflictForensics();
++
++        True(summary.RollbackVerified);
++        Equal(0, summary.UnresolvedConflicts);
++        True(conflicts.Any(x => x.FieldName == "broadcast_slot" && x.AutoResolved &&
++                                x.Classification == "Canonical identity" && x.SelectedValue == string.Empty));
++        True(conflicts.Any(x => x.FieldName == "title" && x.AutoResolved &&
++                                x.Classification == "Descriptive title over filename" &&
++                                x.SelectedValue.Contains("WJFK evening show", StringComparison.Ordinal)));
++        True(conflicts.Any(x => x.FieldName == "broadcast_variant" && x.AutoResolved &&
++                                x.Classification == "Recording-level variant" && x.SelectedValue == string.Empty));
++        True(conflicts.Any(x => x.FieldName == "broadcast_era" && x.AutoResolved &&
++                                x.Classification == "Generated era winner"));
++        True(conflicts.Any(x => x.FieldName == "artwork_path" && x.AutoResolved &&
++                                x.Classification == "Survivor artwork"));
++        True(conflicts.Any(x => x.FieldName == "edition" && x.AutoResolved &&
++                                x.SelectedValue.Contains("WJFK-FM", StringComparison.Ordinal)));
++    }
++    finally
++    {
++        try { Directory.Delete(directory, true); } catch { }
++    }
++}
++
+ static void RunLibraryTruthScenario(
+     string collection,
+     IReadOnlyList<(string Filename, string Date, string Slot, long DurationMs, string PartialHash)> files,
+diff --git a/VERSION.txt b/VERSION.txt
+index a0337e4..9bc181b 100644
+--- a/VERSION.txt
++++ b/VERSION.txt
+@@ -1 +1 @@
+-0.28.0-alpha8-conflict-forensics-buildfix2
++0.28.0-alpha9-policy-refinement

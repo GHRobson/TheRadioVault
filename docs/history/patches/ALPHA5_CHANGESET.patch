@@ -1,0 +1,706 @@
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ALPHA5_STATIC_VALIDATION.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ALPHA5_STATIC_VALIDATION.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ALPHA5_STATIC_VALIDATION.md	1970-01-01 00:00:00.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ALPHA5_STATIC_VALIDATION.md	2026-07-19 17:09:03.053069015 +0000
+@@ -0,0 +1,16 @@
++# Alpha5 static validation record
++
++- Target version: `0.28.0-alpha5-multipart-family-corrections`
++- Base: known-working `0.28.0-alpha4-recording-integrity`
++- Schema: unchanged at 41
++
++## Source checks
++
++- [x] Version markers updated.
++- [x] Attached A/B family normalisation implemented.
++- [x] Safe multipart annotations normalised only during explicit multipart family analysis.
++- [x] FNR/Eddie Trunk programme evidence retained.
++- [x] Effective promoted parts projected to shadow file rows and exports.
++- [x] Three desktop family regressions registered.
++- [x] Promoted part display regression registered.
++- [ ] Compile and smoke tests require the Windows/.NET 8 build environment.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ARCHITECTURE.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ARCHITECTURE.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ARCHITECTURE.md	2026-07-19 15:34:51.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ARCHITECTURE.md	2026-07-19 17:09:03.051688882 +0000
+@@ -1,4 +1,4 @@
+-# v0.28.0-alpha4 Library Truth architecture
++# v0.28.0-alpha5 Library Truth architecture
+ 
+ The Library Truth Engine remains a non-destructive shadow system with three primary layers:
+ 
+@@ -6,13 +6,13 @@
+ 2. **Recording** — a complete capture, alternate encode, multipart assembly, partial capture, clip, damaged file, or unresolved recording family.
+ 3. **Physical File** — the actual file location and preservation evidence.
+ 
+-Alpha4 adds a conservative filename-family stage before recording assembly:
++Alpha5 refines the filename-family stage introduced in alpha4:
+ 
+-- source naming style, explicit V1/V2 tokens, residual filename text, encoding markers and extension form a recording-family key;
+-- explicit parts are assembled only inside that family;
+-- bare trailing numbers become parts only when sibling files establish a contiguous 1..N sequence;
+-- a lone numbered segment has unknown extent rather than an invented expected total.
++- source naming style, explicit V1/V2 tokens, meaningful residual filename text, encoding markers and extension still define recording lineage;
++- attached A/B markers are removed before date normalisation so `...2002a` and `...2002b` remain siblings;
++- safe segment annotations such as `partial` and `ph` are treated as properties of a segment rather than separate recording families;
++- programme markers such as FNR and Eddie Trunk remain lineage/evidence tokens;
++- bare trailing numbers become parts only when siblings establish a contiguous 1..N sequence;
++- the effective promoted position is projected back into the file-level shadow model and export.
+ 
+-The merge auditor then evaluates repeated duration clusters, programme-specific filename evidence, and same-date slot coverage. A Standard recording that matches one sibling slot or the sum of two sibling slots is retained but downgraded to review pending a future persisted Recording Segment → Broadcast Coverage model.
+-
+-All output is written to the existing schema-41 `library_truth_*` shadow tables. No live-library adoption is enabled.
++All output remains in the schema-41 `library_truth_*` shadow tables. No live-library adoption is enabled.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/BUILDING.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/BUILDING.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/BUILDING.md	2026-07-19 15:30:42.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/BUILDING.md	2026-07-19 17:09:03.051038447 +0000
+@@ -1,8 +1,8 @@
+-# Building v0.28.0-alpha4
++# Building v0.28.0-alpha5
+ 
+ 1. Install Visual Studio 2022 with **.NET desktop development** and the .NET 8 SDK.
+ 2. Open `TheRadioVault.sln`.
+ 3. Build `Release | Any CPU`, or run `build.ps1` for the self-contained Windows x64 publish.
+-4. Run `release-gate.ps1`; it performs source validation, smoke tests and the release build checks.
++4. Run `release-gate.ps1`; it performs source validation, smoke tests and release build checks.
+ 
+-Alpha4 retains database schema 41 because its additional evidence is represented in the existing shadow audit fields. No live data migration is performed.
++Alpha5 retains database schema 41. Effective promoted part numbers are stored in the existing Library Truth shadow columns, so no live data migration is performed.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/CHANGELOG.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/CHANGELOG.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/CHANGELOG.md	2026-07-19 15:30:42.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/CHANGELOG.md	2026-07-19 17:09:03.050340844 +0000
+@@ -1,11 +1,9 @@
+-# v0.28.0-alpha4 — Recording Integrity
++# v0.28.0-alpha5 — Multipart Family Corrections
+ 
+-- Added filename-family and explicit variant lineage to multipart assembly.
+-- Prevented V1/V2 and long-name/short-name cross-pairing.
+-- Replaced per-file bare-number multipart guesses with sibling-sequence promotion.
+-- Protected leading source/track indices such as `09 17th, Jan 2008.m4a`.
+-- Added unknown-extent multipart classification and removed contradictory 1-of-1 incomplete output.
+-- Added repeated duration-family and programme-token suspicious-merge detection.
+-- Added same-date Standard-versus-slot equivalence and composite AM/PM coverage audits.
+-- Tightened shadow adoption readiness without enabling adoption.
+-- Added alpha4 regression coverage derived from the 2026-07-19 GRAHAM-PC truth export.
++- Normalised attached A/B segment suffixes after date tokens.
++- Removed safe segment annotations (`partial`, `partially`, `ph`) from multipart family identity only.
++- Preserved programme-specific filename evidence including FNR and Eddie Trunk.
++- Reassembled the 2002-10-31, 2003-10-20 and 2003-11-10 desktop regression families.
++- Persisted context-promoted bare-number part positions and totals into Library Truth file rows and exports.
++- Added focused parser, recording-planner and export regressions.
++- Kept live-library adoption disabled.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ENGINEERING.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ENGINEERING.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ENGINEERING.md	2026-07-19 15:30:42.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ENGINEERING.md	2026-07-19 17:09:03.051432642 +0000
+@@ -1,16 +1,15 @@
+-# v0.28.0-alpha4 engineering status
++# v0.28.0-alpha5 engineering status
+ 
+-The alpha3 full-library export validated the broad canonical broadcast model but exposed recording-family errors. Alpha4 addresses those errors in the shadow pipeline only.
++The complete alpha4 desktop export validated the broad corrections but exposed three over-separated multipart families and one file-row projection inconsistency. Alpha5 addresses only those findings.
+ 
+ Implemented:
+ 
+-- filename-family analyser in `TheRadioVault.Core/LibraryTruth/LibraryTruthRecordingStructure.cs`;
+-- family-first multipart planning in `LibraryTruthEngine`;
+-- contextual promotion of bare 1..N sequences;
+-- unknown-extent multipart semantics;
+-- duration/programme suspicious-merge audit;
+-- same-date cross-slot and composite coverage audit;
+-- regression tests for the confirmed desktop cases.
++- attached A/B suffix normalisation before date removal;
++- safe multipart annotation normalisation for `partial`, `partially` and `ph`;
++- retention of programme-specific lineage such as FNR and Eddie Trunk;
++- recording-planner effective part assignments projected into shadow file rows;
++- file-level evidence and change summaries for promoted bare-number sequences;
++- regression tests for all confirmed alpha4 desktop failures.
+ 
+ Still deliberately deferred:
+ 
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/LIBRARY_TRUTH_ALPHA5_VALIDATION.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/LIBRARY_TRUTH_ALPHA5_VALIDATION.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/LIBRARY_TRUTH_ALPHA5_VALIDATION.md	1970-01-01 00:00:00.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/LIBRARY_TRUTH_ALPHA5_VALIDATION.md	2026-07-19 17:09:03.052770624 +0000
+@@ -0,0 +1,20 @@
++# v0.28.0-alpha5 Library Truth validation
++
++## Regression targets from the GRAHAM-PC alpha4 export
++
++- [ ] 2002-10-31 A/B files form one complete two-part recording.
++- [ ] 2003-10-20 Part 2 `-ph` remains in the parts 2–6 family.
++- [ ] 2003-11-10 Part 3 `-partial` remains in the parts 1–4 family.
++- [ ] `20011122 R&F 1/2` file rows display Part 1 of 2 and Part 2 of 2.
++- [ ] The 2011 and 2014 bare-number pairs also display effective positions correctly.
++- [ ] 2002-06-25 V1/V2 remains separated.
++- [ ] 2001-09-27, 2001-10-15 and 2001-10-23 source-style separation remains intact.
++- [ ] 2008-01-17 leading `09` remains a track number.
++- [ ] 2001-11-23 trailing `1` remains standalone.
++- [ ] FNR/Eddie Trunk and same-date coverage reviews remain present.
++
++## Safety
++
++- [ ] Live episode count and metadata are unchanged after analysis.
++- [ ] Physical files are not renamed, moved or deleted.
++- [ ] Existing preservation, research, transcript and listening data remain intact.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/LIBRARY_TRUTH_ENGINE.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/LIBRARY_TRUTH_ENGINE.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/LIBRARY_TRUTH_ENGINE.md	2026-07-19 15:34:51.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/LIBRARY_TRUTH_ENGINE.md	2026-07-19 17:09:03.051980322 +0000
+@@ -1,6 +1,6 @@
+ # Library Truth Engine — Parser V3
+ 
+-Parser V3 is the alpha4 shadow interpretation pipeline. It does not replace the live library parser and cannot modify episodes or files.
++Parser V3 is the alpha5 shadow interpretation pipeline. It does not replace the live library parser and cannot modify episodes or files.
+ 
+ ## Pipeline
+ 
+@@ -8,19 +8,21 @@
+ 2. Learn folder-level show/date conventions.
+ 3. Parse show, date, slot, explicit multipart markers and headline evidence.
+ 4. Analyse filename-family lineage and numeric ambiguity.
+-5. Assemble recordings inside family boundaries.
+-6. Rank complete, alternate, multipart, partial, fragment and damaged recordings.
+-7. Audit suspicious duration/programme clusters.
+-8. Audit same-date Standard-versus-slot equivalence and composite coverage.
+-9. Calculate conservative adoption readiness.
+-10. Store and export the shadow report.
++5. Normalise safe multipart suffixes without erasing programme identity.
++6. Assemble recordings inside family boundaries.
++7. Promote bare 1..N sequences only with sibling evidence and project effective parts to file rows.
++8. Rank complete, alternate, multipart, partial, fragment and damaged recordings.
++9. Audit suspicious duration/programme clusters and same-date coverage.
++10. Calculate conservative adoption readiness and export the shadow report.
+ 
+-## Alpha4 safeguards
++## Alpha5 safeguards
+ 
+ - V1 and V2 never share a multipart assembly.
+ - Long `Ron and Fez` and short `R&F` segment families are not cross-filled automatically.
+-- `09 17th, Jan 2008.m4a` is a track-index case, not Part 9.
+-- `20011123 R&F 1.mp3` remains standalone unless a sibling sequence establishes multipart structure.
+-- One numbered segment with no total is “unknown extent”, not “1 of 1 incomplete”.
+-- Repeated duration families and programme tokens such as FNR/Eddie Trunk trigger review.
+-- Composite AM/PM packages and same-date slot equivalents trigger review.
++- `R&F-10-31-2002a/b` forms one two-part recording.
++- `RaF1020-Part2-ph` remains with its sibling parts.
++- `RaF1110-Part3-partial` remains with its sibling parts.
++- FNR/Eddie Trunk evidence is preserved.
++- `09 17th, Jan 2008.m4a` remains a track-index case.
++- `20011123 R&F 1.mp3` remains standalone without sibling evidence.
++- Context-confirmed bare-number rows display their effective Part 1/Part 2 positions.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/README.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/README.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/README.md	2026-07-19 15:30:42.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/README.md	2026-07-19 17:09:03.049845580 +0000
+@@ -1,21 +1,19 @@
+-# Radio Vault v0.28.0-alpha4 — Recording Integrity
++# Radio Vault v0.28.0-alpha5 — Multipart Family Corrections
+ 
+-Version: `0.28.0-alpha4-recording-integrity`  
++Version: `0.28.0-alpha5-multipart-family-corrections`  
+ Status: shadow-only Library Truth analysis; no live-library adoption or file changes.
+ 
+ ## Purpose
+ 
+-Alpha4 hardens the recording layer discovered by the first full 7,169-file alpha3 desktop run. It keeps the Broadcast → Recording → Physical File model, but refuses to call a recording family trustworthy when filename lineage, multipart numbering, duration families, or same-date slot coverage contradict it.
++Alpha5 is the focused correction pass derived from the complete alpha4 desktop export. It preserves alpha4’s conservative source and variant boundaries while preventing harmless multipart suffixes from fragmenting one recording family.
+ 
+-## Alpha4 changes
++## Alpha5 changes
+ 
+-- V1/V2 and source filename families are isolated before multipart assembly.
+-- Bare trailing numbers are no longer treated as parts per file; a contiguous sibling 1..N sequence is required.
+-- Leading track numbers before named dates remain track numbers.
+-- A single numbered segment with no declared total is reported as unknown extent, never “1 of 1 incomplete”.
+-- Repeated duration clusters plus programme-specific filename evidence trigger a suspicious-merge review.
+-- Standard recordings matching a sibling slot or the combined AM+PM duration are flagged for coverage modelling.
+-- Adoption readiness is downgraded whenever these recording-structure risks remain.
++- Attached date suffixes such as `10-31-2002a/b` now share one multipart family.
++- Segment quality/state suffixes such as `-partial` and `-ph` no longer create separate recording lineages.
++- Programme evidence such as FNR and Eddie Trunk remains meaningful and is not stripped.
++- Context-confirmed bare `1..N` sequences now persist their effective part number and total into file-level shadow rows and exports.
++- New regressions cover the three alpha4 desktop family splits and the promoted-part display inconsistency.
+ 
+ ## Safety
+ 
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_BASELINE.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_BASELINE.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_BASELINE.md	2026-07-19 15:30:42.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_BASELINE.md	2026-07-19 17:09:03.050710478 +0000
+@@ -1,7 +1,7 @@
+-# v0.28.0-alpha4 development baseline
++# v0.28.0-alpha5 development baseline
+ 
+-Current version: `0.28.0-alpha4-recording-integrity`
++Current version: `0.28.0-alpha5-multipart-family-corrections`
+ 
+-Baseline: v0.28.0-alpha3 Recording Structure & Merge Audit plus the recording-integrity corrections derived from `RadioVault-Library-Truth-GRAHAM-PC-2026-07-19-1531.trvtruth`.
++Baseline: the known-working v0.28.0-alpha4 source plus corrections derived from `RadioVault-Library-Truth-GRAHAM-PC-2026-07-19-1750.trvtruth`.
+ 
+-This remains a shadow-analysis release. Adoption must stay disabled until a new full desktop export confirms the alpha4 regressions are resolved without unacceptable fragmentation.
++This remains a shadow-analysis release. Adoption must stay disabled until a fresh full desktop export confirms that the three fragmented multipart families are repaired, promoted part rows display correctly, and alpha4’s conservative V1/V2 and source-style boundaries remain intact.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_CHECKLIST.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_CHECKLIST.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_CHECKLIST.md	2026-07-19 15:30:42.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_CHECKLIST.md	2026-07-19 17:09:03.052275162 +0000
+@@ -1,15 +1,16 @@
+-# v0.28.0-alpha4 Recording Integrity checklist
++# v0.28.0-alpha5 Multipart Family Corrections checklist
+ 
+-- [ ] Application reports `0.28.0-alpha4-recording-integrity`.
++- [ ] Application reports `0.28.0-alpha5-multipart-family-corrections`.
+ - [ ] `release-gate.ps1` passes.
+ - [ ] Existing library opens without migration errors.
+ - [ ] Library Truth completes over the full 7,169-file desktop archive.
+-- [ ] 2002-06-25 creates separate V1 and V2 multipart recordings.
+-- [ ] 2001-09-27, 2001-10-15 and 2001-10-23 do not cross-pair long-name and short-name segment families.
++- [ ] `R&F-10-31-2002a/b` is one complete two-part recording.
++- [ ] `RaF1020-Part2-ph` remains with parts 3–6.
++- [ ] `RaF1110-Part3-partial` remains with parts 1, 2 and 4.
++- [ ] The five context-confirmed bare-number sets display distinct effective part numbers and totals.
++- [ ] V1/V2 and long-name/short-name families remain separated.
+ - [ ] `09 17th, Jan 2008.m4a` is not Part 9.
+-- [ ] `20011123 R&F 1.mp3` is not reported as 1 of 1 incomplete.
+-- [ ] 2001-11-22 and 2002-06-25 Standard composites are review recommended.
+-- [ ] 2002-10-23 Standard is linked for review against the AM slot.
+-- [ ] 2002-08-23 is flagged as a suspicious merge.
++- [ ] `20011123 R&F 1.mp3` remains a standalone ambiguity.
++- [ ] FNR/Eddie Trunk suspicious-duration review remains active.
+ - [ ] No episodes, playback, research, transcripts, moments or physical files are modified.
+-- [ ] Export the new `.trvtruth` for comparison before considering alpha5.
++- [ ] Export a new `.trvtruth` for comparison before baseline promotion.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_NOTES_0.28.0_ALPHA5.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_NOTES_0.28.0_ALPHA5.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_NOTES_0.28.0_ALPHA5.md	1970-01-01 00:00:00.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/RELEASE_NOTES_0.28.0_ALPHA5.md	2026-07-19 17:09:03.052620529 +0000
+@@ -0,0 +1,16 @@
++# Radio Vault v0.28.0-alpha5 — Multipart Family Corrections
++
++Alpha5 is a focused correction release based on the complete 7,169-file alpha4 desktop truth export.
++
++## Fixed
++
++- `R&F-10-31-2002a.mp3` and `R&F-10-31-2002b.mp3` now assemble as one complete two-part recording.
++- `RaF1020-Part2-ph.mp3` no longer forms a separate recording family from parts 3–6.
++- `RaF1110-Part3-partial.mp3` no longer forms a separate recording family from parts 1, 2 and 4.
++- Context-confirmed bare-number multipart files now export their effective part numbers and totals instead of every row displaying Part 1.
++
++## Preserved safeguards
++
++V1/V2 separation, long-name/short-name lineage boundaries, leading-track protection, lone-number ambiguity, suspicious duration-family reviews, and same-date coverage audits remain in place.
++
++This release is still shadow-only and does not adopt Library Truth results into the live library.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ROADMAP.md b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ROADMAP.md
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ROADMAP.md	2026-07-19 15:34:52.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/ROADMAP.md	2026-07-19 17:16:57.522161490 +0000
+@@ -3,8 +3,9 @@
+ 1. **alpha1 — Shadow index (completed):** evidence-bearing parser, context learning and Broadcast → Recording → Physical File modelling.
+ 2. **alpha2 — Corpus corrections (completed):** date and show parsing fixes from the first export.
+ 3. **alpha3 — Recording Structure & Merge Audit (completed):** recording roles, preferred-capture ranking, duplicate/conflict audit and readiness summary.
+-4. **alpha4 — Recording Integrity (current):** filename-family-safe multipart assembly, numeric ambiguity, suspicious duration/programme clusters and same-date coverage audit.
+-5. **alpha5 — Full-corpus confirmation:** compare the next desktop truth export with alpha3, refine false positives and design persisted Recording Segment → Broadcast Coverage evidence.
+-6. **Later adoption milestone:** only after the shadow model is proven against desktop and laptop archives.
++4. **alpha4 — Recording Integrity:** filename-family-safe multipart assembly, numeric ambiguity, suspicious duration/programme clusters and same-date coverage audit.
++5. **alpha5 — Multipart Family Corrections (current):** repair safe suffix over-separation and persist context-promoted file-level part positions before baseline promotion.
++6. **alpha6 — Full-corpus confirmation and adoption preparation:** compare the next desktop truth export with alpha4, refine any remaining false positives and design persisted Recording Segment → Broadcast Coverage evidence.
++7. **Later adoption milestone:** only after the shadow model is proven against desktop and laptop archives.
+ 
+ Major feature expansion remains frozen while the Library Truth Engine is being established.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault/LibraryTruthWindow.xaml.cs b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault/LibraryTruthWindow.xaml.cs
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault/LibraryTruthWindow.xaml.cs	2026-07-19 15:29:00.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault/LibraryTruthWindow.xaml.cs	2026-07-19 17:16:34.864838417 +0000
+@@ -88,7 +88,7 @@
+                 $"{adoption.ReviewRecommendedBroadcasts:N0} groups deserve a focused structure check and {adoption.BlockedBroadcasts:N0} remain blocked.\n\n" +
+                 $"Recording roles: {adoption.PartialRecordings:N0} partial/incomplete captures, {adoption.FragmentRecordings:N0} short clips, " +
+                 $"{adoption.TruncatedRecordings:N0} likely truncated files. {adoption.SuspiciousMergeGroups:N0} suspicious merge groups and " +
+-                $"{adoption.CrossIdentityConflicts:N0} cross-identity audio conflicts are preserved for audit. Nothing is adopted or deleted in alpha4.";
++                $"{adoption.CrossIdentityConflicts:N0} cross-identity audio conflicts are preserved for audit. Nothing is adopted or deleted in alpha5.";
+             StatusText.Text = $"Showing {files.Count:N0} physical files, {recordings.Count:N0} recording roles, {broadcasts.Count:N0} canonical broadcasts, {years.Count:N0} year summaries and {conflicts.Count:N0} blocking audio conflicts. The live library is unchanged.";
+         }
+         catch (Exception ex)
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault/TheRadioVault.csproj b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault/TheRadioVault.csproj
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault/TheRadioVault.csproj	2026-07-19 15:30:42.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault/TheRadioVault.csproj	2026-07-19 17:09:03.049391197 +0000
+@@ -9,10 +9,10 @@
+     <ImplicitUsings>disable</ImplicitUsings>
+     <AssemblyName>TheRadioVault</AssemblyName>
+     <RootNamespace>TheRadioVault</RootNamespace>
+-    <Version>0.28.0-alpha4-recording-integrity</Version>
++    <Version>0.28.0-alpha5-multipart-family-corrections</Version>
+     <AssemblyVersion>0.28.0.0</AssemblyVersion>
+     <FileVersion>0.28.0.0</FileVersion>
+-    <InformationalVersion>0.28.0-alpha4-recording-integrity</InformationalVersion>
++    <InformationalVersion>0.28.0-alpha5-multipart-family-corrections</InformationalVersion>
+   </PropertyGroup>
+   <ItemGroup>
+     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.7" />
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs	2026-07-19 15:41:24.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs	2026-07-19 17:04:59.684898458 +0000
+@@ -12,7 +12,7 @@
+ /// </summary>
+ public sealed class LibraryTruthParser
+ {
+-    public const string CurrentVersion = "0.28.0-alpha4-recording-integrity-v3";
++    public const string CurrentVersion = "0.28.0-alpha5-multipart-family-corrections-v3";
+ 
+     private static readonly Regex IsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})[\s._-]+(?<month>\d{1,2})[\s._-]+(?<day>\d{1,2})(?!\d)");
+     private static readonly Regex CompactIsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})(?<month>\d{2})(?<day>\d{2})(?!\d)");
+@@ -489,7 +489,7 @@
+             return new MultipartDetection(part, 2, "Part", match.Value, "Recognised a trailing A/B segment marker.");
+         }
+ 
+-        // Alpha4 no longer promotes a bare trailing number at file-parse time.
++        // Alpha5 still does not promote a bare trailing number at file-parse time.
+         // A lone "... 1" is frequently a track or version marker. The shadow
+         // recording planner may promote 1,2,... only when sibling filenames
+         // establish a contiguous multipart convention within one family.
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Core/LibraryTruth/LibraryTruthRecordingStructure.cs b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Core/LibraryTruth/LibraryTruthRecordingStructure.cs
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Core/LibraryTruth/LibraryTruthRecordingStructure.cs	2026-07-19 15:45:10.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Core/LibraryTruth/LibraryTruthRecordingStructure.cs	2026-07-19 17:04:59.668198268 +0000
+@@ -21,7 +21,7 @@
+     string EncodingKey);
+ 
+ /// <summary>
+-/// Alpha4 filename-family evidence used only by the shadow Library Truth engine.
++/// Alpha5 filename-family evidence used only by the shadow Library Truth engine.
+ /// It deliberately separates source/variant lineages before multipart segments
+ /// are assembled, and leaves lone trailing numbers ambiguous until sibling
+ /// filenames establish a contiguous sequence.
+@@ -32,6 +32,8 @@
+     private static readonly Regex ExplicitPart = Rx(@"(?:^|[\s_.-])(?:part|pt|hour|hr|segment|seg|disc|disk|cd|p)[\s_.-]*(?<number>\d{1,3})(?:\s*(?:of|/)[\s]*(?<total>\d{1,3}))?(?=$|[\s_.-])");
+     private static readonly Regex OfTotal = Rx(@"(?:^|[\s_.-])(?<number>\d{1,3})\s*(?:of|/)\s*(?<total>\d{1,3})(?=$|[\s_.-])");
+     private static readonly Regex TrailingRomanOrLetter = Rx(@"(?:^|[\s_.-])(?:I{1,3}|IV|V|VI{0,3}|IX|X|A|B)\s*$");
++    private static readonly Regex AttachedLetterPart = Rx(@"(?<=\d)[ab]\s*$");
++    private static readonly Regex BenignMultipartAnnotation = Rx(@"(?:^|[\s_.-])(?:partial(?:ly)?|ph)(?=$|[\s_.-])");
+     private static readonly Regex BareTrailingNumber = Rx(@"(?:^|[\s_.-])(?<number>\d{1,3})\s*$");
+     private static readonly Regex LeadingNumber = Rx(@"^\s*\d{1,3}(?=$|[\s_.-])");
+     private static readonly Regex StructuredDate = Rx(@"\b(?:19|20)\d{2}[\s_.-]\d{1,2}[\s_.-]\d{1,2}\b|\b\d{1,2}[\s_.-]\d{1,2}[\s_.-](?:19|20)?\d{2}\b");
+@@ -95,12 +97,25 @@
+         bool parserFoundExplicitMultipart)
+     {
+         var text = stem.ToLowerInvariant();
++        if (parserFoundExplicitMultipart)
++        {
++            // Some archive dates run directly into an A/B segment suffix
++            // (for example 10-31-2002a). Remove that segment marker before
++            // stripping the date so both halves retain one filename family.
++            text = AttachedLetterPart.Replace(text, " ");
++        }
+         text = RemoveDateTokens(text);
+         text = Variant.Replace(text, " ");
+         text = ExplicitPart.Replace(text, " ");
+         text = OfTotal.Replace(text, " ");
+         if (parserFoundExplicitMultipart)
++        {
+             text = TrailingRomanOrLetter.Replace(text, " ");
++            // Quality/state suffixes describe one segment, not a separate
++            // recording lineage. Programme markers such as FNR and Eddie
++            // Trunk are intentionally not part of this list.
++            text = BenignMultipartAnnotation.Replace(text, " ");
++        }
+         text = BareTrailingNumber.Replace(text, " ");
+         text = Regex.Replace(text,
+             @"(?<![a-z0-9])(?:ron\s*(?:and|&)\s*fez|r\s*&\s*f|r\s*and\s*f|raf|rf)(?![a-z0-9])",
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Services/Services/LibraryTruthEngine.cs b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Services/Services/LibraryTruthEngine.cs
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Services/Services/LibraryTruthEngine.cs	2026-07-19 15:41:24.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Services/Services/LibraryTruthEngine.cs	2026-07-19 17:15:38.832120316 +0000
+@@ -8,7 +8,7 @@
+ 
+ /// <summary>
+ /// Builds a non-destructive shadow interpretation of the physical archive.
+-/// Alpha4 audits recording structure and adoption readiness without updating episodes, playback, research, transcripts, or files.
++/// Alpha5 audits recording structure and adoption readiness without updating episodes, playback, research, transcripts, or files.
+ /// </summary>
+ public sealed class LibraryTruthEngine
+ {
+@@ -441,6 +441,7 @@
+             .ToHashSet();
+ 
+         var groups = new List<BroadcastAnalysis>();
++        var effectivePartAssignments = new Dictionary<long, EffectivePartAssignment>();
+         foreach (var group in interpretations.GroupBy(x => x.CanonicalBroadcastKey, StringComparer.OrdinalIgnoreCase))
+         {
+             var files = group.ToArray();
+@@ -455,7 +456,7 @@
+                         .Where(y => !string.IsNullOrWhiteSpace(y))
+                         .Distinct(StringComparer.OrdinalIgnoreCase).Count() <= 1)
+                 .ToArray();
+-            var recordings = BuildRecordingFamilies(group.Key, files);
++            var recordings = BuildRecordingFamilies(group.Key, files, effectivePartAssignments);
+             var segmentCount = recordings.Where(x => x.IsMultipart).Select(x => x.SegmentCount).DefaultIfEmpty(1).Max();
+             var currentEpisodeCount = files.Select(x => x.Input.CurrentEpisodeId).Distinct().Count();
+             var exactDuplicateCount = exactGroups.Sum(x => x.Count() - 1);
+@@ -528,7 +529,7 @@
+ 
+         var coverageAuditedGroups = ApplySameDateCoverageAudit(groups);
+         var years = BuildYearAnalyses(interpretations, coverageAuditedGroups, splitEpisodes);
+-        return new GroupAnalysis(coverageAuditedGroups, splitEpisodes, conflictMediaIds, conflicts, years);
++        return new GroupAnalysis(coverageAuditedGroups, splitEpisodes, conflictMediaIds, conflicts, years, effectivePartAssignments);
+     }
+ 
+     private static IReadOnlyList<ConflictAnalysis> BuildCrossIdentityConflicts(
+@@ -567,7 +568,8 @@
+ 
+     private static IReadOnlyList<RecordingAnalysis> BuildRecordingFamilies(
+         string canonicalBroadcastKey,
+-        IReadOnlyList<LibraryTruthInterpretation> files)
++        IReadOnlyList<LibraryTruthInterpretation> files,
++        IDictionary<long, EffectivePartAssignment> effectivePartAssignments)
+     {
+         if (files.Count == 0) return Array.Empty<RecordingAnalysis>();
+ 
+@@ -662,7 +664,19 @@
+                     _ => $"Multipart assembly contains {availableParts.Length:N0} of {expectedParts.Value:N0} expected numbered segments."
+                 };
+                 if (promotedBareSequence)
++                {
+                     evidence += " Bare trailing numbers were promoted only because sibling filenames formed a contiguous 1..N sequence within this exact filename family.";
++                    foreach (var selectedPart in selected)
++                    {
++                        foreach (var selectedFile in selectedPart.Cluster.Files)
++                        {
++                            effectivePartAssignments[selectedFile.Input.MediaFileId] = new EffectivePartAssignment(
++                                selectedPart.Part,
++                                expectedParts,
++                                true);
++                        }
++                    }
++                }
+                 evidence += $" Filename-family lineage: {family.Key}.";
+ 
+                 seeds.Add(new RecordingSeed(
+@@ -1104,6 +1118,35 @@
+             var disposition = interpretation.Disposition;
+             var changeSummary = interpretation.ChangeSummary;
+             var warnings = interpretation.Warnings.ToList();
++            var evidence = interpretation.Evidence.ToList();
++            var proposedPart = interpretation.PartNumber;
++            var proposedTotalParts = interpretation.TotalParts;
++            if (analysis.EffectivePartAssignments.TryGetValue(interpretation.Input.MediaFileId, out var effectivePart))
++            {
++                proposedPart = effectivePart.PartNumber;
++                proposedTotalParts = effectivePart.TotalParts;
++                evidence.Add(new LibraryTruthEvidence(
++                    "part",
++                    proposedTotalParts.HasValue ? $"{proposedPart} of {proposedTotalParts.Value}" : proposedPart.ToString(),
++                    90,
++                    "filename-family",
++                    "Filename-family sibling evidence formed a contiguous 1..N sequence, so the recording planner promoted the otherwise ambiguous trailing number to an effective multipart position."));
++
++                if (Math.Max(1, interpretation.Input.CurrentPartNumber) != Math.Max(1, proposedPart) ||
++                    interpretation.Input.CurrentTotalParts != proposedTotalParts)
++                {
++                    var segmentChange = $"segment: {PartDisplay(interpretation.Input.CurrentPartNumber, interpretation.Input.CurrentTotalParts)} → {PartDisplay(proposedPart, proposedTotalParts)}";
++                    if (disposition == "Unchanged")
++                    {
++                        disposition = "Multipart correction";
++                        changeSummary = segmentChange;
++                    }
++                    else
++                    {
++                        changeSummary = Append(changeSummary, segmentChange);
++                    }
++                }
++            }
+             var hasConflictingExactIdentity = analysis.ConflictingIdentityMediaIds.Contains(interpretation.Input.MediaFileId);
+             if (hasConflictingExactIdentity)
+             {
+@@ -1147,8 +1190,8 @@
+             insertFile.Parameters.AddWithValue("$proposedCollection", interpretation.CollectionName);
+             insertFile.Parameters.AddWithValue("$proposedDate", interpretation.AirDate?.ToString("yyyy-MM-dd") ?? (object)DBNull.Value);
+             insertFile.Parameters.AddWithValue("$proposedSlot", interpretation.BroadcastSlot);
+-            insertFile.Parameters.AddWithValue("$proposedPart", interpretation.PartNumber);
+-            insertFile.Parameters.AddWithValue("$proposedTotal", interpretation.TotalParts ?? (object)DBNull.Value);
++            insertFile.Parameters.AddWithValue("$proposedPart", proposedPart);
++            insertFile.Parameters.AddWithValue("$proposedTotal", proposedTotalParts ?? (object)DBNull.Value);
+             insertFile.Parameters.AddWithValue("$headline", interpretation.Headline);
+             insertFile.Parameters.AddWithValue("$key", interpretation.CanonicalBroadcastKey);
+             insertFile.Parameters.AddWithValue("$recording", recordingKeyByMediaFile.TryGetValue(interpretation.Input.MediaFileId, out var recordingKey) ? recordingKey : string.Empty);
+@@ -1156,7 +1199,7 @@
+             insertFile.Parameters.AddWithValue("$confidence", interpretation.Confidence.ToString());
+             insertFile.Parameters.AddWithValue("$disposition", disposition);
+             insertFile.Parameters.AddWithValue("$change", changeSummary);
+-            insertFile.Parameters.AddWithValue("$evidence", JsonSerializer.Serialize(interpretation.Evidence, _json));
++            insertFile.Parameters.AddWithValue("$evidence", JsonSerializer.Serialize(evidence, _json));
+             insertFile.Parameters.AddWithValue("$warnings", JsonSerializer.Serialize(warnings, _json));
+             insertFile.ExecuteNonQuery();
+         }
+@@ -1433,6 +1476,10 @@
+         LibraryTruthInterpretation File,
+         LibraryTruthRecordingFilenameStructure Structure,
+         bool ExplicitMultipart);
++    private sealed record EffectivePartAssignment(
++        int PartNumber,
++        int? TotalParts,
++        bool PromotedFromAmbiguousNumber);
+     private sealed record PlannedAudioCluster(
+         string AudioKey,
+         LibraryTruthInterpretation[] Files,
+@@ -1521,5 +1568,6 @@
+         IReadOnlySet<long> SplitEpisodeIds,
+         IReadOnlySet<long> ConflictingIdentityMediaIds,
+         IReadOnlyList<ConflictAnalysis> Conflicts,
+-        IReadOnlyList<YearAnalysis> Years);
++        IReadOnlyList<YearAnalysis> Years,
++        IReadOnlyDictionary<long, EffectivePartAssignment> EffectivePartAssignments);
+ }
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Tests/Program.cs b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Tests/Program.cs
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Tests/Program.cs	2026-07-19 15:27:50.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/TheRadioVault.Tests/Program.cs	2026-07-19 17:16:34.864131819 +0000
+@@ -40,6 +40,8 @@
+     ("Library Truth distinguishes explicit and ambiguous multipart markers", LibraryTruthRecognisesAdditionalMultipartMarkers),
+     ("Library Truth protects leading track and lone version numbers", LibraryTruthProtectsTrackAndVersionNumbers),
+     ("Library Truth keeps variant and source filename families separate", LibraryTruthKeepsRecordingFamiliesSeparate),
++    ("Library Truth normalises safe multipart family suffixes", LibraryTruthNormalizesSafeMultipartFamilySuffixes),
++    ("Library Truth reassembles annotated multipart families", LibraryTruthReassemblesAnnotatedMultipartFamilies),
+     ("Library Truth assembles Roman multipart files into one broadcast", LibraryTruthGroupsRomanMultipart),
+     ("Library Truth preserves genuinely unknown dates", LibraryTruthPreservesUnknownDate),
+     ("Library Truth shadow index separates broadcasts recordings and files", LibraryTruthShadowIndexSeparatesLayers),
+@@ -360,6 +362,69 @@
+     True(!string.Equals(shortFamily.FamilyKey, longFamily.FamilyKey, StringComparison.OrdinalIgnoreCase));
+ }
+ 
++static void LibraryTruthNormalizesSafeMultipartFamilySuffixes()
++{
++    var attachedA = LibraryTruthRecordingStructure.Analyse("R&F-10-31-2002a.mp3", true);
++    var attachedB = LibraryTruthRecordingStructure.Analyse("R&F-10-31-2002b.mp3", true);
++    Equal(attachedA.FamilyKey, attachedB.FamilyKey);
++
++    var annotatedPart = LibraryTruthRecordingStructure.Analyse("RaF1020-Part2-ph.mp3", true);
++    var plainPart = LibraryTruthRecordingStructure.Analyse("RaF1020-Part3.mp3", true);
++    Equal(annotatedPart.FamilyKey, plainPart.FamilyKey);
++
++    var partialPart = LibraryTruthRecordingStructure.Analyse("RaF1110-Part3-partial.mp3", true);
++    var siblingPart = LibraryTruthRecordingStructure.Analyse("RaF1110-Part4.mp3", true);
++    Equal(partialPart.FamilyKey, siblingPart.FamilyKey);
++
++    var fnrPart = LibraryTruthRecordingStructure.Analyse("Ron and Fez_ 2002-08-23-Part1-FNR.mp3", true);
++    var standardPart = LibraryTruthRecordingStructure.Analyse("Ron and Fez_ 2002-08-23-Part2.mp3", true);
++    True(!string.Equals(fnrPart.FamilyKey, standardPart.FamilyKey, StringComparison.OrdinalIgnoreCase));
++    True(fnrPart.ProgrammeTokens.Contains("fnr"));
++}
++
++static void LibraryTruthReassemblesAnnotatedMultipartFamilies()
++{
++    var hour = (long)TimeSpan.FromHours(1).TotalMilliseconds;
++    RunLibraryTruthScenario("Ron & Fez", new[]
++    {
++        ("R&F-10-31-2002a.mp3", "2002-10-31", "", 2 * hour, "AB-A"),
++        ("R&F-10-31-2002b.mp3", "2002-10-31", "", 1 * hour, "AB-B")
++    }, engine =>
++    {
++        var recording = engine.GetRecordings().Single();
++        Equal(2, recording.SegmentCount);
++        Equal(3 * hour, recording.DurationMs);
++        Equal("Complete multipart recording", recording.Role);
++    });
++
++    RunLibraryTruthScenario("Ron & Fez", new[]
++    {
++        ("Ron and Fez_ 2003-10-20-Part2-ph.mp3", "2003-10-20", "", 20 * 60_000L, "PH-2"),
++        ("Ron and Fez_ 2003-10-20-Part3.mp3", "2003-10-20", "", 20 * 60_000L, "PH-3"),
++        ("Ron and Fez_ 2003-10-20-Part4.mp3", "2003-10-20", "", 20 * 60_000L, "PH-4"),
++        ("Ron and Fez_ 2003-10-20-Part5.mp3", "2003-10-20", "", 20 * 60_000L, "PH-5"),
++        ("Ron and Fez_ 2003-10-20-Part6-of-6.mp3", "2003-10-20", "", 20 * 60_000L, "PH-6")
++    }, engine =>
++    {
++        var recording = engine.GetRecordings().Single();
++        Equal(5, recording.SegmentCount);
++        Equal("Incomplete multipart recording", recording.Role);
++    });
++
++    RunLibraryTruthScenario("Ron & Fez", new[]
++    {
++        ("Ron and Fez_ 2003-11-10-Part1.mp3", "2003-11-10", "", 18 * 60_000L, "PARTIAL-1"),
++        ("Ron and Fez_ 2003-11-10-Part2.mp3", "2003-11-10", "", 18 * 60_000L, "PARTIAL-2"),
++        ("Ron and Fez_ 2003-11-10-Part3-partial.mp3", "2003-11-10", "", 18 * 60_000L, "PARTIAL-3"),
++        ("Ron and Fez_ 2003-11-10-Part4-of-4.mp3", "2003-11-10", "", 18 * 60_000L, "PARTIAL-4")
++    }, engine =>
++    {
++        var recording = engine.GetRecordings().Single();
++        Equal(4, recording.SegmentCount);
++        Equal("Complete multipart recording", recording.Role);
++    });
++}
++
+ static void LibraryTruthGroupsRomanMultipart()
+ {
+     var parser = new LibraryTruthParser();
+@@ -856,6 +921,11 @@
+         Equal(2, recording.SegmentCount);
+         Equal("Complete multipart recording", recording.Role);
+         True(recording.Evidence.Contains("contiguous 1..N sequence", StringComparison.OrdinalIgnoreCase));
++
++        var files = engine.GetFiles().OrderBy(x => x.Filename, StringComparer.OrdinalIgnoreCase).ToArray();
++        Equal("Part 1 of 2", files[0].ProposedPart);
++        Equal("Part 2 of 2", files[1].ProposedPart);
++        True(files[1].Evidence.Contains("filename-family", StringComparison.OrdinalIgnoreCase));
+     });
+ }
+ 
+@@ -920,7 +990,7 @@
+ {
+     var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+     Directory.CreateDirectory(directory);
+-    var databasePath = Path.Combine(directory, "truth-alpha4.sqlite");
++    var databasePath = Path.Combine(directory, "truth-alpha5.sqlite");
+     try
+     {
+         var database = new SqliteDatabase(databasePath);
+@@ -932,7 +1002,7 @@
+                                 "INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled) " +
+                                 "VALUES($root,(SELECT id FROM collections WHERE name=$collection),1,1);";
+             setup.Parameters.AddWithValue("$collection", collection);
+-            setup.Parameters.AddWithValue("$root", @"D:\Radio\Alpha4");
++            setup.Parameters.AddWithValue("$root", @"D:\Radio\Alpha5");
+             setup.ExecuteNonQuery();
+ 
+             for (var index = 0; index < files.Count; index++)
+@@ -949,8 +1019,8 @@
+                 insert.Parameters.AddWithValue("$date", file.Date);
+                 insert.Parameters.AddWithValue("$title", file.Filename);
+                 insert.Parameters.AddWithValue("$slot", file.Slot);
+-                insert.Parameters.AddWithValue("$uid", $"ALPHA4-{index}-{Guid.NewGuid():N}");
+-                insert.Parameters.AddWithValue("$path", Path.Combine(@"D:\Radio\Alpha4", file.Filename));
++                insert.Parameters.AddWithValue("$uid", $"ALPHA5-{index}-{Guid.NewGuid():N}");
++                insert.Parameters.AddWithValue("$path", Path.Combine(@"D:\Radio\Alpha5", file.Filename));
+                 insert.Parameters.AddWithValue("$filename", file.Filename);
+                 insert.Parameters.AddWithValue("$size", Math.Max(1000, file.DurationMs / 10));
+                 insert.Parameters.AddWithValue("$duration", file.DurationMs);
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/VERSION.txt b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/VERSION.txt
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/VERSION.txt	2026-07-19 15:30:42.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/VERSION.txt	2026-07-19 17:09:03.048603029 +0000
+@@ -1 +1 @@
+-0.28.0-alpha4-recording-integrity
++0.28.0-alpha5-multipart-family-corrections
+diff -ruN '--exclude=ALPHA4_CHANGESET.patch' '--exclude=ALPHA5_CHANGESET.patch' a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/validate-source.ps1 b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/validate-source.ps1
+--- a/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/validate-source.ps1	2026-07-19 15:31:01.000000000 +0000
++++ b/TheRadioVault-v0.28.0-alpha5-multipart-family-corrections-source/validate-source.ps1	2026-07-19 17:15:07.815020714 +0000
+@@ -112,7 +112,7 @@
+ 
+ $schemaText = Get-Content (Join-Path $root "TheRadioVault.Data\Database\SqliteDatabase.cs") -Raw
+ if ($schemaText -notmatch 'CurrentSchemaVersion\s*=\s*41') {
+-    Add-ValidationError "v0.28 alpha4 Library Truth releases must use database schema 41."
++    Add-ValidationError "v0.28 alpha5 Library Truth releases must use database schema 41."
+ }
+ foreach ($columnName in @('requires_review','review_category','recommended_action','decision_source')) {
+     if ($schemaText -notmatch [regex]::Escape($columnName)) {
+@@ -562,8 +562,9 @@
+     if (-not (Test-Path (Join-Path $root $file))) { Add-ValidationError "Library Truth Engine file is missing: $file" }
+ }
+ $truthText = (Get-Content (Join-Path $root 'TheRadioVault.Core\LibraryTruth\LibraryTruthParser.cs') -Raw) + "`n" +
++             (Get-Content (Join-Path $root 'TheRadioVault.Core\LibraryTruth\LibraryTruthRecordingStructure.cs') -Raw) + "`n" +
+              (Get-Content (Join-Path $root 'TheRadioVault.Services\Services\LibraryTruthEngine.cs') -Raw)
+-foreach ($capability in @('LibraryTruthContextAnalyzer','LibraryTruthRecordingStructure','AmbiguousTrailingNumber','CanonicalBroadcastKey','BuildRecordingFamilies','ApplySameDateCoverageAudit','BuildCrossIdentityConflicts','ClassifyRecordingRole','PreferredRecordingScore','DetectSuspiciousMerge','GetAdoptionSummary','GetYears','GetConflicts','library_truth_recordings','recordingKeyByMediaFile','The live library was not changed')) {
++foreach ($capability in @('LibraryTruthContextAnalyzer','LibraryTruthRecordingStructure','AmbiguousTrailingNumber','AttachedLetterPart','BenignMultipartAnnotation','EffectivePartAssignments','CanonicalBroadcastKey','BuildRecordingFamilies','ApplySameDateCoverageAudit','BuildCrossIdentityConflicts','ClassifyRecordingRole','PreferredRecordingScore','DetectSuspiciousMerge','GetAdoptionSummary','GetYears','GetConflicts','library_truth_recordings','recordingKeyByMediaFile','The live library was not changed')) {
+     if ($truthText -notmatch [regex]::Escape($capability)) {
+         Add-ValidationError "Library Truth capability is missing: $capability"
+     }
+@@ -573,7 +574,7 @@
+         Add-ValidationError "Library Truth UI marker is missing: $marker"
+     }
+ }
+-foreach ($testCapability in @('Library Truth recovers AFRO short dates from folder context','Library Truth recognises Bennington OR slot','Library Truth keeps parent show for AFRO format broadcasts','Library Truth recovers compact RaF month day from year folder','Library Truth learns year from labelled year folders','Library Truth parses indexed named-month dates','Library Truth does not confuse source indices with years','Library Truth recognises compact and trailing multipart markers','Library Truth assembles Roman multipart files into one broadcast','Library Truth preserves genuinely unknown dates','Library Truth shadow index separates broadcasts recordings and files','Library Truth treats alternate recordings as normal structure','Library Truth keeps identical audio with conflicting dates separate','Library Truth groups exact unknown physical copies','Library Truth separates full captures from multipart assemblies','Library Truth classifies truncated recordings and ranks a preferred capture','Library Truth compares multipart coverage with a full capture','Library Truth flags suspicious substantial merges','Library Truth propagates strong cross-date audio conflicts','Library Truth produces adoption and year audit summaries','Schema 41 includes Library Truth recording audit tables','Schema 41 upgrades Library Truth schema 40 safely')) {
++foreach ($testCapability in @('Library Truth recovers AFRO short dates from folder context','Library Truth recognises Bennington OR slot','Library Truth keeps parent show for AFRO format broadcasts','Library Truth recovers compact RaF month day from year folder','Library Truth learns year from labelled year folders','Library Truth parses indexed named-month dates','Library Truth does not confuse source indices with years','Library Truth distinguishes explicit and ambiguous multipart markers','Library Truth protects leading track and lone version numbers','Library Truth keeps variant and source filename families separate','Library Truth normalises safe multipart family suffixes','Library Truth reassembles annotated multipart families','Library Truth assembles Roman multipart files into one broadcast','Library Truth preserves genuinely unknown dates','Library Truth shadow index separates broadcasts recordings and files','Library Truth treats alternate recordings as normal structure','Library Truth keeps identical audio with conflicting dates separate','Library Truth groups exact unknown physical copies','Library Truth separates full captures from multipart assemblies','Library Truth classifies truncated recordings and ranks a preferred capture','Library Truth compares multipart coverage with a full capture','Library Truth flags suspicious substantial merges','Library Truth propagates strong cross-date audio conflicts','Library Truth produces adoption and year audit summaries','Library Truth assembles variant multipart families without cross-pairing','Library Truth promotes bare multipart numbers only with sibling evidence','Library Truth flags repeated programme-specific duration clusters','Library Truth detects composite AM and PM coverage','Library Truth detects same-date cross-slot equivalents','Schema 41 includes Library Truth recording audit tables','Schema 41 upgrades Library Truth schema 40 safely')) {
+     if ($testText -notmatch [regex]::Escape($testCapability)) {
+         Add-ValidationError "Library Truth test is missing: $testCapability"
+     }
+@@ -591,4 +592,4 @@
+     exit 1
+ }
+ 
+-Write-Host "Source validation passed: version, responsive large-library research reconciliation, archive identity/parser safeguards, portable restore state, Phoenix boundaries, playback/API contracts, schema 41, Library Truth recording structure and adoption auditing, preservation manifests, deep scans, cross-PC comparison, transcript quality, speaker identity, voice memory, XAML, handlers, bindings, source hygiene and database connection policy." -ForegroundColor Green
++Write-Host "Source validation passed: version, responsive large-library research reconciliation, archive identity/parser safeguards, portable restore state, Phoenix boundaries, playback/API contracts, schema 41, Library Truth multipart-family correction and adoption auditing, preservation manifests, deep scans, cross-PC comparison, transcript quality, speaker identity, voice memory, XAML, handlers, bindings, source hygiene and database connection policy." -ForegroundColor Green

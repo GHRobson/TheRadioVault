@@ -1,0 +1,96 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.QueueView">
+  <Grid>
+    <Grid Margin="{StaticResource RvPagePadding}" RowDefinitions="Auto,Auto,*" RowSpacing="14">
+      <Border Classes="card">
+        <Grid ColumnDefinitions="Auto,*,Auto,Auto" ColumnSpacing="14">
+          <Border Width="48" Height="48" CornerRadius="13" Background="{DynamicResource RvAccentSubtleBrush}">
+            <TextBlock Text="≡" FontSize="22" HorizontalAlignment="Center" VerticalAlignment="Center"
+                       Foreground="{DynamicResource RvAccentBrush}" />
+          </Border>
+          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+            <TextBlock Text="{Binding CountText}" Classes="section-title" />
+            <TextBlock Text="Radio Vault continues with the next item when the current broadcast finishes."
+                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
+          </StackPanel>
+          <Button Grid.Column="2" Content="Play first" Classes="primary" Command="{Binding PlayFirstCommand}" />
+          <Button Grid.Column="3" Content="⋯" Classes="secondary icon-button" ToolTip.Tip="Queue options">
+            <Button.Flyout>
+              <MenuFlyout>
+                <MenuItem Header="Refresh queue" Command="{Binding RefreshCommand}" />
+                <Separator />
+                <MenuItem Header="Clear queue" Command="{Binding ClearCommand}" />
+              </MenuFlyout>
+            </Button.Flyout>
+          </Button>
+        </Grid>
+      </Border>
+
+      <TextBlock Grid.Row="1" Text="{Binding StatusText}" Classes="muted" FontSize="12" />
+
+      <Border Grid.Row="2" Classes="card" Padding="0">
+        <Grid>
+          <ListBox IsVisible="{Binding HasItems}" Classes="library-list" Margin="8" ItemsSource="{Binding Items}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Border Padding="12,10">
+                  <Border.ContextMenu>
+                    <ContextMenu>
+                      <MenuItem Header="Play now" Command="{Binding PlayCommand}" />
+                      <Separator />
+                      <MenuItem Header="Move up" Command="{Binding MoveUpCommand}" />
+                      <MenuItem Header="Move down" Command="{Binding MoveDownCommand}" />
+                      <MenuItem Header="Remove from queue" Command="{Binding RemoveCommand}" />
+                    </ContextMenu>
+                  </Border.ContextMenu>
+                  <Grid ColumnDefinitions="48,*,112,Auto,Auto" ColumnSpacing="12">
+                    <Border Width="42" Height="42" CornerRadius="11"
+                            Background="{DynamicResource RvAccentSubtleBrush}" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding PositionText}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 FontSize="14" FontWeight="Bold" Foreground="{DynamicResource RvAccentBrush}" />
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <StackPanel Orientation="Horizontal" Spacing="7">
+                        <TextBlock Text="{Binding CollectionText}" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="•" Classes="subtle" FontSize="9" />
+                        <TextBlock Text="{Binding DateText}" Classes="muted" FontSize="10" />
+                      </StackPanel>
+                    </StackPanel>
+                    <TextBlock Grid.Column="2" Text="{Binding AddedText}" Classes="muted" FontSize="10"
+                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                    <Button Grid.Column="3" Classes="primary icon-button" Content="▶"
+                            Command="{Binding PlayCommand}" ToolTip.Tip="Play now" VerticalAlignment="Center" />
+                    <Button Grid.Column="4" Classes="ghost icon-button" Content="⋯" ToolTip.Tip="More queue actions" VerticalAlignment="Center">
+                      <Button.Flyout>
+                        <MenuFlyout>
+                          <MenuItem Header="Move up" Command="{Binding MoveUpCommand}" />
+                          <MenuItem Header="Move down" Command="{Binding MoveDownCommand}" />
+                          <Separator />
+                          <MenuItem Header="Remove" Command="{Binding RemoveCommand}" />
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <StackPanel IsVisible="{Binding !HasItems}" HorizontalAlignment="Center" VerticalAlignment="Center"
+                      Margin="30" Spacing="9">
+            <Border Width="58" Height="58" CornerRadius="17" Background="{DynamicResource RvAccentSubtleBrush}"
+                    HorizontalAlignment="Center">
+              <TextBlock Text="≡" FontSize="25" HorizontalAlignment="Center" VerticalAlignment="Center"
+                         Foreground="{DynamicResource RvAccentBrush}" />
+            </Border>
+            <TextBlock Text="Your queue is empty" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" />
+            <TextBlock Text="Use Play next or Add to queue from a broadcast's menu."
+                       Classes="muted" FontSize="11" HorizontalAlignment="Center" />
+          </StackPanel>
+        </Grid>
+      </Border>
+    </Grid>
+  </Grid>
+</UserControl>

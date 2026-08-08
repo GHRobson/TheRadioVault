@@ -1,0 +1,328 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.LibraryView">
+  <UserControl.Resources>
+    <DataTemplate x:Key="BroadcastListItemTemplate">
+      <Border Padding="10,7" Classes.playing-row="{Binding IsCurrentPlayback}">
+        <Border.ContextMenu>
+          <ContextMenu>
+            <MenuItem Header="Broadcast information" Command="{Binding OpenFullInfoCommand}" />
+            <Separator />
+            <MenuItem Header="Play / pause" Command="{Binding RowPlaybackCommand}" />
+            <MenuItem Header="Play next" Command="{Binding PlayNextCommand}" />
+            <MenuItem Header="Add to queue" Command="{Binding AddToQueueCommand}" />
+            <MenuItem Header="Toggle favourite" Command="{Binding ToggleFavouriteCommand}" />
+            <MenuItem Header="{Binding DownloadActionText}" Command="{Binding DownloadCommand}" IsEnabled="{Binding CanDownload}" />
+            <Separator />
+            <MenuItem Header="Mark as listened" Command="{Binding MarkListenedCommand}" IsVisible="{Binding !IsCompleted}" />
+            <MenuItem Header="Mark as unlistened" Command="{Binding MarkUnlistenedCommand}" IsVisible="{Binding !IsUnplayed}" />
+            <Separator />
+            <MenuItem Header="Transcribe broadcast" Command="{Binding TranscribeCommand}" />
+          </ContextMenu>
+        </Border.ContextMenu>
+        <Grid ColumnDefinitions="36,26,72,*,42,32" ColumnSpacing="6">
+          <Button Grid.Column="0" Classes="glyph-only icon-button compact-action row-hover-action"
+                  Command="{Binding RowPlaybackCommand}"
+                  ToolTip.Tip="{Binding RowPlaybackToolTip}" VerticalAlignment="Center">
+            <Grid Width="24" Height="24">
+              <Path IsVisible="{Binding !IsCurrentlyPlaying}" Width="24" Height="24" Stretch="None"
+                    Stroke="{DynamicResource RvStatProgressBrush}" StrokeThickness="1.9"
+                    StrokeLineCap="Round" StrokeJoin="Round"
+                    Data="M8,5 L18,12 L8,19 Z" />
+              <Grid IsVisible="{Binding IsCurrentlyPlaying}" Width="24" Height="24">
+                <Path Stroke="{DynamicResource RvStatProgressBrush}" StrokeThickness="2.2" StrokeLineCap="Round" Data="M8,5 L8,19" />
+                <Path Stroke="{DynamicResource RvStatProgressBrush}" StrokeThickness="2.2" StrokeLineCap="Round" Data="M16,5 L16,19" />
+              </Grid>
+            </Grid>
+          </Button>
+          <Button Grid.Column="1" Classes="glyph-only compact-action favourite-action row-favourite-action" Classes.favourite="{Binding IsFavourite}"
+                  Content="{Binding}" ContentTemplate="{StaticResource CompactFavouriteIconTemplate}"
+                  Command="{Binding ToggleFavouriteCommand}"
+                  ToolTip.Tip="{Binding FavouriteToolTip}" VerticalAlignment="Center" />
+          <StackPanel Grid.Column="2" VerticalAlignment="Center">
+            <TextBlock Text="{Binding DateDayText}" FontSize="11" FontWeight="Bold" TextAlignment="Center" />
+            <TextBlock Text="{Binding DateRestText}" FontSize="10" FontWeight="Bold" Classes="muted" TextAlignment="Center" />
+          </StackPanel>
+          <StackPanel Grid.Column="3" VerticalAlignment="Center" Spacing="3" MinWidth="0" ClipToBounds="True">
+            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding CollectionText}" IsVisible="{Binding ShowCollectionText}"
+                       Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding AttentionText}" IsVisible="{Binding NeedsAttention}"
+                       Foreground="{DynamicResource RvDangerBrush}" FontSize="9" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <StackPanel Grid.Column="4" VerticalAlignment="Center" Spacing="4" Width="34" HorizontalAlignment="Right">
+            <TextBlock Text="{Binding CompactProgressText}" FontSize="9" Classes="muted" HorizontalAlignment="Right" />
+            <ProgressBar Classes="thin" Value="{Binding ProgressPercent}" Maximum="100" Width="17" HorizontalAlignment="Right" />
+          </StackPanel>
+          <Button Grid.Column="5" Classes="ghost icon-button compact-action row-hover-action"
+                  Command="{Binding OpenFullInfoCommand}" ToolTip.Tip="Full broadcast information"
+                  VerticalAlignment="Center">
+            <Grid Width="17" Height="17">
+              <Ellipse Stroke="{DynamicResource RvMutedTextBrush}" StrokeThickness="1.5" />
+              <TextBlock Text="i" FontSize="11" FontWeight="Bold" Classes="muted"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />
+            </Grid>
+          </Button>
+        </Grid>
+      </Border>
+    </DataTemplate>
+
+    <DataTemplate x:Key="SelectedBroadcastDetailsTemplate">
+      <ScrollViewer VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="16" Margin="16">
+          <Grid ColumnDefinitions="96,*" ColumnSpacing="14">
+            <Border Width="96" Height="96" CornerRadius="12" Background="{DynamicResource RvAccentSubtleBrush}" ClipToBounds="True">
+              <Grid>
+                <ContentControl IsVisible="{Binding !SelectedBroadcast.HasArtwork}" Content="Radio mast"
+                                ContentTemplate="{StaticResource MissingArtworkIconTemplate}"
+                                Width="46" Height="46" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <Image IsVisible="{Binding SelectedBroadcast.HasArtwork}"
+                       Source="{Binding SelectedBroadcast.ArtworkPath, Converter={StaticResource ArtworkPathToBitmapConverter}}" Stretch="UniformToFill" />
+              </Grid>
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="7" VerticalAlignment="Center">
+              <TextBlock Text="{Binding SelectedBroadcast.Title}" FontSize="18" FontWeight="SemiBold" TextWrapping="Wrap" />
+              <TextBlock Text="{Binding SelectedBroadcast.DateText}" Classes="muted" FontSize="11" />
+              <TextBlock Text="{Binding SelectedBroadcast.BroadcastContextText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+              <ProgressBar Classes="thin" Value="{Binding SelectedBroadcast.ProgressPercent}" Maximum="100" Width="170" HorizontalAlignment="Left" />
+              <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Content="Play" Classes="primary" Command="{Binding SelectedBroadcast.PlayCommand}" />
+                <Button Content="{Binding SelectedBroadcast}" ContentTemplate="{StaticResource FavouriteIconTemplate}"
+                        Classes="secondary icon-button favourite-action"
+                        Command="{Binding SelectedBroadcast.ToggleFavouriteCommand}" ToolTip.Tip="{Binding SelectedBroadcast.FavouriteToolTip}" />
+                <Button Classes="secondary icon-button" Command="{Binding SelectedBroadcast.OpenFullInfoCommand}"
+                        ToolTip.Tip="Full broadcast information">
+                  <Grid Width="18" Height="18">
+                    <Ellipse Stroke="{DynamicResource RvTextBrush}" StrokeThickness="1.5" />
+                    <TextBlock Text="i" FontSize="12" FontWeight="Bold"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />
+                  </Grid>
+                </Button>
+                <Button Content="⋯" Classes="ghost icon-button" ToolTip.Tip="More actions">
+                  <Button.Flyout><MenuFlyout>
+                    <MenuItem Header="Play next" Command="{Binding SelectedBroadcast.PlayNextCommand}" />
+                    <MenuItem Header="Add to queue" Command="{Binding SelectedBroadcast.AddToQueueCommand}" />
+                    <MenuItem Header="{Binding SelectedBroadcast.DownloadActionText}"
+                              Command="{Binding SelectedBroadcast.DownloadCommand}"
+                              IsEnabled="{Binding SelectedBroadcast.CanDownload}" />
+                    <MenuItem Header="Transcribe broadcast" Command="{Binding SelectedBroadcast.TranscribeCommand}" />
+                  </MenuFlyout></Button.Flyout>
+                </Button>
+              </StackPanel>
+            </StackPanel>
+          </Grid>
+
+          <StackPanel Spacing="7">
+            <TextBlock Text="Summary" Classes="section-title" />
+            <TextBlock Text="{Binding SelectedBroadcast.DescriptionText}" Classes="muted" FontSize="12" LineHeight="18" TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel IsVisible="{Binding SelectedBroadcast.HasPeople}" Spacing="9">
+            <TextBlock Text="People" Classes="section-title" />
+            <StackPanel IsVisible="{Binding SelectedBroadcast.HasHosts}" Spacing="5">
+              <TextBlock Text="HOSTS" Classes="eyebrow" />
+              <ItemsControl ItemsSource="{Binding SelectedBroadcast.Hosts}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+            <StackPanel IsVisible="{Binding SelectedBroadcast.HasGuests}" Spacing="5">
+              <TextBlock Text="GUESTS" Classes="eyebrow" />
+              <ItemsControl ItemsSource="{Binding SelectedBroadcast.Guests}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+            <StackPanel IsVisible="{Binding SelectedBroadcast.HasCallers}" Spacing="5">
+              <TextBlock Text="CALLERS" Classes="eyebrow" />
+              <ItemsControl ItemsSource="{Binding SelectedBroadcast.Callers}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+            <StackPanel IsVisible="{Binding SelectedBroadcast.HasMentionedPeople}" Spacing="5">
+              <TextBlock Text="MENTIONED" Classes="eyebrow" />
+              <ItemsControl ItemsSource="{Binding SelectedBroadcast.MentionedPeople}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding SelectedBroadcast.HasTopics}" Spacing="7">
+            <TextBlock Text="Topics" Classes="section-title" />
+            <ItemsControl ItemsSource="{Binding SelectedBroadcast.Topics}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <UserControl.Styles>
+    <Style Selector="ListBox.library-list > ListBoxItem Button.row-hover-action">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="ListBox.library-list > ListBoxItem:pointerover Button.row-hover-action">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="IsHitTestVisible" Value="True" />
+    </Style>
+    <Style Selector="ListBox.library-list > ListBoxItem:selected Button.row-hover-action">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="IsHitTestVisible" Value="True" />
+    </Style>
+  </UserControl.Styles>
+
+  <Grid>
+    <Grid Margin="{StaticResource RvPagePadding}" RowDefinitions="Auto,Auto,Auto,*" RowSpacing="12">
+      <StackPanel Spacing="3" Margin="0,0,0,3">
+        <TextBlock Text="{Binding PageTitle}" Classes="display-title" />
+        <TextBlock Text="{Binding PageDescription}" Classes="muted" FontSize="12" TextWrapping="Wrap" />
+      </StackPanel>
+      <Grid Grid.Row="1" ColumnDefinitions="*,210,Auto,Auto" ColumnSpacing="10">
+        <TextBox Classes="search-box" PlaceholderText="Search broadcasts" Text="{Binding SearchText, Mode=TwoWay}">
+          <TextBox.InnerLeftContent>
+            <Border Width="38" Height="42" Margin="0,0,2,0">
+              <Path Data="M10,3 A7,7 0 1 0 10,17 A7,7 0 1 0 10,3 M15.2,15.2 L21,21"
+                    Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="2"
+                    Width="20" Height="20" Stretch="Uniform"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+          </TextBox.InnerLeftContent>
+          <TextBox.InnerRightContent>
+            <Button IsVisible="{Binding HasActiveFilters}" Classes="ghost icon-button compact-action"
+                    Content="×" Command="{Binding ClearSearchCommand}" ToolTip.Tip="Clear search and filter" />
+          </TextBox.InnerRightContent>
+        </TextBox>
+        <ComboBox Grid.Column="1" Classes="filter-box" ItemsSource="{Binding Filters}"
+                  SelectedItem="{Binding SelectedFilter, Mode=TwoWay}">
+          <ComboBox.ItemTemplate><DataTemplate><TextBlock Text="{Binding Title}" /></DataTemplate></ComboBox.ItemTemplate>
+        </ComboBox>
+        <ToggleButton Grid.Column="2" Content="✓" Classes="ghost icon-button"
+                      IsChecked="{Binding HideCompleted, Mode=TwoWay}"
+                      ToolTip.Tip="Hide completed broadcasts" />
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center" IsVisible="{Binding CanUseGridView}">
+          <ToggleButton Content="☷" Classes="ghost icon-button" IsChecked="{Binding IsListView}" Command="{Binding ShowListCommand}" ToolTip.Tip="List view" />
+          <ToggleButton Content="▦" Classes="ghost icon-button" IsVisible="{Binding CanUseGridView}"
+                        IsChecked="{Binding IsGridView}" Command="{Binding ShowGridCommand}" ToolTip.Tip="Browse by year and month" />
+        </StackPanel>
+      </Grid>
+      <TextBlock Grid.Row="2" Text="{Binding StatusText}" Classes="muted" FontSize="11" />
+
+      <Grid Grid.Row="3" IsVisible="{Binding IsListView}" ColumnDefinitions="*,350" ColumnSpacing="14">
+        <Border Classes="library-list-frame">
+          <Grid RowDefinitions="Auto,*">
+            <Grid ColumnDefinitions="36,26,72,*,42,32" ColumnSpacing="6" Margin="10,0,10,8">
+              <TextBlock Grid.Column="2" Text="DATE" Classes="eyebrow" HorizontalAlignment="Center" />
+              <TextBlock Grid.Column="3" Text="BROADCAST" Classes="eyebrow" />
+              <TextBlock Grid.Column="4" Text="PLAYED" Classes="eyebrow" HorizontalAlignment="Right" />
+            </Grid>
+            <ListBox Grid.Row="1" IsVisible="{Binding HasBroadcasts}" Classes="library-list"
+                     ItemsSource="{Binding Broadcasts}" SelectedItem="{Binding SelectedBroadcast, Mode=TwoWay}"
+                     ItemTemplate="{StaticResource BroadcastListItemTemplate}" />
+            <StackPanel Grid.Row="1" IsVisible="{Binding !HasBroadcasts}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+              <TextBlock Text="No matching broadcasts" FontSize="17" FontWeight="SemiBold" />
+              <TextBlock Text="Try a broader search or clear the listening filter." Classes="muted" FontSize="11" />
+              <Button Content="Clear search" Classes="secondary" Command="{Binding ClearSearchCommand}" />
+            </StackPanel>
+          </Grid>
+        </Border>
+
+        <Border Grid.Column="1" Classes="card" Padding="0" IsVisible="{Binding HasSelection}">
+          <ContentControl Content="{Binding}" ContentTemplate="{StaticResource SelectedBroadcastDetailsTemplate}" />
+        </Border>
+      </Grid>
+
+      <Grid Grid.Row="3" IsVisible="{Binding IsArchivePeriodView}" RowDefinitions="Auto,Auto,*" RowSpacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left">
+          <Button Content="{Binding ArchiveRootText}" Classes="breadcrumb"
+                  Command="{Binding ArchiveRootCommand}" IsEnabled="{Binding CanGoArchiveRoot}" />
+          <TextBlock Text="›" Classes="breadcrumb-separator" IsVisible="{Binding HasArchiveYear}" />
+          <Button Content="{Binding ArchiveYearText}" Classes="breadcrumb" IsVisible="{Binding HasArchiveYear}"
+                  Command="{Binding ArchiveYearCommand}" IsEnabled="{Binding CanGoArchiveYear}" />
+        </StackPanel>
+        <StackPanel Grid.Row="1" Spacing="3">
+          <TextBlock Text="{Binding ArchiveHeading}" FontSize="22" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding ArchiveDescription}" Classes="muted" FontSize="11" />
+        </StackPanel>
+        <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding ArchivePeriods}" IsVisible="{Binding HasArchivePeriods}">
+            <ItemsControl.ItemsPanel>
+              <ItemsPanelTemplate>
+                <WrapPanel ItemWidth="238" ItemHeight="238" ItemSpacing="12" LineSpacing="12" />
+              </ItemsPanelTemplate>
+            </ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Button Classes="archive-tile" Command="{Binding OpenCommand}">
+                  <Border CornerRadius="11" ClipToBounds="True" Background="#20242A">
+                    <Grid>
+                      <Image IsVisible="{Binding HasArtwork}" Source="{Binding ArtworkPath, Converter={StaticResource ArtworkPathToBitmapConverter}}"
+                             Stretch="UniformToFill" Opacity="0.42" />
+                      <Border IsVisible="{Binding HasArtwork}" Background="#8A0E1116" />
+                      <ContentControl IsVisible="{Binding !HasArtwork}" Content="Radio mast"
+                                      ContentTemplate="{StaticResource MissingArtworkIconTemplate}"
+                                      Width="92" Height="92" Opacity="0.22"
+                                      HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,12,14,0" />
+                      <Grid Margin="16" RowDefinitions="*,Auto">
+                        <StackPanel Spacing="4">
+                          <TextBlock Text="{Binding ShowsText}" Foreground="#D9FFFFFF" FontSize="11" FontWeight="SemiBold"
+                                     TextTrimming="CharacterEllipsis" />
+                          <TextBlock Text="{Binding Title}" Foreground="White" FontSize="30" FontWeight="Bold"
+                                     TextWrapping="Wrap" MaxHeight="78" />
+                        </StackPanel>
+                        <StackPanel Grid.Row="1" Spacing="8">
+                          <TextBlock Text="{Binding BroadcastCountText}" Foreground="White" FontSize="13" FontWeight="SemiBold" />
+                          <Grid ColumnDefinitions="*,Auto">
+                            <TextBlock Text="{Binding ProgressPercentText}" Foreground="#D9FFFFFF" FontSize="10" />
+                            <TextBlock Grid.Column="1" Text="{Binding FavouriteCountText}" Foreground="#B8FFFFFF" FontSize="10" />
+                          </Grid>
+                          <ProgressBar Classes="thin" Value="{Binding ProgressPercent}" Maximum="100" />
+                        </StackPanel>
+                      </Grid>
+                    </Grid>
+                  </Border>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+      </Grid>
+
+      <Grid Grid.Row="3" IsVisible="{Binding IsArchiveBroadcastList}" RowDefinitions="Auto,Auto,*" RowSpacing="10">
+        <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Left">
+          <Button Content="{Binding ArchiveRootText}" Classes="breadcrumb"
+                  Command="{Binding ArchiveRootCommand}" IsEnabled="{Binding CanGoArchiveRoot}" />
+          <TextBlock Text="›" Classes="breadcrumb-separator" />
+          <Button Content="{Binding ArchiveYearText}" Classes="breadcrumb"
+                  Command="{Binding ArchiveYearCommand}" IsEnabled="{Binding CanGoArchiveYear}" />
+          <TextBlock Text="›" Classes="breadcrumb-separator" />
+          <Button Content="{Binding ArchiveMonthText}" Classes="breadcrumb" IsEnabled="False" />
+        </StackPanel>
+        <StackPanel Grid.Row="1" Spacing="3">
+          <TextBlock Text="{Binding ArchiveHeading}" FontSize="22" FontWeight="SemiBold" />
+          <TextBlock Text="{Binding ArchiveDescription}" Classes="muted" FontSize="11" />
+        </StackPanel>
+        <Grid Grid.Row="2" ColumnDefinitions="*,350" ColumnSpacing="14">
+          <Border Classes="library-list-frame">
+            <Grid RowDefinitions="Auto,*">
+              <Grid ColumnDefinitions="36,32,72,*,48,32" ColumnSpacing="6" Margin="10,0,10,8">
+                <TextBlock Grid.Column="2" Text="DATE" Classes="eyebrow" HorizontalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="BROADCAST" Classes="eyebrow" />
+                <TextBlock Grid.Column="4" Text="PLAYED" Classes="eyebrow" HorizontalAlignment="Right" />
+              </Grid>
+              <ListBox Grid.Row="1" IsVisible="{Binding HasBroadcasts}" Classes="library-list"
+                       ItemsSource="{Binding Broadcasts}" SelectedItem="{Binding SelectedBroadcast, Mode=TwoWay}"
+                       ItemTemplate="{StaticResource BroadcastListItemTemplate}" />
+            </Grid>
+          </Border>
+          <Border Grid.Column="1" Classes="card" Padding="0" IsVisible="{Binding HasSelection}">
+            <ContentControl Content="{Binding}" ContentTemplate="{StaticResource SelectedBroadcastDetailsTemplate}" />
+          </Border>
+        </Grid>
+      </Grid>
+    </Grid>
+  </Grid>
+</UserControl>

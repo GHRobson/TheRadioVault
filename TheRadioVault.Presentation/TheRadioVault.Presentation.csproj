@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>TheRadioVault.Presentation</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TheRadioVault.Application\TheRadioVault.Application.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Core\TheRadioVault.Core.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Services\TheRadioVault.Services.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Transcription\TheRadioVault.Transcription.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,11 @@
+[
+  {
+    "Name": "Radio Vault (Avalonia default)",
+    "Projects": [
+      {
+        "Path": "TheRadioVault.Desktop.Avalonia\\TheRadioVault.Desktop.Avalonia.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

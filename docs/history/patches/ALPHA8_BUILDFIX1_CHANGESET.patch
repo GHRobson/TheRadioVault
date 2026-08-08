@@ -1,0 +1,223 @@
+diff --git a/ALPHA8_CONFLICT_FORENSICS_BUILDFIX1_VALIDATION.md b/ALPHA8_CONFLICT_FORENSICS_BUILDFIX1_VALIDATION.md
+new file mode 100644
+index 0000000..5fa082a
+--- /dev/null
++++ b/ALPHA8_CONFLICT_FORENSICS_BUILDFIX1_VALIDATION.md
+@@ -0,0 +1,19 @@
++# Alpha8 Conflict Forensics buildfix1 validation
++
++## Compiler corrections
++
++- Corrected CS0826 in `LibraryTruthConflictForensics.cs` by explicitly declaring `MetadataFieldRules` as `new MetadataFieldRule[]`.
++- Corrected CS0411 by normalising both provenance `SelectMany` branches to `IEnumerable<ProvenanceSnapshot>`.
++- The three reported CS0006 errors were cascading failures caused by `TheRadioVault.Services` not producing its DLL.
++- Added source-validation guards for both primary compiler-failure patterns.
++
++## Static validation completed
++
++- Parsed all 37 project/XAML XML files successfully.
++- Confirmed `VERSION.txt`, project `Version`, `InformationalVersion` and the Library Truth parser marker agree.
++- Confirmed 97 smoke tests remain registered.
++- Confirmed database schema remains 44 and Library Truth export schema remains 6.
++- Confirmed the buildfix patch applies cleanly to the original alpha8 source and reproduces the corrected tree.
++- Confirmed no `bin`, `obj` or `.vs` directories are included.
++
++Conflict policies, forensic rows, backup creation, disposable transaction, integrity checking and mandatory rollback are unchanged. No live adoption command or live-library mutation path was added. Full compilation and smoke-test execution still require Windows with the .NET 8 SDK.
+diff --git a/ALPHA8_CONFLICT_FORENSICS_STATIC_VALIDATION.md b/ALPHA8_CONFLICT_FORENSICS_STATIC_VALIDATION.md
+index 17850fa..09b49d1 100644
+--- a/ALPHA8_CONFLICT_FORENSICS_STATIC_VALIDATION.md
++++ b/ALPHA8_CONFLICT_FORENSICS_STATIC_VALIDATION.md
+@@ -1,6 +1,6 @@
+ # Alpha8 Conflict Forensics — static validation
+ 
+-This package was checked without executing the Windows/.NET application.
++This package was checked without executing the Windows/.NET application. The original alpha8 package subsequently exposed two Visual Studio compiler errors; buildfix1 corrects those exact type-inference sites and adds source guards against recurrence.
+ 
+ Validated statically:
+ 
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 2ce34c6..353b8f5 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,3 +1,20 @@
++# v0.28.0-alpha8 buildfix1 — Conflict Forensics
++
++## Fixed
++
++- Corrected CS0826 in the explicitly typed metadata-field rule array.
++- Corrected CS0411 in provenance `SelectMany` by returning one common enumerable type from both branches.
++- Downstream CS0006 errors now clear when `TheRadioVault.Services` compiles.
++
++## Unchanged
++
++- Database schema 44 and export schema 6.
++- Conflict classification and preservation policy.
++- Disposable rehearsal transaction, integrity checks and mandatory rollback.
++- Live adoption remains disabled.
++
++---
++
+ # v0.28.0-alpha8 — Conflict Forensics
+ 
+ ## Added
+diff --git a/LIBRARY_TRUTH_ALPHA8_VALIDATION.md b/LIBRARY_TRUTH_ALPHA8_VALIDATION.md
+index ca742ef..fca4a0b 100644
+--- a/LIBRARY_TRUTH_ALPHA8_VALIDATION.md
++++ b/LIBRARY_TRUTH_ALPHA8_VALIDATION.md
+@@ -4,6 +4,11 @@
+ 
+ The alpha7 desktop rehearsal completed all 4,305 eligible broadcasts with exact preview counts, zero foreign-key violations, SQLite integrity `ok`, backup restore `ok` and identical source/rollback fingerprints. It reported 7,165 coarse metadata/reference differences across 2,195 Ron & Fez broadcasts.
+ 
++
++## Buildfix baseline
++
++Run this validation with `0.28.0-alpha8-conflict-forensics-buildfix1`. Buildfix1 changes only two C# type-inference expressions in the conflict-forensics service; database schema 44, export schema 6 and all conflict policies remain unchanged.
++
+ ## Alpha8 acceptance criteria
+ 
+ 1. Preserve every accepted parser, broadcast, recording, file, coverage and adoption-preview count.
+diff --git a/README.md b/README.md
+index 7bf823f..a762a34 100644
+--- a/README.md
++++ b/README.md
+@@ -1,6 +1,6 @@
+-# Radio Vault v0.28.0-alpha8 — Conflict Forensics
++# Radio Vault v0.28.0-alpha8 buildfix1 — Conflict Forensics
+ 
+-Version: `0.28.0-alpha8-conflict-forensics`
++Version: `0.28.0-alpha8-conflict-forensics-buildfix1`
+ 
+ Alpha8 builds on the full-corpus-confirmed alpha7 transactional-rehearsal baseline. The accepted Broadcast → Recording → Physical File model, segment coverage, adoption previews, backup creation, integrity checks and mandatory rollback remain unchanged.
+ 
+diff --git a/RELEASE_BASELINE.md b/RELEASE_BASELINE.md
+index cc185cd..56be4ce 100644
+--- a/RELEASE_BASELINE.md
++++ b/RELEASE_BASELINE.md
+@@ -1,6 +1,6 @@
+-# v0.28.0-alpha8 development baseline
++# v0.28.0-alpha8 buildfix1 development baseline
+ 
+-Current version: `0.28.0-alpha8-conflict-forensics`
++Current version: `0.28.0-alpha8-conflict-forensics-buildfix1`
+ 
+ Source baseline: the full-corpus-confirmed `0.28.0-alpha7-transactional-rehearsal-buildfix1` build.
+ 
+diff --git a/RELEASE_CHECKLIST.md b/RELEASE_CHECKLIST.md
+index b9ae44e..0f6a45d 100644
+--- a/RELEASE_CHECKLIST.md
++++ b/RELEASE_CHECKLIST.md
+@@ -1,6 +1,6 @@
+-# v0.28.0-alpha8 Conflict Forensics checklist
++# v0.28.0-alpha8 buildfix1 Conflict Forensics checklist
+ 
+-- [ ] Application reports `0.28.0-alpha8-conflict-forensics`.
++- [ ] Application reports `0.28.0-alpha8-conflict-forensics-buildfix1`.
+ - [ ] Database initializes or upgrades to schema 44 with a pre-upgrade backup.
+ - [ ] Full solution builds on .NET 8.
+ - [ ] All 97 smoke tests pass.
+diff --git a/RELEASE_NOTES_0.28.0_ALPHA8_BUILDFIX1.md b/RELEASE_NOTES_0.28.0_ALPHA8_BUILDFIX1.md
+new file mode 100644
+index 0000000..250ef33
+--- /dev/null
++++ b/RELEASE_NOTES_0.28.0_ALPHA8_BUILDFIX1.md
+@@ -0,0 +1,12 @@
++# Radio Vault v0.28.0-alpha8 buildfix1 — Conflict Forensics
++
++Version: `0.28.0-alpha8-conflict-forensics-buildfix1`
++
++This buildfix corrects the two primary Visual Studio compiler errors in `LibraryTruthConflictForensics.cs`:
++
++- CS0826 at the metadata-field rule declaration: the target-typed record constructors now sit inside an explicitly typed `MetadataFieldRule[]`.
++- CS0411 in provenance expansion: both `SelectMany` branches now return `IEnumerable<ProvenanceSnapshot>`, removing the `List<T>` versus array inference ambiguity.
++
++The three CS0006 missing-metadata-file errors were downstream consequences of `TheRadioVault.Services` failing to compile and require no separate change.
++
++No conflict classification, selected-value policy, provenance handling, rehearsal transaction, rollback, schema or export behaviour changed. Database schema remains 44 and Library Truth export schema remains 6.
+diff --git a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+index 1c45603..38f5d28 100644
+--- a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
++++ b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+@@ -12,7 +12,7 @@ namespace TheRadioVault.Core.LibraryTruth;
+ /// </summary>
+ public sealed class LibraryTruthParser
+ {
+-    public const string CurrentVersion = "0.28.0-alpha8-conflict-forensics-v3";
++    public const string CurrentVersion = "0.28.0-alpha8-conflict-forensics-buildfix1-v3";
+ 
+     private static readonly Regex IsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})[\s._-]+(?<month>\d{1,2})[\s._-]+(?<day>\d{1,2})(?!\d)");
+     private static readonly Regex CompactIsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})(?<month>\d{2})(?<day>\d{2})(?!\d)");
+diff --git a/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs b/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
+index 215b97e..22b20cb 100644
+--- a/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
++++ b/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
+@@ -15,7 +15,7 @@ namespace TheRadioVault.Services.Services;
+ public sealed partial class LibraryTruthAdoptionRehearsalService
+ {
+     private static readonly MetadataFieldRule[] MetadataFieldRules =
+-    new[]
++    new MetadataFieldRule[]
+     {
+         new("collection_id", "Collection", MetadataFieldKind.Structural),
+         new("air_date", "Broadcast date", MetadataFieldKind.Structural),
+@@ -420,7 +420,9 @@ public sealed partial class LibraryTruthAdoptionRehearsalService
+         var normalized = NormalizeValue(rule.Column, value);
+         var aliases = ProvenanceAliases(rule.Column);
+         var possible = aliases
+-            .SelectMany(alias => provenance.TryGetValue(ProvenanceKey(snapshot.Id, alias), out var values) ? values : Array.Empty<ProvenanceSnapshot>())
++            .SelectMany(alias => provenance.TryGetValue(ProvenanceKey(snapshot.Id, alias), out var values)
++                ? values.AsEnumerable()
++                : Enumerable.Empty<ProvenanceSnapshot>())
+             .ToArray();
+         var matching = possible.Where(x => NormalizeValue(rule.Column, x.ValueText) == normalized).ToArray();
+         // Provenance only belongs to the candidate when its value actually
+diff --git a/TheRadioVault/TheRadioVault.csproj b/TheRadioVault/TheRadioVault.csproj
+index 926d95c..46c849b 100644
+--- a/TheRadioVault/TheRadioVault.csproj
++++ b/TheRadioVault/TheRadioVault.csproj
+@@ -9,10 +9,10 @@
+     <ImplicitUsings>disable</ImplicitUsings>
+     <AssemblyName>TheRadioVault</AssemblyName>
+     <RootNamespace>TheRadioVault</RootNamespace>
+-    <Version>0.28.0-alpha8-conflict-forensics</Version>
++    <Version>0.28.0-alpha8-conflict-forensics-buildfix1</Version>
+     <AssemblyVersion>0.28.0.0</AssemblyVersion>
+     <FileVersion>0.28.0.0</FileVersion>
+-    <InformationalVersion>0.28.0-alpha8-conflict-forensics</InformationalVersion>
++    <InformationalVersion>0.28.0-alpha8-conflict-forensics-buildfix1</InformationalVersion>
+   </PropertyGroup>
+   <ItemGroup>
+     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.7" />
+diff --git a/VERSION.txt b/VERSION.txt
+index adc1c5c..b550acd 100644
+--- a/VERSION.txt
++++ b/VERSION.txt
+@@ -1 +1 @@
+-0.28.0-alpha8-conflict-forensics
++0.28.0-alpha8-conflict-forensics-buildfix1
+diff --git a/validate-source.ps1 b/validate-source.ps1
+index de67ebd..74e6f35 100644
+--- a/validate-source.ps1
++++ b/validate-source.ps1
+@@ -7,6 +7,22 @@ function Add-ValidationError([string]$message) {
+     $errors.Add($message)
+ }
+ 
++# Alpha8 buildfix1: target-typed constructors need an explicit array element type,
++# and SelectMany branches must expose one common enumerable type.
++$conflictForensicsText = Get-Content (Join-Path $root "TheRadioVault.Services\Services\LibraryTruthConflictForensics.cs") -Raw
++if ($conflictForensicsText -match 'MetadataFieldRules\s*=\s*new\[\]\s*\{\s*new\(') {
++    Add-ValidationError "MetadataFieldRules must use an explicitly typed MetadataFieldRule[]; new[] cannot infer target-typed record constructors."
++}
++if ($conflictForensicsText -notmatch 'MetadataFieldRules\s*=\s*new\s+MetadataFieldRule\[\]') {
++    Add-ValidationError "Alpha8 buildfix1 requires an explicitly typed MetadataFieldRule[] declaration."
++}
++if ($conflictForensicsText -match '\?\s*values\s*:\s*Array\.Empty<ProvenanceSnapshot>\(\)') {
++    Add-ValidationError "Provenance SelectMany branches must return one common IEnumerable<ProvenanceSnapshot> type."
++}
++if ($conflictForensicsText -notmatch '\?\s*values\.AsEnumerable\(\)\s*:\s*Enumerable\.Empty<ProvenanceSnapshot>\(\)') {
++    Add-ValidationError "Alpha8 buildfix1 provenance expansion must use values.AsEnumerable() and Enumerable.Empty<ProvenanceSnapshot>()."
++}
++
+ # C# optional-parameter methods cannot be passed as zero-argument Task.Run method groups.
+ $libraryTruthWindowText = Get-Content (Join-Path $root "TheRadioVault\LibraryTruthWindow.xaml.cs") -Raw
+ if ($libraryTruthWindowText -match 'Task\.Run\(_rehearsal\.GetLatestItems\)') {

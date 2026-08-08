@@ -1,0 +1,199 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:views="using:TheRadioVault.Desktop.Avalonia.Views"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.SearchView">
+  <Grid>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Classes="page-scroll-root">
+      <StackPanel Margin="{StaticResource RvPagePadding}" Spacing="18" MaxWidth="1260" HorizontalAlignment="Center">
+        <StackPanel Orientation="Horizontal" Spacing="11">
+          <Border Width="42" Height="42" CornerRadius="13" Background="{DynamicResource RvAccentSubtleBrush}">
+            <Path Data="M10,3 A7,7 0 1 0 10,17 A7,7 0 1 0 10,3 M15.2,15.2 L21,21"
+                  Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="2" Width="22" Height="22"
+                  Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+          </Border>
+          <StackPanel Spacing="2">
+            <TextBlock Text="Search" Classes="display-title" />
+            <TextBlock Text="Find broadcasts by what happened, who appeared, when they aired or what was said."
+                       Classes="muted" FontSize="12" TextWrapping="Wrap" />
+          </StackPanel>
+        </StackPanel>
+
+        <Border Classes="card-raised" Padding="22" Background="{DynamicResource RvAccentSubtleBrush}">
+          <StackPanel Spacing="12">
+            <TextBlock Text="Search the archive" FontSize="22" FontWeight="SemiBold" />
+            <TextBox Classes="search-box" PlaceholderText="Try a show, person, topic, date or phrase from a transcript"
+                     Text="{Binding SearchText, Mode=TwoWay}" FontSize="14">
+              <TextBox.InnerLeftContent>
+                <Border Width="36" Height="42" Margin="-3,0,2,0">
+                  <Path Data="M10,3 A7,7 0 1 0 10,17 A7,7 0 1 0 10,3 M15.2,15.2 L21,21"
+                        Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="2" Width="19" Height="19"
+                        Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                </Border>
+              </TextBox.InnerLeftContent>
+              <TextBox.InnerRightContent>
+                <Button IsVisible="{Binding HasSearchText}" Content="×" Classes="ghost icon-button compact-action"
+                        Command="{Binding ClearCommand}" ToolTip.Tip="Clear search" />
+              </TextBox.InnerRightContent>
+            </TextBox>
+            <Border IsVisible="{Binding HasSuggestions}" Classes="card" Padding="6">
+              <ItemsControl ItemsSource="{Binding Suggestions}">
+                <ItemsControl.ItemTemplate><DataTemplate>
+                  <Button Classes="ghost" Command="{Binding SelectCommand}" HorizontalContentAlignment="Stretch" Padding="11,8">
+                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                      <TextBlock Text="{Binding Value}" TextTrimming="CharacterEllipsis" />
+                      <Border Grid.Column="1" Classes="pill" Padding="8,3"><TextBlock Text="{Binding Kind}" FontSize="9" /></Border>
+                      <TextBlock Grid.Column="2" Text="{Binding CountText}" Classes="subtle" FontSize="9" VerticalAlignment="Center" />
+                    </Grid>
+                  </Button>
+                </DataTemplate></ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+            <TextBlock Text="{Binding StatusText}" Classes="muted" FontSize="10" />
+          </StackPanel>
+        </Border>
+
+        <Border Classes="card" Padding="16">
+          <StackPanel Spacing="12">
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel Spacing="2">
+                <TextBlock Text="Narrow the results" FontSize="17" FontWeight="SemiBold" />
+                <TextBlock Text="Filters work together and remain easy to remove." Classes="muted" FontSize="10" />
+              </StackPanel>
+              <Button Grid.Column="1" Content="Clear filters" Classes="ghost" Command="{Binding ClearCommand}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="18">
+              <StackPanel Spacing="6">
+                <TextBlock Text="SEARCH IN" Classes="eyebrow" />
+                <ItemsControl ItemsSource="{Binding ScopeFilters}">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <ToggleButton Content="{Binding Title}" Classes="secondary" Margin="0,0,6,6" Padding="10,5"
+                                  IsChecked="{Binding IsSelected, Mode=OneWay}" Command="{Binding SelectCommand}" />
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+              <StackPanel Grid.Column="1" Spacing="6">
+                <TextBlock Text="LISTENING STATUS" Classes="eyebrow" />
+                <ItemsControl ItemsSource="{Binding StatusFilters}">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <ToggleButton Content="{Binding Title}" Classes="secondary" Margin="0,0,6,6" Padding="10,5"
+                                  IsChecked="{Binding IsSelected, Mode=OneWay}" Command="{Binding SelectCommand}" />
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Grid>
+            <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="10">
+              <ComboBox Classes="filter-box" ItemsSource="{Binding ShowFilters}" SelectedItem="{Binding SelectedShow, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Title}" PlaceholderText="All shows" />
+              <ComboBox Grid.Column="1" Classes="filter-box" ItemsSource="{Binding YearFilters}" SelectedItem="{Binding SelectedYear, Mode=TwoWay}"
+                        DisplayMemberBinding="{Binding Title}" PlaceholderText="All years" />
+              <CheckBox Grid.Column="2" Content="Has transcript" IsChecked="{Binding HasTranscriptOnly, Mode=TwoWay}"
+                        VerticalAlignment="Center" Margin="8,0" />
+            </Grid>
+          </StackPanel>
+        </Border>
+
+        <views:RelatedWikiPagesView DataContext="{Binding RelatedWiki}" />
+
+        <StackPanel IsVisible="{Binding HasResults}" Spacing="10">
+          <Grid ColumnDefinitions="*,Auto" Margin="2,0">
+            <TextBlock Text="Search results" Classes="section-title" />
+            <TextBlock Grid.Column="1" Text="Most relevant first" Classes="subtle" FontSize="10" VerticalAlignment="Center" />
+          </Grid>
+          <ItemsControl ItemsSource="{Binding Results}">
+            <ItemsControl.ItemTemplate><DataTemplate>
+              <Border Classes="framed-row" Padding="13,11" Margin="0,0,0,7">
+                <Border.ContextMenu>
+                  <ContextMenu>
+                    <MenuItem Header="Play" Command="{Binding PlayCommand}" />
+                    <MenuItem Header="Play next" Command="{Binding PlayNextCommand}" />
+                    <MenuItem Header="Add to queue" Command="{Binding AddToQueueCommand}" />
+                    <Separator /><MenuItem Header="Toggle favourite" Command="{Binding ToggleFavouriteCommand}" />
+                    <Separator /><MenuItem Header="Transcribe broadcast" Command="{Binding TranscribeCommand}" />
+                  </ContextMenu>
+                </Border.ContextMenu>
+                <Grid ColumnDefinitions="44,78,*,130" ColumnSpacing="13">
+                  <Button Width="40" Height="40" Classes="primary icon-button" Command="{Binding PlayCommand}"
+                          Content="{Binding}" ContentTemplate="{StaticResource PlayIconTemplate}" />
+                  <Border Grid.Column="1" Background="{DynamicResource RvSurfaceRaisedBrush}" CornerRadius="10" Padding="8,6">
+                    <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <TextBlock Text="{Binding DateDayText}" FontWeight="Bold" FontSize="10" />
+                      <TextBlock Text="{Binding DateRestText}" Classes="muted" FontSize="9" TextAlignment="Center" />
+                    </StackPanel>
+                  </Border>
+                  <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="3">
+                    <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding CollectionText}" Classes="muted" FontSize="10" />
+                    <TextBlock Text="{Binding Source.SearchContext}" IsVisible="{Binding Source.HasSearchContext}"
+                               Foreground="{DynamicResource RvAccentBrush}" FontSize="10" TextTrimming="CharacterEllipsis"
+                               ToolTip.Tip="{Binding Source.SearchContext}" />
+                  </StackPanel>
+                  <StackPanel Grid.Column="3" VerticalAlignment="Center" Spacing="5">
+                    <TextBlock Text="{Binding ProgressText}" Classes="muted" FontSize="9" HorizontalAlignment="Right" />
+                    <ProgressBar Classes="thin" Value="{Binding ProgressPercent}" Maximum="100" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </StackPanel>
+
+        <Border Classes="card" IsVisible="{Binding HasNoResults}" Padding="32">
+          <StackPanel HorizontalAlignment="Center" Spacing="7">
+            <TextBlock Text="No matching broadcasts" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="Try a broader phrase or remove one of the filters." Classes="muted" FontSize="11" />
+          </StackPanel>
+        </Border>
+
+        <StackPanel IsVisible="{Binding ShowDiscovery}" Spacing="18">
+          <StackPanel Spacing="4">
+            <TextBlock Text="Ways into the archive" Classes="section-title" />
+            <TextBlock Text="Start with a familiar collection or browse a show directly." Classes="muted" FontSize="11" />
+          </StackPanel>
+          <ItemsControl ItemsSource="{Binding QuickCollections}">
+            <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+            <ItemsControl.ItemTemplate><DataTemplate>
+              <Border Width="246" MinHeight="130" Margin="0,0,12,12" Classes="card-raised" Padding="5">
+                <Button Classes="ghost" Command="{Binding OpenCommand}" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" Padding="12">
+                  <Grid RowDefinitions="Auto,*,Auto">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                      <Border Width="40" Height="40" CornerRadius="12" Background="{DynamicResource RvAccentSubtleBrush}">
+                        <TextBlock Text="{Binding Glyph}" FontSize="17" Foreground="{DynamicResource RvAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <TextBlock Grid.Column="1" Text="{Binding Title}" FontWeight="SemiBold" FontSize="15" VerticalAlignment="Center" TextWrapping="Wrap" />
+                    </Grid>
+                    <TextBlock Grid.Row="1" Text="{Binding Description}" Classes="muted" FontSize="10" TextWrapping="Wrap" Margin="0,9,0,7" />
+                    <TextBlock Grid.Row="2" Text="{Binding CountText}" Classes="subtle" FontSize="9" IsVisible="{Binding HasCount}" />
+                  </Grid>
+                </Button>
+              </Border>
+            </DataTemplate></ItemsControl.ItemTemplate>
+          </ItemsControl>
+
+          <StackPanel Spacing="9" IsVisible="{Binding HasShows}">
+            <TextBlock Text="Browse by show" Classes="section-title" />
+            <ItemsControl ItemsSource="{Binding Shows}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate><DataTemplate>
+                <Border Width="246" MinHeight="96" Margin="0,0,12,12" Classes="card" Padding="5">
+                  <Button Classes="ghost" Command="{Binding OpenCommand}" HorizontalContentAlignment="Stretch" Padding="12">
+                    <Grid ColumnDefinitions="44,*" ColumnSpacing="12">
+                      <Border Width="44" Height="44" CornerRadius="13" Background="{DynamicResource RvSurfaceRaisedBrush}">
+                        <TextBlock Text="{Binding Glyph}" FontSize="18" Foreground="{DynamicResource RvAccentBrush}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      </Border>
+                      <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding CountText}" Classes="muted" FontSize="10" />
+                      </StackPanel>
+                    </Grid>
+                  </Button>
+                </Border>
+              </DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </StackPanel>
+        </StackPanel>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

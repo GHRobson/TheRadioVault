@@ -1,0 +1,23 @@
+{
+  "buildIdentity": "0.32.0-alpha4-buildfix2-library-row-polish-responsive-overscroll",
+  "architectureVersion": "0.32-alpha4-buildfix2-library-row-polish-responsive-overscroll",
+  "databaseSchema": 45,
+  "lanCapabilityGeneration": 14,
+  "apiVersion": "v1",
+  "defaultDesktopShell": "avalonia",
+  "canonicalExecutable": "TheRadioVault.exe",
+  "wpfReferenceExecutable": "TheRadioVault.WpfReference.exe",
+  "migratedWorkflows": [
+    "local-playback",
+    "favourites",
+    "persistent-queue",
+    "moments",
+    "show-navigation"
+  ],
+  "presentationWritesViaServices": true,
+  "elasticOverscrollStabilized": true,
+  "remoteClientMigrated": false,
+  "elasticOverscrollDirectTracking": true,
+  "expandableShowNavigation": true,
+  "libraryCollectionFiltering": true
+}

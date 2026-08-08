@@ -1,0 +1,28 @@
+{
+  "buildIdentity": "0.32.0-alpha6-buildfix1-connected-access-route-import",
+  "architectureVersion": "0.32-alpha6-connected-access-remote-parity",
+  "databaseSchema": 45,
+  "lanCapabilityGeneration": 14,
+  "apiVersion": "v1",
+  "defaultDesktopShell": "avalonia",
+  "startupOwnershipSelectedBeforeComposition": true,
+  "remoteClientInitializesLocalDatabase": false,
+  "remoteSessionCoordinator": "RemoteLibrarySessionCoordinator",
+  "connectedAccessBoundary": "IConnectedAccessService",
+  "remoteLibraryContracts": [
+    "ILibraryBrowseService",
+    "ILibraryActionService",
+    "ILocalPlaybackLibraryService",
+    "IQueueService",
+    "IMomentsService",
+    "IResearchWorkspaceService"
+  ],
+  "encryptedServerBoundCache": true,
+  "automaticReconnect": true,
+  "remoteMediaCredentialProxy": true,
+  "pendingProgressRetry": true,
+  "remoteOwnedLocalDatabaseWritesBlocked": true,
+  "wpfReferenceRetained": true,
+  "sourceManifestFileCount": 737,
+  "maximumInternalZipPathLength": 94
+}

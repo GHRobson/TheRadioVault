@@ -1,0 +1,126 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.DownloadsView">
+  <Grid Margin="{StaticResource RvPagePadding}" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="14">
+    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+      <StackPanel Spacing="3">
+        <TextBlock Text="Downloads" Classes="display-title" />
+        <TextBlock Text="Broadcasts stored on this PC for playback without streaming from the server."
+                   Classes="muted" FontSize="12" TextWrapping="Wrap" />
+      </StackPanel>
+      <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+        <Button Content="Check downloads" Classes="secondary" Command="{Binding AuditCommand}" />
+        <Button Content="Refresh" Classes="secondary" Command="{Binding RefreshCommand}" />
+        <Button Content="Remove all" Classes="ghost" Command="{Binding RemoveAllCommand}" IsEnabled="{Binding HasDownloads}" />
+      </StackPanel>
+    </Grid>
+
+    <Grid Grid.Row="1" ColumnDefinitions="*,*,*" ColumnSpacing="10">
+      <Border Classes="card" Padding="15,13">
+        <Grid ColumnDefinitions="38,*" ColumnSpacing="11">
+          <Border Width="34" Height="34" CornerRadius="9" Background="{DynamicResource RvAccentSubtleBrush}">
+            <Path Width="21" Height="21" Stretch="None" Stroke="{DynamicResource RvAccentBrush}"
+                  StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
+                  Data="M12,3 L12,15 M8,11 L12,15 L16,11 M5,20 L19,20" />
+          </Border>
+          <StackPanel Grid.Column="1" Spacing="1">
+            <TextBlock Text="{Binding CountText}" FontSize="18" FontWeight="SemiBold" />
+            <TextBlock Text="Stored broadcasts" FontSize="10" Classes="muted" />
+          </StackPanel>
+        </Grid>
+      </Border>
+      <Border Grid.Column="1" Classes="card" Padding="15,13">
+        <StackPanel Spacing="1">
+          <TextBlock Text="{Binding StoredSizeText}" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock Text="Device storage used" FontSize="10" Classes="muted" />
+        </StackPanel>
+      </Border>
+      <Border Grid.Column="2" Classes="card" Padding="15,13">
+        <StackPanel Spacing="1">
+          <TextBlock Text="{Binding HealthText}" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock Text="Local media health" FontSize="10" Classes="muted" />
+        </StackPanel>
+      </Border>
+    </Grid>
+
+    <Border Grid.Row="2" IsVisible="{Binding IsDownloading}" Classes="card-raised" Padding="14,12"
+            BorderBrush="{DynamicResource RvAccentMutedBrush}">
+      <Grid RowDefinitions="Auto,Auto" RowSpacing="9">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+          <StackPanel Spacing="2">
+            <TextBlock Text="{Binding ActiveTitle}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+            <TextBlock Text="{Binding ActiveDetail}" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+          </StackPanel>
+          <Button Grid.Column="1" Content="Cancel" Classes="secondary" Command="{Binding CancelDownloadCommand}" />
+        </Grid>
+        <ProgressBar Grid.Row="1" Classes="thin" Height="5" Maximum="100" Value="{Binding DownloadPercent}" />
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="3" Classes="library-list-frame">
+      <Grid RowDefinitions="Auto,*">
+        <Grid Margin="14,10,14,8" ColumnDefinitions="72,*,110,230" ColumnSpacing="12">
+          <TextBlock Grid.Column="1" Text="BROADCAST" Classes="eyebrow" />
+          <TextBlock Grid.Column="2" Text="STORAGE" Classes="eyebrow" />
+          <TextBlock Grid.Column="3" Text="ACTIONS" Classes="eyebrow" HorizontalAlignment="Right" />
+        </Grid>
+        <ScrollViewer Grid.Row="1" HorizontalScrollBarVisibility="Disabled">
+          <ItemsControl ItemsSource="{Binding Items}" IsVisible="{Binding HasDownloads}">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate>
+                <Border Padding="12,9" BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,1,0,0">
+                  <Grid ColumnDefinitions="72,*,110,230" ColumnSpacing="12">
+                    <Border Width="58" Height="58" CornerRadius="9" ClipToBounds="True"
+                            Background="{DynamicResource RvAccentSubtleBrush}" VerticalAlignment="Center">
+                      <Grid>
+                        <ContentControl IsVisible="{Binding !HasArtwork}" Content="Radio mast"
+                                        ContentTemplate="{StaticResource MissingArtworkIconTemplate}"
+                                        Width="30" Height="30" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        <Image IsVisible="{Binding HasArtwork}"
+                               Source="{Binding ArtworkPath, Converter={StaticResource ArtworkPathToBitmapConverter}}"
+                               Stretch="UniformToFill" />
+                      </Grid>
+                    </Border>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3" MinWidth="0">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding CollectionName}" FontSize="10" Foreground="{DynamicResource RvAccentMutedBrush}"
+                                 TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding DateText}" FontSize="10" Classes="muted" />
+                      <TextBlock IsVisible="{Binding NeedsRepair}" Text="{Binding RepairText}" FontSize="9"
+                                 Foreground="{DynamicResource RvDangerBrush}" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="2">
+                      <TextBlock Text="{Binding SizeText}" FontSize="11" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding PartsText}" FontSize="9" Classes="muted" />
+                      <TextBlock Text="{Binding DownloadedText}" FontSize="9" Classes="subtle" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" HorizontalAlignment="Right"
+                                VerticalAlignment="Center" Spacing="7">
+                      <Button Content="Play" Classes="primary" Command="{Binding PlayCommand}" IsEnabled="{Binding !NeedsRepair}" />
+                      <Button Content="Repair" Classes="secondary" Command="{Binding RepairCommand}" IsVisible="{Binding NeedsRepair}" />
+                      <Button Content="Remove" Classes="ghost" Command="{Binding RemoveCommand}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+        </ScrollViewer>
+        <StackPanel Grid.Row="1" IsVisible="{Binding HasNoDownloads}"
+                    HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+          <Border Width="64" Height="64" CornerRadius="16" Background="{DynamicResource RvAccentSubtleBrush}">
+            <Path Width="31" Height="31" Stretch="None" Stroke="{DynamicResource RvAccentBrush}"
+                  StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
+                  Data="M16,4 L16,20 M10,14 L16,20 L22,14 M6,27 L26,27" />
+          </Border>
+          <TextBlock Text="No broadcasts downloaded" FontSize="18" FontWeight="SemiBold" />
+          <TextBlock Text="Right-click a broadcast in the Library and choose Download to this PC."
+                     Classes="muted" FontSize="11" TextAlignment="Center" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <TextBlock Grid.Row="4" Text="{Binding StatusText}" Classes="muted" FontSize="10"
+               HorizontalAlignment="Left" Margin="2,0,0,0" />
+  </Grid>
+</UserControl>

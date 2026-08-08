@@ -1,0 +1,17 @@
+{
+  "buildIdentity": "0.32.0-alpha2-avalonia-design-foundation",
+  "architectureVersion": "0.32-alpha2-avalonia-design-foundation",
+  "databaseSchema": 45,
+  "lanCapabilityGeneration": 14,
+  "apiVersion": "v1",
+  "defaultDesktopShell": "avalonia",
+  "canonicalExecutable": "TheRadioVault.exe",
+  "wpfReferenceExecutable": "TheRadioVault.WpfReference.exe",
+  "toolkitNeutralPresentation": true,
+  "designStateOwnedByPresentation": true,
+  "avaloniaThemeResourcesOwnedByDesktop": true,
+  "wpfReferenceRetained": true,
+  "playbackMigrated": false,
+  "remoteClientMigrated": false,
+  "windowsRuntimeGatePending": true
+}

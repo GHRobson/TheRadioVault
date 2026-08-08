@@ -1,0 +1,21 @@
+* text=auto
+
+# macOS scripts must remain Unix text files and executable in source archives.
+*.sh text eol=lf
+*.command text eol=lf
+
+# Retain conventional Windows line endings for launch and installer scripts.
+*.cmd text eol=crlf
+*.iss text eol=crlf
+
+# Never attempt text conversion for product and design assets.
+*.docx binary
+*.ico binary
+*.icns binary
+*.jpg binary
+*.jpeg binary
+*.png binary
+*.zip binary
+*.dll binary
+*.dylib binary
+*.exe binary

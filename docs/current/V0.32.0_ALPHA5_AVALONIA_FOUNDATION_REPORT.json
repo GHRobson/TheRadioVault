@@ -1,0 +1,16 @@
+{
+  "buildIdentity": "0.32.0-alpha5-research-workspace-metadata-studio",
+  "foundationVersion": "0.32-alpha5-research-workspace-metadata-studio",
+  "avaloniaVersion": "12.1.0",
+  "naudioVersion": "2.3.0",
+  "targetFramework": "net8.0",
+  "defaultDesktopShell": "avalonia",
+  "researchWorkspaceMigrated": true,
+  "metadataStudioMigrated": true,
+  "sourceDiagnosticsMigrated": true,
+  "researchImportHistoryMigrated": true,
+  "remoteResearchWritesGuarded": true,
+  "connectedAccessMigrated": false,
+  "sourceManifestFileCount": 722,
+  "maximumInternalZipPathLength": 94
+}

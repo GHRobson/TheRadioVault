@@ -1,0 +1,165 @@
+{
+  "generatedAtUtc": "2026-07-25T15:29:49.000173+00:00",
+  "buildIdentity": "0.31.0-alpha5-lan-shared-session-consolidation",
+  "architectureVersion": "0.31-alpha5",
+  "neutralProjects": [
+    "TheRadioVault.Core",
+    "TheRadioVault.Application",
+    "TheRadioVault.Data",
+    "TheRadioVault.Media",
+    "TheRadioVault.Services",
+    "TheRadioVault.Research",
+    "TheRadioVault.Web",
+    "TheRadioVault.Transcription",
+    "TheRadioVault.Tests"
+  ],
+  "intentionalWindowsBoundaries": [
+    "TheRadioVault",
+    "TheRadioVault.Platform.Windows"
+  ],
+  "projectReports": [
+    {
+      "name": "TheRadioVault.Core",
+      "targetFramework": "net8.0",
+      "sourceFiles": 27,
+      "projectReferences": [],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Application",
+      "targetFramework": "net8.0",
+      "sourceFiles": 30,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Data",
+      "targetFramework": "net8.0",
+      "sourceFiles": 1,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Media",
+      "targetFramework": "net8.0",
+      "sourceFiles": 8,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Services",
+      "targetFramework": "net8.0",
+      "sourceFiles": 28,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj",
+        "..\\TheRadioVault.Data\\TheRadioVault.Data.csproj",
+        "..\\TheRadioVault.Media\\TheRadioVault.Media.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Research",
+      "targetFramework": "net8.0",
+      "sourceFiles": 3,
+      "projectReferences": [],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Web",
+      "targetFramework": "net8.0",
+      "sourceFiles": 11,
+      "projectReferences": [],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Transcription",
+      "targetFramework": "net8.0",
+      "sourceFiles": 21,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj",
+        "..\\TheRadioVault.Data\\TheRadioVault.Data.csproj",
+        "..\\TheRadioVault.Services\\TheRadioVault.Services.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Tests",
+      "targetFramework": "net8.0",
+      "sourceFiles": 1,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj",
+        "..\\TheRadioVault.Application\\TheRadioVault.Application.csproj",
+        "..\\TheRadioVault.Data\\TheRadioVault.Data.csproj",
+        "..\\TheRadioVault.Research\\TheRadioVault.Research.csproj",
+        "..\\TheRadioVault.Services\\TheRadioVault.Services.csproj",
+        "..\\TheRadioVault.Web\\TheRadioVault.Web.csproj",
+        "..\\TheRadioVault.Transcription\\TheRadioVault.Transcription.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Platform.Windows",
+      "targetFramework": "net8.0-windows",
+      "sourceFiles": 10,
+      "projectReferences": [
+        "..\\TheRadioVault.Application\\TheRadioVault.Application.csproj",
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj"
+      ],
+      "windowsUiMarkers": 12
+    },
+    {
+      "name": "TheRadioVault",
+      "targetFramework": "net8.0-windows",
+      "sourceFiles": 133,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj",
+        "..\\TheRadioVault.Application\\TheRadioVault.Application.csproj",
+        "..\\TheRadioVault.Platform.Windows\\TheRadioVault.Platform.Windows.csproj",
+        "..\\TheRadioVault.Data\\TheRadioVault.Data.csproj",
+        "..\\TheRadioVault.Services\\TheRadioVault.Services.csproj",
+        "..\\TheRadioVault.Media\\TheRadioVault.Media.csproj",
+        "..\\TheRadioVault.Research\\TheRadioVault.Research.csproj",
+        "..\\TheRadioVault.Web\\TheRadioVault.Web.csproj",
+        "..\\TheRadioVault.Transcription\\TheRadioVault.Transcription.csproj"
+      ],
+      "windowsUiMarkers": 55
+    }
+  ],
+  "desktopCoupling": {
+    "sourceFiles": 133,
+    "mainWindowPartialFiles": 31,
+    "systemWindowsMarkers": 51,
+    "messageBoxMarkers": 210,
+    "openFileDialogMarkers": 8,
+    "saveFileDialogMarkers": 10,
+    "dispatcherMarkers": 79,
+    "windowSubclassMarkers": 25,
+    "databaseServiceMarkers": 49,
+    "applicationStartupCoordinatorMarkers": 2,
+    "applicationShutdownCoordinatorMarkers": 3,
+    "applicationWindowTransitionCoordinatorMarkers": 3,
+    "directProcessStartMarkers": 0,
+    "directClipboardMarkers": 0,
+    "directRegistryMarkers": 0,
+    "directSystemParametersMarkers": 0,
+    "playbackSessionCoordinatorMarkers": 3,
+    "playbackProgressCoordinatorMarkers": 3,
+    "playbackCompletionCoordinatorMarkers": 3,
+    "remoteLibrarySessionCoordinatorMarkers": 3,
+    "oldRemoteRefreshGateMarkers": 0,
+    "oldRemoteSyncCancellationMarkers": 0
+  },
+  "extractionEvidence": {
+    "playbackSessionOwner": "TheRadioVault.Application.Services.PlaybackSessionCoordinator",
+    "remoteLibrarySessionOwner": "TheRadioVault.Application.Services.RemoteLibrarySessionCoordinator",
+    "localMediaAdapter": "TheRadioVault.Platform.Windows.Adapters.WpfMediaPlaybackEngine",
+    "lanProgressCapability": "TheRadioVault.Services.ILanPlaybackProgressSynchronizer"
+  },
+  "violations": []
+}

@@ -1,0 +1,16 @@
+{
+  "buildIdentity": "0.32.0-alpha7-desktop-tools-library-parity",
+  "foundationVersion": "0.32-alpha7-desktop-tools-library-parity",
+  "avaloniaVersion": "12.1.0",
+  "naudioVersion": "2.3.0",
+  "targetFramework": "net8.0",
+  "defaultDesktopShell": "avalonia",
+  "libraryGridMigrated": true,
+  "fullBroadcastInformationMigrated": true,
+  "nowPlayingInformationParity": true,
+  "desktopToolsWorkspaceStarted": true,
+  "remoteBroadcastDetailsParity": true,
+  "localDatabaseFallbackBlocked": true,
+  "sourceManifestFileCount": 755,
+  "maximumInternalZipPathLength": 94
+}

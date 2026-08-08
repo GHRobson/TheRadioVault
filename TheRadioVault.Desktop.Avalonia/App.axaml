@@ -1,0 +1,823 @@
+<Application xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:interactions="using:TheRadioVault.Desktop.Avalonia.Interactions"
+             xmlns:converters="using:TheRadioVault.Desktop.Avalonia.Converters"
+             x:Class="TheRadioVault.Desktop.Avalonia.App"
+             RequestedThemeVariant="Default">
+  <Application.Resources>
+    <ResourceDictionary>
+      <ResourceDictionary.ThemeDictionaries>
+        <ResourceDictionary x:Key="Dark">
+          <SolidColorBrush x:Key="RvBackgroundBrush" Color="#111317" />
+          <SolidColorBrush x:Key="RvShellBrush" Color="#15181D" />
+          <SolidColorBrush x:Key="RvSurfaceBrush" Color="#1C2026" />
+          <SolidColorBrush x:Key="RvSurfaceRaisedBrush" Color="#23282F" />
+          <SolidColorBrush x:Key="RvSurfaceHoverBrush" Color="#2B3139" />
+          <SolidColorBrush x:Key="RvBorderBrush" Color="#363D46" />
+          <SolidColorBrush x:Key="RvBorderStrongBrush" Color="#4B5561" />
+          <SolidColorBrush x:Key="RvTextBrush" Color="#F5F6F8" />
+          <SolidColorBrush x:Key="RvMutedTextBrush" Color="#AFB5BD" />
+          <SolidColorBrush x:Key="RvSubtleTextBrush" Color="#7F8791" />
+          <SolidColorBrush x:Key="RvAccentBrush" Color="#F2C94C" />
+          <SolidColorBrush x:Key="RvAccentHoverBrush" Color="#FFD969" />
+          <SolidColorBrush x:Key="RvAccentSubtleBrush" Color="#3A331A" />
+          <SolidColorBrush x:Key="RvAccentMutedBrush" Color="#C8AF62" />
+          <SolidColorBrush x:Key="RvAccentMutedSubtleBrush" Color="#39331F" />
+          <Color x:Key="SystemAccentColor">#C8AF62</Color>
+          <Color x:Key="SystemAccentColorDark1">#A89250</Color>
+          <Color x:Key="SystemAccentColorDark2">#887640</Color>
+          <Color x:Key="SystemAccentColorDark3">#66582F</Color>
+          <Color x:Key="SystemAccentColorLight1">#D6C17F</Color>
+          <Color x:Key="SystemAccentColorLight2">#E3D39D</Color>
+          <Color x:Key="SystemAccentColorLight3">#F0E5BE</Color>
+          <SolidColorBrush x:Key="RvSuccessBrush" Color="#4FD3A0" />
+          <SolidColorBrush x:Key="RvSuccessSubtleBrush" Color="#163A30" />
+          <SolidColorBrush x:Key="RvWarningBrush" Color="#F0B85A" />
+          <SolidColorBrush x:Key="RvWarningSubtleBrush" Color="#3B2D17" />
+          <SolidColorBrush x:Key="RvDangerBrush" Color="#F87182" />
+          <SolidColorBrush x:Key="RvDangerSubtleBrush" Color="#3C1D25" />
+          <SolidColorBrush x:Key="RvInfoBrush" Color="#69A7D4" />
+          <SolidColorBrush x:Key="RvInfoSubtleBrush" Color="#1C2B36" />
+          <SolidColorBrush x:Key="RvSelectionBrush" Color="#2A2B2F" />
+          <SolidColorBrush x:Key="RvAccentContrastBrush" Color="#18140A" />
+          <SolidColorBrush x:Key="RvPlayingBrush" Color="#302D21" />
+          <SolidColorBrush x:Key="RvChromeBrush" Color="#101216" />
+          <SolidColorBrush x:Key="RvStatBroadcastBrush" Color="#F2C94C" />
+          <SolidColorBrush x:Key="RvStatProgressBrush" Color="#68B5FF" />
+          <SolidColorBrush x:Key="RvStatCompletedBrush" Color="#52D6A2" />
+          <SolidColorBrush x:Key="RvStatFavouriteBrush" Color="#F08DB7" />
+          <SolidColorBrush x:Key="RvMomentBrush" Color="#E8A45E" />
+          <SolidColorBrush x:Key="RvResearchBrush" Color="#B49AF2" />
+          <SolidColorBrush x:Key="RvWikiBrush" Color="#8EA7FF" />
+          <SolidColorBrush x:Key="RvWikiSubtleBrush" Color="#222C4A" />
+          <SolidColorBrush x:Key="RvTranscriptBrush" Color="#5ED5C8" />
+          <SolidColorBrush x:Key="RvTranscriptSubtleBrush" Color="#173B39" />
+          <SolidColorBrush x:Key="RvSearchBrush" Color="#78B6D8" />
+          <SolidColorBrush x:Key="RvSettingsBrush" Color="#A9B0B8" />
+          <SolidColorBrush x:Key="TextControlBackground" Color="#23282F" />
+          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#272C33" />
+          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#23282F" />
+          <SolidColorBrush x:Key="TextControlBorderBrush" Color="#363D46" />
+          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#4B5561" />
+          <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#C8AF62" />
+          <SolidColorBrush x:Key="ComboBoxBackground" Color="#23282F" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#272C33" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#2B3139" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#363D46" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#4B5561" />
+        </ResourceDictionary>
+        <ResourceDictionary x:Key="Light">
+          <SolidColorBrush x:Key="RvBackgroundBrush" Color="#F4F5F8" />
+          <SolidColorBrush x:Key="RvShellBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="RvSurfaceBrush" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="RvSurfaceRaisedBrush" Color="#F9FAFC" />
+          <SolidColorBrush x:Key="RvSurfaceHoverBrush" Color="#ECEEF4" />
+          <SolidColorBrush x:Key="RvBorderBrush" Color="#DFE2E9" />
+          <SolidColorBrush x:Key="RvBorderStrongBrush" Color="#C7CCD6" />
+          <SolidColorBrush x:Key="RvTextBrush" Color="#171923" />
+          <SolidColorBrush x:Key="RvMutedTextBrush" Color="#626B7A" />
+          <SolidColorBrush x:Key="RvSubtleTextBrush" Color="#9097A3" />
+          <SolidColorBrush x:Key="RvAccentBrush" Color="#C58B00" />
+          <SolidColorBrush x:Key="RvAccentHoverBrush" Color="#A87500" />
+          <SolidColorBrush x:Key="RvAccentSubtleBrush" Color="#FFF4C2" />
+          <SolidColorBrush x:Key="RvAccentMutedBrush" Color="#A77D1D" />
+          <SolidColorBrush x:Key="RvAccentMutedSubtleBrush" Color="#F6E8B4" />
+          <Color x:Key="SystemAccentColor">#A77D1D</Color>
+          <Color x:Key="SystemAccentColorDark1">#8E6917</Color>
+          <Color x:Key="SystemAccentColorDark2">#735512</Color>
+          <Color x:Key="SystemAccentColorDark3">#58410E</Color>
+          <Color x:Key="SystemAccentColorLight1">#BA963E</Color>
+          <Color x:Key="SystemAccentColorLight2">#CEB66B</Color>
+          <Color x:Key="SystemAccentColorLight3">#E5D79D</Color>
+          <SolidColorBrush x:Key="RvSuccessBrush" Color="#17865C" />
+          <SolidColorBrush x:Key="RvSuccessSubtleBrush" Color="#DCF4E9" />
+          <SolidColorBrush x:Key="RvWarningBrush" Color="#A96B08" />
+          <SolidColorBrush x:Key="RvWarningSubtleBrush" Color="#FFF0D3" />
+          <SolidColorBrush x:Key="RvDangerBrush" Color="#C83D52" />
+          <SolidColorBrush x:Key="RvDangerSubtleBrush" Color="#FFE3E8" />
+          <SolidColorBrush x:Key="RvInfoBrush" Color="#256EAF" />
+          <SolidColorBrush x:Key="RvInfoSubtleBrush" Color="#E2F1FF" />
+          <SolidColorBrush x:Key="RvSelectionBrush" Color="#FFF1B2" />
+          <SolidColorBrush x:Key="RvAccentContrastBrush" Color="#211A05" />
+          <SolidColorBrush x:Key="RvPlayingBrush" Color="#FFF6D0" />
+          <SolidColorBrush x:Key="RvChromeBrush" Color="#EEF2F7" />
+          <SolidColorBrush x:Key="RvStatBroadcastBrush" Color="#B77D00" />
+          <SolidColorBrush x:Key="RvStatProgressBrush" Color="#256EAF" />
+          <SolidColorBrush x:Key="RvStatCompletedBrush" Color="#17865C" />
+          <SolidColorBrush x:Key="RvStatFavouriteBrush" Color="#B83E72" />
+          <SolidColorBrush x:Key="RvMomentBrush" Color="#B46619" />
+          <SolidColorBrush x:Key="RvResearchBrush" Color="#7352BA" />
+          <SolidColorBrush x:Key="RvWikiBrush" Color="#4D63C7" />
+          <SolidColorBrush x:Key="RvWikiSubtleBrush" Color="#E7EBFF" />
+          <SolidColorBrush x:Key="RvTranscriptBrush" Color="#087D74" />
+          <SolidColorBrush x:Key="RvTranscriptSubtleBrush" Color="#DDF5F2" />
+          <SolidColorBrush x:Key="RvSearchBrush" Color="#2D719D" />
+          <SolidColorBrush x:Key="RvSettingsBrush" Color="#66707B" />
+          <SolidColorBrush x:Key="TextControlBackground" Color="#F9FAFC" />
+          <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="#F2F3F7" />
+          <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="#FFFFFF" />
+          <SolidColorBrush x:Key="TextControlBorderBrush" Color="#DFE2E9" />
+          <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="#C7CCD6" />
+          <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="#A77D1D" />
+          <SolidColorBrush x:Key="ComboBoxBackground" Color="#F9FAFC" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPointerOver" Color="#F2F3F7" />
+          <SolidColorBrush x:Key="ComboBoxBackgroundPressed" Color="#ECEEF4" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrush" Color="#DFE2E9" />
+          <SolidColorBrush x:Key="ComboBoxBorderBrushPointerOver" Color="#C7CCD6" />
+        </ResourceDictionary>
+      </ResourceDictionary.ThemeDictionaries>
+
+      <converters:ArtworkPathToBitmapConverter x:Key="ArtworkPathToBitmapConverter" />
+      <converters:ByteArrayToBitmapConverter x:Key="ByteArrayToBitmapConverter" />
+
+      <DataTemplate x:Key="FavouriteIconTemplate">
+        <Grid Width="24" Height="24">
+          <Path IsVisible="{Binding IsNotFavourite}" Width="23" Height="23" Stretch="Uniform"
+                Stroke="{DynamicResource RvStatFavouriteBrush}" StrokeThickness="1.9"
+                StrokeLineCap="Round" StrokeJoin="Round"
+                Data="M12,20 L5.2,13.8 C2,10.8 3.7,6 7.5,6 C9.4,6 11,7.1 12,8.7 C13,7.1 14.6,6 16.5,6 C20.3,6 22,10.8 18.8,13.8 Z" />
+          <Path IsVisible="{Binding IsFavourite}" Width="23" Height="23" Stretch="Uniform"
+                Fill="{DynamicResource RvStatFavouriteBrush}" Stroke="{DynamicResource RvStatFavouriteBrush}"
+                StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"
+                Data="M12,20 L5.2,13.8 C2,10.8 3.7,6 7.5,6 C9.4,6 11,7.1 12,8.7 C13,7.1 14.6,6 16.5,6 C20.3,6 22,10.8 18.8,13.8 Z" />
+        </Grid>
+      </DataTemplate>
+
+      <DataTemplate x:Key="CompactFavouriteIconTemplate">
+        <Grid Width="16" Height="16">
+          <Path IsVisible="{Binding IsNotFavourite}" Width="15" Height="15" Stretch="Uniform"
+                Stroke="{DynamicResource RvStatFavouriteBrush}" StrokeThickness="1.8"
+                StrokeLineCap="Round" StrokeJoin="Round"
+                Data="M12,20 L5.2,13.8 C2,10.8 3.7,6 7.5,6 C9.4,6 11,7.1 12,8.7 C13,7.1 14.6,6 16.5,6 C20.3,6 22,10.8 18.8,13.8 Z" />
+          <Path IsVisible="{Binding IsFavourite}" Width="15" Height="15" Stretch="Uniform"
+                Fill="{DynamicResource RvStatFavouriteBrush}" Stroke="{DynamicResource RvStatFavouriteBrush}"
+                StrokeThickness="1.3" StrokeLineCap="Round" StrokeJoin="Round"
+                Data="M12,20 L5.2,13.8 C2,10.8 3.7,6 7.5,6 C9.4,6 11,7.1 12,8.7 C13,7.1 14.6,6 16.5,6 C20.3,6 22,10.8 18.8,13.8 Z" />
+        </Grid>
+      </DataTemplate>
+
+      <DataTemplate x:Key="MomentIconTemplate">
+        <Path Width="22" Height="22" Stretch="Uniform"
+              Stroke="{DynamicResource RvMomentBrush}" StrokeThickness="1.9"
+              StrokeLineCap="Round" StrokeJoin="Round"
+              Data="M6,3 L18,3 L18,21 L12,16.7 L6,21 Z" />
+      </DataTemplate>
+
+      <DataTemplate x:Key="PlayIconTemplate">
+        <Path Width="24" Height="24" Stretch="None"
+              Stroke="{DynamicResource RvStatProgressBrush}" StrokeThickness="1.9"
+              StrokeLineCap="Round" StrokeJoin="Round"
+              Data="M8,5 L18,12 L8,19 Z" />
+      </DataTemplate>
+
+      <DataTemplate x:Key="MissingArtworkIconTemplate">
+        <Viewbox Stretch="Uniform">
+          <Grid Width="48" Height="48">
+            <Ellipse Width="39" Height="39" Stroke="{DynamicResource RvAccentBrush}"
+                     StrokeThickness="2.2" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Ellipse Width="9" Height="9" Stroke="{DynamicResource RvAccentBrush}"
+                     StrokeThickness="2.4" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Path Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="2.5"
+                  StrokeLineCap="Round" Data="M24,28.5 L24,43" />
+            <Path Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="2.4"
+                  StrokeLineCap="Round" StrokeJoin="Round"
+                  Data="M18.5,18 C15.5,21.1 15.5,26.9 18.5,30 M29.5,18 C32.5,21.1 32.5,26.9 29.5,30 M13.5,13.5 C7.7,19.2 7.7,28.8 13.5,34.5 M34.5,13.5 C40.3,19.2 40.3,28.8 34.5,34.5" />
+          </Grid>
+        </Viewbox>
+      </DataTemplate>
+
+      <x:Double x:Key="RvPageSpacing">24</x:Double>
+      <x:Double x:Key="RvSectionSpacing">18</x:Double>
+      <Thickness x:Key="RvPagePadding">28,24,28,28</Thickness>
+      <Thickness x:Key="RvCompactPagePadding">24,20,24,24</Thickness>
+    </ResourceDictionary>
+  </Application.Resources>
+
+  <Application.Styles>
+    <FluentTheme />
+
+    <Style Selector="ScrollViewer">
+      <Setter Property="interactions:ElasticScroll.IsEnabled" Value="True" />
+      <Setter Property="IsScrollChainingEnabled" Value="True" />
+      <Setter Property="IsScrollInertiaEnabled" Value="True" />
+      <Setter Property="AllowAutoHide" Value="True" />
+    </Style>
+
+    <Style Selector="Window">
+      <Setter Property="Background" Value="{DynamicResource RvBackgroundBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+
+    <Style Selector="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.display-title">
+      <Setter Property="FontSize" Value="28" />
+      <Setter Property="FontWeight" Value="Bold" />
+      <Setter Property="LineHeight" Value="34" />
+    </Style>
+    <Style Selector="TextBlock.section-title">
+      <Setter Property="FontSize" Value="18" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.card-title">
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TextBlock.eyebrow">
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentBrush}" />
+    </Style>
+    <Style Selector="TextBlock.muted">
+      <Setter Property="Foreground" Value="{DynamicResource RvMutedTextBrush}" />
+    </Style>
+    <Style Selector="TextBlock.subtle">
+      <Setter Property="Foreground" Value="{DynamicResource RvSubtleTextBrush}" />
+    </Style>
+
+    <Style Selector="Border.card">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="16" />
+    </Style>
+    <Style Selector="Border.card-raised">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="16" />
+    </Style>
+    <Style Selector="Border.framed-row">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Padding" Value="10,8" />
+    </Style>
+    <Style Selector="Border.framed-row:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+    </Style>
+    <Style Selector="Border.pill">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="10,5" />
+    </Style>
+    <Style Selector="Border.accent-pill">
+      <Setter Property="Background" Value="{DynamicResource RvAccentSubtleBrush}" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="10,5" />
+    </Style>
+    <Style Selector="Border.success-pill">
+      <Setter Property="Background" Value="{DynamicResource RvSuccessSubtleBrush}" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="9,4" />
+    </Style>
+    <Style Selector="Border.warning-pill">
+      <Setter Property="Background" Value="{DynamicResource RvWarningSubtleBrush}" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Padding" Value="9,4" />
+    </Style>
+
+    <Style Selector="Button">
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.primary">
+      <Setter Property="Background" Value="{DynamicResource RvAccentBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentContrastBrush}" />
+    </Style>
+    <Style Selector="Button.primary:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvAccentHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentHoverBrush}" />
+    </Style>
+    <Style Selector="Button.secondary">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="Button.secondary:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+    </Style>
+    <Style Selector="Button.ghost">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource RvMutedTextBrush}" />
+    </Style>
+    <Style Selector="Button.ghost:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="Button.entity-chip">
+      <Setter Property="MinHeight" Value="0" />
+      <Setter Property="Padding" Value="9,4" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Background" Value="{DynamicResource RvAccentSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+      <Setter Property="FontSize" Value="10" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+    <Style Selector="Button.entity-chip:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvWikiSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvWikiBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvWikiBrush}" />
+    </Style>
+    <Style Selector="Button.glyph-only">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+      <Setter Property="Foreground" Value="{DynamicResource RvMutedTextBrush}" />
+    </Style>
+    <Style Selector="Button.glyph-only:pointerover">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+      <Setter Property="Opacity" Value="1" />
+    </Style>
+    <Style Selector="Button.glyph-only /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+    </Style>
+    <Style Selector="Button.glyph-only:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.glyph-only:pressed /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.glyph-only:pressed">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="Opacity" Value="0.72" />
+    </Style>
+    <Style Selector="Button.glyph-only:focus-visible">
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+    </Style>
+    <Style Selector="Button.icon-button">
+      <Setter Property="Width" Value="38" />
+      <Setter Property="MinWidth" Value="38" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.mini-player-action">
+      <Setter Property="Width" Value="42" />
+      <Setter Property="MinWidth" Value="42" />
+      <Setter Property="Height" Value="42" />
+      <Setter Property="MinHeight" Value="42" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="Button.compact-action">
+      <Setter Property="Width" Value="30" />
+      <Setter Property="MinWidth" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+    <Style Selector="Button.status-chip">
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="Padding" Value="10,6" />
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="FontWeight" Value="Normal" />
+    </Style>
+    <Style Selector="Button.status-chip:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+    </Style>
+    <Style Selector="Button.chrome-status">
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="9,3" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="Button.window-control">
+      <Setter Property="Width" Value="46" />
+      <Setter Property="MinWidth" Value="46" />
+      <Setter Property="Height" Value="37" />
+      <Setter Property="MinHeight" Value="37" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.window-control:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+    </Style>
+    <Style Selector="Button.connection-status-button">
+      <Setter Property="Width" Value="30" />
+      <Setter Property="MinWidth" Value="30" />
+      <Setter Property="Height" Value="38" />
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button.connection-status-button:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+    </Style>
+    <Style Selector="Border.connection-status-dot">
+      <Setter Property="Background" Value="{DynamicResource RvWarningBrush}" />
+    </Style>
+    <Style Selector="Border.connection-status-dot.healthy">
+      <Setter Property="Background" Value="{DynamicResource RvSuccessBrush}" />
+    </Style>
+    <Style Selector="Border.connection-status-dot.pending">
+      <Setter Property="Background" Value="{DynamicResource RvWarningBrush}" />
+    </Style>
+    <Style Selector="Border.connection-status-dot.error">
+      <Setter Property="Background" Value="{DynamicResource RvDangerBrush}" />
+    </Style>
+    <Style Selector="Button.close-window-control:pointerover">
+      <Setter Property="Background" Value="#C42B1C" />
+    </Style>
+    <Style Selector="Button.close-window-control:pointerover Path">
+      <Setter Property="Stroke" Value="White" />
+    </Style>
+    <Style Selector="Button.danger-ghost">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource RvDangerBrush}" />
+    </Style>
+    <Style Selector="Button.danger-ghost:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvDangerSubtleBrush}" />
+    </Style>
+    <Style Selector="Button:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <Style Selector="ToggleButton.ghost">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="Foreground" Value="{DynamicResource RvMutedTextBrush}" />
+      <Setter Property="CornerRadius" Value="8" />
+    </Style>
+    <Style Selector="ToggleButton.ghost:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.ghost:checked">
+      <Setter Property="Background" Value="{DynamicResource RvAccentMutedSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentMutedBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.ghost:checked /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource RvAccentMutedSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentMutedBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.ghost:checked:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource RvAccentMutedSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentMutedBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.icon-button">
+      <Setter Property="Width" Value="38" />
+      <Setter Property="MinWidth" Value="38" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="HorizontalContentAlignment" Value="Center" />
+      <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="ToggleButton.compact-action">
+      <Setter Property="Width" Value="30" />
+      <Setter Property="MinWidth" Value="30" />
+      <Setter Property="Height" Value="30" />
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="0" />
+    </Style>
+
+
+    <Style Selector="Border.settings-section-frame">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style Selector="Border.settings-section-frame.selected">
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentBrush}" />
+    </Style>
+    <Style Selector="Button.settings-section-button">
+      <Setter Property="MinHeight" Value="54" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Padding" Value="11,8" />
+      <Setter Property="Foreground" Value="{DynamicResource RvMutedTextBrush}" />
+    </Style>
+    <Style Selector="Button.settings-section-button:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="Border.settings-section-frame.selected Button.settings-section-button">
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+
+    <Style Selector="Border.shell-nav-frame">
+      <Setter Property="Width" Value="178" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Margin" Value="0,0,0,4" />
+    </Style>
+    <Style Selector="Border.shell-nav-frame.selected">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentBrush}" />
+    </Style>
+    <Style Selector="Button.shell-nav-button">
+      <Setter Property="Width" Value="176" />
+      <Setter Property="MinWidth" Value="176" />
+      <Setter Property="MinHeight" Value="44" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Padding" Value="10,8" />
+      <Setter Property="Foreground" Value="{DynamicResource RvMutedTextBrush}" />
+    </Style>
+    <Style Selector="Button.shell-nav-button:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="Border.shell-nav-frame.selected Button.shell-nav-button">
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+
+    <Style Selector="Border.shell-nav-child-frame">
+      <Setter Property="Width" Value="158" />
+      <Setter Property="HorizontalAlignment" Value="Left" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="Margin" Value="0,0,0,2" />
+    </Style>
+    <Style Selector="Border.shell-nav-child-frame.selected">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentBrush}" />
+    </Style>
+    <Style Selector="Button.shell-nav-child-button">
+      <Setter Property="Width" Value="156" />
+      <Setter Property="MinWidth" Value="156" />
+      <Setter Property="MinHeight" Value="34" />
+      <Setter Property="HorizontalAlignment" Value="Stretch" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="9,5" />
+      <Setter Property="Foreground" Value="{DynamicResource RvMutedTextBrush}" />
+    </Style>
+    <Style Selector="Button.shell-nav-child-button:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="Border.shell-nav-child-frame.selected Button.shell-nav-child-button">
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="ToggleButton:focus-visible">
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <Style Selector="TextBlock.nav-icon">
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentMutedBrush}" />
+      <Setter Property="FontWeight" Value="Bold" />
+    </Style>
+    <Style Selector="TextBlock.nav-icon.search"><Setter Property="Foreground" Value="{DynamicResource RvSearchBrush}" /></Style>
+    <Style Selector="TextBlock.nav-icon.progress"><Setter Property="Foreground" Value="{DynamicResource RvStatProgressBrush}" /></Style>
+    <Style Selector="TextBlock.nav-icon.favourite"><Setter Property="Foreground" Value="{DynamicResource RvStatFavouriteBrush}" /></Style>
+    <Style Selector="TextBlock.nav-icon.moment"><Setter Property="Foreground" Value="{DynamicResource RvMomentBrush}" /></Style>
+    <Style Selector="TextBlock.nav-icon.research"><Setter Property="Foreground" Value="{DynamicResource RvResearchBrush}" /></Style>
+    <Style Selector="TextBlock.nav-icon.transcript"><Setter Property="Foreground" Value="{DynamicResource RvTranscriptBrush}" /></Style>
+    <Style Selector="TextBlock.nav-icon.settings"><Setter Property="Foreground" Value="{DynamicResource RvSettingsBrush}" /></Style>
+
+    <Style Selector="Button.favourite-action"><Setter Property="Foreground" Value="{DynamicResource RvStatFavouriteBrush}" /></Style>
+    <Style Selector="Button.favourite-action:pointerover"><Setter Property="Foreground" Value="{DynamicResource RvStatFavouriteBrush}" /><Setter Property="Opacity" Value="1" /></Style>
+    <Style Selector="Button.moment-action"><Setter Property="Foreground" Value="{DynamicResource RvMomentBrush}" /></Style>
+    <Style Selector="Button.moment-action:pointerover"><Setter Property="Foreground" Value="{DynamicResource RvMomentBrush}" /><Setter Property="Opacity" Value="1" /></Style>
+
+    <Style Selector="Button.breadcrumb">
+      <Setter Property="MinHeight" Value="30" />
+      <Setter Property="Padding" Value="10,4" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource RvMutedTextBrush}" />
+      <Setter Property="FontSize" Value="11" />
+    </Style>
+    <Style Selector="Button.breadcrumb:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="Button.breadcrumb:disabled">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="Background" Value="{DynamicResource RvAccentSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentBrush}" />
+    </Style>
+    <Style Selector="TextBlock.breadcrumb-separator">
+      <Setter Property="Foreground" Value="{DynamicResource RvSubtleTextBrush}" />
+      <Setter Property="FontSize" Value="15" />
+      <Setter Property="VerticalAlignment" Value="Center" />
+    </Style>
+
+    <Style Selector="TextBox.search-box">
+      <Setter Property="MinHeight" Value="44" />
+      <Setter Property="Padding" Value="13,9" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+      <Setter Property="PlaceholderForeground" Value="{DynamicResource RvSubtleTextBrush}" />
+    </Style>
+    <Style Selector="TextBox.search-box:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+    </Style>
+    <Style Selector="TextBox.search-box:focus">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+    <Style Selector="ComboBox.filter-box">
+      <Setter Property="MinHeight" Value="44" />
+      <Setter Property="Padding" Value="12,8" />
+      <Setter Property="CornerRadius" Value="10" />
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="ComboBox.filter-box:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+    </Style>
+    <Style Selector="ComboBox.filter-box:focus">
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+      <Setter Property="BorderThickness" Value="2" />
+    </Style>
+
+    <Style Selector="Border.library-list-frame">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="Padding" Value="10" />
+    </Style>
+    <Style Selector="ListBox.library-list">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBox.library-list > ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Margin" Value="0,0,0,5" />
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="ListBox.library-list > ListBoxItem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+    </Style>
+    <Style Selector="ListBox.library-list > ListBoxItem:selected">
+      <Setter Property="Background" Value="{DynamicResource RvAccentMutedSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+    </Style>
+    <Style Selector="ListBox.library-list > ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource RvAccentMutedSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+    </Style>
+    <Style Selector="ListBox.library-list > ListBoxItem Button.row-favourite-action">
+      <Setter Property="Opacity" Value="0" />
+      <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+    <Style Selector="ListBox.library-list > ListBoxItem Button.row-favourite-action.favourite">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="IsHitTestVisible" Value="True" />
+    </Style>
+    <Style Selector="ListBox.library-list > ListBoxItem:pointerover Button.row-favourite-action">
+      <Setter Property="Opacity" Value="1" />
+      <Setter Property="IsHitTestVisible" Value="True" />
+    </Style>
+    <Style Selector="ListBox.research-list">
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="ListBox.research-list > ListBoxItem">
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="BorderBrush" Value="Transparent" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="ListBox.research-list > ListBoxItem:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+    </Style>
+    <Style Selector="ListBox.research-list > ListBoxItem:selected">
+      <Setter Property="Background" Value="{DynamicResource RvAccentMutedSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+    </Style>
+    <Style Selector="ListBox.research-list > ListBoxItem:selected /template/ ContentPresenter#PART_ContentPresenter">
+      <Setter Property="Background" Value="{DynamicResource RvAccentMutedSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+    </Style>
+
+    <Style Selector="Button.archive-tile">
+      <Setter Property="Width" Value="224" />
+      <Setter Property="Height" Value="224" />
+      <Setter Property="MinWidth" Value="224" />
+      <Setter Property="MinHeight" Value="224" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="12" />
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="VerticalContentAlignment" Value="Stretch" />
+    </Style>
+    <Style Selector="Button.archive-tile:pointerover">
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentBrush}" />
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+    </Style>
+    <Style Selector="Border.playing-row">
+      <Setter Property="Background" Value="{DynamicResource RvPlayingBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentBrush}" />
+      <Setter Property="BorderThickness" Value="3,0,0,0" />
+    </Style>
+    <Style Selector="Button.pagination-dot">
+      <Setter Property="Width" Value="8" />
+      <Setter Property="MinWidth" Value="8" />
+      <Setter Property="Height" Value="8" />
+      <Setter Property="MinHeight" Value="8" />
+      <Setter Property="Padding" Value="0" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Background" Value="{DynamicResource RvBorderStrongBrush}" />
+      <Setter Property="BorderThickness" Value="0" />
+    </Style>
+    <Style Selector="Button.pagination-dot.active">
+      <Setter Property="Width" Value="22" />
+      <Setter Property="MinWidth" Value="22" />
+      <Setter Property="Background" Value="{DynamicResource RvAccentBrush}" />
+    </Style>
+    <Style Selector="Slider.playback-seek">
+      <Setter Property="MinHeight" Value="22" />
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentMutedBrush}" />
+    </Style>
+    <Style Selector="Slider.volume-slider">
+      <Setter Property="MinWidth" Value="92" />
+      <Setter Property="MaxWidth" Value="130" />
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentMutedBrush}" />
+    </Style>
+
+    <Style Selector="ProgressBar.thin">
+      <Setter Property="Height" Value="5" />
+      <Setter Property="MinHeight" Value="5" />
+      <Setter Property="CornerRadius" Value="999" />
+      <Setter Property="Foreground" Value="{DynamicResource RvAccentBrush}" />
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+    </Style>
+  </Application.Styles>
+</Application>

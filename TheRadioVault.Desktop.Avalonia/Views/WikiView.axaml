@@ -1,0 +1,882 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:controls="using:TheRadioVault.Desktop.Avalonia.Controls"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.WikiView">
+  <Grid Margin="{StaticResource RvPagePadding}" RowDefinitions="Auto,*,Auto" RowSpacing="12">
+    <Grid RowDefinitions="Auto,Auto" RowSpacing="10">
+      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+      <StackPanel Spacing="3">
+        <StackPanel Orientation="Horizontal" Spacing="10">
+          <Border Width="38" Height="38" CornerRadius="10" Background="{DynamicResource RvWikiSubtleBrush}">
+            <Path Width="24" Height="24" Stretch="None" Stroke="{DynamicResource RvWikiBrush}"
+                  StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
+                  Data="M4,5 C7,4 9.5,4.5 12,6 L12,20 C9.5,18.5 7,18 4,19 Z M20,5 C17,4 14.5,4.5 12,6 L12,20 C14.5,18.5 17,18 20,19 Z M7,9 L10,9 M14,9 L17,9 M7,12 L10,12 M14,12 L17,12" />
+          </Border>
+          <StackPanel Spacing="2">
+            <TextBlock Text="Explore" Classes="display-title" />
+            <TextBlock Text="A human-editable history of the archive, grounded in citations, dated images and broadcasts."
+                       Classes="muted" FontSize="12" TextWrapping="Wrap" />
+          </StackPanel>
+        </StackPanel>
+        <TextBlock Text="{Binding OverviewText}" Classes="subtle" FontSize="10" Margin="48,0,0,0" />
+      </StackPanel>
+      </Grid>
+      <Grid Grid.Row="1" ColumnDefinitions="Auto,Auto,Auto,Auto,*,Auto,Auto" ColumnSpacing="7">
+        <Button Content="&#x2190;" Classes="secondary icon-button" Command="{Binding BackCommand}" IsEnabled="{Binding CanGoBack}" ToolTip.Tip="Back" />
+        <Button Grid.Column="1" Content="&#x2192;" Classes="secondary icon-button" Command="{Binding ForwardCommand}" IsEnabled="{Binding CanGoForward}" ToolTip.Tip="Forward" />
+        <Button Grid.Column="2" Content="Home" Classes="ghost" Command="{Binding ShowDashboardCommand}" />
+        <Button Grid.Column="3" Content="Timeline Explorer" Classes="ghost" Command="{Binding ShowTimelineExplorerCommand}" />
+        <StackPanel IsVisible="False">
+        <Button Content="Import authoring pack…" Classes="secondary" Command="{Binding ChooseImportCommand}" />
+        <Button Content="Export for an AI agent…" Classes="secondary" Command="{Binding ExportCommand}" />
+        <Button Content="Refresh" Classes="ghost" Command="{Binding RefreshCommand}" />
+        </StackPanel>
+        <TextBox Grid.Column="4" Classes="search-box" Text="{Binding SearchText, Mode=TwoWay}"
+                 PlaceholderText="Search people, shows, places, events or article text" />
+        <Button Grid.Column="5" Content="Search" Classes="primary" Command="{Binding SearchCommand}" />
+        <Button Grid.Column="6" Content="&#x22EF;" Classes="secondary icon-button" ToolTip.Tip="Explore actions">
+          <Button.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="Browse all articles" Command="{Binding BrowseWikiCommand}" />
+              <MenuItem Header="Create a new page" Command="{Binding NewPageCommand}" />
+              <MenuItem Header="Edit current page" Command="{Binding ManageWikiCommand}" />
+              <MenuItem Header="Build starter pages" Command="{Binding GenerateStartersCommand}" />
+              <Separator />
+              <MenuItem Header="Run Explore quality audit" Command="{Binding AuditQualityCommand}" />
+              <MenuItem Header="Refresh Explore" Command="{Binding RefreshCommand}" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
+      </Grid>
+    </Grid>
+
+    <ScrollViewer Grid.Row="1" IsVisible="{Binding IsDashboardMode}" HorizontalScrollBarVisibility="Disabled">
+      <StackPanel Spacing="18" MaxWidth="1180" HorizontalAlignment="Center" Margin="6,0,6,20">
+        <Border Classes="card-raised" Padding="26" Background="{DynamicResource RvWikiSubtleBrush}"
+                BorderBrush="{DynamicResource RvWikiBrush}">
+          <Grid ColumnDefinitions="1.3*,1*" ColumnSpacing="30">
+            <StackPanel Spacing="10">
+              <TextBlock Text="RADIO VAULT EXPLORE" Classes="eyebrow" Foreground="{DynamicResource RvWikiBrush}" />
+              <TextBlock Text="Explore the stories behind the archive" FontSize="31" FontWeight="Bold" TextWrapping="Wrap" />
+              <TextBlock Text="Shows, people, stories and turning points—connected directly to the broadcasts that preserve them."
+                         FontSize="15" Classes="muted" TextWrapping="Wrap" LineHeight="22" />
+              <TextBlock Text="{Binding DashboardIntroduction}" Classes="subtle" FontSize="10" />
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="7" Margin="0,6,0,0">
+                <TextBox Classes="search-box" Text="{Binding SearchText, Mode=TwoWay}" PlaceholderText="Search Explore" />
+                <Button Grid.Column="1" Content="Search" Classes="primary" Command="{Binding SearchCommand}" />
+              </Grid>
+              <StackPanel Orientation="Horizontal" Spacing="7">
+                <Button Content="Browse articles" Classes="secondary" Command="{Binding BrowseWikiCommand}" />
+                <Button Content="Surprise me" Classes="ghost" Command="{Binding RandomPageCommand}" />
+                <Button Content="Explore timelines" Classes="ghost" Command="{Binding ShowTimelineExplorerCommand}" />
+              </StackPanel>
+            </StackPanel>
+            <Border Grid.Column="1" Classes="card" Padding="18" VerticalAlignment="Center">
+              <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="16" RowSpacing="18">
+                <StackPanel Spacing="2"><TextBlock Text="ARTICLES" Classes="eyebrow" /><TextBlock Text="{Binding Overview.PageCount}" FontSize="27" FontWeight="Bold" /></StackPanel>
+                <StackPanel Grid.Column="1" Spacing="2"><TextBlock Text="DATED EVENTS" Classes="eyebrow" /><TextBlock Text="{Binding Overview.TimelineEventCount}" FontSize="27" FontWeight="Bold" /></StackPanel>
+                <StackPanel Grid.Row="1" Spacing="2"><TextBlock Text="SOURCES" Classes="eyebrow" /><TextBlock Text="{Binding Overview.SourceCount}" FontSize="27" FontWeight="Bold" /></StackPanel>
+                <StackPanel Grid.Row="1" Grid.Column="1" Spacing="2"><TextBlock Text="IMAGES" Classes="eyebrow" /><TextBlock Text="{Binding Overview.ImageCount}" FontSize="27" FontWeight="Bold" /></StackPanel>
+              </Grid>
+            </Border>
+          </Grid>
+        </Border>
+
+        <Border Classes="card-raised" Padding="20" IsVisible="{Binding HasNoPages}">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+            <StackPanel Spacing="5">
+              <TextBlock Text="Build the first map of the archive" FontSize="21" FontWeight="SemiBold" />
+              <TextBlock Text="Radio Vault can create safe draft starting points from your shows, recurring people and topics. Existing human pages are never replaced."
+                         Classes="muted" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Build starter pages" Classes="primary" Command="{Binding GenerateStartersCommand}" />
+          </Grid>
+        </Border>
+
+        <Border Classes="card-raised" Padding="20" IsVisible="{Binding HasOnThisDay}">
+          <Grid ColumnDefinitions="180,*" ColumnSpacing="22">
+            <StackPanel Spacing="5">
+              <TextBlock Text="ON THIS DATE" Classes="eyebrow" Foreground="{DynamicResource RvWikiBrush}" />
+              <TextBlock Text="History from across the years" FontSize="22" FontWeight="SemiBold" TextWrapping="Wrap" />
+              <TextBlock Text="Open an event to read its story and inspect the broadcasts that preserve it." Classes="muted" FontSize="10" TextWrapping="Wrap" />
+            </StackPanel>
+            <ItemsControl Grid.Column="1" ItemsSource="{Binding OnThisDayItems}">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate><DataTemplate>
+                <Button Width="260" Margin="0,0,9,9" Classes="secondary" HorizontalContentAlignment="Stretch"
+                        Command="{Binding $parent[UserControl].DataContext.OpenPageCommand}" CommandParameter="{Binding Page}">
+                  <Grid ColumnDefinitions="62,*" ColumnSpacing="10">
+                    <TextBlock Text="{Binding Event.YearText}" Foreground="{DynamicResource RvWikiBrush}" FontSize="18" FontWeight="Bold" />
+                    <StackPanel Grid.Column="1" Spacing="3">
+                      <TextBlock Text="{Binding Event.Title}" FontWeight="SemiBold" TextWrapping="Wrap" MaxLines="2" />
+                      <TextBlock Text="{Binding Event.Summary}" Classes="muted" FontSize="9" TextWrapping="Wrap" MaxLines="2" />
+                    </StackPanel>
+                  </Grid>
+                </Button>
+              </DataTemplate></ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </Grid>
+        </Border>
+
+        <Grid ColumnDefinitions="1.45*,1*" ColumnSpacing="16" IsVisible="{Binding HasFeaturedPages}">
+          <Border Classes="card-raised" Padding="17">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Featured starting points" FontSize="21" FontWeight="SemiBold" />
+              <TextBlock Text="Well-developed and recently enriched pages from across the archive." Classes="muted" FontSize="10" />
+              <ListBox ItemsSource="{Binding FeaturedPages}" SelectedItem="{Binding SelectedPage, Mode=TwoWay}"
+                       Background="Transparent" BorderThickness="0">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Border Padding="11,9" BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1">
+                      <Grid ColumnDefinitions="*,Auto" ColumnSpacing="9">
+                        <StackPanel Spacing="3">
+                          <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" />
+                          <TextBlock Text="{Binding Summary}" Classes="muted" FontSize="10" TextWrapping="Wrap" MaxHeight="34" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" HorizontalAlignment="Right">
+                          <TextBlock Text="{Binding PageType}" Foreground="{DynamicResource RvWikiBrush}" FontSize="9" />
+                          <TextBlock Text="{Binding EvidenceSummary}" Classes="subtle" FontSize="8" />
+                        </StackPanel>
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="1" Classes="card-raised" Padding="17">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Recently updated" FontSize="21" FontWeight="SemiBold" />
+              <ListBox ItemsSource="{Binding RecentPages}" SelectedItem="{Binding SelectedPage, Mode=TwoWay}"
+                       Background="Transparent" BorderThickness="0">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Grid ColumnDefinitions="*,Auto" Margin="7,7" ColumnSpacing="8">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Grid.Column="1" Text="{Binding PageType}" Foreground="{DynamicResource RvWikiBrush}" FontSize="9" />
+                    </Grid>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="16">
+          <Border Classes="card-raised" Padding="16" IsVisible="{Binding HasShowPages}">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Shows" FontSize="20" FontWeight="SemiBold" />
+              <TextBlock Text="Explore each programme through its history and timeline." Classes="muted" FontSize="10" TextWrapping="Wrap" />
+              <ListBox ItemsSource="{Binding ShowPages}" SelectedItem="{Binding SelectedPage, Mode=TwoWay}" Background="Transparent" BorderThickness="0"
+                       DisplayMemberBinding="{Binding Title}" />
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="1" Classes="card-raised" Padding="16" IsVisible="{Binding HasPeoplePages}">
+            <StackPanel Spacing="8">
+              <TextBlock Text="People" FontSize="20" FontWeight="SemiBold" />
+              <TextBlock Text="Hosts, guests, callers and the people remembered in the archive." Classes="muted" FontSize="10" TextWrapping="Wrap" />
+              <ListBox ItemsSource="{Binding PeoplePages}" SelectedItem="{Binding SelectedPage, Mode=TwoWay}" Background="Transparent" BorderThickness="0"
+                       DisplayMemberBinding="{Binding Title}" />
+            </StackPanel>
+          </Border>
+          <Border Grid.Column="2" Classes="card-raised" Padding="16" IsVisible="{Binding HasTopicPages}">
+            <StackPanel Spacing="8">
+              <TextBlock Text="Topics and stories" FontSize="20" FontWeight="SemiBold" />
+              <TextBlock Text="Follow recurring subjects across shows and years." Classes="muted" FontSize="10" TextWrapping="Wrap" />
+              <ListBox ItemsSource="{Binding TopicPages}" SelectedItem="{Binding SelectedPage, Mode=TwoWay}" Background="Transparent" BorderThickness="0"
+                       DisplayMemberBinding="{Binding Title}" />
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Grid ColumnDefinitions="*" IsVisible="{Binding HasEras}">
+          <Border Classes="card-raised" Padding="17">
+            <StackPanel Spacing="10">
+              <TextBlock Text="Explore by era" FontSize="21" FontWeight="SemiBold" />
+              <TextBlock Text="Jump into an era, then scrub through the archive's connected history." Classes="muted" FontSize="10" />
+              <ItemsControl ItemsSource="{Binding Eras}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Button Classes="secondary" Margin="0,0,7,7" Command="{Binding $parent[UserControl].DataContext.OpenEraCommand}" CommandParameter="{Binding}">
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="{Binding Label}" FontSize="15" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding Summary}" Classes="subtle" FontSize="8" />
+                      </StackPanel>
+                    </Button>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </StackPanel>
+          </Border>
+        </Grid>
+
+        <Border Classes="card-raised" Padding="17" IsVisible="{Binding HasTimelinePages}">
+          <Grid ColumnDefinitions="Auto,*" ColumnSpacing="18">
+            <Border Width="54" Height="54" CornerRadius="14" Background="{DynamicResource RvWikiSubtleBrush}">
+              <TextBlock Text="↕" Foreground="{DynamicResource RvWikiBrush}" FontSize="27" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+            <StackPanel Grid.Column="1" Spacing="8">
+              <TextBlock Text="Travel through the timelines" FontSize="21" FontWeight="SemiBold" />
+              <TextBlock Text="These histories connect major events to the broadcasts and Moments that document them." Classes="muted" FontSize="10" />
+              <ListBox ItemsSource="{Binding TimelinePages}" SelectedItem="{Binding SelectedPage, Mode=TwoWay}"
+                       Background="Transparent" BorderThickness="0" DisplayMemberBinding="{Binding Title}" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </StackPanel>
+    </ScrollViewer>
+
+    <Grid Grid.Row="1" IsVisible="{Binding IsExplorerMode}">
+      <Border Classes="library-list-frame" IsVisible="{Binding IsBrowseMode}" MaxWidth="1180" HorizontalAlignment="Stretch">
+        <Grid RowDefinitions="Auto,*">
+          <StackPanel Margin="12" Spacing="8">
+            <Border Classes="card-raised" Padding="10" IsVisible="{Binding HasSearchSuggestions}">
+              <ItemsControl ItemsSource="{Binding SearchSuggestions}">
+                <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <Button Classes="entity-chip" Margin="0,0,6,6" Content="{Binding Title}"
+                            Command="{Binding $parent[UserControl].DataContext.OpenPageCommand}" CommandParameter="{Binding}" />
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="7">
+              <TextBox Classes="search-box" Text="{Binding SearchText, Mode=TwoWay}"
+                       PlaceholderText="Search wiki pages" />
+              <Button Grid.Column="1" Content="Search" Classes="secondary" Command="{Binding SearchCommand}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,*,Auto" ColumnSpacing="7">
+              <ComboBox ItemsSource="{Binding TypeFilters}" SelectedItem="{Binding SelectedTypeFilter, Mode=TwoWay}" />
+              <ComboBox Grid.Column="1" ItemsSource="{Binding StatusFilters}" SelectedItem="{Binding SelectedStatusFilter, Mode=TwoWay}" />
+              <Button Grid.Column="2" Content="Reset" Classes="ghost" Command="{Binding ClearFiltersCommand}" />
+            </Grid>
+            <Grid ColumnDefinitions="*,Auto">
+              <StackPanel>
+                <TextBlock Text="PAGES" Classes="eyebrow" VerticalAlignment="Center" />
+                <TextBlock Text="{Binding StarterPreviewText}" Classes="subtle" FontSize="8" TextWrapping="Wrap" MaxWidth="250" />
+              </StackPanel>
+              <Button Grid.Column="1" Content="New page" Classes="secondary" Command="{Binding NewPageCommand}" />
+            </Grid>
+          </StackPanel>
+          <ListBox Grid.Row="1" ItemsSource="{Binding Pages}" SelectedItem="{Binding SelectedPage, Mode=TwoWay}"
+                   Background="Transparent" BorderThickness="0" IsVisible="{Binding HasPages}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Border Padding="11,10" BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,1,0,0">
+                  <StackPanel Spacing="3">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                      <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                      <Border Grid.Column="1" Classes="accent-pill" Padding="7,2">
+                        <TextBlock Text="{Binding PageType}" FontSize="9" Foreground="{DynamicResource RvWikiBrush}" />
+                      </Border>
+                    </Grid>
+                    <TextBlock Text="{Binding Summary}" Classes="muted" FontSize="10" TextWrapping="Wrap"
+                               MaxHeight="32" TextTrimming="CharacterEllipsis" />
+                    <TextBlock Text="{Binding EvidenceSummary}" Classes="subtle" FontSize="9" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <StackPanel Grid.Row="1" IsVisible="{Binding HasNoPages}" HorizontalAlignment="Center"
+                      VerticalAlignment="Center" Spacing="8" Margin="20">
+            <TextBlock Text="The wiki is ready to begin" FontSize="17" FontWeight="SemiBold" />
+            <TextBlock Text="Create the first page here, or import a baseline authoring pack."
+                       Classes="muted" FontSize="10" TextAlignment="Center" TextWrapping="Wrap" />
+            <Button Content="Create first page" Classes="primary" Command="{Binding NewPageCommand}" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <GridSplitter IsVisible="False" />
+
+      <Border Classes="card" Padding="0" ClipToBounds="True" IsVisible="{Binding IsTimelineExplorerMode}">
+        <Grid RowDefinitions="Auto,*">
+          <Border Padding="22,18" Background="{DynamicResource RvWikiSubtleBrush}" BorderBrush="{DynamicResource RvWikiBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="1.35*,1*" ColumnSpacing="24">
+              <StackPanel Spacing="7">
+                <TextBlock Text="Timeline Explorer" FontSize="29" FontWeight="Bold" />
+                <TextBlock Text="Choose a show, then scroll vertically through its history and open the broadcasts that preserve each turning point."
+                           Classes="muted" FontSize="12" TextWrapping="Wrap" />
+                <ComboBox ItemsSource="{Binding TimelineShows}" SelectedItem="{Binding SelectedTimelineShow, Mode=TwoWay}"
+                          DisplayMemberBinding="{Binding Page.Title}" PlaceholderText="Choose a show" />
+                <TextBlock Text="{Binding SelectedTimelineShow.Summary}" Foreground="{DynamicResource RvWikiBrush}" FontSize="10" />
+              </StackPanel>
+              <Border Grid.Column="1" Classes="card" Padding="14" VerticalAlignment="Center">
+                <StackPanel Spacing="5">
+                  <TextBlock Text="{Binding TimelineYearText}" FontSize="20" FontWeight="Bold" Foreground="{DynamicResource RvWikiBrush}" />
+                  <TextBlock Text="Events remain in chronological context while you scroll. Dated broadcasts and Moments open directly from each entry."
+                             Classes="subtle" FontSize="9" TextWrapping="Wrap" />
+                </StackPanel>
+              </Border>
+            </Grid>
+          </Border>
+          <ScrollViewer x:Name="TimelineScrollViewer" Grid.Row="1" HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto" PointerWheelChanged="TimelineScrollViewer_OnPointerWheelChanged">
+            <ItemsControl ItemsSource="{Binding FilteredTimelineEvents}" Margin="30,22,44,36" MaxWidth="980" HorizontalAlignment="Center">
+              <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Vertical" Spacing="0" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Grid ColumnDefinitions="92,26,*" MinHeight="190">
+                    <StackPanel Margin="0,17,10,24" HorizontalAlignment="Right" Spacing="2">
+                      <TextBlock Text="{Binding YearText}" FontSize="24" FontWeight="Bold" Foreground="{DynamicResource RvWikiBrush}" />
+                      <TextBlock Text="{Binding DateDisplay}" Classes="subtle" FontSize="8" TextAlignment="Right" />
+                    </StackPanel>
+                    <Grid Grid.Column="1">
+                      <Border Width="2" Background="{DynamicResource RvWikiSubtleBrush}" HorizontalAlignment="Center" />
+                      <Border Width="14" Height="14" CornerRadius="7" Background="{DynamicResource RvWikiBrush}"
+                              BorderBrush="{DynamicResource RvBackgroundBrush}" BorderThickness="3" VerticalAlignment="Top" Margin="0,24,0,0" />
+                    </Grid>
+                    <Border Grid.Column="2" Classes="card-raised" Padding="18" Margin="12,8,0,18">
+                      <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="9">
+                        <StackPanel Spacing="5">
+                          <TextBlock Text="{Binding Title}" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding Summary}" Classes="muted" TextWrapping="Wrap" LineHeight="19" />
+                          <TextBlock Text="{Binding EvidenceSummary}" Classes="subtle" FontSize="9" />
+                        </StackPanel>
+                        <ItemsControl Grid.Row="1" ItemsSource="{Binding Broadcasts}">
+                          <ItemsControl.ItemTemplate><DataTemplate>
+                            <Button Classes="secondary" Margin="0,2,0,0" HorizontalContentAlignment="Stretch"
+                                    Command="{Binding $parent[UserControl].DataContext.PlayTimelineLinkCommand}" CommandParameter="{Binding}">
+                              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="7">
+                                <TextBlock Text="Open" Foreground="{DynamicResource RvWikiBrush}" FontWeight="SemiBold" />
+                                <TextBlock Grid.Column="1" Text="{Binding Label}" TextTrimming="CharacterEllipsis" />
+                              </Grid>
+                            </Button>
+                          </DataTemplate></ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <Button Grid.Row="2" Content="Open the full article" Classes="ghost" HorizontalAlignment="Left"
+                                Command="{Binding $parent[UserControl].DataContext.OpenTimelineEventPageCommand}" CommandParameter="{Binding}" />
+                      </Grid>
+                    </Border>
+                  </Grid>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+        </Grid>
+      </Border>
+
+      <Border Classes="card" Padding="0" ClipToBounds="True" IsVisible="{Binding IsArticleMode}">
+        <Grid RowDefinitions="Auto,*">
+          <Border Padding="14,11" BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+              <StackPanel Spacing="2">
+                <TextBlock Text="{Binding SelectionHeading}" FontWeight="SemiBold" FontSize="16" TextTrimming="CharacterEllipsis" />
+                <TextBlock Text="{Binding EditorRevisionText}" Classes="muted" FontSize="9" />
+              </StackPanel>
+              <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="7">
+                <Button Content="Read" Classes="ghost" Command="{Binding ShowReadingModeCommand}" />
+                <Button Content="Edit" Classes="secondary" Command="{Binding ShowEditingModeCommand}" />
+                <Button Content="Revert" Classes="ghost" Command="{Binding RevertCommand}" IsVisible="{Binding IsEditingMode}" />
+                <Button Content="Save page" Classes="primary" Command="{Binding SaveCommand}" IsVisible="{Binding IsEditingMode}" />
+              </StackPanel>
+            </Grid>
+          </Border>
+
+          <ScrollViewer Grid.Row="1" IsVisible="{Binding IsReadingMode}" HorizontalScrollBarVisibility="Disabled">
+            <StackPanel Margin="34,26,34,44" Spacing="18" MaxWidth="1180" HorizontalAlignment="Center">
+              <StackPanel Spacing="5">
+                <TextBlock Text="{Binding EditorTitle}" FontSize="36" FontWeight="Bold" TextWrapping="Wrap" />
+                <Border Height="1" Background="{DynamicResource RvBorderStrongBrush}" />
+                <TextBlock Text="{Binding ReaderByline}" Classes="subtle" FontSize="10" />
+              </StackPanel>
+
+              <Grid ColumnDefinitions="*,290" ColumnSpacing="26">
+                <StackPanel Spacing="18">
+                  <TextBlock Text="{Binding EditorSummary}" FontSize="17" TextWrapping="Wrap" LineHeight="26" />
+                  <controls:WikiMarkdownView Markdown="{Binding EditorBodyMarkdown}"
+                                             LinkTargets="{Binding InlineLinkTargets}"
+                                             NavigateCommand="{Binding OpenInternalWikiLinkCommand}" />
+                  <Border Padding="13" IsVisible="{Binding HasMissingLinks}" CornerRadius="9"
+                          Background="{DynamicResource RvWarningSubtleBrush}" BorderBrush="{DynamicResource RvWarningBrush}" BorderThickness="1">
+                    <StackPanel Spacing="6">
+                      <TextBlock Text="Pages still needed" FontWeight="SemiBold" />
+                      <TextBlock Text="These article links do not have a matching page yet." Classes="muted" FontSize="10" />
+                      <ItemsControl ItemsSource="{Binding MissingLinks}">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                          <Button Classes="entity-chip" Margin="0,0,6,6" Content="{Binding Label}"
+                                  Command="{Binding $parent[UserControl].DataContext.OpenInternalWikiLinkCommand}" CommandParameter="{Binding Target}" />
+                        </DataTemplate></ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+
+                <StackPanel Grid.Column="1" Spacing="14">
+                  <Border Classes="card-raised" Padding="0" ClipToBounds="True">
+                    <StackPanel>
+                      <Border Background="{DynamicResource RvWikiSubtleBrush}" Padding="13,10">
+                        <TextBlock Text="{Binding EditorTitle}" FontSize="17" FontWeight="SemiBold" TextAlignment="Center" TextWrapping="Wrap" />
+                      </Border>
+                      <ItemsControl ItemsSource="{Binding ReaderImages}" IsVisible="{Binding HasReaderImages}">
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                          <StackPanel Spacing="5" Margin="10,10,10,4">
+                            <Border CornerRadius="7" ClipToBounds="True" Background="{DynamicResource RvSurfaceHoverBrush}" Height="170">
+                              <Image Source="{Binding Content, Converter={StaticResource ByteArrayToBitmapConverter}}" Stretch="Uniform" />
+                            </Border>
+                            <TextBlock Text="{Binding Caption}" FontSize="10" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Text="{Binding DateText}" Classes="subtle" FontSize="9" TextWrapping="Wrap" />
+                          </StackPanel>
+                        </DataTemplate></ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                      <Grid Margin="13,10,13,14" ColumnDefinitions="92,*" RowDefinitions="Auto,Auto,Auto,Auto" ColumnSpacing="9" RowSpacing="8">
+                        <TextBlock Text="Type" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding EditorPageType}" Foreground="{DynamicResource RvWikiBrush}" />
+                        <TextBlock Grid.Row="1" Text="Also known as" FontWeight="SemiBold" /><TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding ReaderAliases}" TextWrapping="Wrap" FontSize="10" />
+                        <TextBlock Grid.Row="2" Text="Evidence" FontWeight="SemiBold" /><TextBlock Grid.Row="2" Grid.Column="1" Text="{Binding ReaderEvidence}" FontSize="10" />
+                        <TextBlock Grid.Row="3" Text="Timeline" FontWeight="SemiBold" /><TextBlock Grid.Row="3" Grid.Column="1" Text="{Binding ReaderTimelineRange}" FontSize="10" />
+                      </Grid>
+                    </StackPanel>
+                  </Border>
+                </StackPanel>
+              </Grid>
+
+              <Grid ColumnDefinitions="*,*" ColumnSpacing="14" IsVisible="{Binding HasRelatedPages}">
+                <Border Classes="card" Padding="14">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="Related pages" FontSize="19" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding RelatedPages}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,6,6" Content="{Binding Title}" Command="{Binding $parent[UserControl].DataContext.OpenPageCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+                <Border Grid.Column="1" Classes="card" Padding="14" IsVisible="{Binding HasBacklinks}">
+                  <StackPanel Spacing="8">
+                    <TextBlock Text="Pages that mention this" FontSize="19" FontWeight="SemiBold" />
+                    <ItemsControl ItemsSource="{Binding BacklinkPages}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,6,6" Content="{Binding Title}" Command="{Binding $parent[UserControl].DataContext.OpenPageCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </Border>
+              </Grid>
+
+              <StackPanel IsVisible="{Binding HasTimeline}" Spacing="10">
+                <TextBlock Text="Timeline" FontSize="24" FontWeight="SemiBold" />
+                <Border Height="1" Background="{DynamicResource RvBorderBrush}" />
+                <ItemsControl ItemsSource="{Binding Timeline}">
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <Grid ColumnDefinitions="92,18,*" Margin="0,0,0,8">
+                      <StackPanel HorizontalAlignment="Right" Margin="0,3,9,0"><TextBlock Text="{Binding YearText}" Foreground="{DynamicResource RvWikiBrush}" FontSize="18" FontWeight="Bold" /><TextBlock Text="{Binding DateDisplay}" Classes="subtle" FontSize="8" TextAlignment="Right" /></StackPanel>
+                      <Grid Grid.Column="1"><Border Width="2" Background="{DynamicResource RvWikiSubtleBrush}" HorizontalAlignment="Center" /><Ellipse Width="10" Height="10" Fill="{DynamicResource RvWikiBrush}" VerticalAlignment="Top" Margin="0,7,0,0" /></Grid>
+                      <StackPanel Grid.Column="2" Margin="8,0,0,12" Spacing="4">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="16" />
+                        <TextBlock Text="{Binding Summary}" Classes="muted" TextWrapping="Wrap" LineHeight="19" />
+                        <ItemsControl ItemsSource="{Binding Broadcasts}"><ItemsControl.ItemTemplate><DataTemplate><Button Content="{Binding Label}" Classes="secondary" Margin="0,3,0,0" HorizontalContentAlignment="Left" Command="{Binding $parent[UserControl].DataContext.PlayTimelineLinkCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+
+              <StackPanel Spacing="9" IsVisible="{Binding HasCitations}">
+                <TextBlock Text="References" FontSize="24" FontWeight="SemiBold" />
+                <Border Height="1" Background="{DynamicResource RvBorderBrush}" />
+                <ItemsControl ItemsSource="{Binding Citations}">
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <Grid ColumnDefinitions="38,*" ColumnSpacing="8" Margin="0,4,0,9">
+                      <TextBlock Text="{Binding DisplayNumber}" Foreground="{DynamicResource RvWikiBrush}" FontWeight="Bold" />
+                      <StackPanel Grid.Column="1" Spacing="3">
+                        <TextBlock Text="{Binding DisplayText}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Source.Author}" Classes="subtle" FontSize="9" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Source.Url}" Foreground="{DynamicResource RvWikiBrush}" FontSize="9" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Source.Locator}" Classes="subtle" FontSize="9" TextWrapping="Wrap" />
+                        <Button Content="{Binding ArchiveAudioLabel}" Classes="secondary" HorizontalAlignment="Left" IsVisible="{Binding HasArchiveAudio}" Command="{Binding $parent[UserControl].DataContext.OpenCitationArchiveLinkCommand}" CommandParameter="{Binding}" />
+                        <TextBlock Text="{Binding Note}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                        <Border BorderBrush="{DynamicResource RvWikiBrush}" BorderThickness="2,0,0,0" Padding="8,2" IsVisible="{Binding HasQuotedText}"><TextBlock Text="{Binding QuotedText}" FontStyle="Italic" Classes="muted" FontSize="10" TextWrapping="Wrap" /></Border>
+                      </StackPanel>
+                    </Grid>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </StackPanel>
+          </ScrollViewer>
+
+          <TabControl Grid.Row="1" IsVisible="{Binding IsEditingMode}">
+            <TabItem Header="Article">
+              <ScrollViewer HorizontalScrollBarVisibility="Disabled">
+                <StackPanel Margin="15" Spacing="12">
+                  <Grid ColumnDefinitions="2*,1.2*,1.1*" ColumnSpacing="10">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Title" Classes="eyebrow" />
+                      <TextBox Text="{Binding EditorTitle, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="4">
+                      <TextBlock Text="Page type" Classes="eyebrow" />
+                      <ComboBox ItemsSource="{Binding PageTypes}" SelectedItem="{Binding EditorPageType, Mode=TwoWay}" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="2" Spacing="4">
+                      <TextBlock Text="Status" Classes="eyebrow" />
+                      <ComboBox ItemsSource="{Binding PageStatuses}" SelectedItem="{Binding EditorStatus, Mode=TwoWay}" />
+                    </StackPanel>
+                  </Grid>
+                  <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                    <StackPanel Spacing="4">
+                      <TextBlock Text="Stable web slug" Classes="eyebrow" />
+                      <TextBox Text="{Binding EditorSlug, Mode=TwoWay}" PlaceholderText="Generated from title if blank" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="4">
+                      <TextBlock Text="Aliases" Classes="eyebrow" />
+                      <TextBox Text="{Binding EditorAliases, Mode=TwoWay}" PlaceholderText="Comma-separated alternative names" />
+                    </StackPanel>
+                  </Grid>
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="Short summary" Classes="eyebrow" />
+                    <TextBox Text="{Binding EditorSummary, Mode=TwoWay}" AcceptsReturn="True" MinHeight="64"
+                             TextWrapping="Wrap" />
+                  </StackPanel>
+                  <StackPanel Spacing="4">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <TextBlock Text="Article (Markdown)" Classes="eyebrow" />
+                      <TextBlock Grid.Column="1" Text="Use [1], [2]… to match structured citations in authoring packs"
+                                 Classes="subtle" FontSize="9" />
+                    </Grid>
+                    <TextBox Text="{Binding EditorBodyMarkdown, Mode=TwoWay}" AcceptsReturn="True"
+                             TextWrapping="Wrap" MinHeight="340" FontFamily="Consolas" FontSize="12" />
+                  </StackPanel>
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="Revision note" Classes="eyebrow" />
+                    <TextBox Text="{Binding EditorChangeSummary, Mode=TwoWay}"
+                             PlaceholderText="Briefly describe what changed" />
+                  </StackPanel>
+                </StackPanel>
+              </ScrollViewer>
+            </TabItem>
+
+            <TabItem Header="Timeline">
+              <Grid Margin="15" RowDefinitions="Auto,Auto,*" RowSpacing="10">
+                <StackPanel Spacing="2">
+                  <TextBlock Text="Scrollable show timeline" FontSize="16" FontWeight="SemiBold" />
+                  <TextBlock Text="Events are tied to dates, sources, images and exact broadcasts or Moments."
+                             Classes="muted" FontSize="10" />
+                </StackPanel>
+                <Expander Grid.Row="1" Header="Add or edit a dated event" IsExpanded="False">
+                  <StackPanel Spacing="8" Margin="0,8,0,4">
+                    <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="7">
+                      <ComboBox ItemsSource="{Binding Timeline}" SelectedItem="{Binding SelectedTimelineEvent, Mode=TwoWay}"
+                                DisplayMemberBinding="{Binding Title}" PlaceholderText="Choose an event to edit" />
+                      <Button Grid.Column="1" Content="New event" Classes="secondary" Command="{Binding NewTimelineCommand}" />
+                      <Button Grid.Column="2" Content="Remove" Classes="ghost" Command="{Binding RemoveTimelineCommand}" />
+                      <Button Grid.Column="3" Content="Stage event" Classes="primary" Command="{Binding SaveTimelineCommand}" />
+                    </Grid>
+                    <Grid ColumnDefinitions="2*,1.1*,1*,1*" ColumnSpacing="7">
+                      <TextBox Text="{Binding TimelineTitle, Mode=TwoWay}" PlaceholderText="Event title" />
+                      <TextBox Grid.Column="1" Text="{Binding TimelineCategory, Mode=TwoWay}" PlaceholderText="Category" />
+                      <TextBox Grid.Column="2" Text="{Binding TimelineStartDate, Mode=TwoWay}" PlaceholderText="Start YYYY-MM-DD" />
+                      <TextBox Grid.Column="3" Text="{Binding TimelineEndDate, Mode=TwoWay}" PlaceholderText="End (optional)" />
+                    </Grid>
+                    <Grid ColumnDefinitions="*,120" ColumnSpacing="7">
+                      <TextBox Text="{Binding TimelineDateDisplay, Mode=TwoWay}" PlaceholderText="Human date label, e.g. Summer 1998" />
+                      <TextBox Grid.Column="1" Text="{Binding TimelineSignificance, Mode=TwoWay}" PlaceholderText="Importance 0-100" />
+                    </Grid>
+                    <TextBox Text="{Binding TimelineSummary, Mode=TwoWay}" AcceptsReturn="True" MinHeight="54"
+                             TextWrapping="Wrap" PlaceholderText="What happened, and why it matters" />
+                    <Border Classes="card-raised" Padding="9">
+                      <StackPanel Spacing="6">
+                        <Grid ColumnDefinitions="*,Auto">
+                          <TextBox Text="{Binding ArchiveSearchText, Mode=TwoWay}" PlaceholderText="Find broadcasts or Moments to support this event" />
+                          <Button Grid.Column="1" Content="Search archive" Classes="secondary" Command="{Binding SearchArchiveCommand}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,Auto,*,Auto" ColumnSpacing="7">
+                          <ComboBox ItemsSource="{Binding ArchiveBroadcasts}" SelectedItem="{Binding SelectedArchiveBroadcast, Mode=TwoWay}"
+                                    DisplayMemberBinding="{Binding DisplayText}" PlaceholderText="Choose a broadcast" />
+                          <Button Grid.Column="1" Content="Link broadcast" Classes="ghost" Command="{Binding AddBroadcastLinkCommand}" />
+                          <ComboBox Grid.Column="2" ItemsSource="{Binding ArchiveMoments}" SelectedItem="{Binding SelectedArchiveMoment, Mode=TwoWay}"
+                                    DisplayMemberBinding="{Binding DisplayText}" PlaceholderText="Choose a Moment" />
+                          <Button Grid.Column="3" Content="Link Moment" Classes="ghost" Command="{Binding AddMomentLinkCommand}" />
+                        </Grid>
+                        <TextBlock Text="{Binding TimelineLinksText}" Classes="subtle" FontSize="9" />
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="7">
+                          <ListBox ItemsSource="{Binding TimelineLinks}" SelectedItem="{Binding SelectedTimelineLink, Mode=TwoWay}"
+                                   DisplayMemberBinding="{Binding Label}" MaxHeight="92" Background="Transparent" BorderThickness="0" />
+                          <Button Grid.Column="1" Content="Remove selected link" Classes="ghost" Command="{Binding RemoveTimelineLinkCommand}" />
+                        </Grid>
+                      </StackPanel>
+                    </Border>
+                  </StackPanel>
+                </Expander>
+                <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+                  <Grid>
+                  <ItemsControl ItemsSource="{Binding Timeline}" IsVisible="{Binding HasTimeline}">
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate>
+                        <Grid ColumnDefinitions="70,18,*" Margin="0,0,0,12">
+                          <TextBlock Text="{Binding YearText}" FontSize="16" FontWeight="Bold"
+                                     Foreground="{DynamicResource RvWikiBrush}" HorizontalAlignment="Right" />
+                          <Grid Grid.Column="1">
+                            <Border Width="2" Background="{DynamicResource RvBorderStrongBrush}" HorizontalAlignment="Center" />
+                            <Ellipse Width="10" Height="10" Fill="{DynamicResource RvWikiBrush}" VerticalAlignment="Top" Margin="0,5,0,0" />
+                          </Grid>
+                          <Border Grid.Column="2" Classes="card-raised" Padding="12,10" Margin="6,0,0,0">
+                            <StackPanel Spacing="4">
+                              <TextBlock Text="{Binding Title}" FontWeight="SemiBold" FontSize="14" />
+                              <TextBlock Text="{Binding DateDisplay}" Foreground="{DynamicResource RvWikiBrush}" FontSize="10" />
+                              <TextBlock Text="{Binding Summary}" Classes="muted" TextWrapping="Wrap" FontSize="11" />
+                              <TextBlock Text="{Binding EvidenceSummary}" Classes="subtle" FontSize="9" />
+                              <ItemsControl ItemsSource="{Binding Broadcasts}">
+                                <ItemsControl.ItemTemplate>
+                                  <DataTemplate>
+                                    <Border Background="{DynamicResource RvSurfaceHoverBrush}" CornerRadius="6" Padding="8,5" Margin="0,3,0,0">
+                                      <TextBlock Text="{Binding Label}" FontSize="10" TextTrimming="CharacterEllipsis" />
+                                    </Border>
+                                  </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                              </ItemsControl>
+                            </StackPanel>
+                          </Border>
+                        </Grid>
+                      </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                  <StackPanel IsVisible="{Binding !HasTimeline}" HorizontalAlignment="Center" Margin="30" Spacing="5">
+                    <TextBlock Text="No timeline events yet" FontSize="16" FontWeight="SemiBold" />
+                    <TextBlock Text="Dated events can be added in an authoring pack and linked to broadcasts or Moments."
+                               Classes="muted" FontSize="10" TextAlignment="Center" TextWrapping="Wrap" />
+                  </StackPanel>
+                  </Grid>
+                </ScrollViewer>
+              </Grid>
+            </TabItem>
+
+            <TabItem Header="Sources &amp; images">
+              <Grid Margin="15" ColumnDefinitions="*,*" ColumnSpacing="12">
+                <Border Classes="card-raised" Padding="12">
+                  <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                    <TextBlock Text="Citations" FontSize="15" FontWeight="SemiBold" />
+                    <Expander Grid.Row="1" Header="Add or edit a source" IsExpanded="False">
+                      <StackPanel Spacing="6" Margin="0,7,0,3">
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="6">
+                          <ComboBox ItemsSource="{Binding Citations}" SelectedItem="{Binding SelectedCitation, Mode=TwoWay}"
+                                    DisplayMemberBinding="{Binding DisplayText}" PlaceholderText="Choose a citation" />
+                          <Button Grid.Column="1" Content="New" Classes="ghost" Command="{Binding NewCitationCommand}" />
+                          <Button Grid.Column="2" Content="Remove" Classes="ghost" Command="{Binding RemoveCitationCommand}" />
+                          <Button Grid.Column="3" Content="Stage" Classes="primary" Command="{Binding SaveCitationCommand}" />
+                        </Grid>
+                        <Grid ColumnDefinitions="1.2*,0.8*" ColumnSpacing="6">
+                          <TextBox Text="{Binding CitationSourceTitle, Mode=TwoWay}" PlaceholderText="Source title" />
+                          <TextBox Grid.Column="1" Text="{Binding CitationSourceType, Mode=TwoWay}" PlaceholderText="Type: Web, Broadcast, Book…" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                          <TextBox Text="{Binding CitationAuthor, Mode=TwoWay}" PlaceholderText="Author" />
+                          <TextBox Grid.Column="1" Text="{Binding CitationPublisher, Mode=TwoWay}" PlaceholderText="Publisher" />
+                        </Grid>
+                        <TextBox Text="{Binding CitationUrl, Mode=TwoWay}" PlaceholderText="Source URL" />
+                        <Grid ColumnDefinitions="130,*" ColumnSpacing="6">
+                          <TextBox Text="{Binding CitationPublishedDate, Mode=TwoWay}" PlaceholderText="YYYY-MM-DD" />
+                          <TextBox Grid.Column="1" Text="{Binding CitationLocator, Mode=TwoWay}" PlaceholderText="Page, timestamp or archive locator" />
+                        </Grid>
+                        <TextBox Text="{Binding CitationQuotedText, Mode=TwoWay}" PlaceholderText="Short supporting quotation (optional)" />
+                        <TextBox Text="{Binding CitationNote, Mode=TwoWay}" PlaceholderText="What this source supports" />
+                      </StackPanel>
+                    </Expander>
+                    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+                      <ListBox ItemsSource="{Binding Citations}" SelectedItem="{Binding SelectedCitation, Mode=TwoWay}"
+                               Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                          <DataTemplate>
+                            <Border BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+                              <Grid ColumnDefinitions="34,*" ColumnSpacing="7">
+                                <TextBlock Text="{Binding DisplayNumber}" Foreground="{DynamicResource RvWikiBrush}" FontWeight="Bold" />
+                                <StackPanel Grid.Column="1" Spacing="2">
+                                  <TextBlock Text="{Binding DisplayText}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                  <TextBlock Text="{Binding Note}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                                </StackPanel>
+                              </Grid>
+                            </Border>
+                          </DataTemplate>
+                        </ListBox.ItemTemplate>
+                      </ListBox>
+                    </ScrollViewer>
+                  </Grid>
+                </Border>
+                <Border Grid.Column="1" Classes="card-raised" Padding="12">
+                  <Grid RowDefinitions="Auto,Auto,*" RowSpacing="8">
+                    <TextBlock Text="Dated images" FontSize="15" FontWeight="SemiBold" />
+                    <Expander Grid.Row="1" Header="Add or edit a dated image" IsExpanded="False">
+                      <StackPanel Spacing="6" Margin="0,7,0,3">
+                        <Grid ColumnDefinitions="*,Auto,Auto,Auto,Auto" ColumnSpacing="6">
+                          <ComboBox ItemsSource="{Binding ImageDrafts}" SelectedItem="{Binding SelectedImage, Mode=TwoWay}"
+                                    DisplayMemberBinding="{Binding Link.Image.Caption}" PlaceholderText="Choose an image" />
+                          <Button Grid.Column="1" Content="New" Classes="ghost" Command="{Binding NewImageCommand}" />
+                          <Button Grid.Column="2" Content="Choose file…" Classes="secondary" Command="{Binding ChooseImageCommand}" />
+                          <Button Grid.Column="3" Content="Remove" Classes="ghost" Command="{Binding RemoveImageCommand}" />
+                          <Button Grid.Column="4" Content="Stage" Classes="primary" Command="{Binding SaveImageCommand}" />
+                        </Grid>
+                        <TextBlock Text="{Binding ImageFileName}" Classes="subtle" FontSize="9" />
+                        <TextBox Text="{Binding ImageCaption, Mode=TwoWay}" PlaceholderText="Caption" />
+                        <TextBox Text="{Binding ImageAltText, Mode=TwoWay}" PlaceholderText="Accessible alt text" />
+                        <Grid ColumnDefinitions="*,*" ColumnSpacing="6">
+                          <TextBox Text="{Binding ImageCreator, Mode=TwoWay}" PlaceholderText="Creator" />
+                          <TextBox Grid.Column="1" Text="{Binding ImageCopyright, Mode=TwoWay}" PlaceholderText="Copyright holder" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,120" ColumnSpacing="6">
+                          <TextBox Text="{Binding ImageLicence, Mode=TwoWay}" PlaceholderText="Licence or permission" />
+                          <TextBox Grid.Column="1" Text="{Binding ImageRole, Mode=TwoWay}" PlaceholderText="Role" />
+                        </Grid>
+                        <Grid ColumnDefinitions="*,*,*" ColumnSpacing="6">
+                          <TextBox Text="{Binding ImageCapturedDate, Mode=TwoWay}" PlaceholderText="Captured YYYY-MM-DD" />
+                          <TextBox Grid.Column="1" Text="{Binding ImageRepresentativeFrom, Mode=TwoWay}" PlaceholderText="Represents from" />
+                          <TextBox Grid.Column="2" Text="{Binding ImageRepresentativeTo, Mode=TwoWay}" PlaceholderText="Represents to" />
+                        </Grid>
+                        <TextBox Text="{Binding ImageDateNotes, Mode=TwoWay}" PlaceholderText="How the date is known and what period it represents" />
+                      </StackPanel>
+                    </Expander>
+                    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+                      <ListBox ItemsSource="{Binding ImageDrafts}" SelectedItem="{Binding SelectedImage, Mode=TwoWay}"
+                               Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate>
+                          <DataTemplate>
+                            <Border BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1" Padding="0,8">
+                              <StackPanel Spacing="3">
+                                <TextBlock Text="{Binding Link.Image.Caption}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Link.Image.OriginalFileName}" Classes="muted" FontSize="9" />
+                                <TextBlock Text="{Binding Link.Image.DateNotes}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Link.Image.Licence}" Foreground="{DynamicResource RvWikiBrush}" FontSize="9" />
+                              </StackPanel>
+                            </Border>
+                          </DataTemplate>
+                        </ListBox.ItemTemplate>
+                      </ListBox>
+                    </ScrollViewer>
+                  </Grid>
+                </Border>
+              </Grid>
+            </TabItem>
+            <TabItem Header="Revision history">
+              <Grid Margin="15" ColumnDefinitions="310,*" ColumnSpacing="14">
+                <Border Classes="card-raised" Padding="12">
+                  <Grid RowDefinitions="Auto,*" RowSpacing="8">
+                    <StackPanel Spacing="3">
+                      <TextBlock Text="Revision history" FontSize="17" FontWeight="SemiBold" />
+                      <TextBlock Text="Every restore creates a new revision; existing history is never overwritten." Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <ListBox Grid.Row="1" ItemsSource="{Binding Revisions}" SelectedItem="{Binding SelectedRevision, Mode=TwoWay}"
+                             Background="Transparent" BorderThickness="0" DisplayMemberBinding="{Binding DisplayText}" />
+                  </Grid>
+                </Border>
+                <Border Grid.Column="1" Classes="card-raised" Padding="14">
+                  <Grid RowDefinitions="Auto,Auto,*" RowSpacing="9">
+                    <Grid ColumnDefinitions="*,Auto">
+                      <StackPanel Spacing="2">
+                        <TextBlock Text="Compare with current article" FontSize="17" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding SelectedRevision.ChangeSummary}" Classes="muted" FontSize="10" />
+                      </StackPanel>
+                      <Button Grid.Column="1" Content="Restore as a new revision" Classes="primary" Command="{Binding RestoreRevisionCommand}" />
+                    </Grid>
+                    <TextBlock Grid.Row="1" Text="{Binding SelectedRevision.DisplayText}" Foreground="{DynamicResource RvWikiBrush}" FontSize="10" />
+                    <ScrollViewer Grid.Row="2" HorizontalScrollBarVisibility="Disabled">
+                      <TextBlock Text="{Binding RevisionComparisonText}" FontFamily="Consolas" FontSize="11" TextWrapping="Wrap" />
+                    </ScrollViewer>
+                  </Grid>
+                </Border>
+              </Grid>
+            </TabItem>
+            <TabItem Header="Explore quality">
+              <Grid Margin="15" RowDefinitions="Auto,*" RowSpacing="10">
+                <Border Classes="card-raised" Padding="13">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="3">
+                      <TextBlock Text="Explore quality audit" FontSize="17" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding QualityAuditSummary}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <Button Grid.Column="1" Content="Audit Explore" Classes="primary" Command="{Binding AuditQualityCommand}" />
+                  </Grid>
+                </Border>
+                <TabControl Grid.Row="1">
+                  <TabItem Header="Citations">
+                    <ListBox ItemsSource="{Binding CitationAuditIssues}" Background="Transparent" BorderThickness="0">
+                      <ListBox.ItemTemplate><DataTemplate>
+                        <Border Classes="card-raised" Padding="11" Margin="0,0,0,7">
+                          <Grid ColumnDefinitions="80,210,*" ColumnSpacing="10">
+                            <TextBlock Text="{Binding Severity}" Foreground="{DynamicResource RvWarningBrush}" FontWeight="SemiBold" />
+                            <StackPanel Grid.Column="1"><TextBlock Text="{Binding PageTitle}" FontWeight="SemiBold" /><TextBlock Text="{Binding Code}" Classes="subtle" FontSize="9" /></StackPanel>
+                            <TextBlock Grid.Column="2" Text="{Binding Message}" Classes="muted" TextWrapping="Wrap" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate></ListBox.ItemTemplate>
+                    </ListBox>
+                  </TabItem>
+                  <TabItem Header="Broken links">
+                    <ListBox ItemsSource="{Binding BrokenLinks}" Background="Transparent" BorderThickness="0">
+                      <ListBox.ItemTemplate><DataTemplate>
+                        <Button Classes="ghost" HorizontalContentAlignment="Stretch" Command="{Binding $parent[UserControl].DataContext.OpenInternalWikiLinkCommand}" CommandParameter="{Binding Target}">
+                          <Grid ColumnDefinitions="230,*" ColumnSpacing="10"><TextBlock Text="{Binding PageTitle}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding Target}" Foreground="{DynamicResource RvWarningBrush}" /></Grid>
+                        </Button>
+                      </DataTemplate></ListBox.ItemTemplate>
+                    </ListBox>
+                  </TabItem>
+                  <TabItem Header="Possible duplicates">
+                    <ListBox ItemsSource="{Binding DuplicatePages}" Background="Transparent" BorderThickness="0">
+                      <ListBox.ItemTemplate><DataTemplate>
+                        <Border Classes="card-raised" Padding="11" Margin="0,0,0,7">
+                          <Grid ColumnDefinitions="*,Auto,*" ColumnSpacing="10">
+                            <Button Content="{Binding First.Title}" Classes="ghost" Command="{Binding $parent[UserControl].DataContext.OpenPageCommand}" CommandParameter="{Binding First}" />
+                            <TextBlock Grid.Column="1" Text="may duplicate" Classes="subtle" VerticalAlignment="Center" />
+                            <Button Grid.Column="2" Content="{Binding Second.Title}" Classes="ghost" Command="{Binding $parent[UserControl].DataContext.OpenPageCommand}" CommandParameter="{Binding Second}" />
+                          </Grid>
+                        </Border>
+                      </DataTemplate></ListBox.ItemTemplate>
+                    </ListBox>
+                  </TabItem>
+                  <TabItem Header="Topic cleanup">
+                    <Grid RowDefinitions="Auto,*,Auto" RowSpacing="10" Margin="8">
+                      <Border Classes="card-raised" Padding="12">
+                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                          <StackPanel Spacing="3">
+                            <TextBlock Text="Canonical topic cleanup" FontSize="17" FontWeight="SemiBold" />
+                            <TextBlock Text="{Binding TopicCleanupSummary}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                            <TextBlock Text="Safe punctuation, spacing and possessive differences are merged automatically. Meaning-based matches remain here for review." Classes="subtle" FontSize="9" TextWrapping="Wrap" />
+                          </StackPanel>
+                          <Button Grid.Column="1" Content="Scan topics" Classes="secondary" Command="{Binding AuditTopicsCommand}" />
+                          <Button Grid.Column="2" Content="Run safe automatic cleanup" Classes="primary" Command="{Binding AutomaticTopicCleanupCommand}" />
+                        </Grid>
+                      </Border>
+                      <ListBox Grid.Row="1" ItemsSource="{Binding TopicMergeSuggestions}" SelectedItem="{Binding SelectedTopicSuggestion, Mode=TwoWay}"
+                               Background="Transparent" BorderThickness="0">
+                        <ListBox.ItemTemplate><DataTemplate>
+                          <Border Classes="card-raised" Padding="12" Margin="0,0,0,7">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                              <StackPanel Spacing="4">
+                                <TextBlock Text="{Binding CanonicalName}" FontSize="15" FontWeight="SemiBold" />
+                                <TextBlock Text="{Binding VariantsText}" Foreground="{DynamicResource RvWikiBrush}" TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Reason}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                                <StackPanel Orientation="Horizontal" Spacing="12"><TextBlock Text="{Binding ConfidenceText}" Classes="subtle" FontSize="9" /><TextBlock Text="{Binding EvidenceText}" Classes="subtle" FontSize="9" /></StackPanel>
+                              </StackPanel>
+                              <Button Grid.Column="1" Content="Merge these topics" Classes="primary" Command="{Binding $parent[UserControl].DataContext.MergeTopicSuggestionCommand}" CommandParameter="{Binding}" />
+                            </Grid>
+                          </Border>
+                        </DataTemplate></ListBox.ItemTemplate>
+                      </ListBox>
+                      <Border Grid.Row="2" Classes="card-raised" Padding="10">
+                        <StackPanel Spacing="4"><TextBlock Text="Recent automatic and approved merges" FontWeight="SemiBold" /><ItemsControl ItemsSource="{Binding TopicMergeHistory}"><ItemsControl.ItemTemplate><DataTemplate><TextBlock Text="{Binding Summary}" Classes="muted" FontSize="10" /></DataTemplate></ItemsControl.ItemTemplate></ItemsControl></StackPanel>
+                      </Border>
+                    </Grid>
+                  </TabItem>
+                  <TabItem Header="Orphan pages">
+                    <ListBox ItemsSource="{Binding OrphanPages}" Background="Transparent" BorderThickness="0">
+                      <ListBox.ItemTemplate><DataTemplate>
+                        <Button Classes="ghost" HorizontalContentAlignment="Stretch" Command="{Binding $parent[UserControl].DataContext.OpenPageCommand}" CommandParameter="{Binding}">
+                          <Grid ColumnDefinitions="*,Auto"><TextBlock Text="{Binding Title}" FontWeight="SemiBold" /><TextBlock Grid.Column="1" Text="{Binding PageType}" Foreground="{DynamicResource RvWikiBrush}" /></Grid>
+                        </Button>
+                      </DataTemplate></ListBox.ItemTemplate>
+                    </ListBox>
+                  </TabItem>
+                </TabControl>
+              </Grid>
+            </TabItem>
+          </TabControl>
+        </Grid>
+      </Border>
+    </Grid>
+
+    <Grid Grid.Row="2" ColumnDefinitions="Auto,*" ColumnSpacing="9">
+      <Border IsVisible="{Binding IsBusy}" Width="7" Height="7" CornerRadius="4"
+              Background="{DynamicResource RvWikiBrush}" VerticalAlignment="Center" />
+      <TextBlock Grid.Column="1" Text="{Binding StatusText}" Classes="muted" FontSize="10" VerticalAlignment="Center" />
+    </Grid>
+  </Grid>
+</UserControl>

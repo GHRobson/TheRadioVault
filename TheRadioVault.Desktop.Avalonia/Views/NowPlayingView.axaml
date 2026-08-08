@@ -1,0 +1,307 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.NowPlayingView">
+  <Grid>
+    <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled" Classes="page-scroll-root">
+      <StackPanel Margin="{StaticResource RvPagePadding}" Spacing="18">
+        <StackPanel Spacing="3" Margin="0,0,0,3">
+          <TextBlock Text="Now Playing" Classes="display-title" />
+          <TextBlock Text="Current broadcast, context and what is coming next." Classes="muted" FontSize="12" />
+        </StackPanel>
+
+
+        <Grid ColumnDefinitions="*,350" ColumnSpacing="16">
+          <StackPanel Spacing="16" IsVisible="{Binding Playback.HasCurrentBroadcast}">
+            <Border Classes="card-raised" Padding="22">
+              <Grid ColumnDefinitions="220,*" ColumnSpacing="24">
+                <Border Width="220" Height="220" CornerRadius="16"
+                        Background="{DynamicResource RvAccentSubtleBrush}"
+                        BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1" ClipToBounds="True">
+                  <Grid>
+                    <ContentControl IsVisible="{Binding !Playback.HasArtwork}" Content="Radio mast"
+                                    ContentTemplate="{StaticResource MissingArtworkIconTemplate}"
+                                    Width="96" Height="96" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                    <Image IsVisible="{Binding Playback.HasArtwork}"
+                           Source="{Binding Playback.ArtworkPath, Converter={StaticResource ArtworkPathToBitmapConverter}}"
+                           Stretch="UniformToFill" />
+                  </Grid>
+                </Border>
+
+                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="16">
+                  <StackPanel Spacing="6">
+                    <TextBlock Text="NOW PLAYING" Classes="eyebrow" />
+                    <TextBlock Text="{Binding Playback.Title}" FontSize="31" FontWeight="Bold" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Playback.Subtitle}" FontSize="14" Classes="muted" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding Playback.SegmentText}" FontSize="12"
+                               Foreground="{DynamicResource RvAccentBrush}" IsVisible="{Binding Playback.IsMultipart}" />
+                  </StackPanel>
+
+                  <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button Content="{Binding Playback}" ContentTemplate="{StaticResource FavouriteIconTemplate}"
+                            Classes="secondary icon-button mini-player-action favourite-action"
+                            Command="{Binding Playback.ToggleFavouriteCommand}"
+                            ToolTip.Tip="{Binding Playback.FavouriteToolTip}" />
+                    <Button Classes="secondary icon-button mini-player-action moment-action"
+                            Content="{Binding}" ContentTemplate="{StaticResource MomentIconTemplate}"
+                            Command="{Binding Moments.CreateCurrentCommand}" ToolTip.Tip="Save a Moment" />
+                    <Button Classes="secondary icon-button mini-player-action"
+                            Command="{Binding OpenFullInfoCommand}" ToolTip.Tip="Full broadcast information">
+                      <Grid Width="19" Height="19">
+                        <Ellipse Stroke="{DynamicResource RvTextBrush}" StrokeThickness="1.7" />
+                        <TextBlock Text="i" FontSize="12" FontWeight="Bold"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,-1,0,0" />
+                      </Grid>
+                    </Button>
+                    <Button Content="⋯" Classes="ghost icon-button mini-player-action" ToolTip.Tip="More actions">
+                      <Button.Flyout>
+                        <MenuFlyout>
+                          <MenuItem Header="Play next" Command="{Binding Playback.PlayNextCommand}" />
+                          <MenuItem Header="Add to queue" Command="{Binding Playback.AddToQueueCommand}" />
+                        </MenuFlyout>
+                      </Button.Flyout>
+                    </Button>
+                  </StackPanel>
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <Border Classes="card" IsVisible="{Binding Playback.IsPrimaryTransportLoading}"
+                    Background="{DynamicResource RvAccentSubtleBrush}" Padding="14,11">
+              <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                <Path Width="20" Height="20" Stretch="Uniform" Data="M12,3 A9,9 0 1 1 4.2,7.5"
+                      Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="2.3" StrokeLineCap="Round"
+                      RenderTransformOrigin="50%,50%" VerticalAlignment="Center">
+                  <Path.RenderTransform><RotateTransform Angle="{Binding Playback.PrimaryTransportSpinnerAngle}" /></Path.RenderTransform>
+                </Path>
+                <StackPanel Grid.Column="1" Spacing="2">
+                  <TextBlock Text="Preparing playback" FontWeight="SemiBold" />
+                  <TextBlock Text="{Binding Playback.StatusText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+                </StackPanel>
+              </Grid>
+            </Border>
+
+            <Border Classes="card" IsVisible="{Binding HasSummary}">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Broadcast summary" Classes="section-title" />
+                <TextBlock Text="{Binding SummaryText}" Classes="muted" FontSize="13"
+                           LineHeight="20" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" IsVisible="{Binding HasCatalogueDetails}">
+              <StackPanel Spacing="10">
+                <TextBlock Text="Programme details" Classes="section-title" />
+                <ItemsControl ItemsSource="{Binding CatalogueFields}">
+                  <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate><DataTemplate>
+                    <Border Classes="card-raised" Padding="10,8" Margin="0,0,8,8" MinWidth="180" MaxWidth="360">
+                      <StackPanel Spacing="3">
+                        <TextBlock Text="{Binding Label}" Classes="eyebrow" />
+                        <TextBlock Text="{Binding Value}" TextWrapping="Wrap" FontSize="11" />
+                      </StackPanel>
+                    </Border>
+                  </DataTemplate></ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </StackPanel>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+              <Border Classes="card" IsVisible="{Binding HasPeople}">
+                <StackPanel Spacing="12">
+                  <TextBlock Text="People" Classes="section-title" />
+
+                  <StackPanel IsVisible="{Binding HasHosts}" Spacing="5">
+                    <TextBlock Text="HOSTS" Classes="eyebrow" />
+                    <ItemsControl ItemsSource="{Binding Hosts}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+
+                  <StackPanel IsVisible="{Binding HasGuests}" Spacing="5">
+                    <TextBlock Text="GUESTS" Classes="eyebrow" />
+                    <ItemsControl ItemsSource="{Binding Guests}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+
+                  <StackPanel IsVisible="{Binding HasCallers}" Spacing="5">
+                    <TextBlock Text="CALLERS" Classes="eyebrow" />
+                    <ItemsControl ItemsSource="{Binding Callers}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+
+                  <StackPanel IsVisible="{Binding HasMentionedPeople}" Spacing="5">
+                    <TextBlock Text="MENTIONED" Classes="eyebrow" />
+                    <ItemsControl ItemsSource="{Binding MentionedPeople}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </StackPanel>
+                </StackPanel>
+              </Border>
+
+              <Border Grid.Column="1" Classes="card" IsVisible="{Binding HasTopics}">
+                <StackPanel Spacing="10">
+                  <TextBlock Text="Topics" Classes="section-title" />
+                  <ItemsControl ItemsSource="{Binding Topics}">
+                    <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                      <DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                  </ItemsControl>
+                </StackPanel>
+              </Border>
+            </Grid>
+
+            <Border Classes="card" IsVisible="{Binding HasDetails}">
+              <StackPanel Spacing="12">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                  <Border Width="42" Height="42" CornerRadius="11" Background="{DynamicResource RvAccentSubtleBrush}">
+                    <Path Width="23" Height="23" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"
+                          Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.8" StrokeLineCap="Round" StrokeJoin="Round"
+                          Data="M12,3 C9.8,3 8,4.8 8,7 L8,12 C8,14.2 9.8,16 12,16 C14.2,16 16,14.2 16,12 L16,7 C16,4.8 14.2,3 12,3 Z M5,11 C5,15.4 8.1,19 12,19 C15.9,19 19,15.4 19,11 M12,19 L12,22" />
+                  </Border>
+                  <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
+                    <TextBlock Text="Transcript" Classes="section-title" />
+                    <TextBlock Text="{Binding TranscriptStateText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                    <TextBlock Text="{Binding TranscriptDetailsText}" Classes="subtle" FontSize="9" />
+                  </StackPanel>
+                  <Button Grid.Column="2" Content="Start transcription" Classes="secondary" IsVisible="{Binding HasNoTranscript}"
+                          Command="{Binding StartTranscriptionCommand}" VerticalAlignment="Center" />
+                </Grid>
+                <Expander Header="Read transcript" IsVisible="{Binding HasTranscript}" IsExpanded="False">
+                  <StackPanel Margin="0,10,0,0" Spacing="9">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                      <TextBlock Text="Timed phrases" Classes="eyebrow" VerticalAlignment="Center" />
+                      <Button Grid.Column="1" Content="Edit in Transcription studio" Classes="ghost" Command="{Binding OpenTranscriptCommand}" />
+                    </Grid>
+                    <ScrollViewer MaxHeight="430" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                      <ItemsControl ItemsSource="{Binding TranscriptSegments}">
+                        <ItemsControl.ItemTemplate><DataTemplate>
+                          <Button Classes="ghost" Command="{Binding $parent[UserControl].DataContext.PlayTranscriptSegmentCommand}"
+                                  CommandParameter="{Binding}" HorizontalContentAlignment="Stretch" Padding="8,7" Margin="0,0,0,3">
+                            <Grid ColumnDefinitions="58,120,*" ColumnSpacing="10">
+                              <TextBlock Text="{Binding TimeDisplay}" Foreground="{DynamicResource RvAccentBrush}" FontWeight="SemiBold" FontSize="10" />
+                              <TextBlock Grid.Column="1" Text="{Binding DisplaySpeaker}" Classes="subtle" FontSize="10" TextTrimming="CharacterEllipsis" />
+                              <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="Wrap" FontSize="11" />
+                            </Grid>
+                          </Button>
+                        </DataTemplate></ItemsControl.ItemTemplate></ItemsControl>
+                    </ScrollViewer>
+                  </StackPanel>
+                </Expander>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" IsVisible="{Binding HasNotes}">
+              <StackPanel Spacing="12">
+                <TextBlock Text="Notes" Classes="section-title" />
+                <TextBlock IsVisible="{Binding HasArchiveNotes}" Text="{Binding ArchiveNotesText}"
+                           Classes="muted" FontSize="12" LineHeight="19" TextWrapping="Wrap" />
+                <Border IsVisible="{Binding HasPersonalNotes}" Classes="card-raised" Padding="12">
+                  <StackPanel Spacing="4">
+                    <TextBlock Text="PERSONAL" Classes="eyebrow" />
+                    <TextBlock Text="{Binding PersonalNotesText}" FontSize="12" TextWrapping="Wrap" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </Border>
+
+            <Border Classes="card" IsVisible="{Binding !HasDetails}">
+              <StackPanel Spacing="8">
+                <TextBlock Text="Broadcast context" Classes="section-title" />
+                <TextBlock Text="{Binding DetailsStatus}" Classes="muted" TextWrapping="Wrap" />
+                <Button Content="Try again" Classes="secondary" Command="{Binding RefreshCommand}" HorizontalAlignment="Left" />
+              </StackPanel>
+            </Border>
+          </StackPanel>
+
+          <Border Grid.Column="0" Classes="card" IsVisible="{Binding !Playback.HasCurrentBroadcast}" Padding="44" VerticalAlignment="Top">
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="10" MinHeight="410">
+              <Border Width="72" Height="72" CornerRadius="22" Background="{DynamicResource RvAccentSubtleBrush}">
+                <ContentControl Content="Radio mast" ContentTemplate="{StaticResource MissingArtworkIconTemplate}"
+                                Width="38" Height="38" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <TextBlock Text="Nothing is playing" FontSize="22" FontWeight="Bold" HorizontalAlignment="Center" />
+              <TextBlock Text="Choose a broadcast from the Library, the queue, Moments or Knowledge."
+                         Classes="muted" HorizontalAlignment="Center" TextAlignment="Center" TextWrapping="Wrap" />
+              <Button Content="Play first queued broadcast" Classes="primary" Command="{Binding Queue.PlayFirstCommand}"
+                      IsVisible="{Binding Queue.HasItems}" HorizontalAlignment="Center" Margin="0,8,0,0" />
+            </StackPanel>
+          </Border>
+
+          <Border Grid.Column="1" Classes="card" Padding="0" VerticalAlignment="Top">
+            <Grid RowDefinitions="Auto,*">
+              <Border Padding="16,14" BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                  <StackPanel Spacing="2">
+                    <TextBlock Text="Up next" Classes="section-title" />
+                    <TextBlock Text="{Binding Queue.CountText}" Classes="muted" FontSize="10" />
+                  </StackPanel>
+                  <Button Grid.Column="1" Content="⋯" Classes="secondary icon-button" ToolTip.Tip="Queue options" VerticalAlignment="Center">
+                    <Button.Flyout><MenuFlyout>
+                      <MenuItem Header="Play first" Command="{Binding Queue.PlayFirstCommand}" />
+                      <MenuItem Header="Refresh queue" Command="{Binding Queue.RefreshCommand}" />
+                      <Separator />
+                      <MenuItem Header="Clear queue" Command="{Binding Queue.ClearCommand}" />
+                    </MenuFlyout></Button.Flyout>
+                  </Button>
+                </Grid>
+              </Border>
+
+              <Grid Grid.Row="1" MinHeight="410">
+                <ListBox IsVisible="{Binding Queue.HasItems}" ItemsSource="{Binding Queue.Items}"
+                         Classes="library-list" Margin="8" MaxHeight="720">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Border Padding="10,9">
+                        <Border.ContextMenu>
+                          <ContextMenu>
+                            <MenuItem Header="Play now" Command="{Binding PlayCommand}" />
+                            <Separator />
+                            <MenuItem Header="Move up" Command="{Binding MoveUpCommand}" />
+                            <MenuItem Header="Move down" Command="{Binding MoveDownCommand}" />
+                            <MenuItem Header="Remove" Command="{Binding RemoveCommand}" />
+                          </ContextMenu>
+                        </Border.ContextMenu>
+                        <Grid ColumnDefinitions="36,*,Auto" ColumnSpacing="9">
+                          <Border Width="34" Height="34" CornerRadius="9" Background="{DynamicResource RvAccentSubtleBrush}">
+                            <TextBlock Text="{Binding PositionText}" FontWeight="Bold" Foreground="{DynamicResource RvAccentBrush}"
+                                       HorizontalAlignment="Center" VerticalAlignment="Center" />
+                          </Border>
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding CollectionText}" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <Button Grid.Column="2" Content="▶" Classes="ghost icon-button compact-action"
+                                  Command="{Binding PlayCommand}" ToolTip.Tip="Play now" VerticalAlignment="Center" />
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+
+                <StackPanel IsVisible="{Binding !Queue.HasItems}" HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="9" Margin="20">
+                  <Border Width="52" Height="52" CornerRadius="15" Background="{DynamicResource RvAccentSubtleBrush}">
+                    <Grid Width="25" Height="25" HorizontalAlignment="Center" VerticalAlignment="Center">
+                      <Path Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.8" StrokeLineCap="Round"
+                            Data="M8,6 L22,6 M8,12 L22,12 M8,18 L18,18" />
+                      <Path Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="2.5" StrokeLineCap="Round"
+                            Data="M3,6 L3.01,6 M3,12 L3.01,12 M3,18 L3.01,18" />
+                    </Grid>
+                  </Border>
+                  <TextBlock Text="Nothing queued yet" FontWeight="SemiBold" />
+                  <TextBlock Text="Use Play next or Add to queue from any broadcast menu." Classes="muted" FontSize="10" TextAlignment="Center" TextWrapping="Wrap" />
+                </StackPanel>
+              </Grid>
+            </Grid>
+          </Border>
+        </Grid>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

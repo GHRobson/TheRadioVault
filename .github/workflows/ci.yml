@@ -1,0 +1,125 @@
+name: Radio Vault parity
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: parity-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+
+jobs:
+  windows:
+    name: Windows client and server
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 runtime and pinned SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.423
+            10.0.302
+
+      - name: Run complete Windows release gate
+        shell: pwsh
+        run: ./release-gate.ps1
+
+      - name: Publish Windows Client
+        shell: pwsh
+        run: >-
+          dotnet publish
+          ./TheRadioVault.Desktop.Avalonia/TheRadioVault.Desktop.Avalonia.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=false
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+          -o ./artifacts/ci/windows-client
+
+      - name: Publish Windows Server
+        shell: pwsh
+        run: >-
+          dotnet publish
+          ./TheRadioVault.Server/TheRadioVault.Server.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=false
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+          -o ./artifacts/ci/windows-server
+
+      - name: Upload Windows test builds
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-client-and-server
+          path: |
+            artifacts/ci/windows-client/
+            artifacts/ci/windows-server/
+          if-no-files-found: error
+          retention-days: 14
+
+  macos:
+    name: macOS client
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Install .NET 8 runtime and pinned SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.423
+            10.0.302
+
+      - name: Restore shared solution
+        run: dotnet restore TheRadioVault.sln
+
+      - name: Build macOS Client
+        run: >-
+          dotnet build
+          TheRadioVault.Desktop.Avalonia/TheRadioVault.Desktop.Avalonia.csproj
+          -c Release --no-restore -warnaserror
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+
+      - name: Build smoke-test runner
+        run: >-
+          dotnet build
+          TheRadioVault.Tests/TheRadioVault.Tests.csproj
+          -c Release --no-restore -warnaserror
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+
+      - name: Run macOS parity smoke tests
+        run: |
+          dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj \
+            -c Release --no-build -- \
+            "Mac client remains usable before server pairing" \
+            "Mac Client uses native AVFoundation and existing server contracts" \
+            "Core hardening platform requests remain neutral"
+
+      - name: Package unsigned Apple Silicon Client
+        shell: pwsh
+        run: ./package-macos-client.ps1 -RuntimeIdentifier osx-arm64
+
+      - name: Upload macOS test build
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-client-osx-arm64-unsigned
+          path: artifacts/macos/osx-arm64/RadioVault.Client-*-unsigned.zip
+          if-no-files-found: error
+          retention-days: 14

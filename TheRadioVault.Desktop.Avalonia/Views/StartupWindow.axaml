@@ -1,0 +1,113 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="TheRadioVault.Desktop.Avalonia.Views.StartupWindow"
+        Title="The Radio Vault"
+        Width="720" Height="430" MinWidth="660" MinHeight="390"
+        CanResize="False"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource RvBackgroundBrush}"
+        WindowDecorations="BorderOnly"
+        ExtendClientAreaToDecorationsHint="True"
+        ExtendClientAreaTitleBarHeightHint="38">
+  <Border Margin="10" CornerRadius="16" ClipToBounds="True"
+          Background="{DynamicResource RvShellBrush}"
+          BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1">
+    <Grid ColumnDefinitions="218,*">
+      <Border Padding="24,30,24,24"
+              Background="{DynamicResource RvShellBrush}"
+              BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,1,0"
+              PointerPressed="Window_OnPointerPressed">
+        <Grid RowDefinitions="*,Auto">
+          <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="13">
+            <Image Width="132" Height="132" Source="/Assets/RadioVault-Logo.png"
+                   Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" />
+            <StackPanel Spacing="3" HorizontalAlignment="Center">
+              <TextBlock Text="THE RADIO VAULT" FontSize="16" FontWeight="Bold" TextAlignment="Center" />
+              <TextBlock Text="Broadcast archive" FontSize="10" Classes="muted" TextAlignment="Center" />
+            </StackPanel>
+          </StackPanel>
+          <StackPanel Grid.Row="1" Spacing="8">
+            <Border Classes="pill" Padding="10,6" HorizontalAlignment="Stretch">
+              <TextBlock x:Name="ConnectionModeText" Text="DESKTOP CLIENT" FontSize="9" FontWeight="SemiBold"
+                         Foreground="{DynamicResource RvAccentMutedBrush}" TextAlignment="Center" />
+            </Border>
+            <TextBlock Text="RADIO VAULT" FontSize="8" FontWeight="Bold" Classes="subtle"
+                       HorizontalAlignment="Center" />
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Grid Grid.Column="1" RowDefinitions="38,*">
+        <Border Background="Transparent" PointerPressed="Window_OnPointerPressed" />
+
+        <Grid x:Name="LoadingPanel" Grid.Row="1" Margin="30,17,30,24"
+              RowDefinitions="Auto,*,Auto" RowSpacing="18">
+          <StackPanel Spacing="3">
+            <TextBlock Text="STARTING RADIO VAULT" Classes="eyebrow" />
+            <TextBlock x:Name="StartupSourceText" Text="Choosing a Radio Vault Server"
+                       FontSize="10" Classes="muted" />
+          </StackPanel>
+
+          <StackPanel Grid.Row="1" VerticalAlignment="Center" Spacing="12">
+            <TextBlock x:Name="StartupStatusText" Text="Choosing your server"
+                       FontSize="27" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock x:Name="StartupDetailText"
+                       Text="Reading the saved connection and startup preference."
+                       MaxWidth="390" FontSize="12" Classes="muted" TextWrapping="Wrap" LineHeight="18" />
+
+            <Grid Margin="0,13,0,0" ColumnDefinitions="Auto,*,Auto,*,Auto" ColumnSpacing="9">
+              <Border Width="26" Height="26" CornerRadius="13"
+                      Background="{DynamicResource RvAccentSubtleBrush}"
+                      BorderBrush="{DynamicResource RvAccentMutedBrush}" BorderThickness="1">
+                <TextBlock Text="1" FontSize="10" FontWeight="Bold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <Border Grid.Column="1" Height="1" Background="{DynamicResource RvBorderBrush}" VerticalAlignment="Center" />
+              <Border Grid.Column="2" Width="26" Height="26" CornerRadius="13"
+                      Background="{DynamicResource RvSurfaceRaisedBrush}"
+                      BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1">
+                <TextBlock Text="2" FontSize="10" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+              <Border Grid.Column="3" Height="1" Background="{DynamicResource RvBorderBrush}" VerticalAlignment="Center" />
+              <Border Grid.Column="4" Width="26" Height="26" CornerRadius="13"
+                      Background="{DynamicResource RvSurfaceRaisedBrush}"
+                      BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1">
+                <TextBlock Text="3" FontSize="10" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" />
+              </Border>
+            </Grid>
+            <Grid ColumnDefinitions="Auto,*,Auto,*,Auto" ColumnSpacing="9">
+              <TextBlock Width="62" Text="SERVER" Classes="eyebrow" TextAlignment="Center" />
+              <TextBlock Grid.Column="2" Width="82" Text="WORKSPACE" Classes="eyebrow" TextAlignment="Center" />
+              <TextBlock Grid.Column="4" Width="62" Text="OPEN" Classes="eyebrow" TextAlignment="Center" />
+            </Grid>
+          </StackPanel>
+
+          <StackPanel Grid.Row="2" Spacing="9">
+            <ProgressBar x:Name="StartupProgressBar" Height="5" Minimum="0" Maximum="1" Value="0.12"
+                         Foreground="{DynamicResource RvAccentBrush}"
+                         Background="{DynamicResource RvAccentSubtleBrush}" />
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+              <TextBlock x:Name="StartupCacheText" Text="Preparing the saved workspace" FontSize="10" Classes="muted"
+                         TextTrimming="CharacterEllipsis" />
+              <TextBlock Grid.Column="1" Text="Changes are checked after opening" FontSize="9" Classes="subtle" />
+            </Grid>
+          </StackPanel>
+        </Grid>
+
+        <Border x:Name="FailurePanel" Grid.Row="1" IsVisible="False" Margin="24,12,24,24"
+                Classes="card-raised" Padding="20">
+          <Grid RowDefinitions="Auto,Auto,*,Auto" RowSpacing="11">
+            <TextBlock Text="RADIO VAULT COULD NOT START" FontSize="11" FontWeight="SemiBold"
+                       Foreground="{DynamicResource RvDangerBrush}" />
+            <TextBlock x:Name="FailureSummaryText" Grid.Row="1" FontSize="17" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBox x:Name="FailureDetailsText" Grid.Row="2" IsReadOnly="True" AcceptsReturn="True"
+                     TextWrapping="Wrap" MinHeight="210" MaxHeight="270" />
+            <StackPanel Grid.Row="3" Orientation="Horizontal" HorizontalAlignment="Right" Spacing="8">
+              <Button Content="Open log location" Classes="secondary" Click="OpenLogLocation_OnClick" />
+              <Button Content="Close" Classes="primary" Click="Close_OnClick" />
+            </StackPanel>
+          </Grid>
+        </Border>
+      </Grid>
+    </Grid>
+  </Border>
+</Window>

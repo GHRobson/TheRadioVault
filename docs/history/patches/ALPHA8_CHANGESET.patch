@@ -1,0 +1,2138 @@
+diff --git a/ALPHA8_CONFLICT_FORENSICS_STATIC_VALIDATION.md b/ALPHA8_CONFLICT_FORENSICS_STATIC_VALIDATION.md
+new file mode 100644
+index 0000000..17850fa
+--- /dev/null
++++ b/ALPHA8_CONFLICT_FORENSICS_STATIC_VALIDATION.md
+@@ -0,0 +1,17 @@
++# Alpha8 Conflict Forensics — static validation
++
++This package was checked without executing the Windows/.NET application.
++
++Validated statically:
++
++- version alignment across `VERSION.txt`, project metadata and Library Truth parser marker;
++- database schema 44 table/column definitions and migration guards;
++- export schema 6 and forensic model wiring;
++- conflict service C# syntax and partial-class integration;
++- UI XAML parsing, event-handler presence and explicit `Task.Run` lambdas for optional-parameter methods;
++- 97 registered smoke tests with no duplicate names or missing method references;
++- conflict policy regression registration and schema-43-to-44 migration coverage;
++- no new live-adoption command or direct working-library adoption path;
++- patch dry-run, ZIP integrity and extracted-tree reproduction.
++
++Compilation, PowerShell release validation, smoke-test execution and the full 7,169-file rehearsal still require the user's Windows .NET 8 environment.
+diff --git a/ARCHITECTURE.md b/ARCHITECTURE.md
+index 15916fb..704d673 100644
+--- a/ARCHITECTURE.md
++++ b/ARCHITECTURE.md
+@@ -1,27 +1,32 @@
+-# v0.28.0-alpha7 Library Truth architecture
++# v0.28.0-alpha8 Library Truth architecture
+ 
+-The proven Broadcast → Recording → Physical File model, segment coverage evidence and guarded adoption previews remain unchanged from alpha6. Alpha7 adds a third safety layer: **Disposable Transactional Rehearsal**.
++The proven Broadcast → Recording → Physical File model, segment coverage evidence, guarded adoption previews and alpha7 disposable transaction remain unchanged. Alpha8 adds a fourth shadow layer: **Field-Level Conflict Forensics**.
+ 
+-1. **Pre-rehearsal backup**
+-   - An online SQLite backup is created before the live rehearsal ledger is written.
+-   - The retained backup is reopened independently and must pass `PRAGMA integrity_check`.
++1. **Validated pre-rehearsal backup**
++   - An online SQLite backup is created before the rehearsal ledger is written.
++   - The retained backup must reopen and pass `PRAGMA integrity_check`.
+ 
+ 2. **Disposable working clone**
+    - A separate working database is copied from the validated backup.
+    - Only the 4,305 adoption-ready previews are loaded.
+-   - Preview membership, survivor selection and operation counts are validated before migration work begins.
++   - Preview membership, survivor selection and operation counts are validated.
+ 
+ 3. **Transactional rehearsal**
+    - Future canonical broadcasts, recordings, segments, coverage and episode mappings are created inside one transaction.
+-   - Media-file links and clearly mergeable state are reassigned to the provisional survivor.
+-   - Redundant live episodes become mapped hidden aliases inside the clone rather than being deleted.
+-   - Metadata and multiple-transcript conflicts are reported instead of silently resolved.
+-   - Each broadcast must execute exactly the operations recorded by its alpha6 adoption preview.
++   - Media-file links and clearly mergeable user/research state are reassigned to the provisional survivor.
++   - Redundant episodes become mapped hidden aliases inside the clone rather than being deleted.
+ 
+-4. **Integrity and rollback proof**
++4. **Conflict forensics and merge policy**
++   - Every meaningful episode-field or residual alias-reference difference becomes a forensic row.
++   - Candidate values, source episodes and matching research provenance are recorded.
++   - Lossless or decisively evidenced cases receive deterministic rehearsal-only resolutions.
++   - Every alternate is retained in evidence; genuinely comparable contradictions remain unresolved.
++   - Provenance never transfers authority to a value it does not match.
++
++5. **Integrity and rollback proof**
+    - Foreign-key and SQLite integrity checks run before rollback.
+    - The transaction is always rolled back.
+    - A deterministic fingerprint of every non-shadow table must match its pre-rehearsal fingerprint.
+-   - Only the shadow rehearsal summary and per-broadcast evidence are persisted in the live database.
++   - Only shadow rehearsal summaries, per-broadcast results and forensic evidence persist.
+ 
+ There is still no live adoption route.
+diff --git a/BUILDING.md b/BUILDING.md
+index a5474f1..80a7f9e 100644
+--- a/BUILDING.md
++++ b/BUILDING.md
+@@ -1,8 +1,9 @@
+-# Building v0.28.0-alpha7
++# Building v0.28.0-alpha8
+ 
+ 1. Open `TheRadioVault.sln` in Visual Studio 2022 with the .NET 8 SDK installed.
+ 2. Restore NuGet packages.
+-3. Build the solution in Release or Debug configuration.
++3. Build the full solution in Debug or Release.
+ 4. Run `TheRadioVault.Tests` or execute `release-gate.ps1` from PowerShell.
++5. Open Library Truth and run **Run adoption rehearsal…** before exporting a new `.trvtruth` report.
+ 
+-Alpha7 upgrades the database to schema 43 and adds only the shadow `library_truth_rehearsal_runs` and `library_truth_rehearsal_items` ledgers. The rehearsal itself runs against a validated disposable copy of the database. No live episode or media-file adoption schema is committed.
++Alpha8 upgrades the database to schema 44. It adds the shadow `library_truth_rehearsal_conflicts` ledger and conflict summary columns to the existing rehearsal tables. The adoption and merge policies execute only against a validated disposable database copy, are rolled back, and are checked against the pre-rehearsal logical fingerprint. No live episode or media-file adoption is committed.
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 1de62dc..2ce34c6 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -1,3 +1,22 @@
++# v0.28.0-alpha8 — Conflict Forensics
++
++## Added
++
++- Field-level metadata and alias-reference forensic ledger.
++- Deterministic merge classifications with selected values, provenance, confidence and preserved alternates.
++- Explicit unresolved review cases for genuinely ambiguous conflicts.
++- Headline-review and residual transcript/voice reference analysis.
++- Conflict Forensics UI, schema-6 export and database schema 44.
++- Focused conflict-policy and schema-upgrade tests.
++
++## Safety
++
++- All policy applications occur only in the disposable rehearsal transaction.
++- Rollback fingerprint verification remains mandatory.
++- No live adoption command exists.
++
++---
++
+ # v0.28.0-alpha7 buildfix1 — Transactional Adoption Rehearsal
+ 
+ ## Added
+diff --git a/ENGINEERING.md b/ENGINEERING.md
+index feeec0c..47f26ef 100644
+--- a/ENGINEERING.md
++++ b/ENGINEERING.md
+@@ -1,21 +1,16 @@
+-# v0.28.0-alpha7 engineering status
++# v0.28.0-alpha8 engineering status
+ 
+-Alpha6 was confirmed against the complete 7,169-file desktop corpus with exactly 7,106 coverage rows and 4,330 adoption previews. Alpha7 therefore freezes all parser, broadcast, recording and coverage behaviour and concentrates solely on executing the adoption plan safely inside a disposable database.
++Alpha7 proved the complete 4,305-broadcast adoption transaction, backup restore, state migration, SQLite integrity and exact rollback against the desktop library. It also exposed 7,165 coarse policy differences across 2,195 Ron & Fez broadcasts, but did not identify their fields or values.
+ 
+-Implemented:
++Alpha8 adds:
+ 
+-- schema 43 rehearsal run and item ledgers;
+-- online backup and independent backup integrity validation;
+-- disposable clone creation;
+-- strict loading and validation of all eligible preview plans;
+-- transactional canonical/recording/segment/coverage rehearsal;
+-- media-file reassignment and mapped alias retirement;
+-- playback, favourite, Moment, queue, guest, tag, research and single-transcript preservation rules;
+-- explicit metadata and transcript conflict reporting;
+-- per-preview expected-versus-actual operation validation;
+-- foreign-key and integrity checking;
+-- mandatory rollback and non-shadow logical fingerprint comparison;
+-- Rehearsal Results UI and schema-5 `.trvtruth` export;
+-- smoke coverage proving the working database remains unchanged.
++- schema 44 field-level conflict and provenance ledger;
++- deterministic canonical-identity, normalization, populated-value, list-union, placeholder, manual-edit, protected-provenance and quality-ranking policies;
++- preservation of every alternate value in exported forensic evidence;
++- explicit unresolved-review classification when evidence is not decisive;
++- headline-review and residual alias-reference forensics;
++- per-broadcast and run-level auto-resolved, unresolved and alternate counts;
++- Conflict Forensics UI and schema-6 `.trvtruth` export;
++- regression coverage proving policy decisions are rolled back and the live metadata remains unchanged.
+ 
+-The .NET solution still requires validation on Windows because the packaging environment does not include the .NET 8 SDK or PowerShell.
++No committed adoption route exists. The next decision depends on the full desktop alpha8 rehearsal: only a small, intelligible unresolved set should advance to a committed disposable-clone trial.
+diff --git a/LIBRARY_TRUTH_ALPHA8_VALIDATION.md b/LIBRARY_TRUTH_ALPHA8_VALIDATION.md
+new file mode 100644
+index 0000000..ca742ef
+--- /dev/null
++++ b/LIBRARY_TRUTH_ALPHA8_VALIDATION.md
+@@ -0,0 +1,20 @@
++# Library Truth alpha8 validation plan
++
++## Accepted baseline
++
++The alpha7 desktop rehearsal completed all 4,305 eligible broadcasts with exact preview counts, zero foreign-key violations, SQLite integrity `ok`, backup restore `ok` and identical source/rollback fingerprints. It reported 7,165 coarse metadata/reference differences across 2,195 Ron & Fez broadcasts.
++
++## Alpha8 acceptance criteria
++
++1. Preserve every accepted parser, broadcast, recording, file, coverage and adoption-preview count.
++2. Preserve alpha7's exact structural and state-migration operation counts.
++3. Persist one forensic row per meaningful field/reference difference.
++4. Include all candidate values, source episode IDs and matching provenance.
++5. Auto-resolve only deterministic, lossless or decisively evidenced cases.
++6. Preserve alternate values even when a winner is selected.
++7. Leave comparable contradictions unresolved.
++8. Maintain zero foreign-key violations, SQLite integrity `ok`, validated backup restore and identical rollback fingerprints.
++9. Keep all 15 review-recommended and 10 blocked broadcasts outside the rehearsal.
++10. Keep live adoption disabled.
++
++The full desktop schema-6 `.trvtruth` export is required before alpha8 can be promoted.
+diff --git a/LIBRARY_TRUTH_ENGINE.md b/LIBRARY_TRUTH_ENGINE.md
+index daf1749..61d8ee4 100644
+--- a/LIBRARY_TRUTH_ENGINE.md
++++ b/LIBRARY_TRUTH_ENGINE.md
+@@ -1,27 +1,30 @@
+-# Library Truth Engine — Parser V3
++# Library Truth Engine — Parser V3 and Adoption Forensics
+ 
+-Parser V3 is the alpha6 shadow interpretation pipeline. It does not replace the live library parser and cannot modify episodes or files.
++Parser V3 remains the shadow interpretation pipeline. It does not replace the live library parser and cannot directly modify episodes or files.
+ 
+ ## Pipeline
+ 
+-1. Read the physical file inventory and preservation evidence.
++1. Read physical inventory and preservation evidence.
+ 2. Learn folder-level show/date conventions.
+ 3. Parse show, date, slot, multipart and headline evidence.
+ 4. Assemble filename-family-safe recording variants.
+ 5. Rank complete, alternate, multipart, partial, fragment and damaged recordings.
+ 6. Audit suspicious duration/programme families and cross-identity audio conflicts.
+-7. Persist direct Recording Segment → Broadcast Coverage rows.
+-8. Persist review-only equivalent/composite same-date coverage evidence.
+-9. Calculate conservative readiness without changing the 15 review and 10 blocked desktop cases.
+-10. Persist one deterministic, non-executable adoption preview per canonical broadcast.
+-11. Export files, broadcasts, recordings, coverage, previews, years and conflicts.
++7. Persist direct and review-only Recording Segment → Broadcast Coverage evidence.
++8. Calculate conservative readiness while retaining review and blocked cases.
++9. Persist one deterministic, guarded adoption preview per canonical broadcast.
++10. Rehearse eligible plans in a validated disposable clone and prove exact rollback.
++11. Classify field-level metadata/reference differences with candidate values and matching provenance.
++12. Export files, broadcasts, recordings, coverage, previews, rehearsal results and conflict forensics.
+ 
+-## Alpha6 safeguards
++## Alpha8 safeguards
+ 
+-- All alpha5 multipart-family corrections remain active.
+-- V1/V2 and source-style lineages remain separate.
+-- Direct coverage never changes canonical identity.
+-- Inferred cross-slot coverage always requires review.
+-- Provisional survivor selection is deterministic and explicitly non-authoritative.
+-- Adoption previews cannot execute writes.
++- All accepted alpha5–alpha7 corpus and transaction safeguards remain active.
++- Structural canonical identity comes from Library Truth, not arbitrary duplicate episode rows.
++- Equivalent formatting and empty-versus-populated differences are losslessly normalized.
++- People/source lists are unioned without discarding any entry.
++- Placeholders can lose to one specific value; protected/manual provenance can win only when it matches that value.
++- Comparable contradictions remain `Needs review`.
++- Every alternate value remains in the forensic ledger.
++- All merge decisions run only in the disposable transaction and are rolled back.
+ - The live library remains unchanged.
+diff --git a/README.md b/README.md
+index d54acfb..7bf823f 100644
+--- a/README.md
++++ b/README.md
+@@ -1,9 +1,11 @@
+-# Radio Vault v0.28.0-alpha7 buildfix1 — Transactional Adoption Rehearsal
++# Radio Vault v0.28.0-alpha8 — Conflict Forensics
+ 
+-Version: `0.28.0-alpha7-transactional-rehearsal-buildfix1`
++Version: `0.28.0-alpha8-conflict-forensics`
+ 
+-Alpha7 builds on the full-corpus-confirmed alpha6 Library Truth model. It keeps the Broadcast → Recording → Physical File, segment coverage and guarded adoption-preview data unchanged, then executes the planned structural and state-preservation operations only inside a disposable SQLite clone.
++Alpha8 builds on the full-corpus-confirmed alpha7 transactional-rehearsal baseline. The accepted Broadcast → Recording → Physical File model, segment coverage, adoption previews, backup creation, integrity checks and mandatory rollback remain unchanged.
+ 
+-Before each rehearsal Radio Vault creates a retained online backup and verifies that it can be reopened with SQLite integrity `ok`. The clone then receives the proposed canonical broadcasts, recordings, segments, coverage rows, media-file reassignments, episode mappings and losslessly mergeable user/research state. Foreign-key and integrity checks run before the transaction is rolled back, and a logical fingerprint confirms that every non-shadow table returned to its original state.
++The new conflict-forensics layer replaces alpha7's coarse metadata-conflict count with field-level evidence. During the disposable rehearsal, Radio Vault records every competing episode value, the source episode, research provenance, confidence, selected value, merge rule, preserved alternates and whether human review is still required.
+ 
+-The live library still cannot be adopted in this build. Only the shadow rehearsal run and per-broadcast result ledger are written to the working database; live episodes, media-file links, playback state, favourites, Moments, research and transcripts are not changed.
++Deterministic policies cover canonical identity, equivalent formatting, empty-versus-populated values, mergeable people/source lists, specific values over placeholders, protected research provenance, manual edits and decisive quality differences. A value is never credited with provenance belonging to a different value. Genuinely comparable contradictions remain unresolved.
++
++The rehearsal still runs only against a validated disposable SQLite clone and is always rolled back. The live library cannot be adopted in this build. Only shadow rehearsal summaries, per-broadcast results and the forensic ledger are persisted after rollback verification.
+diff --git a/RELEASE_BASELINE.md b/RELEASE_BASELINE.md
+index 342eaae..cc185cd 100644
+--- a/RELEASE_BASELINE.md
++++ b/RELEASE_BASELINE.md
+@@ -1,7 +1,9 @@
+-# v0.28.0-alpha7 buildfix1 development baseline
++# v0.28.0-alpha8 development baseline
+ 
+-Current version: `0.28.0-alpha7-transactional-rehearsal-buildfix1`
++Current version: `0.28.0-alpha8-conflict-forensics`
+ 
+-Source baseline: the full-corpus-confirmed `0.28.0-alpha6-adoption-preview` build.
++Source baseline: the full-corpus-confirmed `0.28.0-alpha7-transactional-rehearsal-buildfix1` build.
+ 
+-Alpha7 must preserve the accepted alpha6 corpus totals, parser behaviour, recording structure, 7,106 coverage rows and 4,330 adoption previews. Its only executable migration route is a disposable clone transaction that always rolls back. Live adoption remains disabled.
++Alpha8 must preserve the accepted 7,169-file desktop Library Truth model, 4,330 canonical broadcasts, 7,106 coverage rows, 4,330 adoption previews and alpha7's exact 4,305-broadcast transaction/rollback behaviour. Its only new responsibility is to explain and classify field-level metadata/reference differences inside the disposable rehearsal.
++
++Database schema: 44. Library Truth export schema: 6. Live adoption remains disabled.
+diff --git a/RELEASE_CHECKLIST.md b/RELEASE_CHECKLIST.md
+index d138677..b9ae44e 100644
+--- a/RELEASE_CHECKLIST.md
++++ b/RELEASE_CHECKLIST.md
+@@ -1,18 +1,21 @@
+-# v0.28.0-alpha7 Transactional Adoption Rehearsal checklist
++# v0.28.0-alpha8 Conflict Forensics checklist
+ 
+-- [ ] Application reports `0.28.0-alpha7-transactional-rehearsal-buildfix1`.
+-- [ ] Database initializes or upgrades to schema 43 with a pre-upgrade backup.
++- [ ] Application reports `0.28.0-alpha8-conflict-forensics`.
++- [ ] Database initializes or upgrades to schema 44 with a pre-upgrade backup.
+ - [ ] Full solution builds on .NET 8.
+-- [ ] All smoke tests pass.
+-- [ ] Desktop Library Truth scan still reports 7,169 files and 4,330 canonical broadcasts.
+-- [ ] Adoption states remain 4,305 ready, 15 review recommended and 10 blocked unless new corpus evidence explains a change.
++- [ ] All 97 smoke tests pass.
++- [ ] Desktop Library Truth remains at 7,169 files and 4,330 canonical broadcasts.
++- [ ] Adoption states remain 4,305 ready, 15 review recommended and 10 blocked unless new evidence explains a change.
+ - [ ] Coverage remains 7,106 rows: 7,096 direct and 10 review-only.
+ - [ ] Exactly 4,330 adoption previews remain present.
+-- [ ] The rehearsal loads all 4,305 eligible previews and rejects incomplete or internally inconsistent plans.
+-- [ ] The retained pre-rehearsal backup reopens with SQLite integrity `ok`.
+-- [ ] The disposable transaction writes exactly the operations persisted by each preview.
++- [ ] The rehearsal executes the same exact alpha7 structural operation counts.
++- [ ] Every reported field/reference difference has candidate values, source episode evidence and a classification.
++- [ ] Protected/manual provenance is used only when it matches the candidate value.
++- [ ] Auto-resolved cases record their rule, selected value, confidence and preserved alternates.
++- [ ] Comparable contradictions remain marked `Needs review` rather than receiving a silent winner.
++- [ ] The retained backup reopens with SQLite integrity `ok`.
+ - [ ] Foreign-key violations are zero and SQLite integrity is `ok` before rollback.
+ - [ ] Source and post-rollback logical fingerprints are identical.
+ - [ ] Normal browsing, playback, favourites, Moments, research and transcripts remain unchanged.
+-- [ ] Exported `.trvtruth` uses schema version 5 and includes rehearsal summary and per-broadcast evidence.
++- [ ] Exported `.trvtruth` uses schema version 6 and includes the conflict-forensics ledger.
+ - [ ] No live adoption command exists.
+diff --git a/RELEASE_NOTES_0.28.0_ALPHA8.md b/RELEASE_NOTES_0.28.0_ALPHA8.md
+new file mode 100644
+index 0000000..d7cd44a
+--- /dev/null
++++ b/RELEASE_NOTES_0.28.0_ALPHA8.md
+@@ -0,0 +1,21 @@
++# Radio Vault v0.28.0-alpha8 — Conflict Forensics
++
++## Added
++
++- Field-level rehearsal-conflict rows keyed by canonical broadcast and metadata field.
++- Full candidate-value and provenance evidence for every recorded difference.
++- Deterministic classifications for canonical identity, equivalent formatting, empty versus populated, mergeable lists, specific over placeholder, protected provenance, manual edits and quality-ranked winners.
++- Explicit unresolved state for genuinely comparable contradictory values.
++- Preserved-alternate counts and selected-value evidence.
++- Headline-review comparison and remaining transcript/voice alias-reference forensics.
++- Conflict Forensics tab with value, provenance and policy detail.
++- Schema-6 `.trvtruth` export containing the complete forensic ledger.
++- Database schema 44 and focused regression coverage.
++
++## Safety
++
++- The policies run only inside the disposable adoption-rehearsal transaction.
++- The transaction is always rolled back and compared with the source logical fingerprint.
++- Provenance is credited only when its stored value matches the candidate value.
++- Every alternate remains in the forensic ledger even when a deterministic winner exists.
++- No live adoption command exists.
+diff --git a/ROADMAP.md b/ROADMAP.md
+index b383f29..596b313 100644
+--- a/ROADMAP.md
++++ b/ROADMAP.md
+@@ -3,10 +3,11 @@
+ 1. **alpha1 — Shadow index (completed):** evidence-bearing parser, context learning and Broadcast → Recording → Physical File modelling.
+ 2. **alpha2 — Corpus corrections (completed):** date and show parsing fixes from the first export.
+ 3. **alpha3 — Recording Structure & Merge Audit (completed):** recording roles, preferred-capture ranking, duplicate/conflict audit and readiness summary.
+-4. **alpha4 — Recording Integrity:** filename-family-safe multipart assembly, numeric ambiguity, suspicious duration/programme clusters and same-date coverage audit.
+-5. **alpha5 — Multipart Family Corrections (completed):** repaired safe suffix over-separation, persisted context-promoted part positions and passed the complete 7,169-file desktop corpus.
+-6. **alpha6 — Coverage Evidence & Adoption Preview (current):** persist Recording Segment → Broadcast Coverage evidence and one guarded, non-executable adoption preview per canonical broadcast.
+-7. **alpha7 — Transaction and state-preservation design:** design backup verification, survivor-state merging, rollback ledgers and explicit approval without yet enabling broad adoption.
+-8. **Later adoption milestone:** only after desktop and laptop truth exports, transaction simulations and rollback tests pass.
++4. **alpha4 — Recording Integrity (completed):** filename-family-safe multipart assembly, ambiguity and suspicious coverage audits.
++5. **alpha5 — Multipart Family Corrections (completed):** repaired safe suffix over-separation and passed the complete 7,169-file desktop corpus.
++6. **alpha6 — Coverage Evidence & Adoption Preview (completed):** persisted segment coverage and 4,330 guarded adoption plans.
++7. **alpha7 — Transactional Rehearsal (completed):** validated backup, exact disposable transaction, state preservation, integrity checks and rollback across all 4,305 eligible broadcasts.
++8. **alpha8 — Conflict Forensics (current):** classify every metadata/reference difference, preserve provenance and alternates, and reduce the unresolved policy set to genuinely ambiguous cases.
++9. **Next adoption milestone:** committed adoption on a disposable database clone only after alpha8's unresolved set is small, explicit and explainable.
+ 
+ Major feature expansion remains frozen while the Library Truth Engine is being established.
+diff --git a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+index c6c7114..1c45603 100644
+--- a/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
++++ b/TheRadioVault.Core/LibraryTruth/LibraryTruthParser.cs
+@@ -12,7 +12,7 @@ namespace TheRadioVault.Core.LibraryTruth;
+ /// </summary>
+ public sealed class LibraryTruthParser
+ {
+-    public const string CurrentVersion = "0.28.0-alpha7-transactional-rehearsal-buildfix1-v3";
++    public const string CurrentVersion = "0.28.0-alpha8-conflict-forensics-v3";
+ 
+     private static readonly Regex IsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})[\s._-]+(?<month>\d{1,2})[\s._-]+(?<day>\d{1,2})(?!\d)");
+     private static readonly Regex CompactIsoDate = Rx(@"(?<!\d)(?<year>(?:19|20)\d{2})(?<month>\d{2})(?<day>\d{2})(?!\d)");
+diff --git a/TheRadioVault.Data/Database/SqliteDatabase.cs b/TheRadioVault.Data/Database/SqliteDatabase.cs
+index 08e8319..6895324 100644
+--- a/TheRadioVault.Data/Database/SqliteDatabase.cs
++++ b/TheRadioVault.Data/Database/SqliteDatabase.cs
+@@ -9,7 +9,7 @@ namespace TheRadioVault.Data.Database;
+ /// </summary>
+ public sealed class SqliteDatabase
+ {
+-    public const int CurrentSchemaVersion = 43;
++    public const int CurrentSchemaVersion = 44;
+ 
+     private readonly object _initializationGate = new();
+     private bool _initialized;
+@@ -334,6 +334,12 @@ public sealed class SqliteDatabase
+             EnsureColumn(connection, columnCache, "library_truth_recordings", "duration_ratio", "REAL NOT NULL DEFAULT 0");
+             EnsureColumn(connection, columnCache, "library_truth_recordings", "is_preferred_candidate", "INTEGER NOT NULL DEFAULT 0");
+             EnsureColumn(connection, columnCache, "library_truth_recordings", "review_reason", "TEXT NOT NULL DEFAULT ''");
++            EnsureColumn(connection, columnCache, "library_truth_rehearsal_runs", "auto_resolved_conflicts", "INTEGER NOT NULL DEFAULT 0");
++            EnsureColumn(connection, columnCache, "library_truth_rehearsal_runs", "unresolved_conflicts", "INTEGER NOT NULL DEFAULT 0");
++            EnsureColumn(connection, columnCache, "library_truth_rehearsal_runs", "preserved_alternates", "INTEGER NOT NULL DEFAULT 0");
++            EnsureColumn(connection, columnCache, "library_truth_rehearsal_items", "auto_resolved_conflicts", "INTEGER NOT NULL DEFAULT 0");
++            EnsureColumn(connection, columnCache, "library_truth_rehearsal_items", "unresolved_conflicts", "INTEGER NOT NULL DEFAULT 0");
++            EnsureColumn(connection, columnCache, "library_truth_rehearsal_items", "preserved_alternates", "INTEGER NOT NULL DEFAULT 0");
+             EnsurePerformanceIndexes(connection);
+ 
+             using (var schemaVersion = connection.CreateCommand())
+@@ -570,6 +576,9 @@ public sealed class SqliteDatabase
+                 alias_rows_retired INTEGER NOT NULL DEFAULT 0,
+                 state_rows_migrated INTEGER NOT NULL DEFAULT 0,
+                 metadata_conflicts INTEGER NOT NULL DEFAULT 0,
++                auto_resolved_conflicts INTEGER NOT NULL DEFAULT 0,
++                unresolved_conflicts INTEGER NOT NULL DEFAULT 0,
++                preserved_alternates INTEGER NOT NULL DEFAULT 0,
+                 transcript_conflicts INTEGER NOT NULL DEFAULT 0,
+                 foreign_key_violations INTEGER NOT NULL DEFAULT 0,
+                 integrity_check TEXT NOT NULL DEFAULT '',
+@@ -589,6 +598,9 @@ public sealed class SqliteDatabase
+                 files_reassigned INTEGER NOT NULL DEFAULT 0,
+                 state_rows_migrated INTEGER NOT NULL DEFAULT 0,
+                 metadata_conflicts INTEGER NOT NULL DEFAULT 0,
++                auto_resolved_conflicts INTEGER NOT NULL DEFAULT 0,
++                unresolved_conflicts INTEGER NOT NULL DEFAULT 0,
++                preserved_alternates INTEGER NOT NULL DEFAULT 0,
+                 transcript_conflicts INTEGER NOT NULL DEFAULT 0,
+                 outcome TEXT NOT NULL DEFAULT 'Passed',
+                 evidence TEXT NOT NULL DEFAULT '',
+@@ -596,6 +608,29 @@ public sealed class SqliteDatabase
+             );
+             CREATE INDEX IF NOT EXISTS ix_library_truth_rehearsal_items_outcome
+                 ON library_truth_rehearsal_items(rehearsal_run_id,outcome,canonical_key);
++
++            CREATE TABLE IF NOT EXISTS library_truth_rehearsal_conflicts (
++                id INTEGER PRIMARY KEY AUTOINCREMENT,
++                rehearsal_run_id INTEGER NOT NULL REFERENCES library_truth_rehearsal_runs(id) ON DELETE CASCADE,
++                canonical_key TEXT NOT NULL,
++                field_name TEXT NOT NULL,
++                conflict_kind TEXT NOT NULL DEFAULT 'Episode metadata',
++                classification TEXT NOT NULL DEFAULT '',
++                selected_episode_id INTEGER NULL,
++                selected_value TEXT NOT NULL DEFAULT '',
++                candidate_values_json TEXT NOT NULL DEFAULT '[]',
++                provenance_json TEXT NOT NULL DEFAULT '[]',
++                resolution TEXT NOT NULL DEFAULT 'manual_review',
++                auto_resolved INTEGER NOT NULL DEFAULT 0,
++                requires_review INTEGER NOT NULL DEFAULT 1,
++                confidence_score INTEGER NOT NULL DEFAULT 0,
++                preserved_alternate_count INTEGER NOT NULL DEFAULT 0,
++                evidence TEXT NOT NULL DEFAULT ''
++            );
++            CREATE INDEX IF NOT EXISTS ix_library_truth_rehearsal_conflicts_review
++                ON library_truth_rehearsal_conflicts(rehearsal_run_id,requires_review,canonical_key,field_name);
++            CREATE INDEX IF NOT EXISTS ix_library_truth_rehearsal_conflicts_classification
++                ON library_truth_rehearsal_conflicts(rehearsal_run_id,classification,field_name);
+             """;
+         command.ExecuteNonQuery();
+     }
+diff --git a/TheRadioVault.Services/Models/LibraryTruthModels.cs b/TheRadioVault.Services/Models/LibraryTruthModels.cs
+index 12041af..62aaf7e 100644
+--- a/TheRadioVault.Services/Models/LibraryTruthModels.cs
++++ b/TheRadioVault.Services/Models/LibraryTruthModels.cs
+@@ -238,7 +238,7 @@ public sealed record LibraryTruthConflictView(
+ 
+ public sealed class LibraryTruthExportReport
+ {
+-    public int SchemaVersion { get; set; } = 5;
++    public int SchemaVersion { get; set; } = 6;
+     public string AppVersion { get; set; } = string.Empty;
+     public DateTimeOffset ExportedAt { get; set; } = DateTimeOffset.UtcNow;
+     public LibraryTruthRunSummary Summary { get; set; } = LibraryTruthRunSummary.Empty;
+@@ -253,4 +253,5 @@ public sealed class LibraryTruthExportReport
+     public IReadOnlyList<LibraryTruthAdoptionPreviewView> AdoptionPreviews { get; set; } = Array.Empty<LibraryTruthAdoptionPreviewView>();
+     public LibraryTruthRehearsalSummary Rehearsal { get; set; } = LibraryTruthRehearsalSummary.Empty;
+     public IReadOnlyList<LibraryTruthRehearsalItem> RehearsalItems { get; set; } = Array.Empty<LibraryTruthRehearsalItem>();
++    public IReadOnlyList<LibraryTruthConflictForensic> ConflictForensics { get; set; } = Array.Empty<LibraryTruthConflictForensic>();
+ }
+diff --git a/TheRadioVault.Services/Models/LibraryTruthRehearsalModels.cs b/TheRadioVault.Services/Models/LibraryTruthRehearsalModels.cs
+index 0bca0b5..076c0c9 100644
+--- a/TheRadioVault.Services/Models/LibraryTruthRehearsalModels.cs
++++ b/TheRadioVault.Services/Models/LibraryTruthRehearsalModels.cs
+@@ -23,6 +23,9 @@ public sealed record LibraryTruthRehearsalSummary(
+     int AliasRowsRetired,
+     int StateRowsMigrated,
+     int MetadataConflicts,
++    int AutoResolvedConflicts,
++    int UnresolvedConflicts,
++    int PreservedAlternates,
+     int TranscriptConflicts,
+     int ForeignKeyViolations,
+     string IntegrityCheck,
+@@ -32,12 +35,12 @@ public sealed record LibraryTruthRehearsalSummary(
+ {
+     public static LibraryTruthRehearsalSummary Empty { get; } = new(
+         0, 0, DateTimeOffset.MinValue, null, "not-run", string.Empty, string.Empty, string.Empty,
+-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, string.Empty, string.Empty, false,
++        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, string.Empty, string.Empty, false,
+         "No adoption rehearsal has been run yet.");
+ 
+     public string CompletedDisplay => CompletedAt?.ToLocalTime().ToString("g") ?? "Not completed";
+     public string RollbackDisplay => RollbackVerified ? "Verified" : "Not verified";
+-    public string SummaryDisplay => $"{EligibleBroadcasts:N0} rehearsed · {FileReassignments:N0} file links · {AliasRowsRetired:N0} aliases · {MetadataConflicts:N0} metadata conflicts · rollback {RollbackDisplay.ToLowerInvariant()}";
++    public string SummaryDisplay => $"{EligibleBroadcasts:N0} rehearsed · {FileReassignments:N0} file links · {AliasRowsRetired:N0} aliases · {AutoResolvedConflicts:N0} policy-resolved · {UnresolvedConflicts:N0} need review · rollback {RollbackDisplay.ToLowerInvariant()}";
+ }
+ 
+ public sealed record LibraryTruthRehearsalItem(
+@@ -49,6 +52,9 @@ public sealed record LibraryTruthRehearsalItem(
+     int FilesReassigned,
+     int StateRowsMigrated,
+     int MetadataConflicts,
++    int AutoResolvedConflicts,
++    int UnresolvedConflicts,
++    int PreservedAlternates,
+     int TranscriptConflicts,
+     string Outcome,
+     string Evidence)
+@@ -56,5 +62,29 @@ public sealed record LibraryTruthRehearsalItem(
+     public string BroadcastDisplay => CanonicalKey.Replace("|", " · ", StringComparison.Ordinal);
+     public string SurvivorDisplay => $"Episode {SurvivorEpisodeId:N0}";
+     public string OperationsDisplay => $"{FilesReassigned:N0} files · {StateRowsMigrated:N0} state rows";
+-    public string ConflictDisplay => $"{MetadataConflicts:N0} metadata · {TranscriptConflicts:N0} transcript";
++    public string ConflictDisplay => $"{AutoResolvedConflicts:N0} auto · {UnresolvedConflicts:N0} review · {TranscriptConflicts:N0} transcript";
++}
++
++public sealed record LibraryTruthConflictForensic(
++    long Id,
++    long RehearsalRunId,
++    string CanonicalKey,
++    string FieldName,
++    string ConflictKind,
++    string Classification,
++    long? SelectedEpisodeId,
++    string SelectedValue,
++    string CandidateValues,
++    string Provenance,
++    string Resolution,
++    bool AutoResolved,
++    bool RequiresReview,
++    int ConfidenceScore,
++    int PreservedAlternateCount,
++    string Evidence)
++{
++    public string BroadcastDisplay => CanonicalKey.Replace("|", " · ", StringComparison.Ordinal);
++    public string PolicyDisplay => RequiresReview ? "Needs review" : AutoResolved ? "Auto-resolved" : "Informational";
++    public string SelectedEpisodeDisplay => SelectedEpisodeId.HasValue ? $"Episode {SelectedEpisodeId.Value:N0}" : "Canonical value";
++    public string ConfidenceDisplay => $"{ConfidenceScore}%";
+ }
+diff --git a/TheRadioVault.Services/Services/LibraryTruthAdoptionRehearsalService.cs b/TheRadioVault.Services/Services/LibraryTruthAdoptionRehearsalService.cs
+index 7653521..e81c55e 100644
+--- a/TheRadioVault.Services/Services/LibraryTruthAdoptionRehearsalService.cs
++++ b/TheRadioVault.Services/Services/LibraryTruthAdoptionRehearsalService.cs
+@@ -14,7 +14,7 @@ namespace TheRadioVault.Services.Services;
+ /// rolled back and passed integrity/fingerprint checks; no live episode or
+ /// media-file row is changed by this service.
+ /// </summary>
+-public sealed class LibraryTruthAdoptionRehearsalService
++public sealed partial class LibraryTruthAdoptionRehearsalService
+ {
+     private readonly SqliteDatabase _database;
+     private readonly JsonSerializerOptions _json = new(JsonSerializerDefaults.Web);
+@@ -29,8 +29,8 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         command.CommandText = """
+             SELECT id,truth_run_id,started_at,completed_at,status,backup_path,source_fingerprint,rollback_fingerprint,
+                    eligible_broadcasts,canonical_writes,recording_writes,segment_writes,coverage_writes,file_reassignments,
+-                   alias_rows_retired,state_rows_migrated,metadata_conflicts,transcript_conflicts,foreign_key_violations,
+-                   integrity_check,backup_restore_check,rollback_verified,message
++                   alias_rows_retired,state_rows_migrated,metadata_conflicts,auto_resolved_conflicts,unresolved_conflicts,preserved_alternates,
++                   transcript_conflicts,foreign_key_violations,integrity_check,backup_restore_check,rollback_verified,message
+               FROM library_truth_rehearsal_runs
+              ORDER BY id DESC LIMIT 1
+             """;
+@@ -44,10 +44,11 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         using var command = connection.CreateCommand();
+         command.CommandText = """
+             SELECT i.id,i.rehearsal_run_id,i.canonical_key,i.survivor_episode_id,i.alias_episode_ids_json,
+-                   i.files_reassigned,i.state_rows_migrated,i.metadata_conflicts,i.transcript_conflicts,i.outcome,i.evidence
++                   i.files_reassigned,i.state_rows_migrated,i.metadata_conflicts,i.auto_resolved_conflicts,i.unresolved_conflicts,
++                   i.preserved_alternates,i.transcript_conflicts,i.outcome,i.evidence
+               FROM library_truth_rehearsal_items i
+              WHERE i.rehearsal_run_id=(SELECT COALESCE(MAX(id),0) FROM library_truth_rehearsal_runs)
+-             ORDER BY CASE i.outcome WHEN 'Needs policy' THEN 0 ELSE 1 END,i.canonical_key
++             ORDER BY CASE i.outcome WHEN 'Needs review' THEN 0 ELSE 1 END,i.canonical_key
+              LIMIT $limit
+             """;
+         command.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 50000));
+@@ -58,7 +59,8 @@ public sealed class LibraryTruthAdoptionRehearsalService
+             result.Add(new LibraryTruthRehearsalItem(
+                 reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetInt64(3),
+                 FormatIds(reader.GetString(4)), reader.GetInt32(5), reader.GetInt32(6), reader.GetInt32(7),
+-                reader.GetInt32(8), reader.GetString(9), reader.GetString(10)));
++                reader.GetInt32(8), reader.GetInt32(9), reader.GetInt32(10), reader.GetInt32(11),
++                reader.GetString(12), reader.GetString(13)));
+         }
+         return result;
+     }
+@@ -101,6 +103,7 @@ public sealed class LibraryTruthAdoptionRehearsalService
+             var completedAt = DateTimeOffset.UtcNow;
+             CompleteReport(reportId, completedAt, backupRestoreCheck, result);
+             PersistItems(reportId, result.Items);
++            PersistConflicts(reportId, result.Conflicts);
+             return GetSummary(reportId);
+         }
+         catch (OperationCanceledException)
+@@ -157,7 +160,11 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         var aliasRowsRetired = 0;
+         var stateRowsMigrated = 0;
+         var metadataConflicts = 0;
++        var autoResolvedConflicts = 0;
++        var unresolvedConflicts = 0;
++        var preservedAlternates = 0;
+         var transcriptConflicts = 0;
++        var conflictForensics = new List<ConflictForensicResult>();
+         var foreignKeyViolations = 0;
+         var integrityCheck = string.Empty;
+         var rollbackFingerprint = string.Empty;
+@@ -183,7 +190,11 @@ public sealed class LibraryTruthAdoptionRehearsalService
+                 aliasRowsRetired += item.AliasesRetired;
+                 stateRowsMigrated += item.StateRowsMigrated;
+                 metadataConflicts += item.MetadataConflicts;
++                autoResolvedConflicts += item.AutoResolvedConflicts;
++                unresolvedConflicts += item.UnresolvedConflicts;
++                preservedAlternates += item.PreservedAlternates;
+                 transcriptConflicts += item.TranscriptConflicts;
++                conflictForensics.AddRange(item.Conflicts);
+             }
+ 
+             foreignKeyViolations = ScalarInt(connection, transaction, "SELECT COUNT(*) FROM pragma_foreign_key_check");
+@@ -204,8 +215,9 @@ public sealed class LibraryTruthAdoptionRehearsalService
+ 
+         return new RehearsalExecution(
+             previews.Count, canonicalWrites, recordingWrites, segmentWrites, coverageWrites, fileReassignments,
+-            aliasRowsRetired, stateRowsMigrated, metadataConflicts, transcriptConflicts, foreignKeyViolations,
+-            integrityCheck, sourceFingerprint, rollbackFingerprint, rollbackVerified, items);
++            aliasRowsRetired, stateRowsMigrated, metadataConflicts, autoResolvedConflicts, unresolvedConflicts,
++            preservedAlternates, transcriptConflicts, foreignKeyViolations, integrityCheck, sourceFingerprint,
++            rollbackFingerprint, rollbackVerified, items, conflictForensics);
+     }
+ 
+     private RehearsalItemResult RehearseBroadcast(
+@@ -269,11 +281,9 @@ public sealed class LibraryTruthAdoptionRehearsalService
+                AND id IN (SELECT media_file_id FROM library_truth_files WHERE run_id=$run AND canonical_broadcast_key=$key)
+             """, ("$survivor", survivor), ("$run", truthRunId), ("$key", preview.CanonicalKey)), CultureInfo.InvariantCulture);
+ 
+-        var metadataConflictCount = CountMetadataConflicts(connection, transaction, idSql);
++        var conflictForensics = AnalyzeMetadataForensics(connection, transaction, truthRunId, preview.CanonicalKey, ids, survivor);
+         var transcriptCount = ScalarInt(connection, transaction, $"SELECT COUNT(*) FROM transcripts WHERE episode_id IN ({idSql})");
+         var transcriptConflictCount = transcriptCount > 1 ? transcriptCount - 1 : 0;
+-        var headlineReviewCount = ScalarInt(connection, transaction, $"SELECT COUNT(*) FROM headline_reviews WHERE episode_id IN ({idSql})");
+-        if (headlineReviewCount > 1) metadataConflictCount += headlineReviewCount - 1;
+         var stateRows = 0;
+ 
+         // Aggregate the state that has a clear lossless rule.
+@@ -293,8 +303,9 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         stateRows += Execute(connection, transaction, $"UPDATE missing_broadcast_research_revisions SET matched_episode_id=$survivor WHERE matched_episode_id IN ({aliasSql})", ("$survivor", survivor));
+         stateRows += Execute(connection, transaction, $"UPDATE transcription_jobs SET episode_id=$survivor WHERE episode_id IN ({aliasSql})", ("$survivor", survivor));
+ 
+-        if (headlineReviewCount == 1)
+-            stateRows += Execute(connection, transaction, $"UPDATE headline_reviews SET episode_id=$survivor WHERE episode_id IN ({idSql}) AND episode_id<>$survivor", ("$survivor", survivor));
++        var headlineAnalysis = AnalyzeHeadlineReviewForensics(connection, transaction, preview.CanonicalKey, ids, survivor);
++        stateRows += headlineAnalysis.StateRowsMigrated;
++        conflictForensics.AddRange(headlineAnalysis.Forensics);
+ 
+         // A single transcript can move losslessly. Multiple transcripts remain on mapped aliases and are surfaced as policy conflicts.
+         if (transcriptCount == 1)
+@@ -304,7 +315,14 @@ public sealed class LibraryTruthAdoptionRehearsalService
+             stateRows += Execute(connection, transaction, $"UPDATE OR IGNORE voice_samples SET episode_id=$survivor WHERE episode_id IN ({aliasSql})", ("$survivor", survivor));
+         }
+ 
+-        metadataConflictCount += CountRemainingAliasReferences(connection, transaction, aliasSql);
++        var aliasAnalysis = AnalyzeRemainingAliasReferences(connection, transaction, preview.CanonicalKey, aliases, survivor);
++        stateRows += aliasAnalysis.StateRowsMigrated;
++        conflictForensics.AddRange(aliasAnalysis.Forensics);
++
++        var metadataConflictCount = conflictForensics.Count;
++        var autoResolvedConflictCount = conflictForensics.Count(x => x.AutoResolved && !x.RequiresReview);
++        var unresolvedConflictCount = conflictForensics.Count(x => x.RequiresReview);
++        var preservedAlternateCount = conflictForensics.Sum(x => x.PreservedAlternateCount);
+ 
+         // Preserve favourite and the strongest listening status on the survivor.
+         Execute(connection, transaction, $"""
+@@ -338,14 +356,16 @@ public sealed class LibraryTruthAdoptionRehearsalService
+                 $"aliases {aliasesRetired}/{preview.RetireEpisodeCount}.");
+         }
+ 
+-        var outcome = metadataConflictCount > 0 || transcriptConflictCount > 0 ? "Needs policy" : "Passed";
++        var outcome = unresolvedConflictCount > 0 || transcriptConflictCount > 0 ? "Needs review" : "Policy resolved";
+         var evidence = $"Disposable transaction created {canonicalWrites:N0} canonical row, {recordingWrites:N0} recording rows, {segmentWrites:N0} segment rows and {coverageWrites:N0} coverage rows. " +
+                        $"It reassigned {filesReassigned:N0} media-file links, migrated {stateRows:N0} losslessly mergeable state rows and retired {aliasesRetired:N0} redundant live rows as mapped hidden aliases. " +
+-                       $"{metadataConflictCount:N0} metadata field conflict(s) and {transcriptConflictCount:N0} additional transcript(s) require an explicit policy before live adoption. Every change is rolled back.";
++                       $"Alpha8 classified {metadataConflictCount:N0} field/reference difference(s): {autoResolvedConflictCount:N0} were resolved deterministically, {unresolvedConflictCount:N0} still require review, and {preservedAlternateCount:N0} alternate values were preserved. " +
++                       $"{transcriptConflictCount:N0} additional transcript(s) require policy. Every change is rolled back.";
+ 
+         return new RehearsalItemResult(preview.CanonicalKey, survivor, aliases, filesReassigned, stateRows,
+-            metadataConflictCount, transcriptConflictCount, outcome, evidence, canonicalWrites, recordingWrites,
+-            segmentWrites, coverageWrites, aliasesRetired);
++            metadataConflictCount, autoResolvedConflictCount, unresolvedConflictCount, preservedAlternateCount,
++            transcriptConflictCount, outcome, evidence, canonicalWrites, recordingWrites, segmentWrites,
++            coverageWrites, aliasesRetired, conflictForensics);
+     }
+ 
+     private static int MergePlaybackState(SqliteConnection connection, SqliteTransaction transaction, IReadOnlyList<long> ids, long survivor)
+@@ -380,36 +400,6 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         return before;
+     }
+ 
+-    private static int CountRemainingAliasReferences(SqliteConnection connection, SqliteTransaction transaction, string aliasSql)
+-    {
+-        if (string.Equals(aliasSql, "NULL", StringComparison.Ordinal)) return 0;
+-        var checks = new[]
+-        {
+-            $"SELECT COUNT(*) FROM headline_reviews WHERE episode_id IN ({aliasSql})",
+-            $"SELECT COUNT(*) FROM research_reconciliation_candidates WHERE episode_id IN ({aliasSql})",
+-            $"SELECT COUNT(*) FROM transcript_imports WHERE episode_id IN ({aliasSql})",
+-            $"SELECT COUNT(*) FROM voice_samples WHERE episode_id IN ({aliasSql})"
+-        };
+-        return checks.Sum(sql => ScalarInt(connection, transaction, sql));
+-    }
+-
+-    private static int CountMetadataConflicts(SqliteConnection connection, SqliteTransaction transaction, string idSql)
+-    {
+-        var fields = new[]
+-        {
+-            "collection_id", "air_date", "title", "description", "notes", "artwork_path", "broadcast_slot", "edition",
+-            "archive_notes", "broadcast_variant", "broadcast_era", "episode_type", "research_sources", "hosts", "callers", "mentioned_people"
+-        };
+-        var conflicts = 0;
+-        foreach (var field in fields)
+-        {
+-            var count = ScalarInt(connection, transaction,
+-                $"SELECT COUNT(DISTINCT COALESCE(CAST({field} AS TEXT),'')) FROM episodes WHERE id IN ({idSql}) AND COALESCE(CAST({field} AS TEXT),'')<>''");
+-            if (count > 1) conflicts++;
+-        }
+-        return conflicts;
+-    }
+-
+     private static void CreateRehearsalSchema(SqliteConnection connection, SqliteTransaction transaction)
+     {
+         Execute(connection, transaction, """
+@@ -559,7 +549,7 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         using var command = connection.CreateCommand();
+         command.CommandText = """
+             INSERT INTO library_truth_rehearsal_runs(truth_run_id,started_at,status,backup_path,message)
+-            VALUES($truth,$started,'running',$backup,'Preparing disposable adoption rehearsal.');
++            VALUES($truth,$started,'running',$backup,'Preparing disposable alpha8 conflict-forensics rehearsal.');
+             SELECT last_insert_rowid();
+             """;
+         command.Parameters.AddWithValue("$truth", truthRunId);
+@@ -577,7 +567,8 @@ public sealed class LibraryTruthAdoptionRehearsalService
+                 completed_at=$completed,status='completed',source_fingerprint=$source,rollback_fingerprint=$rollback,
+                 eligible_broadcasts=$eligible,canonical_writes=$canonical,recording_writes=$recordings,segment_writes=$segments,
+                 coverage_writes=$coverages,file_reassignments=$files,alias_rows_retired=$aliases,state_rows_migrated=$state,
+-                metadata_conflicts=$metadata,transcript_conflicts=$transcripts,foreign_key_violations=$fk,
++                metadata_conflicts=$metadata,auto_resolved_conflicts=$autoResolved,unresolved_conflicts=$unresolved,
++                preserved_alternates=$alternates,transcript_conflicts=$transcripts,foreign_key_violations=$fk,
+                 integrity_check=$integrity,backup_restore_check=$backupCheck,rollback_verified=$verified,
+                 message=$message
+              WHERE id=$id
+@@ -594,12 +585,15 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         command.Parameters.AddWithValue("$aliases", result.AliasRowsRetired);
+         command.Parameters.AddWithValue("$state", result.StateRowsMigrated);
+         command.Parameters.AddWithValue("$metadata", result.MetadataConflicts);
++        command.Parameters.AddWithValue("$autoResolved", result.AutoResolvedConflicts);
++        command.Parameters.AddWithValue("$unresolved", result.UnresolvedConflicts);
++        command.Parameters.AddWithValue("$alternates", result.PreservedAlternates);
+         command.Parameters.AddWithValue("$transcripts", result.TranscriptConflicts);
+         command.Parameters.AddWithValue("$fk", result.ForeignKeyViolations);
+         command.Parameters.AddWithValue("$integrity", result.IntegrityCheck);
+         command.Parameters.AddWithValue("$backupCheck", backupRestoreCheck);
+         command.Parameters.AddWithValue("$verified", result.RollbackVerified ? 1 : 0);
+-        command.Parameters.AddWithValue("$message", $"Disposable adoption transaction completed for {result.EligibleBroadcasts:N0} broadcasts, passed SQLite integrity checks and rolled back to an identical logical fingerprint. The live library was not changed.");
++        command.Parameters.AddWithValue("$message", $"Disposable adoption transaction completed for {result.EligibleBroadcasts:N0} broadcasts. Alpha8 classified {result.MetadataConflicts:N0} field/reference differences, resolved {result.AutoResolvedConflicts:N0} deterministically, preserved {result.PreservedAlternates:N0} alternates and left {result.UnresolvedConflicts:N0} for review. SQLite integrity and rollback fingerprint checks passed. The live library was not changed.");
+         command.Parameters.AddWithValue("$id", reportId);
+         command.ExecuteNonQuery();
+     }
+@@ -615,8 +609,9 @@ public sealed class LibraryTruthAdoptionRehearsalService
+             command.CommandText = """
+                 INSERT INTO library_truth_rehearsal_items(
+                     rehearsal_run_id,canonical_key,survivor_episode_id,alias_episode_ids_json,files_reassigned,state_rows_migrated,
+-                    metadata_conflicts,transcript_conflicts,outcome,evidence)
+-                VALUES($run,$key,$survivor,$aliases,$files,$state,$metadata,$transcripts,$outcome,$evidence)
++                    metadata_conflicts,auto_resolved_conflicts,unresolved_conflicts,preserved_alternates,
++                    transcript_conflicts,outcome,evidence)
++                VALUES($run,$key,$survivor,$aliases,$files,$state,$metadata,$autoResolved,$unresolved,$alternates,$transcripts,$outcome,$evidence)
+                 """;
+             command.Parameters.AddWithValue("$run", reportId);
+             command.Parameters.AddWithValue("$key", item.CanonicalKey);
+@@ -625,6 +620,9 @@ public sealed class LibraryTruthAdoptionRehearsalService
+             command.Parameters.AddWithValue("$files", item.FilesReassigned);
+             command.Parameters.AddWithValue("$state", item.StateRowsMigrated);
+             command.Parameters.AddWithValue("$metadata", item.MetadataConflicts);
++            command.Parameters.AddWithValue("$autoResolved", item.AutoResolvedConflicts);
++            command.Parameters.AddWithValue("$unresolved", item.UnresolvedConflicts);
++            command.Parameters.AddWithValue("$alternates", item.PreservedAlternates);
+             command.Parameters.AddWithValue("$transcripts", item.TranscriptConflicts);
+             command.Parameters.AddWithValue("$outcome", item.Outcome);
+             command.Parameters.AddWithValue("$evidence", item.Evidence);
+@@ -633,6 +631,42 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         transaction.Commit();
+     }
+ 
++    private void PersistConflicts(long reportId, IReadOnlyList<ConflictForensicResult> conflicts)
++    {
++        using var connection = _database.OpenConnection();
++        using var transaction = connection.BeginTransaction();
++        foreach (var conflict in conflicts)
++        {
++            using var command = connection.CreateCommand();
++            command.Transaction = transaction;
++            command.CommandText = """
++                INSERT INTO library_truth_rehearsal_conflicts(
++                    rehearsal_run_id,canonical_key,field_name,conflict_kind,classification,selected_episode_id,
++                    selected_value,candidate_values_json,provenance_json,resolution,auto_resolved,requires_review,
++                    confidence_score,preserved_alternate_count,evidence)
++                VALUES($run,$key,$field,$kind,$classification,$selectedEpisode,$selectedValue,$candidates,$provenance,
++                       $resolution,$autoResolved,$requiresReview,$confidence,$alternates,$evidence)
++                """;
++            command.Parameters.AddWithValue("$run", reportId);
++            command.Parameters.AddWithValue("$key", conflict.CanonicalKey);
++            command.Parameters.AddWithValue("$field", conflict.FieldName);
++            command.Parameters.AddWithValue("$kind", conflict.ConflictKind);
++            command.Parameters.AddWithValue("$classification", conflict.Classification);
++            command.Parameters.AddWithValue("$selectedEpisode", conflict.SelectedEpisodeId.HasValue ? (object)conflict.SelectedEpisodeId.Value : DBNull.Value);
++            command.Parameters.AddWithValue("$selectedValue", conflict.SelectedValue);
++            command.Parameters.AddWithValue("$candidates", conflict.CandidateValuesJson);
++            command.Parameters.AddWithValue("$provenance", conflict.ProvenanceJson);
++            command.Parameters.AddWithValue("$resolution", conflict.Resolution);
++            command.Parameters.AddWithValue("$autoResolved", conflict.AutoResolved ? 1 : 0);
++            command.Parameters.AddWithValue("$requiresReview", conflict.RequiresReview ? 1 : 0);
++            command.Parameters.AddWithValue("$confidence", conflict.ConfidenceScore);
++            command.Parameters.AddWithValue("$alternates", conflict.PreservedAlternateCount);
++            command.Parameters.AddWithValue("$evidence", conflict.Evidence);
++            command.ExecuteNonQuery();
++        }
++        transaction.Commit();
++    }
++
+     private void FailReport(long reportId, string status, string message)
+     {
+         using var connection = _database.OpenConnection();
+@@ -652,8 +686,8 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         command.CommandText = """
+             SELECT id,truth_run_id,started_at,completed_at,status,backup_path,source_fingerprint,rollback_fingerprint,
+                    eligible_broadcasts,canonical_writes,recording_writes,segment_writes,coverage_writes,file_reassignments,
+-                   alias_rows_retired,state_rows_migrated,metadata_conflicts,transcript_conflicts,foreign_key_violations,
+-                   integrity_check,backup_restore_check,rollback_verified,message
++                   alias_rows_retired,state_rows_migrated,metadata_conflicts,auto_resolved_conflicts,unresolved_conflicts,preserved_alternates,
++                   transcript_conflicts,foreign_key_violations,integrity_check,backup_restore_check,rollback_verified,message
+               FROM library_truth_rehearsal_runs WHERE id=$id
+             """;
+         command.Parameters.AddWithValue("$id", id);
+@@ -668,7 +702,8 @@ public sealed class LibraryTruthAdoptionRehearsalService
+             reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7), reader.GetInt32(8),
+             reader.GetInt32(9), reader.GetInt32(10), reader.GetInt32(11), reader.GetInt32(12), reader.GetInt32(13),
+             reader.GetInt32(14), reader.GetInt32(15), reader.GetInt32(16), reader.GetInt32(17), reader.GetInt32(18),
+-            reader.GetString(19), reader.GetString(20), reader.GetInt64(21) != 0, reader.GetString(22));
++            reader.GetInt32(19), reader.GetInt32(20), reader.GetInt32(21), reader.GetString(22), reader.GetString(23),
++            reader.GetInt64(24) != 0, reader.GetString(25));
+ 
+     private static int Execute(SqliteConnection connection, SqliteTransaction? transaction, string sql, params (string Name, object? Value)[] parameters)
+     {
+@@ -717,10 +752,13 @@ public sealed class LibraryTruthAdoptionRehearsalService
+         int ReassignFileCount);
+     private sealed record RehearsalItemResult(
+         string CanonicalKey,long SurvivorEpisodeId,IReadOnlyList<long> AliasEpisodeIds,int FilesReassigned,int StateRowsMigrated,
+-        int MetadataConflicts,int TranscriptConflicts,string Outcome,string Evidence,int CanonicalWrites,int RecordingWrites,
+-        int SegmentWrites,int CoverageWrites,int AliasesRetired);
++        int MetadataConflicts,int AutoResolvedConflicts,int UnresolvedConflicts,int PreservedAlternates,int TranscriptConflicts,
++        string Outcome,string Evidence,int CanonicalWrites,int RecordingWrites,int SegmentWrites,int CoverageWrites,
++        int AliasesRetired,IReadOnlyList<ConflictForensicResult> Conflicts);
+     private sealed record RehearsalExecution(
+         int EligibleBroadcasts,int CanonicalWrites,int RecordingWrites,int SegmentWrites,int CoverageWrites,int FileReassignments,
+-        int AliasRowsRetired,int StateRowsMigrated,int MetadataConflicts,int TranscriptConflicts,int ForeignKeyViolations,
+-        string IntegrityCheck,string SourceFingerprint,string RollbackFingerprint,bool RollbackVerified,IReadOnlyList<RehearsalItemResult> Items);
++        int AliasRowsRetired,int StateRowsMigrated,int MetadataConflicts,int AutoResolvedConflicts,int UnresolvedConflicts,
++        int PreservedAlternates,int TranscriptConflicts,int ForeignKeyViolations,string IntegrityCheck,string SourceFingerprint,
++        string RollbackFingerprint,bool RollbackVerified,IReadOnlyList<RehearsalItemResult> Items,
++        IReadOnlyList<ConflictForensicResult> Conflicts);
+ }
+diff --git a/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs b/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
+new file mode 100644
+index 0000000..215b97e
+--- /dev/null
++++ b/TheRadioVault.Services/Services/LibraryTruthConflictForensics.cs
+@@ -0,0 +1,760 @@
++using System.Globalization;
++using System.Text.Json;
++using System.Text.RegularExpressions;
++using Microsoft.Data.Sqlite;
++using TheRadioVault.Services.Models;
++
++namespace TheRadioVault.Services.Services;
++
++/// <summary>
++/// Alpha8 field-level conflict forensics for the disposable adoption rehearsal.
++/// The routines in this partial class only mutate the disposable clone. Their
++/// decisions and all competing values are persisted back to the live database
++/// as shadow evidence after rollback has been verified.
++/// </summary>
++public sealed partial class LibraryTruthAdoptionRehearsalService
++{
++    private static readonly MetadataFieldRule[] MetadataFieldRules =
++    new[]
++    {
++        new("collection_id", "Collection", MetadataFieldKind.Structural),
++        new("air_date", "Broadcast date", MetadataFieldKind.Structural),
++        new("title", "Headline", MetadataFieldKind.Text),
++        new("description", "Summary", MetadataFieldKind.Text),
++        new("notes", "Notes", MetadataFieldKind.Text),
++        new("artwork_path", "Artwork", MetadataFieldKind.Text),
++        new("broadcast_slot", "Broadcast slot", MetadataFieldKind.Structural),
++        new("edition", "Station", MetadataFieldKind.Text),
++        new("archive_notes", "Archive notes", MetadataFieldKind.Text),
++        new("broadcast_variant", "Broadcast variant", MetadataFieldKind.Text),
++        new("broadcast_era", "Broadcast era", MetadataFieldKind.Text),
++        new("episode_type", "Episode type", MetadataFieldKind.Text),
++        new("research_sources", "Research sources", MetadataFieldKind.List),
++        new("hosts", "Hosts", MetadataFieldKind.List),
++        new("callers", "Callers", MetadataFieldKind.List),
++        new("mentioned_people", "Mentioned people", MetadataFieldKind.List)
++    };
++
++    private static readonly Regex WhitespaceRegex = new(@"\s+", RegexOptions.Compiled);
++    private static readonly Regex DateOnlyRegex = new(@"^(?:19|20)\d{2}[-_/ .]\d{1,2}[-_/ .]\d{1,2}$", RegexOptions.Compiled);
++
++    public IReadOnlyList<LibraryTruthConflictForensic> GetLatestConflictForensics(int limit = 50000)
++    {
++        using var connection = _database.OpenConnection();
++        using var command = connection.CreateCommand();
++        command.CommandText = """
++            SELECT c.id,c.rehearsal_run_id,c.canonical_key,c.field_name,c.conflict_kind,c.classification,
++                   c.selected_episode_id,c.selected_value,c.candidate_values_json,c.provenance_json,c.resolution,
++                   c.auto_resolved,c.requires_review,c.confidence_score,c.preserved_alternate_count,c.evidence
++              FROM library_truth_rehearsal_conflicts c
++             WHERE c.rehearsal_run_id=(SELECT COALESCE(MAX(id),0) FROM library_truth_rehearsal_runs)
++             ORDER BY c.requires_review DESC,c.canonical_key,c.field_name,c.id
++             LIMIT $limit
++            """;
++        command.Parameters.AddWithValue("$limit", Math.Clamp(limit, 1, 50000));
++        var result = new List<LibraryTruthConflictForensic>();
++        using var reader = command.ExecuteReader();
++        while (reader.Read())
++        {
++            result.Add(new LibraryTruthConflictForensic(
++                reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
++                reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetInt64(6), reader.GetString(7),
++                FormatForensicCandidates(reader.GetString(8)), FormatForensicProvenance(reader.GetString(9)),
++                reader.GetString(10), reader.GetInt64(11) != 0, reader.GetInt64(12) != 0, reader.GetInt32(13),
++                reader.GetInt32(14), reader.GetString(15)));
++        }
++        return result;
++    }
++
++    private List<ConflictForensicResult> AnalyzeMetadataForensics(
++        SqliteConnection connection,
++        SqliteTransaction transaction,
++        long truthRunId,
++        string canonicalKey,
++        IReadOnlyList<long> episodeIds,
++        long survivorEpisodeId)
++    {
++        var snapshots = LoadEpisodeSnapshots(connection, transaction, episodeIds);
++        var provenance = LoadProvenance(connection, transaction, episodeIds);
++        var canonical = LoadCanonicalIdentity(connection, transaction, truthRunId, canonicalKey);
++        var results = new List<ConflictForensicResult>();
++
++        foreach (var rule in MetadataFieldRules)
++        {
++            var candidates = snapshots
++                .Select(snapshot => BuildCandidate(snapshot, rule, provenance, survivorEpisodeId))
++                .ToArray();
++            var result = ClassifyMetadataField(canonicalKey, rule, candidates, canonical, survivorEpisodeId);
++            if (result is null) continue;
++
++            results.Add(result);
++            if (result.AutoResolved && !result.RequiresReview)
++                ApplySelectedMetadataValue(connection, transaction, survivorEpisodeId, rule.Column, result.SelectedValue);
++        }
++
++        return results;
++    }
++
++    private HeadlineAnalysisResult AnalyzeHeadlineReviewForensics(
++        SqliteConnection connection,
++        SqliteTransaction transaction,
++        string canonicalKey,
++        IReadOnlyList<long> episodeIds,
++        long survivorEpisodeId)
++    {
++        var idSql = string.Join(",", episodeIds);
++        using var command = connection.CreateCommand();
++        command.Transaction = transaction;
++        command.CommandText = $"SELECT episode_id,candidate,reviewed_headline,confidence,reasoning,decision,parser_version,updated_at FROM headline_reviews WHERE episode_id IN ({idSql}) ORDER BY episode_id";
++        var rows = new List<HeadlineReviewSnapshot>();
++        using (var reader = command.ExecuteReader())
++        {
++            while (reader.Read())
++            {
++                rows.Add(new HeadlineReviewSnapshot(
++                    reader.GetInt64(0), reader.GetString(1), reader.GetString(2), reader.GetString(3), reader.GetString(4),
++                    reader.GetString(5), reader.GetString(6), reader.GetString(7)));
++            }
++        }
++
++        if (rows.Count == 0) return new(Array.Empty<ConflictForensicResult>(), 0);
++        if (rows.Count == 1)
++        {
++            if (rows[0].EpisodeId == survivorEpisodeId) return new(Array.Empty<ConflictForensicResult>(), 0);
++            Execute(connection, transaction,
++                "UPDATE headline_reviews SET episode_id=$survivor WHERE episode_id=$episode",
++                ("$survivor", survivorEpisodeId), ("$episode", rows[0].EpisodeId));
++            return new(Array.Empty<ConflictForensicResult>(), 1);
++        }
++
++        var scored = rows.Select(row => new
++        {
++            Row = row,
++            Normalized = string.Join("|", NormalizeText(row.Candidate), NormalizeText(row.ReviewedHeadline), NormalizeText(row.Decision)),
++            Score = HeadlineScore(row)
++        }).OrderByDescending(x => x.Score).ThenByDescending(x => x.Row.EpisodeId == survivorEpisodeId).ThenBy(x => x.Row.EpisodeId).ToArray();
++        var distinct = scored.Select(x => x.Normalized).Distinct(StringComparer.Ordinal).ToArray();
++        var top = scored[0];
++        var accepted = scored.Where(x => string.Equals(x.Row.Decision, "Accepted", StringComparison.OrdinalIgnoreCase)).ToArray();
++        var reviewed = scored.Where(x => !string.IsNullOrWhiteSpace(x.Row.Decision)).ToArray();
++        var decisiveAccepted = accepted.Length == 1;
++        var decisiveReviewed = !decisiveAccepted && accepted.Length == 0 && reviewed.Length == 1;
++        var chosen = decisiveAccepted ? accepted[0] : decisiveReviewed ? reviewed[0] : top;
++        var runnerScore = scored.Where(x => !ReferenceEquals(x, chosen)).Select(x => x.Score).DefaultIfEmpty(0).Max();
++        var margin = chosen.Score - runnerScore;
++        var equivalent = distinct.Length <= 1;
++        // Multiple non-equivalent human review decisions are never ranked
++        // against each other automatically. Quality ranking is reserved for
++        // still-pending generated review candidates.
++        var qualityWinner = !equivalent && !decisiveAccepted && !decisiveReviewed && reviewed.Length == 0 && margin >= 20;
++        var auto = equivalent || decisiveAccepted || decisiveReviewed || qualityWinner;
++        var classification = equivalent ? "Equivalent headline reviews"
++            : decisiveAccepted ? "Accepted headline review"
++            : decisiveReviewed ? "Reviewed headline decision"
++            : qualityWinner ? "Quality-ranked headline review"
++            : "Genuine headline-review conflict";
++        var resolution = equivalent ? "normalise_equivalent"
++            : decisiveAccepted ? "use_accepted_review"
++            : decisiveReviewed ? "use_reviewed_decision"
++            : qualityWinner ? "use_higher_quality_review"
++            : "manual_review";
++        var preserved = Math.Max(0, distinct.Length - 1);
++        var candidatesJson = JsonSerializer.Serialize(rows.Select(x => new
++        {
++            episodeId = x.EpisodeId,
++            value = x.Candidate,
++            confidence = x.Confidence,
++            reasoning = x.Reasoning,
++            reviewedHeadline = x.ReviewedHeadline,
++            decision = x.Decision,
++            parserVersion = x.ParserVersion,
++            updatedAt = x.UpdatedAt,
++            score = HeadlineScore(x)
++        }), _json);
++        var evidence = auto
++            ? $"{rows.Count:N0} headline-review rows were compared. {classification} selected episode {chosen.Row.EpisodeId:N0}; every alternate review remains in this forensic row."
++            : $"{rows.Count:N0} materially different headline-review rows have comparable evidence. No candidate was selected automatically.";
++        var forensic = new ConflictForensicResult(
++            canonicalKey, "headline_review", "Review record", classification, auto ? chosen.Row.EpisodeId : null,
++            auto ? HeadlineSelectedValue(chosen.Row) : string.Empty, candidatesJson, candidatesJson, resolution, auto, !auto,
++            auto ? decisiveAccepted ? 99 : decisiveReviewed ? 95 : equivalent ? 94 : Math.Clamp(70 + Math.Max(0, margin), 70, 98) : 35, preserved, evidence);
++
++        if (!auto) return new(new[] { forensic }, 0);
++
++        Execute(connection, transaction, $"DELETE FROM headline_reviews WHERE episode_id IN ({idSql})");
++        Execute(connection, transaction, """
++            INSERT INTO headline_reviews(episode_id,candidate,reviewed_headline,confidence,reasoning,decision,parser_version,updated_at)
++            VALUES($episode,$candidate,$reviewed,$confidence,$reasoning,$decision,$parser,$updated)
++            """,
++            ("$episode", survivorEpisodeId), ("$candidate", chosen.Row.Candidate), ("$reviewed", chosen.Row.ReviewedHeadline),
++            ("$confidence", chosen.Row.Confidence), ("$reasoning", chosen.Row.Reasoning), ("$decision", chosen.Row.Decision),
++            ("$parser", chosen.Row.ParserVersion), ("$updated", chosen.Row.UpdatedAt));
++        return new(new[] { forensic }, rows.Count);
++    }
++
++    private AliasAnalysisResult AnalyzeRemainingAliasReferences(
++        SqliteConnection connection,
++        SqliteTransaction transaction,
++        string canonicalKey,
++        IReadOnlyList<long> aliasEpisodeIds,
++        long survivorEpisodeId)
++    {
++        if (aliasEpisodeIds.Count == 0) return new(Array.Empty<ConflictForensicResult>(), 0);
++        var aliasSql = string.Join(",", aliasEpisodeIds);
++        var results = new List<ConflictForensicResult>();
++        var stateRows = 0;
++
++        var reconciliationRows = ScalarInt(connection, transaction,
++            $"SELECT COUNT(*) FROM research_reconciliation_candidates WHERE episode_id IN ({aliasSql})");
++        if (reconciliationRows > 0)
++        {
++            var candidateJson = ReadRowsAsJson(connection, transaction,
++                $"SELECT id,research_broadcast_id,episode_id,score,status,review_category,recommended_action,decision_source FROM research_reconciliation_candidates WHERE episode_id IN ({aliasSql}) ORDER BY id");
++            stateRows += Execute(connection, transaction,
++                $"DELETE FROM research_reconciliation_candidates WHERE episode_id IN ({aliasSql}) AND EXISTS(SELECT 1 FROM research_reconciliation_candidates s WHERE s.episode_id=$survivor AND s.research_broadcast_id=research_reconciliation_candidates.research_broadcast_id)",
++                ("$survivor", survivorEpisodeId));
++            results.Add(new ConflictForensicResult(
++                canonicalKey, "research_reconciliation_candidates", "Alias reference", "Duplicate reference",
++                survivorEpisodeId, $"Episode {survivorEpisodeId}", candidateJson, candidateJson, "deduplicate_reference",
++                true, false, 100, reconciliationRows, $"{reconciliationRows:N0} alias reconciliation reference(s) duplicated a survivor link and were safely deduplicated inside the disposable transaction."));
++        }
++
++        foreach (var reference in new[]
++        {
++            new AliasReferenceRule("transcript_imports", "Transcript import references"),
++            new AliasReferenceRule("voice_samples", "Voice sample references")
++        })
++        {
++            var count = ScalarInt(connection, transaction, $"SELECT COUNT(*) FROM {reference.Table} WHERE episode_id IN ({aliasSql})");
++            if (count == 0) continue;
++            var json = ReadRowsAsJson(connection, transaction, $"SELECT * FROM {reference.Table} WHERE episode_id IN ({aliasSql}) ORDER BY id");
++            results.Add(new ConflictForensicResult(
++                canonicalKey, reference.Table, "Alias reference", reference.DisplayName, null, string.Empty,
++                json, json, "manual_review", false, true, 25, count,
++                $"{count:N0} {reference.DisplayName.ToLowerInvariant()} remain attached to mapped aliases. They are preserved and require an explicit transcript/voice migration policy."));
++        }
++
++        return new(results, stateRows);
++    }
++
++    private ConflictForensicResult? ClassifyMetadataField(
++        string canonicalKey,
++        MetadataFieldRule rule,
++        IReadOnlyList<MetadataCandidate> candidates,
++        CanonicalIdentity canonical,
++        long survivorEpisodeId)
++    {
++        var nonEmpty = candidates.Where(x => x.Normalized.Length > 0).ToArray();
++        if (nonEmpty.Length == 0) return null;
++        var hasEmpty = candidates.Any(x => x.Normalized.Length == 0);
++        var authoritativeEmpty = candidates.Any(x => x.Normalized.Length == 0 && HasFieldLevelAuthority(x));
++        var normalizedGroups = nonEmpty.GroupBy(x => x.Normalized, StringComparer.Ordinal).ToArray();
++        var rawDistinct = nonEmpty.Select(x => x.Value.Trim()).Distinct(StringComparer.Ordinal).Count();
++        if (!hasEmpty && normalizedGroups.Length == 1 && rawDistinct == 1) return null;
++
++        MetadataCandidate? selectedCandidate = null;
++        string selectedValue;
++        string classification;
++        string resolution;
++        bool autoResolved;
++        bool requiresReview;
++        int confidence;
++
++        if (rule.Kind == MetadataFieldKind.Structural)
++        {
++            selectedValue = canonical.ValueFor(rule.Column);
++            selectedCandidate = candidates.FirstOrDefault(x => string.Equals(x.Normalized, NormalizeValue(rule.Column, selectedValue), StringComparison.Ordinal));
++            classification = "Canonical identity";
++            resolution = "use_canonical_identity";
++            autoResolved = !string.IsNullOrWhiteSpace(selectedValue);
++            requiresReview = !autoResolved;
++            confidence = autoResolved ? 100 : 20;
++        }
++        else if (normalizedGroups.Length == 1)
++        {
++            selectedCandidate = nonEmpty.OrderByDescending(x => x.Score).ThenByDescending(x => x.EpisodeId == survivorEpisodeId).ThenBy(x => x.EpisodeId).First();
++            if (hasEmpty && authoritativeEmpty)
++            {
++                selectedValue = string.Empty;
++                classification = "Protected empty vs populated";
++                resolution = "manual_review";
++                autoResolved = false;
++                requiresReview = true;
++                confidence = 30;
++            }
++            else
++            {
++                selectedValue = selectedCandidate.Value;
++                classification = hasEmpty ? "Empty vs populated" : "Equivalent formatting";
++                resolution = hasEmpty ? "use_populated" : "normalise_equivalent";
++                autoResolved = true;
++                requiresReview = false;
++                confidence = hasEmpty ? 98 : 95;
++            }
++        }
++        else if (rule.Kind == MetadataFieldKind.List)
++        {
++            var authoritativeLists = nonEmpty.Where(HasFieldLevelAuthority).ToArray();
++            if (authoritativeLists.Length > 0)
++            {
++                selectedCandidate = authoritativeLists.OrderByDescending(x => x.Score).ThenBy(x => x.EpisodeId).First();
++                selectedValue = string.Empty;
++                classification = "Authoritative list conflict";
++                resolution = "manual_review";
++                autoResolved = false;
++                requiresReview = true;
++                confidence = 35;
++            }
++            else
++            {
++                var union = nonEmpty.SelectMany(x => SplitList(x.Value)).Distinct(StringComparer.OrdinalIgnoreCase).OrderBy(x => x, StringComparer.OrdinalIgnoreCase).ToArray();
++                selectedValue = string.Join(", ", union);
++                selectedCandidate = null;
++                classification = "Mergeable union";
++                resolution = "merge_union";
++                autoResolved = union.Length > 0;
++                requiresReview = !autoResolved;
++                confidence = autoResolved ? 94 : 25;
++            }
++        }
++        else
++        {
++            var representatives = normalizedGroups
++                .Select(group => group.OrderByDescending(x => x.Score).ThenByDescending(x => x.EpisodeId == survivorEpisodeId).ThenBy(x => x.EpisodeId).First())
++                .OrderByDescending(x => x.Score)
++                .ThenByDescending(x => x.EpisodeId == survivorEpisodeId)
++                .ThenBy(x => x.EpisodeId)
++                .ToArray();
++            var specific = representatives.Where(x => !IsGenericValue(rule.Column, x.Value)).ToArray();
++            var authoritativePlaceholders = representatives.Any(x => IsGenericValue(rule.Column, x.Value) && (HasFieldLevelAuthority(x) || x.UserModified));
++            if (specific.Length == 1 && representatives.Length > 1 && !authoritativePlaceholders)
++            {
++                selectedCandidate = specific[0];
++                selectedValue = selectedCandidate.Value;
++                classification = "Specific over placeholder";
++                resolution = "prefer_specific";
++                autoResolved = true;
++                requiresReview = false;
++                confidence = 92;
++            }
++            else
++            {
++                selectedCandidate = representatives[0];
++                var runnerUp = representatives.Length > 1 ? representatives[1] : null;
++                var margin = runnerUp is null ? selectedCandidate.Score : selectedCandidate.Score - runnerUp.Score;
++                var protectedWinner = selectedCandidate.Protected && (runnerUp is null || !runnerUp.Protected);
++                var manualWinner = HasManualProvenance(selectedCandidate) && (runnerUp is null || !HasManualProvenance(runnerUp));
++                var protectedConflict = representatives.Count(x => x.Protected) > 1;
++                var manualConflict = representatives.Count(HasManualProvenance) > 1;
++                var possibleLegacyManualEdit = representatives.Any(x => x.UserModified);
++                var qualityWinner = margin >= 20 && !protectedConflict && !manualConflict && !possibleLegacyManualEdit;
++                autoResolved = protectedWinner || manualWinner || qualityWinner;
++                requiresReview = !autoResolved;
++                selectedValue = autoResolved ? selectedCandidate.Value : string.Empty;
++                classification = autoResolved
++                    ? protectedWinner ? "Protected provenance winner" : manualWinner ? "Manual edit winner" : "Quality-ranked winner"
++                    : "Genuine conflicting values";
++                resolution = autoResolved
++                    ? protectedWinner ? "prefer_protected" : manualWinner ? "prefer_manual" : "prefer_higher_quality"
++                    : "manual_review";
++                confidence = autoResolved ? Math.Clamp(70 + Math.Max(0, margin), 70, 99) : Math.Clamp(45 - Math.Max(0, margin), 20, 45);
++            }
++        }
++
++        if (requiresReview) selectedCandidate = null;
++
++        var selectedNormalized = NormalizeValue(rule.Column, selectedValue);
++        var preservedAlternates = normalizedGroups.Count(group => !string.Equals(group.Key, selectedNormalized, StringComparison.Ordinal));
++        if (selectedNormalized.Length == 0) preservedAlternates = normalizedGroups.Length;
++        var candidateJson = JsonSerializer.Serialize(candidates.Select(x => new
++        {
++            episodeId = x.EpisodeId,
++            value = x.Value,
++            normalizedValue = x.Normalized,
++            score = x.Score,
++            userModified = x.UserModified,
++            metadataConfidence = x.MetadataConfidence
++        }), _json);
++        var provenanceJson = JsonSerializer.Serialize(candidates.SelectMany(candidate =>
++            candidate.MatchingProvenance.Count > 0
++                ? candidate.MatchingProvenance.Select(source => new
++                {
++                    episodeId = candidate.EpisodeId,
++                    value = candidate.Value,
++                    sourceKind = source.SourceKind,
++                    sourceLabel = source.SourceLabel,
++                    provenanceConfidence = source.Confidence,
++                    evidenceCount = source.EvidenceCount,
++                    protectedValue = source.Protected
++                })
++                : new[]
++                {
++                    new
++                    {
++                        episodeId = candidate.EpisodeId,
++                        value = candidate.Value,
++                        sourceKind = "system",
++                        sourceLabel = string.Empty,
++                        provenanceConfidence = 0,
++                        evidenceCount = 0,
++                        protectedValue = false
++                    }
++                }), _json);
++        var evidence = requiresReview
++            ? $"{rule.DisplayName} has {normalizedGroups.Length:N0} materially different non-empty values with no decisive provenance or quality advantage. All values are preserved for review."
++            : $"{rule.DisplayName} was classified as {classification.ToLowerInvariant()} and resolved by '{resolution}'. {preservedAlternates:N0} alternate value(s) remain preserved in the forensic ledger.";
++
++        return new ConflictForensicResult(
++            canonicalKey, rule.Column, "Episode metadata", classification, selectedCandidate?.EpisodeId,
++            selectedValue, candidateJson, provenanceJson, resolution, autoResolved, requiresReview,
++            confidence, preservedAlternates, evidence);
++    }
++
++    private MetadataCandidate BuildCandidate(
++        EpisodeSnapshot snapshot,
++        MetadataFieldRule rule,
++        IReadOnlyDictionary<string, List<ProvenanceSnapshot>> provenance,
++        long survivorEpisodeId)
++    {
++        var value = snapshot.ValueFor(rule.Column);
++        var normalized = NormalizeValue(rule.Column, value);
++        var aliases = ProvenanceAliases(rule.Column);
++        var possible = aliases
++            .SelectMany(alias => provenance.TryGetValue(ProvenanceKey(snapshot.Id, alias), out var values) ? values : Array.Empty<ProvenanceSnapshot>())
++            .ToArray();
++        var matching = possible.Where(x => NormalizeValue(rule.Column, x.ValueText) == normalized).ToArray();
++        // Provenance only belongs to the candidate when its value actually
++        // matches the episode field. A protected/manual provenance row for an
++        // older alternate must never lend its authority to a different value.
++        var best = matching
++            .OrderByDescending(ProvenanceScore)
++            .ThenByDescending(x => x.Id)
++            .FirstOrDefault();
++        var protectedValue = best?.Protected ?? false;
++        var sourceKind = best?.SourceKind ?? "system";
++        var sourceLabel = best?.SourceLabel ?? string.Empty;
++        var provenanceConfidence = best?.Confidence ?? 0;
++        var evidenceCount = best?.EvidenceCount ?? 0;
++        var score = snapshot.MetadataConfidence;
++        // user_modified is episode-wide, not field-specific. Treat it only as
++        // weak supporting evidence; decisive manual authority requires matching
++        // field-level manual provenance.
++        if (snapshot.UserModified) score += 8;
++        if (protectedValue) score += 70;
++        score += sourceKind switch { "manual" => 45, "research_pack" => 30, "rollback" => 25, _ => 0 };
++        score += provenanceConfidence / 2;
++        score += Math.Min(20, evidenceCount * 2);
++        if (snapshot.Id == survivorEpisodeId) score += 2;
++        if (IsGenericValue(rule.Column, value)) score -= 45;
++        else score += Math.Min(15, value.Trim().Length / 12);
++        return new MetadataCandidate(snapshot.Id, value, normalized, score, snapshot.UserModified,
++            snapshot.MetadataConfidence, protectedValue, sourceKind, sourceLabel, provenanceConfidence, evidenceCount,
++            matching.OrderByDescending(ProvenanceScore).ThenByDescending(x => x.Id).ToArray());
++    }
++
++    private static bool HasManualProvenance(MetadataCandidate candidate)
++        => string.Equals(candidate.SourceKind, "manual", StringComparison.OrdinalIgnoreCase);
++
++    private static bool HasFieldLevelAuthority(MetadataCandidate candidate)
++        => candidate.Protected || HasManualProvenance(candidate);
++
++    private static int ProvenanceScore(ProvenanceSnapshot value)
++        => (value.Protected ? 1000 : 0) + (value.SourceKind switch
++        {
++            "manual" => 500 + value.Confidence * 2 + value.EvidenceCount,
++            "research_pack" => 350 + value.Confidence * 2 + value.EvidenceCount,
++            "rollback" => 300 + value.Confidence * 2 + value.EvidenceCount,
++            _ => value.Confidence * 2 + value.EvidenceCount
++        });
++
++    private static string[] ProvenanceAliases(string field)
++        => field switch
++        {
++            "title" => new[] { "title", "headline" },
++            "description" => new[] { "description", "summary" },
++            "edition" => new[] { "edition", "station" },
++            "research_sources" => new[] { "research_sources", "sources", "source_links" },
++            "mentioned_people" => new[] { "mentioned_people", "people" },
++            _ => new[] { field }
++        };
++
++    private static void ApplySelectedMetadataValue(
++        SqliteConnection connection,
++        SqliteTransaction transaction,
++        long survivorEpisodeId,
++        string field,
++        string selectedValue)
++    {
++        if (!MetadataFieldRules.Any(x => string.Equals(x.Column, field, StringComparison.Ordinal)))
++            throw new InvalidOperationException($"Unknown metadata field '{field}'.");
++        if (field == "collection_id")
++        {
++            if (!long.TryParse(selectedValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out var collectionId)) return;
++            Execute(connection, transaction, "UPDATE episodes SET collection_id=$value WHERE id=$episode",
++                ("$value", collectionId), ("$episode", survivorEpisodeId));
++            return;
++        }
++        Execute(connection, transaction, $"UPDATE episodes SET {field}=$value WHERE id=$episode",
++            ("$value", selectedValue), ("$episode", survivorEpisodeId));
++    }
++
++    private static List<EpisodeSnapshot> LoadEpisodeSnapshots(
++        SqliteConnection connection,
++        SqliteTransaction transaction,
++        IReadOnlyList<long> episodeIds)
++    {
++        var idSql = string.Join(",", episodeIds);
++        using var command = connection.CreateCommand();
++        command.Transaction = transaction;
++        command.CommandText = $"""
++            SELECT id,collection_id,COALESCE(air_date,''),COALESCE(title,''),COALESCE(description,''),COALESCE(notes,''),
++                   COALESCE(artwork_path,''),COALESCE(broadcast_slot,''),COALESCE(edition,''),COALESCE(archive_notes,''),
++                   COALESCE(broadcast_variant,''),COALESCE(broadcast_era,''),COALESCE(episode_type,''),
++                   COALESCE(research_sources,''),COALESCE(hosts,''),COALESCE(callers,''),COALESCE(mentioned_people,''),
++                   user_modified,metadata_confidence,updated_at
++              FROM episodes WHERE id IN ({idSql}) ORDER BY id
++            """;
++        var result = new List<EpisodeSnapshot>();
++        using var reader = command.ExecuteReader();
++        while (reader.Read())
++        {
++            result.Add(new EpisodeSnapshot(
++                reader.GetInt64(0), reader.GetInt64(1).ToString(CultureInfo.InvariantCulture), reader.GetString(2), reader.GetString(3),
++                reader.GetString(4), reader.GetString(5), reader.GetString(6), reader.GetString(7), reader.GetString(8),
++                reader.GetString(9), reader.GetString(10), reader.GetString(11), reader.GetString(12), reader.GetString(13),
++                reader.GetString(14), reader.GetString(15), reader.GetString(16), reader.GetInt64(17) != 0, reader.GetInt32(18), reader.GetString(19)));
++        }
++        return result;
++    }
++
++    private static Dictionary<string, List<ProvenanceSnapshot>> LoadProvenance(
++        SqliteConnection connection,
++        SqliteTransaction transaction,
++        IReadOnlyList<long> episodeIds)
++    {
++        var idSql = string.Join(",", episodeIds);
++        using var command = connection.CreateCommand();
++        command.Transaction = transaction;
++        command.CommandText = $"""
++            SELECT id,episode_id,LOWER(field_name),value_text,source_kind,source_label,confidence,evidence_count,protected
++              FROM research_field_provenance
++             WHERE active=1 AND episode_id IN ({idSql})
++             ORDER BY episode_id,field_name,id
++            """;
++        var result = new Dictionary<string, List<ProvenanceSnapshot>>(StringComparer.OrdinalIgnoreCase);
++        using var reader = command.ExecuteReader();
++        while (reader.Read())
++        {
++            var value = new ProvenanceSnapshot(reader.GetInt64(0), reader.GetInt64(1), reader.GetString(2), reader.GetString(3),
++                reader.GetString(4), reader.GetString(5), reader.GetInt32(6), reader.GetInt32(7), reader.GetInt64(8) != 0);
++            var key = ProvenanceKey(value.EpisodeId, value.FieldName);
++            if (!result.TryGetValue(key, out var values)) result[key] = values = new List<ProvenanceSnapshot>();
++            values.Add(value);
++        }
++        return result;
++    }
++
++    private static CanonicalIdentity LoadCanonicalIdentity(
++        SqliteConnection connection,
++        SqliteTransaction transaction,
++        long truthRunId,
++        string canonicalKey)
++    {
++        using var command = connection.CreateCommand();
++        command.Transaction = transaction;
++        command.CommandText = """
++            SELECT COALESCE(c.id,0),COALESCE(b.air_date,''),COALESCE(b.broadcast_slot,'')
++              FROM library_truth_broadcasts b
++              LEFT JOIN collections c ON LOWER(c.name)=LOWER(b.collection_name)
++             WHERE b.run_id=$run AND b.canonical_key=$key
++             LIMIT 1
++            """;
++        command.Parameters.AddWithValue("$run", truthRunId);
++        command.Parameters.AddWithValue("$key", canonicalKey);
++        using var reader = command.ExecuteReader();
++        return reader.Read()
++            ? new CanonicalIdentity(reader.GetInt64(0).ToString(CultureInfo.InvariantCulture), reader.GetString(1), reader.GetString(2))
++            : new CanonicalIdentity(string.Empty, string.Empty, string.Empty);
++    }
++
++    private static string NormalizeValue(string field, string value)
++    {
++        if (string.IsNullOrWhiteSpace(value)) return string.Empty;
++        if (MetadataFieldRules.First(x => x.Column == field).Kind == MetadataFieldKind.List)
++            return string.Join("|", SplitList(value).Select(NormalizeText).Distinct(StringComparer.Ordinal).OrderBy(x => x, StringComparer.Ordinal));
++        if (field == "collection_id") return value.Trim();
++        if (field == "air_date" && DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.AllowWhiteSpaces, out var date))
++            return date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
++        return NormalizeText(value);
++    }
++
++    private static string NormalizeText(string value)
++    {
++        var normalized = value.Trim()
++            .Replace('\u2013', '-').Replace('\u2014', '-').Replace('\u2212', '-')
++            .Replace('\u2018', '\'').Replace('\u2019', '\'').Replace('\u201c', '"').Replace('\u201d', '"');
++        normalized = WhitespaceRegex.Replace(normalized, " ");
++        return normalized.Trim(' ', '.', ',', ';', ':', '-', '_').ToLowerInvariant();
++    }
++
++    private static IReadOnlyList<string> SplitList(string value)
++    {
++        if (string.IsNullOrWhiteSpace(value)) return Array.Empty<string>();
++        var trimmed = value.Trim();
++        if (trimmed.StartsWith("[", StringComparison.Ordinal))
++        {
++            try
++            {
++                var json = JsonSerializer.Deserialize<string[]>(trimmed);
++                if (json is not null) return json.Where(x => !string.IsNullOrWhiteSpace(x)).Select(x => x.Trim()).ToArray();
++            }
++            catch { }
++        }
++        return trimmed.Split(new[] { ',', ';', '|', '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
++            .Where(x => x.Length > 0)
++            .ToArray();
++    }
++
++    private static bool IsGenericValue(string field, string value)
++    {
++        var normalized = NormalizeText(value);
++        if (normalized.Length == 0) return true;
++        if (field is "title" or "description" or "notes" or "archive_notes")
++        {
++            if (DateOnlyRegex.IsMatch(normalized)) return true;
++            if (normalized is "ron & fez" or "ron and fez" or "bennington" or "afro show" or "opie & anthony" or "opie and anthony") return true;
++            if (normalized.Contains("archive broadcast", StringComparison.Ordinal) ||
++                normalized.Contains("regular episode", StringComparison.Ordinal) ||
++                normalized.Contains("faction talk", StringComparison.Ordinal) ||
++                normalized.Contains("radio show archive", StringComparison.Ordinal) ||
++                normalized is "episode" or "broadcast") return true;
++        }
++        return false;
++    }
++
++    private static string HeadlineSelectedValue(HeadlineReviewSnapshot row)
++        => string.Equals(row.Decision, "Accepted", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrWhiteSpace(row.ReviewedHeadline)
++            ? row.ReviewedHeadline
++            : row.Candidate;
++
++    private static int HeadlineScore(HeadlineReviewSnapshot row)
++    {
++        var score = row.Confidence.Trim().ToLowerInvariant() switch
++        {
++            "confirmed" => 90,
++            "high" => 80,
++            "probable" => 65,
++            "medium" => 55,
++            "low" => 30,
++            _ => 45
++        };
++        score += row.Decision.Trim().ToLowerInvariant() switch
++        {
++            "accepted" => 60,
++            "rejected" => 35,
++            "skipped" => 30,
++            _ => 0
++        };
++        if (!IsGenericValue("title", row.Candidate)) score += 15;
++        score += Math.Min(10, row.Reasoning.Length / 30);
++        return score;
++    }
++
++    private static string ReadRowsAsJson(SqliteConnection connection, SqliteTransaction transaction, string sql)
++    {
++        using var command = connection.CreateCommand();
++        command.Transaction = transaction;
++        command.CommandText = sql;
++        using var reader = command.ExecuteReader();
++        var rows = new List<Dictionary<string, object?>>();
++        while (reader.Read())
++        {
++            var row = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
++            for (var index = 0; index < reader.FieldCount; index++)
++                row[reader.GetName(index)] = reader.IsDBNull(index) ? null : reader.GetValue(index);
++            rows.Add(row);
++        }
++        return JsonSerializer.Serialize(rows);
++    }
++
++    private static string FormatForensicCandidates(string json)
++        => FormatForensicJson(json, "episodeId", "value", "score");
++
++    private static string FormatForensicProvenance(string json)
++        => FormatForensicJson(json, "episodeId", "sourceKind", "sourceLabel", "provenanceConfidence", "protectedValue");
++
++    private static string FormatForensicJson(string json, params string[] preferredProperties)
++    {
++        try
++        {
++            using var document = JsonDocument.Parse(json);
++            if (document.RootElement.ValueKind != JsonValueKind.Array) return json;
++            var lines = new List<string>();
++            foreach (var element in document.RootElement.EnumerateArray())
++            {
++                var parts = new List<string>();
++                foreach (var property in preferredProperties)
++                {
++                    if (!element.TryGetProperty(property, out var value)) continue;
++                    var text = value.ValueKind == JsonValueKind.String ? value.GetString() : value.ToString();
++                    if (!string.IsNullOrWhiteSpace(text)) parts.Add($"{property}: {text}");
++                }
++                if (parts.Count == 0) parts.Add(element.ToString());
++                lines.Add(string.Join(" · ", parts));
++            }
++            return string.Join(Environment.NewLine, lines);
++        }
++        catch { return json; }
++    }
++
++    private static string ProvenanceKey(long episodeId, string fieldName) => $"{episodeId}|{fieldName}";
++
++    private enum MetadataFieldKind { Structural, Text, List }
++    private sealed record MetadataFieldRule(string Column, string DisplayName, MetadataFieldKind Kind);
++    private sealed record CanonicalIdentity(string CollectionId, string AirDate, string BroadcastSlot)
++    {
++        public string ValueFor(string field) => field switch
++        {
++            "collection_id" => CollectionId,
++            "air_date" => AirDate,
++            "broadcast_slot" => BroadcastSlot,
++            _ => string.Empty
++        };
++    }
++    private sealed record EpisodeSnapshot(
++        long Id,string CollectionId,string AirDate,string Title,string Description,string Notes,string ArtworkPath,
++        string BroadcastSlot,string Edition,string ArchiveNotes,string BroadcastVariant,string BroadcastEra,string EpisodeType,
++        string ResearchSources,string Hosts,string Callers,string MentionedPeople,bool UserModified,int MetadataConfidence,string UpdatedAt)
++    {
++        public string ValueFor(string field) => field switch
++        {
++            "collection_id" => CollectionId,
++            "air_date" => AirDate,
++            "title" => Title,
++            "description" => Description,
++            "notes" => Notes,
++            "artwork_path" => ArtworkPath,
++            "broadcast_slot" => BroadcastSlot,
++            "edition" => Edition,
++            "archive_notes" => ArchiveNotes,
++            "broadcast_variant" => BroadcastVariant,
++            "broadcast_era" => BroadcastEra,
++            "episode_type" => EpisodeType,
++            "research_sources" => ResearchSources,
++            "hosts" => Hosts,
++            "callers" => Callers,
++            "mentioned_people" => MentionedPeople,
++            _ => string.Empty
++        };
++    }
++    private sealed record ProvenanceSnapshot(long Id,long EpisodeId,string FieldName,string ValueText,string SourceKind,string SourceLabel,int Confidence,int EvidenceCount,bool Protected);
++    private sealed record MetadataCandidate(long EpisodeId,string Value,string Normalized,int Score,bool UserModified,int MetadataConfidence,bool Protected,string SourceKind,string SourceLabel,int ProvenanceConfidence,int EvidenceCount,IReadOnlyList<ProvenanceSnapshot> MatchingProvenance);
++    private sealed record HeadlineReviewSnapshot(long EpisodeId,string Candidate,string ReviewedHeadline,string Confidence,string Reasoning,string Decision,string ParserVersion,string UpdatedAt);
++    private sealed record HeadlineAnalysisResult(IReadOnlyList<ConflictForensicResult> Forensics,int StateRowsMigrated);
++    private sealed record AliasAnalysisResult(IReadOnlyList<ConflictForensicResult> Forensics,int StateRowsMigrated);
++    private sealed record AliasReferenceRule(string Table,string DisplayName);
++    private sealed record ConflictForensicResult(
++        string CanonicalKey,string FieldName,string ConflictKind,string Classification,long? SelectedEpisodeId,string SelectedValue,
++        string CandidateValuesJson,string ProvenanceJson,string Resolution,bool AutoResolved,bool RequiresReview,int ConfidenceScore,
++        int PreservedAlternateCount,string Evidence);
++}
+diff --git a/TheRadioVault.Services/Services/LibraryTruthEngine.cs b/TheRadioVault.Services/Services/LibraryTruthEngine.cs
+index c470395..563555e 100644
+--- a/TheRadioVault.Services/Services/LibraryTruthEngine.cs
++++ b/TheRadioVault.Services/Services/LibraryTruthEngine.cs
+@@ -440,7 +440,8 @@ public sealed class LibraryTruthEngine
+             Coverages = GetCoverages(limit: 50000),
+             AdoptionPreviews = GetAdoptionPreviews(limit: 50000),
+             Rehearsal = rehearsal.GetLatestSummary(),
+-            RehearsalItems = rehearsal.GetLatestItems(limit: 50000)
++            RehearsalItems = rehearsal.GetLatestItems(limit: 50000),
++            ConflictForensics = rehearsal.GetLatestConflictForensics(limit: 50000)
+         };
+         var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+         if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
+diff --git a/TheRadioVault.Tests/Program.cs b/TheRadioVault.Tests/Program.cs
+index 187450c..09845c7 100644
+--- a/TheRadioVault.Tests/Program.cs
++++ b/TheRadioVault.Tests/Program.cs
+@@ -62,6 +62,7 @@ var tests = new (string Name, Action Run)[]
+     ("Library Truth persists direct recording segment coverage", LibraryTruthPersistsDirectSegmentCoverage),
+     ("Library Truth prepares guarded adoption plans without live writes", LibraryTruthPreparesGuardedAdoptionPreview),
+     ("Library Truth rehearses adoption on a disposable clone and verifies rollback", LibraryTruthRehearsalRollsBackDisposableClone),
++    ("Library Truth classifies metadata conflicts and preserves alternates", LibraryTruthClassifiesMetadataConflicts),
+     ("Research audit catches show guest", ResearchAuditCatchesShowGuest),
+     ("Research audit marks safe repairs", ResearchAuditMarksSafeRepairs),
+     ("Web query filters favourites", WebQueryFiltersFavourites),
+@@ -100,8 +101,8 @@ var tests = new (string Name, Action Run)[]
+     ("Web client registers secure offline shell", WebClientRegistersSecureOfflineShell),
+     ("Web client caches downloaded artwork", WebClientCachesDownloadedArtwork),
+     ("Secure web options carry certificate material", SecureWebOptionsCarryCertificateMaterial),
+-    ("Schema 43 includes Library Truth rehearsal tables", Schema43IncludesLibraryTruthRehearsalTables),
+-    ("Schema 43 upgrades Library Truth schema 42 safely", Schema43UpgradesLibraryTruthSchema42Safely),
++    ("Schema 44 includes Library Truth conflict-forensics tables", Schema44IncludesLibraryTruthConflictForensicsTables),
++    ("Schema 44 upgrades Library Truth schema 43 safely", Schema44UpgradesLibraryTruthSchema43Safely),
+     ("Whisper configuration exposes model capabilities", WhisperConfigurationExposesModelCapabilities),
+     ("Transcription ranges have stable display text", TranscriptionRangesHaveStableDisplayText),
+     ("Transcription jobs preserve worker options", TranscriptionJobsPreserveWorkerOptions),
+@@ -1159,6 +1160,69 @@ static void LibraryTruthRehearsalRollsBackDisposableClone()
+     }
+ }
+ 
++static void LibraryTruthClassifiesMetadataConflicts()
++{
++    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
++    var backupDirectory = Path.Combine(directory, "Backups");
++    Directory.CreateDirectory(backupDirectory);
++    var databasePath = Path.Combine(directory, "truth-alpha8-forensics.sqlite");
++    try
++    {
++        var database = new SqliteDatabase(databasePath);
++        database.Initialize();
++        using (var connection = database.OpenConnection())
++        {
++            using var setup = connection.CreateCommand();
++            setup.CommandText = """
++                INSERT INTO collections(name,sort_name) VALUES('Ron & Fez','Ron & Fez');
++                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
++                VALUES('D:\Radio\Alpha8',(SELECT id FROM collections WHERE name='Ron & Fez'),1,1);
++                INSERT INTO episodes(collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_slot,broadcast_uid,notes,hosts,metadata_confidence)
++                VALUES((SELECT id FROM collections WHERE name='Ron & Fez'),'2005-05-12','High','Ron & Fez archive broadcast','Unplayed',$now,$now,'Standard','ALPHA8-A','','Ron Bennington',30);
++                INSERT INTO episodes(collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_slot,broadcast_uid,notes,hosts,metadata_confidence)
++                VALUES((SELECT id FROM collections WHERE name='Ron & Fez'),'2005-05-12','High','Billy Staples visits Ron & Fez','Unplayed',$now,$now,'Standard','ALPHA8-B','Detailed researched note','Fez Whatley',85);
++                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
++                VALUES((SELECT id FROM episodes WHERE broadcast_uid='ALPHA8-A'),'D:\Radio\Alpha8\a.mp3','R&F 05-12-2005.mp3',1000,$now,0,$now,10800000,'ALPHA8-ONE','AvailableOffline',1);
++                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
++                VALUES((SELECT id FROM episodes WHERE broadcast_uid='ALPHA8-B'),'D:\Radio\Alpha8\b.mp3','Ron and Fez_ 2005-05-12.mp3',1200,$now,0,$now,10810000,'ALPHA8-TWO','AvailableOffline',1);
++                INSERT INTO research_field_provenance(episode_id,field_name,value_text,source_kind,source_label,confidence,evidence_count,protected,active,created_at)
++                VALUES((SELECT id FROM episodes WHERE broadcast_uid='ALPHA8-B'),'headline','Billy Staples visits Ron & Fez','research_pack','Verified pack',95,3,1,1,$now);
++                INSERT INTO research_field_provenance(episode_id,field_name,value_text,source_kind,source_label,confidence,evidence_count,protected,active,created_at)
++                VALUES((SELECT id FROM episodes WHERE broadcast_uid='ALPHA8-A'),'headline','An unrelated old protected value','manual','Old unmatched edit',100,5,1,1,$now);
++                """;
++            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
++            setup.ExecuteNonQuery();
++        }
++
++        var engine = new LibraryTruthEngine(database);
++        engine.BuildShadowIndex();
++        var rehearsal = new LibraryTruthAdoptionRehearsalService(database);
++        var summary = rehearsal.Run(backupDirectory);
++        var conflicts = rehearsal.GetLatestConflictForensics();
++
++        True(summary.RollbackVerified);
++        True(summary.AutoResolvedConflicts >= 3);
++        Equal(0, summary.UnresolvedConflicts);
++        True(summary.PreservedAlternates >= 2);
++        True(conflicts.Any(x => x.FieldName == "title" && x.AutoResolved && x.Classification == "Specific over placeholder"));
++        True(conflicts.Where(x => x.FieldName == "title").All(x => !x.Provenance.Contains("Old unmatched edit", StringComparison.Ordinal)));
++        True(conflicts.Any(x => x.FieldName == "notes" && x.AutoResolved && x.Classification == "Empty vs populated"));
++        True(conflicts.Any(x => x.FieldName == "hosts" && x.AutoResolved && x.Classification == "Mergeable union"));
++        True(conflicts.All(x => !string.IsNullOrWhiteSpace(x.CandidateValues)));
++
++        using var verify = database.OpenConnection();
++        using var titles = verify.CreateCommand();
++        titles.CommandText = "SELECT GROUP_CONCAT(title,'|') FROM episodes ORDER BY id";
++        var liveTitles = Convert.ToString(titles.ExecuteScalar()) ?? string.Empty;
++        True(liveTitles.Contains("Ron & Fez archive broadcast", StringComparison.Ordinal));
++        True(liveTitles.Contains("Billy Staples visits Ron & Fez", StringComparison.Ordinal));
++    }
++    finally
++    {
++        try { Directory.Delete(directory, true); } catch { }
++    }
++}
++
+ static void RunLibraryTruthScenario(
+     string collection,
+     IReadOnlyList<(string Filename, string Date, string Slot, long DurationMs, string PartialHash)> files,
+@@ -1752,11 +1816,11 @@ static void SecureWebOptionsCarryCertificateMaterial()
+     Equal("ABCDEF", options.RootCertificateThumbprint);
+ }
+ 
+-static void Schema43UpgradesLibraryTruthSchema42Safely()
++static void Schema44UpgradesLibraryTruthSchema43Safely()
+ {
+     var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+     Directory.CreateDirectory(directory);
+-    var path = Path.Combine(directory, "schema42.sqlite");
++    var path = Path.Combine(directory, "schema43.sqlite");
+     try
+     {
+         using (var legacy = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
+@@ -1764,7 +1828,7 @@ static void Schema43UpgradesLibraryTruthSchema42Safely()
+             legacy.Open();
+             using var command = legacy.CreateCommand();
+             command.CommandText = """
+-                PRAGMA user_version=42;
++                PRAGMA user_version=43;
+                 CREATE TABLE library_truth_runs (
+                     id INTEGER PRIMARY KEY AUTOINCREMENT,
+                     started_at TEXT NOT NULL,
+@@ -1825,7 +1889,7 @@ static void Schema43UpgradesLibraryTruthSchema42Safely()
+         using var connection = database.OpenConnection();
+         using var version = connection.CreateCommand();
+         version.CommandText = "PRAGMA user_version";
+-        Equal(43L, Convert.ToInt64(version.ExecuteScalar()));
++        Equal(44L, Convert.ToInt64(version.ExecuteScalar()));
+         using var columns = connection.CreateCommand();
+         columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_recordings') WHERE name IN ('role','completeness_score','preferred_score','duration_ratio','is_preferred_candidate','review_reason')";
+         Equal(6L, Convert.ToInt64(columns.ExecuteScalar()));
+@@ -1838,6 +1902,9 @@ static void Schema43UpgradesLibraryTruthSchema42Safely()
+         using var alpha7Tables = connection.CreateCommand();
+         alpha7Tables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_rehearsal_runs','library_truth_rehearsal_items')";
+         Equal(2L, Convert.ToInt64(alpha7Tables.ExecuteScalar()));
++        using var alpha8Table = connection.CreateCommand();
++        alpha8Table.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='library_truth_rehearsal_conflicts'";
++        Equal(1L, Convert.ToInt64(alpha8Table.ExecuteScalar()));
+     }
+     finally
+     {
+@@ -1845,7 +1912,7 @@ static void Schema43UpgradesLibraryTruthSchema42Safely()
+     }
+ }
+ 
+-static void Schema43IncludesLibraryTruthRehearsalTables()
++static void Schema44IncludesLibraryTruthConflictForensicsTables()
+ {
+     var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+     Directory.CreateDirectory(directory);
+@@ -1857,7 +1924,7 @@ static void Schema43IncludesLibraryTruthRehearsalTables()
+         using var connection = database.OpenConnection();
+         using var version = connection.CreateCommand();
+         version.CommandText = "PRAGMA user_version";
+-        Equal(43L, Convert.ToInt64(version.ExecuteScalar()));
++        Equal(44L, Convert.ToInt64(version.ExecuteScalar()));
+         using var qualityTable = connection.CreateCommand();
+         qualityTable.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='research_quality_actions'";
+         Equal(1L, Convert.ToInt64(qualityTable.ExecuteScalar()));
+@@ -1910,8 +1977,14 @@ static void Schema43IncludesLibraryTruthRehearsalTables()
+         truthRehearsalTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_rehearsal_runs','library_truth_rehearsal_items')";
+         Equal(2L, Convert.ToInt64(truthRehearsalTables.ExecuteScalar()));
+         using var truthRehearsalColumns = connection.CreateCommand();
+-        truthRehearsalColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_rehearsal_runs') WHERE name IN ('backup_path','source_fingerprint','rollback_fingerprint','file_reassignments','state_rows_migrated','foreign_key_violations','rollback_verified','message')";
+-        Equal(8L, Convert.ToInt64(truthRehearsalColumns.ExecuteScalar()));
++        truthRehearsalColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_rehearsal_runs') WHERE name IN ('backup_path','source_fingerprint','rollback_fingerprint','file_reassignments','state_rows_migrated','auto_resolved_conflicts','unresolved_conflicts','preserved_alternates','foreign_key_violations','rollback_verified','message')";
++        Equal(11L, Convert.ToInt64(truthRehearsalColumns.ExecuteScalar()));
++        using var truthForensicTable = connection.CreateCommand();
++        truthForensicTable.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='library_truth_rehearsal_conflicts'";
++        Equal(1L, Convert.ToInt64(truthForensicTable.ExecuteScalar()));
++        using var truthForensicColumns = connection.CreateCommand();
++        truthForensicColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_rehearsal_conflicts') WHERE name IN ('canonical_key','field_name','classification','selected_value','candidate_values_json','provenance_json','resolution','auto_resolved','requires_review','preserved_alternate_count')";
++        Equal(10L, Convert.ToInt64(truthForensicColumns.ExecuteScalar()));
+         using var truthRecordingColumns = connection.CreateCommand();
+         truthRecordingColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_recordings') WHERE name IN ('role','completeness_score','preferred_score','duration_ratio','is_preferred_candidate','review_reason')";
+         Equal(6L, Convert.ToInt64(truthRecordingColumns.ExecuteScalar()));
+diff --git a/TheRadioVault/LibraryTruthWindow.xaml b/TheRadioVault/LibraryTruthWindow.xaml
+index 7159ec6..af9b4c5 100644
+--- a/TheRadioVault/LibraryTruthWindow.xaml
++++ b/TheRadioVault/LibraryTruthWindow.xaml
+@@ -180,6 +180,34 @@
+      </Border>
+     </Grid>
+    </TabItem>
++   <TabItem Header="Conflict forensics">
++    <Grid Margin="0,12,0,0">
++     <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
++     <Border Background="{DynamicResource InsetBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,0,0,12">
++      <TextBlock x:Name="ConflictForensicsSummaryText" Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Text="Run the alpha8 adoption rehearsal to classify metadata differences and preserve their provenance."/>
++     </Border>
++     <DataGrid Grid.Row="1" x:Name="ConflictForensicsGrid" AutoGenerateColumns="False" IsReadOnly="True" SelectionMode="Single"
++               SelectionChanged="ConflictForensicsGrid_SelectionChanged" EnableRowVirtualization="True" EnableColumnVirtualization="True"
++               VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.VirtualizationMode="Recycling">
++      <DataGrid.Columns>
++       <DataGridTextColumn Header="Policy" Binding="{Binding PolicyDisplay}" Width="105"/>
++       <DataGridTextColumn Header="Canonical broadcast" Binding="{Binding BroadcastDisplay}" Width="*" MinWidth="260"/>
++       <DataGridTextColumn Header="Field" Binding="{Binding FieldName}" Width="150"/>
++       <DataGridTextColumn Header="Classification" Binding="{Binding Classification}" Width="210"/>
++       <DataGridTextColumn Header="Resolution" Binding="{Binding Resolution}" Width="180"/>
++       <DataGridTextColumn Header="Selected source" Binding="{Binding SelectedEpisodeDisplay}" Width="145"/>
++       <DataGridTextColumn Header="Confidence" Binding="{Binding ConfidenceDisplay}" Width="90"/>
++       <DataGridTextColumn Header="Alternates" Binding="{Binding PreservedAlternateCount}" Width="85"/>
++      </DataGrid.Columns>
++     </DataGrid>
++     <Border Grid.Row="2" Background="{DynamicResource InsetBrush}" BorderBrush="{DynamicResource BorderBrush}" BorderThickness="1" CornerRadius="8" Padding="14" Margin="0,14,0,0">
++      <StackPanel>
++       <TextBlock Text="FIELD-LEVEL VALUES, PROVENANCE AND POLICY" Foreground="{DynamicResource MutedBrush}" FontSize="10" FontWeight="SemiBold"/>
++       <TextBlock x:Name="ConflictForensicsEvidenceText" Text="Select a conflict row to inspect every source value and the deterministic policy decision." Foreground="{DynamicResource TextBrush}" TextWrapping="Wrap" Margin="0,6,0,0"/>
++      </StackPanel>
++     </Border>
++    </Grid>
++   </TabItem>
+    <TabItem Header="Adoption audit">
+     <Grid Margin="0,12,0,0">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+diff --git a/TheRadioVault/LibraryTruthWindow.xaml.cs b/TheRadioVault/LibraryTruthWindow.xaml.cs
+index c3ca516..968afe1 100644
+--- a/TheRadioVault/LibraryTruthWindow.xaml.cs
++++ b/TheRadioVault/LibraryTruthWindow.xaml.cs
+@@ -14,7 +14,7 @@ public partial class LibraryTruthWindow : Window
+         _rehearsal = rehearsal ?? throw new ArgumentNullException(nameof(rehearsal));
+         _summary = summary;
+         InitializeComponent();
+-        SubtitleText.Text = $"Parser {summary.ParserVersion} · completed {summary.CompletedDisplay} · disposable transactional rehearsal available";
++        SubtitleText.Text = $"Parser {summary.ParserVersion} · completed {summary.CompletedDisplay} · alpha8 conflict forensics available";
+         PhysicalCountText.Text = summary.PhysicalFiles.ToString("N0");
+         CurrentCountText.Text = summary.CurrentBroadcasts.ToString("N0");
+         ProposedCountText.Text = summary.ProposedBroadcasts.ToString("N0");
+@@ -48,13 +48,14 @@ public partial class LibraryTruthWindow : Window
+         var generation = Interlocked.Increment(ref _loadGeneration);
+         var filter = (FilterCombo.SelectedItem as ComboBoxItem)?.Tag?.ToString() ?? "all";
+         var search = SearchText.Text.Trim();
+-        StatusText.Text = "Loading recording structure, coverage evidence and the guarded adoption preview…";
++        StatusText.Text = "Loading recording structure, coverage evidence, adoption preview and conflict forensics…";
+         FilesGrid.IsEnabled = false;
+         RecordingsGrid.IsEnabled = false;
+         BroadcastsGrid.IsEnabled = false;
+         CoveragesGrid.IsEnabled = false;
+         AdoptionPreviewGrid.IsEnabled = false;
+         RehearsalGrid.IsEnabled = false;
++        ConflictForensicsGrid.IsEnabled = false;
+         YearsGrid.IsEnabled = false;
+         ConflictsGrid.IsEnabled = false;
+         try
+@@ -68,9 +69,10 @@ public partial class LibraryTruthWindow : Window
+             var planTask = Task.Run(_engine.GetAdoptionPlanSummary);
+             var rehearsalSummaryTask = Task.Run(_rehearsal.GetLatestSummary);
+             var rehearsalItemsTask = Task.Run(() => _rehearsal.GetLatestItems());
++            var conflictForensicsTask = Task.Run(() => _rehearsal.GetLatestConflictForensics());
+             var yearsTask = Task.Run(_engine.GetYears);
+             var conflictsTask = Task.Run(_engine.GetConflicts);
+-            await Task.WhenAll(filesTask, recordingsTask, broadcastsTask, adoptionTask, coverageTask, previewTask, planTask, rehearsalSummaryTask, rehearsalItemsTask, yearsTask, conflictsTask);
++            await Task.WhenAll(filesTask, recordingsTask, broadcastsTask, adoptionTask, coverageTask, previewTask, planTask, rehearsalSummaryTask, rehearsalItemsTask, conflictForensicsTask, yearsTask, conflictsTask);
+             if (generation != Volatile.Read(ref _loadGeneration)) return;
+ 
+             var files = filesTask.Result;
+@@ -82,6 +84,7 @@ public partial class LibraryTruthWindow : Window
+             var plan = planTask.Result;
+             var rehearsalSummary = rehearsalSummaryTask.Result;
+             var rehearsalItems = rehearsalItemsTask.Result;
++            var conflictForensics = conflictForensicsTask.Result;
+             var years = yearsTask.Result;
+             var conflicts = conflictsTask.Result;
+ 
+@@ -91,6 +94,7 @@ public partial class LibraryTruthWindow : Window
+             CoveragesGrid.ItemsSource = coverages;
+             AdoptionPreviewGrid.ItemsSource = previews;
+             RehearsalGrid.ItemsSource = rehearsalItems;
++            ConflictForensicsGrid.ItemsSource = conflictForensics;
+             YearsGrid.ItemsSource = years;
+             ConflictsGrid.ItemsSource = conflicts;
+             FilesGrid.SelectedIndex = files.Count > 0 ? 0 : -1;
+@@ -99,6 +103,7 @@ public partial class LibraryTruthWindow : Window
+             CoveragesGrid.SelectedIndex = coverages.Count > 0 ? 0 : -1;
+             AdoptionPreviewGrid.SelectedIndex = previews.Count > 0 ? 0 : -1;
+             RehearsalGrid.SelectedIndex = rehearsalItems.Count > 0 ? 0 : -1;
++            ConflictForensicsGrid.SelectedIndex = conflictForensics.Count > 0 ? 0 : -1;
+ 
+             ReadyCountText.Text = adoption.AdoptionReadyTotal.ToString("N0");
+             RecommendedCountText.Text = adoption.ReviewRecommendedBroadcasts.ToString("N0");
+@@ -109,17 +114,20 @@ public partial class LibraryTruthWindow : Window
+                 $"{adoption.ReviewRecommendedBroadcasts:N0} groups deserve a focused structure check and {adoption.BlockedBroadcasts:N0} remain blocked.\n\n" +
+                 $"Recording roles: {adoption.PartialRecordings:N0} partial/incomplete captures, {adoption.FragmentRecordings:N0} short clips, " +
+                 $"{adoption.TruncatedRecordings:N0} likely truncated files. {adoption.SuspiciousMergeGroups:N0} suspicious merge groups and " +
+-                $"{adoption.CrossIdentityConflicts:N0} cross-identity audio conflicts are preserved for audit. Alpha7 can rehearse the real database transaction only inside a disposable clone; the live library remains unchanged.";
++                $"{adoption.CrossIdentityConflicts:N0} cross-identity audio conflicts are preserved for audit. Alpha8 can rehearse field-level merge policies only inside a disposable clone; the live library remains unchanged.";
+             AdoptionPlanSummaryText.Text =
+-                $"Alpha7 inherited {plan.PreviewBroadcasts:N0} per-broadcast plans: {plan.EligibleBroadcasts:N0} are structurally prepared, " +
++                $"Alpha8 inherited {plan.PreviewBroadcasts:N0} per-broadcast plans: {plan.EligibleBroadcasts:N0} are structurally prepared, " +
+                 $"{plan.ReviewBroadcasts:N0} remain held for review and {plan.BlockedBroadcasts:N0} remain blocked. " +
+                 $"A later transactional migration would write {plan.CanonicalBroadcastWrites:N0} canonical broadcasts, {plan.RecordingWrites:N0} recordings, " +
+                 $"{plan.CoverageWrites:N0} coverage rows and {plan.FileLinkWrites:N0} media-file links while consolidating {plan.LiveEpisodeRowsToConsolidate:N0} redundant live episode rows. " +
+                 "These counts now feed a disposable rehearsal transaction; there is still no live adoption command.";
+             RehearsalSummaryText.Text = rehearsalSummary.Id == 0
+-                ? "No transactional rehearsal has been run yet. Alpha7 will create and validate a pre-rehearsal backup, execute the migration against a disposable clone, run foreign-key and integrity checks, roll the transaction back, and compare logical fingerprints."
++                ? "No transactional rehearsal has been run yet. Alpha8 will create and validate a pre-rehearsal backup, execute the migration and deterministic conflict policies against a disposable clone, run integrity checks, roll back, and compare logical fingerprints."
+                 : $"{rehearsalSummary.Message}\n\n{rehearsalSummary.SummaryDisplay}. Backup validation: {rehearsalSummary.BackupRestoreCheck}. SQLite integrity: {rehearsalSummary.IntegrityCheck}. Completed {rehearsalSummary.CompletedDisplay}.";
+-            StatusText.Text = $"Showing {files.Count:N0} physical files, {recordings.Count:N0} recording roles, {coverages.Count:N0} coverage rows, {broadcasts.Count:N0} canonical broadcasts and {previews.Count:N0} adoption previews, plus {rehearsalItems.Count:N0} rehearsal result rows. The live library is unchanged.";
++            ConflictForensicsSummaryText.Text = rehearsalSummary.Id == 0
++                ? "Run the alpha8 adoption rehearsal to classify metadata differences, rank provenance, preserve every alternate and identify only the genuinely ambiguous remainder."
++                : $"Alpha8 persisted {rehearsalSummary.MetadataConflicts:N0} field/reference forensic rows: {rehearsalSummary.AutoResolvedConflicts:N0} deterministic resolutions, {rehearsalSummary.UnresolvedConflicts:N0} requiring review and {rehearsalSummary.PreservedAlternates:N0} preserved alternates. No decision was committed to the live library.";
++            StatusText.Text = $"Showing {files.Count:N0} physical files, {recordings.Count:N0} recording roles, {coverages.Count:N0} coverage rows, {broadcasts.Count:N0} canonical broadcasts and {previews.Count:N0} adoption previews, plus {rehearsalItems.Count:N0} rehearsal rows and {conflictForensics.Count:N0} field-level forensic rows. The live library is unchanged.";
+         }
+         catch (Exception ex)
+         {
+@@ -136,6 +144,7 @@ public partial class LibraryTruthWindow : Window
+                 CoveragesGrid.IsEnabled = true;
+                 AdoptionPreviewGrid.IsEnabled = true;
+                 RehearsalGrid.IsEnabled = true;
++                ConflictForensicsGrid.IsEnabled = true;
+                 YearsGrid.IsEnabled = true;
+                 ConflictsGrid.IsEnabled = true;
+             }
+@@ -189,7 +198,7 @@ public partial class LibraryTruthWindow : Window
+     {
+         var confirmation = MessageBox.Show(
+             this,
+-            "Alpha7 will create a validated SQLite backup, execute the planned adoption only inside a disposable database clone, run integrity checks, and roll the transaction back.\n\nIt cannot change the live library. Continue?",
++            "Alpha8 will create a validated SQLite backup, execute the planned adoption and deterministic metadata policies only inside a disposable database clone, preserve all competing values in a forensic ledger, run integrity checks, and roll the transaction back.\n\nIt cannot change the live library. Continue?",
+             "Run adoption rehearsal",
+             MessageBoxButton.YesNo,
+             MessageBoxImage.Information);
+@@ -206,7 +215,7 @@ public partial class LibraryTruthWindow : Window
+             var summary = await Task.Run(() => _rehearsal.Run(AppPaths.BackupDirectory, progress));
+             MessageBox.Show(
+                 this,
+-                $"{summary.Message}\n\n{summary.SummaryDisplay}\nBackup: {summary.BackupPath}",
++                $"{summary.Message}\n\n{summary.SummaryDisplay}\nPreserved alternates: {summary.PreservedAlternates:N0}\nBackup: {summary.BackupPath}",
+                 "Adoption rehearsal completed",
+                 MessageBoxButton.OK,
+                 MessageBoxImage.Information);
+@@ -231,6 +240,29 @@ public partial class LibraryTruthWindow : Window
+             : "Run the adoption rehearsal, then select a broadcast to inspect its transaction and policy evidence.";
+     }
+ 
++    private void ConflictForensicsGrid_SelectionChanged(object sender, SelectionChangedEventArgs e)
++    {
++        ConflictForensicsEvidenceText.Text = ConflictForensicsGrid.SelectedItem is LibraryTruthConflictForensic item
++            ? $"""{item.Evidence}
++
++Canonical broadcast: {item.CanonicalKey}
++Field: {item.FieldName}
++Kind: {item.ConflictKind}
++Classification: {item.Classification}
++Resolution: {item.Resolution}
++Policy: {item.PolicyDisplay} · confidence {item.ConfidenceScore}%
++Selected source: {item.SelectedEpisodeDisplay}
++Selected value: {item.SelectedValue}
++Preserved alternates: {item.PreservedAlternateCount:N0}
++
++Candidate values:
++{item.CandidateValues}
++
++Provenance:
++{item.Provenance}"""
++            : "Select a conflict row to inspect every source value and the deterministic policy decision.";
++    }
++
+     private void ExportReport_Click(object sender, RoutedEventArgs e)
+     {
+         var dialog = new SaveFileDialog
+@@ -243,7 +275,7 @@ public partial class LibraryTruthWindow : Window
+         try
+         {
+             _engine.ExportLatest(dialog.FileName, AppVersionService.Version);
+-            MessageBox.Show(this, "The recording, coverage, adoption-preview and rehearsal report was exported.", "Library Truth Engine", MessageBoxButton.OK, MessageBoxImage.Information);
++            MessageBox.Show(this, "The recording, coverage, adoption-preview, rehearsal and conflict-forensics report was exported.", "Library Truth Engine", MessageBoxButton.OK, MessageBoxImage.Information);
+         }
+         catch (Exception ex)
+         {
+diff --git a/TheRadioVault/TheRadioVault.csproj b/TheRadioVault/TheRadioVault.csproj
+index d817629..926d95c 100644
+--- a/TheRadioVault/TheRadioVault.csproj
++++ b/TheRadioVault/TheRadioVault.csproj
+@@ -9,10 +9,10 @@
+     <ImplicitUsings>disable</ImplicitUsings>
+     <AssemblyName>TheRadioVault</AssemblyName>
+     <RootNamespace>TheRadioVault</RootNamespace>
+-    <Version>0.28.0-alpha7-transactional-rehearsal-buildfix1</Version>
++    <Version>0.28.0-alpha8-conflict-forensics</Version>
+     <AssemblyVersion>0.28.0.0</AssemblyVersion>
+     <FileVersion>0.28.0.0</FileVersion>
+-    <InformationalVersion>0.28.0-alpha7-transactional-rehearsal-buildfix1</InformationalVersion>
++    <InformationalVersion>0.28.0-alpha8-conflict-forensics</InformationalVersion>
+   </PropertyGroup>
+   <ItemGroup>
+     <PackageReference Include="Microsoft.Data.Sqlite" Version="8.0.7" />
+diff --git a/VERSION.txt b/VERSION.txt
+index 033e7e5..adc1c5c 100644
+--- a/VERSION.txt
++++ b/VERSION.txt
+@@ -1 +1 @@
+-0.28.0-alpha7-transactional-rehearsal-buildfix1
++0.28.0-alpha8-conflict-forensics
+diff --git a/validate-source.ps1 b/validate-source.ps1
+index 69cd4bc..de67ebd 100644
+--- a/validate-source.ps1
++++ b/validate-source.ps1
+@@ -13,7 +13,14 @@ if ($libraryTruthWindowText -match 'Task\.Run\(_rehearsal\.GetLatestItems\)') {
+     Add-ValidationError "LibraryTruthWindow must invoke GetLatestItems through an explicit lambda because the method has an optional limit parameter."
+ }
+ if ($libraryTruthWindowText -notmatch 'Task\.Run\(\(\)\s*=>\s*_rehearsal\.GetLatestItems\(\)\)') {
+-    Add-ValidationError "The alpha7 rehearsal item load must use Task.Run(() => _rehearsal.GetLatestItems())."
++    Add-ValidationError "The alpha8 rehearsal item load must use Task.Run(() => _rehearsal.GetLatestItems())."
++}
++
++if ($libraryTruthWindowText -match 'Task\.Run\(_rehearsal\.GetLatestConflictForensics\)') {
++    Add-ValidationError "LibraryTruthWindow must invoke GetLatestConflictForensics through an explicit lambda because the method has an optional limit parameter."
++}
++if ($libraryTruthWindowText -notmatch 'Task\.Run\(\(\)\s*=>\s*_rehearsal\.GetLatestConflictForensics\(\)\)') {
++    Add-ValidationError "The alpha8 conflict-forensics load must use Task.Run(() => _rehearsal.GetLatestConflictForensics())."
+ }
+ 
+ # Version drift is easy to introduce when packaging source builds.
+@@ -120,8 +127,8 @@ foreach ($eventName in @('LibraryScanCompletedEvent','ResearchUpdatedEvent','Met
+ }
+ 
+ $schemaText = Get-Content (Join-Path $root "TheRadioVault.Data\Database\SqliteDatabase.cs") -Raw
+-if ($schemaText -notmatch 'CurrentSchemaVersion\s*=\s*43') {
+-    Add-ValidationError "v0.28 alpha7 Library Truth releases must use database schema 43."
++if ($schemaText -notmatch 'CurrentSchemaVersion\s*=\s*44') {
++    Add-ValidationError "v0.28 alpha8 Library Truth releases must use database schema 44."
+ }
+ foreach ($columnName in @('requires_review','review_category','recommended_action','decision_source')) {
+     if ($schemaText -notmatch [regex]::Escape($columnName)) {
+@@ -139,17 +146,17 @@ foreach ($columnName in @('fingerprinted_at','full_hashed_at','inspection_error'
+ if ($schemaText -notmatch 'CREATE TABLE IF NOT EXISTS preservation_scan_runs') {
+     Add-ValidationError "Preserved schema-39 preservation scan ledger is missing."
+ }
+-foreach ($truthTable in @('library_truth_runs','library_truth_files','library_truth_recordings','library_truth_broadcasts','library_truth_years','library_truth_conflicts','library_truth_coverages','library_truth_adoption_previews','library_truth_rehearsal_runs','library_truth_rehearsal_items')) {
++foreach ($truthTable in @('library_truth_runs','library_truth_files','library_truth_recordings','library_truth_broadcasts','library_truth_years','library_truth_conflicts','library_truth_coverages','library_truth_adoption_previews','library_truth_rehearsal_runs','library_truth_rehearsal_items','library_truth_rehearsal_conflicts')) {
+     if ($schemaText -notmatch ('CREATE TABLE IF NOT EXISTS ' + [regex]::Escape($truthTable))) {
+-        Add-ValidationError "Schema 43 Library Truth table is missing: $truthTable"
++        Add-ValidationError "Schema 44 Library Truth table is missing: $truthTable"
+     }
+ }
+ if ($schemaText -notmatch 'recording_key TEXT NOT NULL DEFAULT' -or $schemaText -notmatch 'ix_library_truth_files_run_recording') {
+-    Add-ValidationError "Schema 43 must preserve physical-file shadow recording-family assignments."
++    Add-ValidationError "Schema 44 must preserve physical-file shadow recording-family assignments."
+ }
+ foreach ($auditColumn in @('adoption_state','preferred_recording_key','suspicious_merge','duration_spread_ratio','cross_identity_conflict_count','role','completeness_score','preferred_score','duration_ratio','is_preferred_candidate')) {
+     if ($schemaText -notmatch [regex]::Escape($auditColumn)) {
+-        Add-ValidationError "Schema 43 Library Truth recording-audit column is missing: $auditColumn"
++        Add-ValidationError "Schema 44 Library Truth recording-audit column is missing: $auditColumn"
+     }
+ }
+ if ($schemaText -notmatch 'CREATE TABLE IF NOT EXISTS research_import_changes') {
+@@ -213,7 +220,7 @@ if ($webServerText -match '_cancellation\?\.Cancel\(\).*?_cancellation\?\.Dispos
+ }
+ 
+ $testText = Get-Content (Join-Path $root "TheRadioVault.Tests\Program.cs") -Raw
+-foreach ($testCapability in @('Background jobs cancel safely','Background jobs dispose safely while running','Web API exposes change feed','Web API requests job cancellation','Web server stop is idempotent','Web shell reports configured app version','Schema 43 includes Library Truth rehearsal tables','Schema 43 upgrades Library Truth schema 42 safely')) {
++foreach ($testCapability in @('Background jobs cancel safely','Background jobs dispose safely while running','Web API exposes change feed','Web API requests job cancellation','Web server stop is idempotent','Web shell reports configured app version','Schema 44 includes Library Truth conflict-forensics tables','Schema 44 upgrades Library Truth schema 43 safely')) {
+     if ($testText -notmatch [regex]::Escape($testCapability)) {
+         Add-ValidationError "Phoenix 4 capability test is missing: $testCapability"
+     }
+@@ -311,7 +318,7 @@ if (-not (Test-Path (Join-Path $root "TheRadioVault\TranscriptionRequestWindow.x
+     -not (Test-Path (Join-Path $root "TheRadioVault\TranscriptionRequestWindow.xaml.cs"))) {
+     Add-ValidationError "The local transcription request window is missing."
+ }
+-foreach ($testCapability in @('Schema 43 includes Library Truth rehearsal tables','Whisper configuration exposes model capabilities','Transcription ranges have stable display text','Transcription jobs preserve worker options','Transcript repository round-trips timed segments','Transcript packages reject overlapping segments','Transcript exchange protects broadcast identity','Speaker confirmations accumulate cross-broadcast voice evidence','Transcript packages preserve speaker assignments','Transcript quality collapses music runs','Portable metadata removes private paths','Transcript v3 packages are compressed')) {
++foreach ($testCapability in @('Schema 44 includes Library Truth conflict-forensics tables','Whisper configuration exposes model capabilities','Transcription ranges have stable display text','Transcription jobs preserve worker options','Transcript repository round-trips timed segments','Transcript packages reject overlapping segments','Transcript exchange protects broadcast identity','Speaker confirmations accumulate cross-broadcast voice evidence','Transcript packages preserve speaker assignments','Transcript quality collapses music runs','Portable metadata removes private paths','Transcript v3 packages are compressed')) {
+     if ($testText -notmatch [regex]::Escape($testCapability)) {
+         Add-ValidationError "Transcription foundation capability test is missing: $testCapability"
+     }
+@@ -567,24 +574,25 @@ foreach ($file in @('TheRadioVault\PreservationScanOptionsWindow.xaml','TheRadio
+     if (-not (Test-Path (Join-Path $root $file))) { Add-ValidationError "Alpha7 preservation file is missing: $file" }
+ }
+ 
+-foreach ($file in @('TheRadioVault.Core\LibraryTruth\LibraryTruthModels.cs','TheRadioVault.Core\LibraryTruth\LibraryTruthRuleCatalog.cs','TheRadioVault.Core\LibraryTruth\LibraryTruthParser.cs','TheRadioVault.Core\LibraryTruth\LibraryTruthContextAnalyzer.cs','TheRadioVault.Core\LibraryTruth\LibraryTruthRecordingStructure.cs','TheRadioVault.Services\Services\LibraryTruthEngine.cs','TheRadioVault.Services\Services\LibraryTruthAdoptionRehearsalService.cs','TheRadioVault.Services\Models\LibraryTruthRehearsalModels.cs','TheRadioVault\LibraryTruthWindow.xaml','TheRadioVault\LibraryTruthWindow.xaml.cs','TheRadioVault\MainWindow.LibraryTruth.cs')) {
++foreach ($file in @('TheRadioVault.Core\LibraryTruth\LibraryTruthModels.cs','TheRadioVault.Core\LibraryTruth\LibraryTruthRuleCatalog.cs','TheRadioVault.Core\LibraryTruth\LibraryTruthParser.cs','TheRadioVault.Core\LibraryTruth\LibraryTruthContextAnalyzer.cs','TheRadioVault.Core\LibraryTruth\LibraryTruthRecordingStructure.cs','TheRadioVault.Services\Services\LibraryTruthEngine.cs','TheRadioVault.Services\Services\LibraryTruthAdoptionRehearsalService.cs','TheRadioVault.Services\Services\LibraryTruthConflictForensics.cs','TheRadioVault.Services\Models\LibraryTruthRehearsalModels.cs','TheRadioVault\LibraryTruthWindow.xaml','TheRadioVault\LibraryTruthWindow.xaml.cs','TheRadioVault\MainWindow.LibraryTruth.cs')) {
+     if (-not (Test-Path (Join-Path $root $file))) { Add-ValidationError "Library Truth Engine file is missing: $file" }
+ }
+ $truthText = (Get-Content (Join-Path $root 'TheRadioVault.Core\LibraryTruth\LibraryTruthParser.cs') -Raw) + "`n" +
+              (Get-Content (Join-Path $root 'TheRadioVault.Core\LibraryTruth\LibraryTruthRecordingStructure.cs') -Raw) + "`n" +
+              (Get-Content (Join-Path $root 'TheRadioVault.Services\Services\LibraryTruthEngine.cs') -Raw) + "`n" +
+-             (Get-Content (Join-Path $root 'TheRadioVault.Services\Services\LibraryTruthAdoptionRehearsalService.cs') -Raw)
+-foreach ($capability in @('LibraryTruthContextAnalyzer','LibraryTruthRecordingStructure','AmbiguousTrailingNumber','AttachedLetterPart','BenignMultipartAnnotation','EffectivePartAssignments','CanonicalBroadcastKey','BuildRecordingFamilies','BuildDirectCoverageEvidence','ApplySameDateCoverageAudit','BuildAdoptionPreviews','BuildCrossIdentityConflicts','ClassifyRecordingRole','PreferredRecordingScore','DetectSuspiciousMerge','GetAdoptionSummary','GetCoverages','GetAdoptionPreviews','GetAdoptionPlanSummary','GetYears','GetConflicts','library_truth_recordings','library_truth_coverages','library_truth_adoption_previews','LibraryTruthAdoptionRehearsalService','CreateOnlineBackup','ComputeLogicalFingerprint','RollbackVerified','library_truth_rehearsal_runs','library_truth_rehearsal_items','recordingKeyByMediaFile','The live library was not changed')) {
++             (Get-Content (Join-Path $root 'TheRadioVault.Services\Services\LibraryTruthAdoptionRehearsalService.cs') -Raw) + "`n" +
++             (Get-Content (Join-Path $root 'TheRadioVault.Services\Services\LibraryTruthConflictForensics.cs') -Raw)
++foreach ($capability in @('LibraryTruthContextAnalyzer','LibraryTruthRecordingStructure','AmbiguousTrailingNumber','AttachedLetterPart','BenignMultipartAnnotation','EffectivePartAssignments','CanonicalBroadcastKey','BuildRecordingFamilies','BuildDirectCoverageEvidence','ApplySameDateCoverageAudit','BuildAdoptionPreviews','BuildCrossIdentityConflicts','ClassifyRecordingRole','PreferredRecordingScore','DetectSuspiciousMerge','GetAdoptionSummary','GetCoverages','GetAdoptionPreviews','GetAdoptionPlanSummary','GetYears','GetConflicts','library_truth_recordings','library_truth_coverages','library_truth_adoption_previews','LibraryTruthAdoptionRehearsalService','CreateOnlineBackup','ComputeLogicalFingerprint','RollbackVerified','library_truth_rehearsal_runs','library_truth_rehearsal_items','library_truth_rehearsal_conflicts','GetLatestConflictForensics','AnalyzeMetadataForensics','preserved_alternates','recordingKeyByMediaFile','The live library was not changed')) {
+     if ($truthText -notmatch [regex]::Escape($capability)) {
+         Add-ValidationError "Library Truth capability is missing: $capability"
+     }
+ }
+-foreach ($marker in @('SettingsLibraryTruthSection','Build shadow library','Physical files','Recording roles','Canonical broadcasts','Coverage evidence','Adoption preview','Rehearsal results','Adoption audit','Export analysis report')) {
++foreach ($marker in @('SettingsLibraryTruthSection','Build shadow library','Physical files','Recording roles','Canonical broadcasts','Coverage evidence','Adoption preview','Conflict forensics','Rehearsal results','Adoption audit','Export analysis report')) {
+     if ($mainWindowXamlText -notmatch [regex]::Escape($marker) -and $allSourceText -notmatch [regex]::Escape($marker)) {
+         Add-ValidationError "Library Truth UI marker is missing: $marker"
+     }
+ }
+-foreach ($testCapability in @('Library Truth recovers AFRO short dates from folder context','Library Truth recognises Bennington OR slot','Library Truth keeps parent show for AFRO format broadcasts','Library Truth recovers compact RaF month day from year folder','Library Truth learns year from labelled year folders','Library Truth parses indexed named-month dates','Library Truth does not confuse source indices with years','Library Truth distinguishes explicit and ambiguous multipart markers','Library Truth protects leading track and lone version numbers','Library Truth keeps variant and source filename families separate','Library Truth normalises safe multipart family suffixes','Library Truth reassembles annotated multipart families','Library Truth assembles Roman multipart files into one broadcast','Library Truth preserves genuinely unknown dates','Library Truth shadow index separates broadcasts recordings and files','Library Truth treats alternate recordings as normal structure','Library Truth keeps identical audio with conflicting dates separate','Library Truth groups exact unknown physical copies','Library Truth separates full captures from multipart assemblies','Library Truth classifies truncated recordings and ranks a preferred capture','Library Truth compares multipart coverage with a full capture','Library Truth flags suspicious substantial merges','Library Truth propagates strong cross-date audio conflicts','Library Truth produces adoption and year audit summaries','Library Truth assembles variant multipart families without cross-pairing','Library Truth promotes bare multipart numbers only with sibling evidence','Library Truth flags repeated programme-specific duration clusters','Library Truth detects composite AM and PM coverage','Library Truth detects same-date cross-slot equivalents','Library Truth persists direct recording segment coverage','Library Truth prepares guarded adoption plans without live writes','Library Truth rehearses adoption on a disposable clone and verifies rollback','Schema 43 includes Library Truth rehearsal tables','Schema 43 upgrades Library Truth schema 42 safely')) {
++foreach ($testCapability in @('Library Truth recovers AFRO short dates from folder context','Library Truth recognises Bennington OR slot','Library Truth keeps parent show for AFRO format broadcasts','Library Truth recovers compact RaF month day from year folder','Library Truth learns year from labelled year folders','Library Truth parses indexed named-month dates','Library Truth does not confuse source indices with years','Library Truth distinguishes explicit and ambiguous multipart markers','Library Truth protects leading track and lone version numbers','Library Truth keeps variant and source filename families separate','Library Truth normalises safe multipart family suffixes','Library Truth reassembles annotated multipart families','Library Truth assembles Roman multipart files into one broadcast','Library Truth preserves genuinely unknown dates','Library Truth shadow index separates broadcasts recordings and files','Library Truth treats alternate recordings as normal structure','Library Truth keeps identical audio with conflicting dates separate','Library Truth groups exact unknown physical copies','Library Truth separates full captures from multipart assemblies','Library Truth classifies truncated recordings and ranks a preferred capture','Library Truth compares multipart coverage with a full capture','Library Truth flags suspicious substantial merges','Library Truth propagates strong cross-date audio conflicts','Library Truth produces adoption and year audit summaries','Library Truth assembles variant multipart families without cross-pairing','Library Truth promotes bare multipart numbers only with sibling evidence','Library Truth flags repeated programme-specific duration clusters','Library Truth detects composite AM and PM coverage','Library Truth detects same-date cross-slot equivalents','Library Truth persists direct recording segment coverage','Library Truth prepares guarded adoption plans without live writes','Library Truth rehearses adoption on a disposable clone and verifies rollback','Library Truth classifies metadata conflicts and preserves alternates','Schema 44 includes Library Truth conflict-forensics tables','Schema 44 upgrades Library Truth schema 43 safely')) {
+     if ($testText -notmatch [regex]::Escape($testCapability)) {
+         Add-ValidationError "Library Truth test is missing: $testCapability"
+     }
+@@ -602,4 +610,4 @@ if ($errors.Count -gt 0) {
+     exit 1
+ }
+ 
+-Write-Host "Source validation passed: version, responsive large-library research reconciliation, archive identity/parser safeguards, portable restore state, Phoenix boundaries, playback/API contracts, schema 43, Library Truth coverage evidence, guarded adoption previewing and disposable rollback rehearsal, preservation manifests, deep scans, cross-PC comparison, transcript quality, speaker identity, voice memory, XAML, handlers, bindings, source hygiene and database connection policy." -ForegroundColor Green
++Write-Host "Source validation passed: version, responsive large-library research reconciliation, archive identity/parser safeguards, portable restore state, Phoenix boundaries, playback/API contracts, schema 44, Library Truth coverage evidence, guarded adoption previewing, disposable rollback rehearsal and field-level conflict forensics, preservation manifests, deep scans, cross-PC comparison, transcript quality, speaker identity, voice memory, XAML, handlers, bindings, source hygiene and database connection policy." -ForegroundColor Green

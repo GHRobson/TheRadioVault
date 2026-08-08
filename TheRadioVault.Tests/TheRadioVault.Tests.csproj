@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>TheRadioVault.Tests</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TheRadioVault.Core\TheRadioVault.Core.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Application\TheRadioVault.Application.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Data\TheRadioVault.Data.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Infrastructure\TheRadioVault.Infrastructure.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Research\TheRadioVault.Research.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Services\TheRadioVault.Services.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Web\TheRadioVault.Web.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Transcription\TheRadioVault.Transcription.csproj" />
+    <ProjectReference Include="..\TheRadioVault.Presentation\TheRadioVault.Presentation.csproj" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,319 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.DashboardView"
+             AttachedToVisualTree="DashboardView_OnAttachedToVisualTree"
+             DetachedFromVisualTree="DashboardView_OnDetachedFromVisualTree">
+  <Grid>
+    <ScrollViewer Classes="page-scroll-root">
+      <StackPanel Margin="{StaticResource RvPagePadding}" Spacing="20">
+        <StackPanel Spacing="3" Margin="0,0,0,2">
+          <TextBlock Text="Dashboard" Classes="display-title" />
+          <TextBlock Text="Continue listening, rediscover the archive, or choose something unexpected."
+                     Classes="muted" FontSize="12" />
+        </StackPanel>
+
+        <!-- Primary listening area: the current broadcast remains prominent without consuming the full page width. -->
+        <Grid ColumnDefinitions="5*,3*" ColumnSpacing="16">
+          <Border Classes="card-raised" Padding="24" MinHeight="292" IsVisible="{Binding HasFeaturedContinue}">
+            <Grid RowDefinitions="Auto,*,Auto" ColumnDefinitions="*,150" ColumnSpacing="24" RowSpacing="18">
+              <StackPanel Grid.ColumnSpan="2" Spacing="3">
+                <TextBlock Text="Continue listening" Classes="section-title" />
+                <TextBlock Text="Pick up exactly where you left off." Classes="muted" />
+              </StackPanel>
+
+              <StackPanel Grid.Row="1" Spacing="8" VerticalAlignment="Center">
+                <TextBlock Text="{Binding FeaturedContinue.CollectionText}" FontSize="27" FontWeight="Bold"
+                           TextWrapping="Wrap" MaxHeight="72" />
+                <TextBlock Text="{Binding FeaturedContinue.DateText}" Classes="muted" FontSize="13" />
+                <TextBlock Text="{Binding FeaturedContinue.Title}" FontSize="17" FontWeight="SemiBold"
+                           FontStyle="Italic" TextWrapping="Wrap" MaxHeight="54" />
+                <Border IsVisible="{Binding FeaturedContinue.HasWikiSummary}" Background="{DynamicResource RvWikiSubtleBrush}"
+                        CornerRadius="9" Padding="11,8" Margin="0,3,0,0">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding FeaturedContinue.WikiSummaryHeading}" Foreground="{DynamicResource RvWikiBrush}"
+                               FontSize="9" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding FeaturedContinue.WikiSummary}" Classes="muted" FontSize="10"
+                               TextWrapping="Wrap" MaxLines="3" LineHeight="16" />
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+
+              <Border Grid.Row="1" Grid.Column="1" Width="140" Height="140" CornerRadius="12"
+                      Background="{DynamicResource RvAccentSubtleBrush}"
+                      BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1"
+                      ClipToBounds="True" VerticalAlignment="Center">
+                <Grid>
+                  <ContentControl IsVisible="{Binding !FeaturedContinue.HasArtwork}" Content="Radio mast"
+                                  ContentTemplate="{StaticResource MissingArtworkIconTemplate}"
+                                  Width="58" Height="58" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                  <Image IsVisible="{Binding FeaturedContinue.HasArtwork}"
+                         Source="{Binding FeaturedContinue.ArtworkPath, Converter={StaticResource ArtworkPathToBitmapConverter}}"
+                         Stretch="UniformToFill" />
+                </Grid>
+              </Border>
+
+              <Grid Grid.Row="2" Grid.ColumnSpan="2" RowDefinitions="Auto,Auto" RowSpacing="12">
+                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+                  <ProgressBar Classes="thin" Value="{Binding FeaturedContinue.ProgressPercent}" Maximum="100"
+                               VerticalAlignment="Center" />
+                  <TextBlock Grid.Column="1" Text="{Binding FeaturedContinue.ProgressText}"
+                             Classes="muted" FontSize="11" VerticalAlignment="Center" />
+                </Grid>
+                <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="8">
+                  <Button Content="Resume" Classes="primary" Command="{Binding FeaturedContinue.PlayCommand}" Padding="22,10" />
+                </StackPanel>
+              </Grid>
+            </Grid>
+          </Border>
+
+          <Border Classes="card-raised" Padding="24" MinHeight="292" IsVisible="{Binding !HasFeaturedContinue}">
+            <StackPanel Spacing="8" VerticalAlignment="Center" HorizontalAlignment="Center">
+              <TextBlock Text="Nothing waiting to resume" Classes="section-title" />
+              <TextBlock Text="Choose something from the Library or let Radio Vault pick for you." Classes="muted"
+                         TextAlignment="Center" TextWrapping="Wrap" MaxWidth="420" />
+            </StackPanel>
+          </Border>
+
+          <StackPanel Grid.Column="1" Spacing="16">
+            <Border Classes="card" Padding="20" MinHeight="102">
+              <Grid ColumnDefinitions="*,Auto" ColumnSpacing="18">
+                <StackPanel Spacing="4" VerticalAlignment="Center">
+                  <TextBlock Text="Not sure what to play?" FontSize="18" FontWeight="SemiBold" />
+                  <TextBlock Text="Choose a random unheard broadcast." Classes="muted" TextWrapping="Wrap" />
+                </StackPanel>
+                <Button Grid.Column="1" Content="Surprise me" Classes="primary" Command="{Binding SurpriseMeCommand}"
+                        VerticalAlignment="Center" Padding="20,10" ToolTip.Tip="Choose an unplayed broadcast" />
+              </Grid>
+            </Border>
+
+            <Grid ColumnDefinitions="*,*" RowDefinitions="*,*" ColumnSpacing="12" RowSpacing="12">
+              <Border Classes="card" Padding="15" MinHeight="82">
+                <Grid ColumnDefinitions="40,*" ColumnSpacing="11">
+                  <Path Width="30" Height="30" Stretch="Uniform" VerticalAlignment="Center"
+                        Stroke="{DynamicResource RvStatBroadcastBrush}" StrokeThickness="2.4"
+                        StrokeLineCap="Round" StrokeJoin="Round"
+                        Data="M5,3 L19,3 L19,21 L5,21 Z M9,8 L15,8 M9,12 L15,12 M9,16 L15,16" />
+                  <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                    <TextBlock Text="Broadcasts" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding TotalBroadcastsText}" FontSize="24" FontWeight="Bold" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+
+              <Border Grid.Column="1" Classes="card" Padding="15" MinHeight="82">
+                <Grid ColumnDefinitions="40,*" ColumnSpacing="11">
+                  <Path Width="30" Height="30" Stretch="Uniform" VerticalAlignment="Center"
+                        Stroke="{DynamicResource RvStatProgressBrush}" StrokeThickness="2.4"
+                        StrokeLineCap="Round" StrokeJoin="Round"
+                        Data="M12,3 A9,9 0 1 1 11.99,3 M12,7 L12,12 L16,14" />
+                  <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                    <TextBlock Text="In progress" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding InProgressBroadcastsText}" FontSize="24" FontWeight="Bold" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+
+              <Border Grid.Row="1" Classes="card" Padding="15" MinHeight="82">
+                <Grid ColumnDefinitions="40,*" ColumnSpacing="11">
+                  <Path Width="30" Height="30" Stretch="Uniform" VerticalAlignment="Center"
+                        Stroke="{DynamicResource RvStatCompletedBrush}" StrokeThickness="3"
+                        StrokeLineCap="Round" StrokeJoin="Round"
+                        Data="M3,13 L9,19 L21,6" />
+                  <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                    <TextBlock Text="Completed" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding CompletedBroadcastsText}" FontSize="24" FontWeight="Bold" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+
+              <Border Grid.Row="1" Grid.Column="1" Classes="card" Padding="15" MinHeight="82">
+                <Grid ColumnDefinitions="40,*" ColumnSpacing="11">
+                  <Path Width="30" Height="30" Stretch="Uniform" VerticalAlignment="Center"
+                        Stroke="{DynamicResource RvStatFavouriteBrush}" StrokeThickness="2.4"
+                        StrokeLineCap="Round" StrokeJoin="Round"
+                        Data="M12,21 L4.7,14 C1.2,10.7 3.1,5 7.5,5 C9.5,5 11.1,6.1 12,7.7 C12.9,6.1 14.5,5 16.5,5 C20.9,5 22.8,10.7 19.3,14 Z" />
+                  <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                    <TextBlock Text="Favourites" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding FavouriteBroadcastsText}" FontSize="24" FontWeight="Bold" />
+                  </StackPanel>
+                </Grid>
+              </Border>
+            </Grid>
+          </StackPanel>
+        </Grid>
+
+        <!-- Secondary continuation choices and the On This Day carousel remain balanced half-width panels. -->
+        <Grid ColumnDefinitions="1.08*,*" ColumnSpacing="16">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Up next" Classes="section-title" />
+            <Border Classes="card" Padding="12" Height="292" ClipToBounds="True">
+              <Grid>
+                <ItemsControl IsVisible="{Binding HasContinueListening}" ItemsSource="{Binding ContinueListening}">
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Border Classes="framed-row" Margin="0,0,0,7">
+                        <Grid ColumnDefinitions="40,*,96" ColumnSpacing="10" ClipToBounds="True">
+                          <Button Width="36" Height="36" Classes="glyph-only icon-button" Command="{Binding PlayCommand}" ToolTip.Tip="Play broadcast"
+                                  Content="{Binding}" ContentTemplate="{StaticResource PlayIconTemplate}" />
+                          <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2" MinWidth="0">
+                            <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Text="{Binding CollectionText}" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+                          </StackPanel>
+                          <StackPanel Grid.Column="2" VerticalAlignment="Center" Spacing="4" Width="88" HorizontalAlignment="Right">
+                            <TextBlock Text="{Binding ProgressText}" HorizontalAlignment="Right" FontSize="9" Classes="muted" />
+                            <ProgressBar Classes="thin" Value="{Binding ProgressPercent}" Maximum="100" Width="88" HorizontalAlignment="Right" />
+                          </StackPanel>
+                        </Grid>
+                      </Border>
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <StackPanel IsVisible="{Binding !HasContinueListening}" Spacing="5"
+                            VerticalAlignment="Center" HorizontalAlignment="Center">
+                  <TextBlock Text="Nothing else waiting to resume." FontWeight="SemiBold" />
+                  <TextBlock Text="Your next unfinished broadcast will appear here." Classes="muted" FontSize="11" />
+                </StackPanel>
+              </Grid>
+            </Border>
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Spacing="10">
+            <TextBlock Text="On this day" Classes="section-title" />
+            <Border IsVisible="{Binding HasOnThisDay}" Classes="card-raised" Padding="18" Height="292" ClipToBounds="True">
+              <Grid RowDefinitions="*,Auto" RowSpacing="12">
+                <Grid ColumnDefinitions="118,*" ColumnSpacing="18">
+                  <Border Width="118" Height="118" CornerRadius="12" Background="{DynamicResource RvAccentSubtleBrush}"
+                          BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1"
+                          ClipToBounds="True" VerticalAlignment="Top">
+                    <Grid>
+                      <ContentControl IsVisible="{Binding !CurrentOnThisDay.HasArtwork}" Content="Radio mast"
+                                      ContentTemplate="{StaticResource MissingArtworkIconTemplate}"
+                                      Width="48" Height="48" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                      <Image IsVisible="{Binding CurrentOnThisDay.HasArtwork}"
+                             Source="{Binding CurrentOnThisDay.ArtworkPath, Converter={StaticResource ArtworkPathToBitmapConverter}}"
+                             Stretch="UniformToFill" />
+                    </Grid>
+                  </Border>
+
+                  <Grid Grid.Column="1" RowDefinitions="Auto,Auto,Auto,Auto,*" RowSpacing="7">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                      <StackPanel Spacing="3">
+                        <TextBlock Text="{Binding CurrentOnThisDay.Title}" FontWeight="SemiBold" FontSize="17"
+                                   TextWrapping="Wrap" MaxHeight="50" />
+                        <TextBlock Text="{Binding CurrentOnThisDay.CollectionText}" Classes="muted" FontSize="11" />
+                        <TextBlock Text="{Binding CurrentOnThisDay.DateText}" Classes="muted" FontSize="11" />
+                      </StackPanel>
+                      <Button Grid.Column="1" Classes="glyph-only icon-button compact-action" VerticalAlignment="Top"
+                              Command="{Binding CurrentOnThisDay.PlayCommand}" ToolTip.Tip="Play broadcast"
+                              Content="{Binding CurrentOnThisDay}" ContentTemplate="{StaticResource PlayIconTemplate}" />
+                    </Grid>
+
+                    <Border Grid.Row="1" IsVisible="{Binding CurrentOnThisDay.HasWikiSummary}"
+                            Background="{DynamicResource RvWikiSubtleBrush}" CornerRadius="9" Padding="10,7">
+                      <StackPanel Spacing="3">
+                        <TextBlock Text="{Binding CurrentOnThisDay.WikiSummaryHeading}" Foreground="{DynamicResource RvWikiBrush}"
+                                   FontSize="9" FontWeight="SemiBold" />
+                        <TextBlock Text="{Binding CurrentOnThisDay.WikiSummary}" Classes="muted" FontSize="10"
+                                   TextWrapping="Wrap" MaxLines="3" LineHeight="16" />
+                      </StackPanel>
+                    </Border>
+
+                    <StackPanel Grid.Row="2" IsVisible="{Binding CurrentOnThisDay.HasPeople}" Spacing="4">
+                      <TextBlock Text="PEOPLE" Classes="eyebrow" />
+                      <ItemsControl ItemsSource="{Binding CurrentOnThisDay.People}">
+                        <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                          <DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Padding="8,4" FontSize="9" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                      </ItemsControl>
+                    </StackPanel>
+
+                    <TextBlock Grid.Row="3" IsVisible="{Binding CurrentOnThisDay.HasTopics}" Text="TOPICS"
+                               Classes="eyebrow" Margin="0,2,0,0" />
+                    <ItemsControl Grid.Row="4" ItemsSource="{Binding CurrentOnThisDay.Topics}"
+                                  IsVisible="{Binding CurrentOnThisDay.HasTopics}" VerticalAlignment="Top">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><WrapPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate>
+                        <DataTemplate><Button Classes="entity-chip" Margin="0,0,5,5" Padding="8,4" FontSize="9" Content="{Binding}" Command="{Binding $parent[UserControl].DataContext.RelatedWiki.OpenEntityCommand}" CommandParameter="{Binding}" /></DataTemplate>
+                      </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </Grid>
+                </Grid>
+
+                <ItemsControl Grid.Row="1" ItemsSource="{Binding OnThisDayDots}"
+                              HorizontalAlignment="Center" VerticalAlignment="Center">
+                  <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate><StackPanel Orientation="Horizontal" Spacing="7" /></ItemsPanelTemplate>
+                  </ItemsControl.ItemsPanel>
+                  <ItemsControl.ItemTemplate>
+                    <DataTemplate>
+                      <Button Classes.active="{Binding IsActive}" Classes="pagination-dot" Command="{Binding SelectCommand}"
+                              ToolTip.Tip="Show this broadcast" />
+                    </DataTemplate>
+                  </ItemsControl.ItemTemplate>
+                </ItemsControl>
+              </Grid>
+            </Border>
+            <Border IsVisible="{Binding !HasOnThisDay}" Classes="card" Height="292" ClipToBounds="True">
+              <TextBlock Text="No broadcasts aired on this date." Classes="muted"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+          </StackPanel>
+        </Grid>
+
+        <!-- Recent and unheard broadcasts now share the available width as matching discovery panels. -->
+        <Grid ColumnDefinitions="*,*" ColumnSpacing="16">
+          <StackPanel Spacing="10">
+            <TextBlock Text="Recently added" Classes="section-title" />
+            <ItemsControl IsVisible="{Binding HasRecentBroadcasts}" ItemsSource="{Binding RecentBroadcasts}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="framed-row" Padding="10" Margin="0,0,0,7">
+                    <Grid ColumnDefinitions="68,*,Auto" ColumnSpacing="9">
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DateDayText}" FontWeight="Bold" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding DateRestText}" FontWeight="SemiBold" FontSize="9" HorizontalAlignment="Center" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding CollectionText}" Classes="muted" FontSize="10" />
+                      </StackPanel>
+                      <Button Grid.Column="2" Classes="glyph-only icon-button compact-action" Command="{Binding PlayCommand}" ToolTip.Tip="Play broadcast"
+                              Content="{Binding}" ContentTemplate="{StaticResource PlayIconTemplate}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock IsVisible="{Binding !HasRecentBroadcasts}" Text="No recently added broadcasts." Classes="muted" Margin="8" />
+          </StackPanel>
+
+          <StackPanel Grid.Column="1" Spacing="10">
+            <TextBlock Text="Unheard broadcasts" Classes="section-title" />
+            <ItemsControl IsVisible="{Binding HasUnheardBroadcasts}" ItemsSource="{Binding UnheardBroadcasts}">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate>
+                  <Border Classes="framed-row" Padding="10" Margin="0,0,0,7">
+                    <Grid ColumnDefinitions="68,*,Auto" ColumnSpacing="9">
+                      <StackPanel VerticalAlignment="Center">
+                        <TextBlock Text="{Binding DateDayText}" FontWeight="Bold" HorizontalAlignment="Center" />
+                        <TextBlock Text="{Binding DateRestText}" FontWeight="SemiBold" FontSize="9" HorizontalAlignment="Center" />
+                      </StackPanel>
+                      <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                        <TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding CollectionText}" Classes="muted" FontSize="10" />
+                      </StackPanel>
+                      <Button Grid.Column="2" Classes="glyph-only icon-button compact-action" Command="{Binding PlayCommand}" ToolTip.Tip="Play broadcast"
+                              Content="{Binding}" ContentTemplate="{StaticResource PlayIconTemplate}" />
+                    </Grid>
+                  </Border>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+            <TextBlock IsVisible="{Binding !HasUnheardBroadcasts}" Text="You have heard everything in the Library." Classes="muted" Margin="8" />
+          </StackPanel>
+        </Grid>
+      </StackPanel>
+    </ScrollViewer>
+  </Grid>
+</UserControl>

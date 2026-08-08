@@ -1,0 +1,18 @@
+# Release Notes — Radio Vault v0.29.0 RC1
+
+Version: `0.29.0-rc1-anywhere-release-candidate`
+
+RC1 is the first build intended to prove that Radio Vault Anywhere can ship without further feature work. It keeps every accepted Beta 2 behaviour and concentrates on safe upgrades, recoverability, accessibility and final validation.
+
+## Changes
+
+- The web client recognises a newly installed application shell and presents a compact **Radio Vault update ready** banner. Reloading keeps downloaded audio, downloaded artwork, IndexedDB listening state and the offline mutation journal intact.
+- Anywhere diagnostics adds **Repair app shell**. This deletes only `radio-vault-anywhere-shell-*` caches and service-worker registrations before reloading. It deliberately leaves `radio-vault-anywhere-audio-v1`, `radio-vault-anywhere-artwork-v1` and IndexedDB untouched.
+- Diagnostic exports now report service-worker control state, the expected shell-cache identity and viewport dimensions without including archive content, paths, filenames, tokens or URLs.
+- Mobile accessibility now includes a skip-to-content link, visible keyboard focus, dialog semantics, focus movement/restoration and Escape-key dismissal for Broadcast Info, Now Playing, diagnostics and the sync sheet.
+- Capability generation is 7. The secure shell cache is `radio-vault-anywhere-shell-v32`; audio and artwork caches remain `v1` and IndexedDB remains version 2.
+- Database schema remains 45.
+
+## Release-candidate rule
+
+No new major Anywhere features should enter RC1. Any follow-up build should address only a reproduced defect, a release-blocking accessibility problem, a data-safety issue or a packaging/build failure.

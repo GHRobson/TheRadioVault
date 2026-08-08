@@ -1,0 +1,20 @@
+{
+  "buildIdentity": "0.32.0-alpha6-buildfix1-connected-access-route-import",
+  "foundationVersion": "0.32-alpha6-connected-access-remote-parity",
+  "avaloniaVersion": "12.1.0",
+  "naudioVersion": "2.3.0",
+  "targetFramework": "net8.0",
+  "defaultDesktopShell": "avalonia",
+  "connectedAccessWorkspaceMigrated": true,
+  "remoteClientMigrated": true,
+  "remoteDashboardLibraryMigrated": true,
+  "remotePlaybackMigrated": true,
+  "remoteFavouriteQueueMomentsWrites": true,
+  "remoteResearchReadParity": true,
+  "remoteMetadataWriteParity": true,
+  "encryptedCachedStartup": true,
+  "automaticReconnect": true,
+  "localDatabaseFallbackBlocked": true,
+  "sourceManifestFileCount": 737,
+  "maximumInternalZipPathLength": 94
+}

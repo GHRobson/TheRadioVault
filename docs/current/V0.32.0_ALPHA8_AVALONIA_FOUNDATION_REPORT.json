@@ -1,0 +1,20 @@
+{
+  "buildIdentity": "0.32.0-alpha8-ux-audit-progressive-disclosure",
+  "foundationVersion": "0.32-alpha8-ux-audit-progressive-disclosure",
+  "avaloniaVersion": "12.1.0",
+  "naudioVersion": "2.3.0",
+  "targetFramework": "net8.0",
+  "defaultDesktopShell": "avalonia",
+  "designSystem": "radio-vault-avalonia-v1",
+  "themeVariants": ["Dark", "Light"],
+  "uxAuditCompleted": true,
+  "progressiveDisclosure": true,
+  "contextualSecondaryActions": true,
+  "automaticSearchFiltering": true,
+  "visibleKeyboardFocus": true,
+  "reducedMotionAware": true,
+  "technicalMetadataCollapsedByDefault": true,
+  "remoteOwnedLocalDatabaseWritesBlocked": true,
+  "sourceManifestFileCount": 761,
+  "maximumInternalZipPathLength": 94
+}

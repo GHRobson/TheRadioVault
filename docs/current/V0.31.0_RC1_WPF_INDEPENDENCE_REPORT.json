@@ -1,0 +1,170 @@
+{
+  "generatedAtUtc": "2026-07-25T18:20:00Z",
+  "buildIdentity": "0.31.0-rc1-core-hardening-release-candidate",
+  "proofVersion": "0.31-rc1",
+  "featureSetFrozen": true,
+  "databaseSchema": 45,
+  "lanCapabilityGeneration": 14,
+  "apiVersion": "v1",
+  "neutralProjects": [
+    {
+      "name": "TheRadioVault.Core",
+      "targetFramework": "net8.0",
+      "sourceFiles": 27,
+      "projectReferences": [],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Application",
+      "targetFramework": "net8.0",
+      "sourceFiles": 33,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Data",
+      "targetFramework": "net8.0",
+      "sourceFiles": 1,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Media",
+      "targetFramework": "net8.0",
+      "sourceFiles": 8,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Services",
+      "targetFramework": "net8.0",
+      "sourceFiles": 28,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj",
+        "..\\TheRadioVault.Data\\TheRadioVault.Data.csproj",
+        "..\\TheRadioVault.Media\\TheRadioVault.Media.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Research",
+      "targetFramework": "net8.0",
+      "sourceFiles": 3,
+      "projectReferences": [],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Web",
+      "targetFramework": "net8.0",
+      "sourceFiles": 11,
+      "projectReferences": [],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Transcription",
+      "targetFramework": "net8.0",
+      "sourceFiles": 21,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj",
+        "..\\TheRadioVault.Data\\TheRadioVault.Data.csproj",
+        "..\\TheRadioVault.Services\\TheRadioVault.Services.csproj"
+      ],
+      "windowsUiMarkers": 0
+    },
+    {
+      "name": "TheRadioVault.Tests",
+      "targetFramework": "net8.0",
+      "sourceFiles": 1,
+      "projectReferences": [
+        "..\\TheRadioVault.Core\\TheRadioVault.Core.csproj",
+        "..\\TheRadioVault.Application\\TheRadioVault.Application.csproj",
+        "..\\TheRadioVault.Data\\TheRadioVault.Data.csproj",
+        "..\\TheRadioVault.Research\\TheRadioVault.Research.csproj",
+        "..\\TheRadioVault.Services\\TheRadioVault.Services.csproj",
+        "..\\TheRadioVault.Web\\TheRadioVault.Web.csproj",
+        "..\\TheRadioVault.Transcription\\TheRadioVault.Transcription.csproj"
+      ],
+      "windowsUiMarkers": 0
+    }
+  ],
+  "intentionalWindowsBoundaries": [
+    "TheRadioVault",
+    "TheRadioVault.Platform.Windows"
+  ],
+  "hardBoundaryCounts": {
+    "neutralWindowsUiMarkers": 0,
+    "directProcessStartMarkers": 0,
+    "directClipboardMarkers": 0,
+    "directRegistryMarkers": 0,
+    "directSystemParametersMarkers": 0,
+    "directWpfMediaEngineConstructionMarkers": 0,
+    "directPlaybackSessionConstructionMarkers": 0,
+    "directPlaybackEngineCommandMarkers": 0,
+    "legacyRemoteRefreshGateMarkers": 0,
+    "legacyRemoteSyncCancellationMarkers": 0
+  },
+  "presentationMetrics": {
+    "desktopSourceFiles": 134,
+    "mainWindowPartialFiles": 32,
+    "systemWindowsMarkers": 51,
+    "messageBoxMarkers": 210,
+    "openFileDialogMarkers": 8,
+    "saveFileDialogMarkers": 10,
+    "dispatcherMarkers": 79,
+    "windowSubclassMarkers": 25,
+    "databaseServiceMarkers": 49
+  },
+  "reusableApplicationSeams": [
+    "ApplicationStartupCoordinator",
+    "ApplicationShutdownCoordinator",
+    "ApplicationWindowTransitionCoordinator",
+    "IUiDispatcher and platform ports",
+    "PlaybackSessionCoordinator",
+    "PlaybackProgressCoordinator",
+    "PlaybackCompletionCoordinator",
+    "PlaybackSessionFactory",
+    "ILocalPlaybackEngineFactory",
+    "RemoteLibrarySessionCoordinator",
+    "certificate-pinned LAN services and API v1"
+  ],
+  "remainingPresentationWork": [
+    {
+      "id": "avalonia-shell-navigation",
+      "classification": "presentation replacement",
+      "evidence": "32 MainWindow source files remain in the current WPF shell",
+      "target": "Build new Avalonia navigation, page lifecycle and view-model composition without changing application services."
+    },
+    {
+      "id": "avalonia-windows-dialogs",
+      "classification": "presentation replacement",
+      "evidence": "25 WPF Window subclasses and specialised modal workflows remain",
+      "target": "Replace windows and specialised dialogs with Avalonia views while retaining Application/platform ports."
+    },
+    {
+      "id": "avalonia-dispatch-binding",
+      "classification": "presentation adapter work",
+      "evidence": "79 current WPF dispatcher markers remain at the presentation edge",
+      "target": "Bind IUiDispatcher and timers to Avalonia Dispatcher/UIThread implementations."
+    },
+    {
+      "id": "feature-viewmodel-extraction",
+      "classification": "incremental UI migration",
+      "evidence": "49 DatabaseService references remain in current presentation workflows",
+      "target": "Create feature view models/application facades as each Avalonia screen is implemented; do not move database implementations into Application."
+    },
+    {
+      "id": "theme-resources-and-chrome",
+      "classification": "presentation replacement",
+      "evidence": "51 System.Windows markers remain inside the intentional WPF boundary",
+      "target": "Recreate theme resources, templates, window chrome, focus and accessibility behavior in Avalonia."
+    }
+  ],
+  "hardBoundaryViolations": [],
+  "avaloniaHandoffReady": true
+}

@@ -1,0 +1,44 @@
+using Avalonia.Controls;
+using Avalonia.Platform.Storage;
+
+namespace TheRadioVault.Server.Services;
+
+public sealed class ServerKnowledgeFileService
+{
+    private static readonly FilePickerFileType KnowledgeDatabaseType = new("Radio Vault Knowledge Database")
+    {
+        Patterns = ["*.trvknowledge"],
+        MimeTypes = ["application/vnd.radiovault.knowledge+sqlite3"]
+    };
+
+    private readonly Window _owner;
+
+    public ServerKnowledgeFileService(Window owner)
+        => _owner = owner ?? throw new ArgumentNullException(nameof(owner));
+
+    public async Task<string?> PickImportAsync(CancellationToken cancellationToken = default)
+    {
+        var files = await _owner.StorageProvider.OpenFilePickerAsync(new FilePickerOpenOptions
+        {
+            Title = "Import a Radio Vault Knowledge Database",
+            AllowMultiple = false,
+            FileTypeFilter = [KnowledgeDatabaseType]
+        }).WaitAsync(cancellationToken).ConfigureAwait(true);
+        return files.FirstOrDefault()?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickExportAsync(
+        string suggestedFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export a Radio Vault Knowledge Database",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "trvknowledge",
+            FileTypeChoices = [KnowledgeDatabaseType],
+            ShowOverwritePrompt = true
+        }).WaitAsync(cancellationToken).ConfigureAwait(true);
+        return file?.TryGetLocalPath();
+    }
+}
