@@ -1,7 +1,7 @@
 # Radio Vault repository instructions
 
 This repository is the single source of truth for the Windows Client, Windows
-Server, macOS Client and their shared libraries.
+Server, macOS Client, iOS Client and their shared libraries.
 
 ## Source-control workflow
 
@@ -21,7 +21,7 @@ Server, macOS Client and their shared libraries.
 - Add or update automated tests for bug fixes and shared contracts.
 - When one platform cannot be executed locally, rely on its required GitHub
   Actions check and do not claim that platform was manually verified.
-- Keep Windows-only and macOS-only code behind explicit platform boundaries;
+- Keep Windows-, macOS- and iOS-only code behind explicit platform boundaries;
   do not duplicate shared business logic between clients.
 - Preserve pairing, playback, cache and handoff protocol compatibility between
   the native clients and the Server.

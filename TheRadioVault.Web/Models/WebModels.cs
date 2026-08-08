@@ -660,6 +660,7 @@ public sealed record WebChangeFeedSnapshot(
 /// broadcasts plus deletions, while Bootstrap refreshes dashboard, queue and
 /// library summary projections.
 /// </summary>
+#if !RADIOVAULT_PROTOCOL
 public sealed record WebFederationLibrarySync(
     string ServerInstanceId,
     string SessionId,
@@ -675,6 +676,7 @@ public sealed record WebFederationLibrarySync(
     IReadOnlyList<WebMomentSummary>? Moments,
     WebAuthoritativeSettingsSnapshot? SettingsSnapshot,
     DateTimeOffset GeneratedAt);
+#endif
 
 public sealed record WebJobSummary(
     Guid JobId,

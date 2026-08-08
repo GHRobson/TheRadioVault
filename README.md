@@ -1,6 +1,6 @@
 # Radio Vault 0.35.0 Alpha 9 Buildfix 3
 
-Radio Vault is a private broadcast archive with a dedicated Windows Server, native Windows and macOS Clients, and a browser-based Radio Vault Web client.
+Radio Vault is a private broadcast archive with a dedicated Windows Server, native Windows, macOS and iOS Clients, and a browser-based Radio Vault Web client.
 
 ## Architecture
 
@@ -47,6 +47,12 @@ The macOS Client is currently an Apple Silicon alpha. It connects to the same
 Windows Server and uses the same pairing, cache, download, playback and handoff
 contracts. See [MACOS-CLIENT.md](MACOS-CLIENT.md) for build and on-Mac acceptance instructions.
 
+The iOS Client is an early iPhone and iPad alpha. Its first milestone provides
+local-network discovery and pairing, a mobile Dashboard and Library, canonical
+multipart playback, Now Playing controls and secure Keychain storage. It uses
+the existing Server v1 API with certificate pinning; no iOS-specific Server is
+required. See [BUILDING.md](BUILDING.md#ios-client) for the Simulator build.
+
 Use the Radio Vault Web QR code in Client or Server Settings to connect a phone on the same private network.
 
 The installers preserve the authoritative database, archive-folder configuration, models, transcripts, certificates, paired-device trust, preferences and encrypted caches during upgrades.
@@ -71,9 +77,9 @@ See [BUILDING.md](BUILDING.md) for build, publish and installer details, [V0.35.
 
 ## Shared development
 
-The Windows Client, Windows Server and macOS Client are maintained from this
+The Windows Client, Windows Server, macOS Client and iOS Client are maintained from this
 one repository. Do not keep separate platform copies of the source. Every
-change should use a short-lived branch and pass both Windows and macOS GitHub
+change should use a short-lived branch and pass Windows, macOS and iOS GitHub
 Actions checks before it is merged into `main`.
 
 See [DEVELOPMENT.md](DEVELOPMENT.md) for the Git and Codex workflow used on each

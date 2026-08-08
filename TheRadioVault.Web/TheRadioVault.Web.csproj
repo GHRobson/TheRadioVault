@@ -9,4 +9,9 @@
     <EmbeddedResource Include="Assets\*.png" />
     <PackageReference Include="NAudio" Version="2.3.0" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Remove="Contracts\WebApiRoutes.cs" />
+    <Compile Remove="Models\WebModels.cs" />
+    <ProjectReference Include="..\TheRadioVault.Protocol\TheRadioVault.Protocol.csproj" />
+  </ItemGroup>
 </Project>

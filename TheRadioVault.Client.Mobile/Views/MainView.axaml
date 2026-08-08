@@ -1,0 +1,188 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:models="using:TheRadioVault.Client.Mobile.Models"
+             xmlns:vm="using:TheRadioVault.Client.Mobile.ViewModels"
+             x:Class="TheRadioVault.Client.Mobile.Views.MainView"
+             x:DataType="vm:MobileMainViewModel"
+             Background="{DynamicResource RvBackgroundBrush}">
+  <UserControl.DataTemplates>
+    <DataTemplate DataType="{x:Type models:MobileBroadcastItem}" x:DataType="models:MobileBroadcastItem">
+      <Border Margin="0,0,0,8" Padding="14,12" CornerRadius="12"
+              Background="{DynamicResource RvSurfaceBrush}"
+              BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1">
+        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="4">
+          <TextBlock Text="{Binding Title}" FontSize="15" FontWeight="SemiBold" TextWrapping="Wrap" />
+          <TextBlock Grid.Row="1" Text="{Binding Subtitle}" FontSize="12"
+                     Foreground="{DynamicResource RvMutedBrush}" TextWrapping="Wrap" />
+          <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="0,4,0,0">
+            <ProgressBar IsVisible="{Binding HasProgress}" Minimum="0" Maximum="100" Value="{Binding Progress}"
+                         Height="3" VerticalAlignment="Center" />
+            <TextBlock Grid.Column="1" Text="{Binding Status}" FontSize="11" Margin="12,0,0,0"
+                       Foreground="{DynamicResource RvMutedBrush}" />
+          </Grid>
+        </Grid>
+      </Border>
+    </DataTemplate>
+  </UserControl.DataTemplates>
+
+  <Grid RowDefinitions="Auto,*,Auto">
+    <Border Grid.Row="0" Padding="18,12,18,10" Background="{DynamicResource RvSurfaceBrush}"
+            BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,0,0,1">
+      <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="11">
+        <Image Width="38" Height="38" Source="/Assets/RadioVault-Logo.png" Stretch="Uniform" />
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
+          <TextBlock Text="THE RADIO VAULT" FontWeight="Bold" FontSize="15" />
+          <TextBlock Text="{Binding ServerName}" FontSize="11" Foreground="{DynamicResource RvMutedBrush}"
+                     TextTrimming="CharacterEllipsis" />
+        </StackPanel>
+        <ProgressBar Grid.Column="2" IsVisible="{Binding IsBusy}" IsIndeterminate="True"
+                     Width="36" Height="4" VerticalAlignment="Center" />
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="1">
+      <ScrollViewer IsVisible="{Binding IsHome}" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="18,18,18,28" Spacing="18">
+          <StackPanel Spacing="5">
+            <TextBlock Text="Your archive" FontSize="28" FontWeight="Bold" />
+            <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource RvMutedBrush}" TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Grid ColumnDefinitions="*,*,*" ColumnSpacing="9">
+            <Border Padding="10,14" CornerRadius="12" Background="{DynamicResource RvSurfaceBrush}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <TextBlock Text="{Binding TotalBroadcastsText}" FontSize="22" FontWeight="Bold" />
+                <TextBlock Text="Broadcasts" FontSize="10" Foreground="{DynamicResource RvMutedBrush}" />
+              </StackPanel>
+            </Border>
+            <Border Grid.Column="1" Padding="10,14" CornerRadius="12" Background="{DynamicResource RvSurfaceBrush}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <TextBlock Text="{Binding InProgressBroadcastsText}" FontSize="22" FontWeight="Bold" />
+                <TextBlock Text="In progress" FontSize="10" Foreground="{DynamicResource RvMutedBrush}" />
+              </StackPanel>
+            </Border>
+            <Border Grid.Column="2" Padding="10,14" CornerRadius="12" Background="{DynamicResource RvSurfaceBrush}">
+              <StackPanel Spacing="3" HorizontalAlignment="Center">
+                <TextBlock Text="{Binding CompletedBroadcastsText}" FontSize="22" FontWeight="Bold" />
+                <TextBlock Text="Played" FontSize="10" Foreground="{DynamicResource RvMutedBrush}" />
+              </StackPanel>
+            </Border>
+          </Grid>
+
+          <StackPanel IsVisible="{Binding HasContinueListening}" Spacing="8">
+            <TextBlock Text="Continue listening" FontSize="19" FontWeight="SemiBold" />
+            <ListBox ItemsSource="{Binding ContinueListening}" SelectedItem="{Binding SelectedBroadcast}"
+                     Background="Transparent" BorderThickness="0" MaxHeight="310" />
+            <Button Classes="primary" Content="Play selected broadcast"
+                    Command="{Binding PlayBroadcastCommand}" CommandParameter="{Binding SelectedBroadcast}" />
+          </StackPanel>
+
+          <StackPanel IsVisible="{Binding HasRecentBroadcasts}" Spacing="8">
+            <TextBlock Text="Recently added" FontSize="19" FontWeight="SemiBold" />
+            <ListBox ItemsSource="{Binding RecentBroadcasts}" SelectedItem="{Binding SelectedBroadcast}"
+                     Background="Transparent" BorderThickness="0" MaxHeight="460" />
+          </StackPanel>
+
+          <Button Content="Refresh from server" Command="{Binding RefreshCommand}" />
+        </StackPanel>
+      </ScrollViewer>
+
+      <Grid IsVisible="{Binding IsLibrary}" RowDefinitions="Auto,*" Margin="18,18,18,12">
+        <StackPanel Spacing="10">
+          <TextBlock Text="Library" FontSize="28" FontWeight="Bold" />
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+            <TextBox Text="{Binding SearchText}" PlaceholderText="Search broadcasts" />
+            <Button Grid.Column="1" Classes="primary" Content="Search" Command="{Binding SearchCommand}" />
+          </Grid>
+          <TextBlock Text="{Binding StatusText}" FontSize="12" Foreground="{DynamicResource RvMutedBrush}" TextWrapping="Wrap" />
+        </StackPanel>
+        <Grid Grid.Row="1" RowDefinitions="*,Auto" Margin="0,14,0,0">
+          <ListBox ItemsSource="{Binding LibraryBroadcasts}" SelectedItem="{Binding SelectedBroadcast}"
+                   Background="Transparent" BorderThickness="0" />
+          <Button Grid.Row="1" Margin="0,10,0,0" Classes="primary" Content="Play selected broadcast"
+                  Command="{Binding PlayBroadcastCommand}" CommandParameter="{Binding SelectedBroadcast}" />
+        </Grid>
+      </Grid>
+
+      <ScrollViewer IsVisible="{Binding IsPlaying}" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="24,30,24,28" Spacing="18" HorizontalAlignment="Stretch">
+          <Border Width="240" Height="240" CornerRadius="24" HorizontalAlignment="Center"
+                  Background="{DynamicResource RvRaisedBrush}" BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1">
+            <Image Margin="48" Source="/Assets/RadioVault-Logo.png" Stretch="Uniform" />
+          </Border>
+          <StackPanel Spacing="5" HorizontalAlignment="Center">
+            <TextBlock Text="{Binding NowPlayingTitle}" FontSize="23" FontWeight="Bold"
+                       TextAlignment="Center" TextWrapping="Wrap" MaxWidth="440" />
+            <TextBlock Text="{Binding NowPlayingSubtitle}" FontSize="13" TextAlignment="Center"
+                       Foreground="{DynamicResource RvMutedBrush}" TextWrapping="Wrap" />
+            <TextBlock Text="{Binding PlaybackStatus}" FontSize="12" TextAlignment="Center"
+                       Foreground="{DynamicResource RvAccentBrush}" TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel Spacing="7">
+            <ProgressBar Minimum="0" Maximum="100" Value="{Binding PlaybackProgress}" Height="5" />
+            <TextBlock Text="{Binding PlaybackTime}" HorizontalAlignment="Center" FontSize="12"
+                       Foreground="{DynamicResource RvMutedBrush}" />
+          </StackPanel>
+          <Grid ColumnDefinitions="*,*,*,*,*" ColumnSpacing="7">
+            <Button Grid.Column="0" Content="−15" Command="{Binding SkipBackCommand}" />
+            <Button Grid.Column="1" Grid.ColumnSpan="3" Classes="primary" Content="{Binding PlayPauseText}"
+                    Command="{Binding PlayPauseCommand}" />
+            <Button Grid.Column="4" Content="+30" Command="{Binding SkipForwardCommand}" />
+          </Grid>
+          <Button Content="{Binding SpeedText}" Command="{Binding CycleSpeedCommand}" HorizontalAlignment="Center" />
+        </StackPanel>
+      </ScrollViewer>
+
+      <ScrollViewer IsVisible="{Binding IsSettings}" VerticalScrollBarVisibility="Auto">
+        <StackPanel Margin="18,18,18,30" Spacing="18">
+          <StackPanel Spacing="5">
+            <TextBlock Text="Server" FontSize="28" FontWeight="Bold" />
+            <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource RvMutedBrush}" TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Border IsVisible="{Binding IsPaired}" Padding="16" CornerRadius="14"
+                  Background="{DynamicResource RvSurfaceBrush}" BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1">
+            <StackPanel Spacing="6">
+              <TextBlock Text="Paired securely" Foreground="{DynamicResource RvSuccessBrush}" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding ServerName}" FontSize="18" FontWeight="Bold" />
+              <TextBlock Text="{Binding ServerAddress}" FontSize="12" Foreground="{DynamicResource RvMutedBrush}" />
+              <Button Margin="0,8,0,0" Content="Test and refresh" Command="{Binding RefreshCommand}" />
+              <Button Content="Forget this server" Command="{Binding ForgetCommand}" />
+            </StackPanel>
+          </Border>
+
+          <StackPanel IsVisible="{Binding IsNotPaired}" Spacing="12">
+            <TextBlock Text="On the Windows server, open Settings, enable native clients, and create a six-digit pairing code."
+                       TextWrapping="Wrap" />
+            <Button Classes="primary" Content="Find Radio Vault Servers" Command="{Binding DiscoverCommand}" />
+            <ComboBox ItemsSource="{Binding Servers}" SelectedItem="{Binding SelectedServer}"
+                      PlaceholderText="Choose a server">
+              <ComboBox.ItemTemplate>
+                <DataTemplate x:DataType="models:DiscoveredRadioVaultServer">
+                  <StackPanel Margin="4" Spacing="2">
+                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding Detail}" FontSize="11" Foreground="{DynamicResource RvMutedBrush}" />
+                    <TextBlock Text="{Binding PairingText}" FontSize="11" Foreground="{DynamicResource RvAccentBrush}" />
+                  </StackPanel>
+                </DataTemplate>
+              </ComboBox.ItemTemplate>
+            </ComboBox>
+            <TextBox Text="{Binding PairingCode}" PlaceholderText="Six-digit pairing code" MaxLength="6"
+                     HorizontalContentAlignment="Center" FontSize="20" />
+            <Button Classes="primary" Content="Pair this iPhone" Command="{Binding PairCommand}" />
+          </StackPanel>
+        </StackPanel>
+      </ScrollViewer>
+    </Grid>
+
+    <Border Grid.Row="2" Background="{DynamicResource RvSurfaceBrush}"
+            BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="0,1,0,0" Padding="6,4,6,8">
+      <Grid ColumnDefinitions="*,*,*,*" ColumnSpacing="3">
+        <Button Grid.Column="0" Classes="nav" Content="Home" Command="{Binding ShowHomeCommand}" IsEnabled="{Binding IsPaired}" />
+        <Button Grid.Column="1" Classes="nav" Content="Library" Command="{Binding ShowLibraryCommand}" IsEnabled="{Binding IsPaired}" />
+        <Button Grid.Column="2" Classes="nav" Content="Playing" Command="{Binding ShowPlayingCommand}" IsEnabled="{Binding IsPaired}" />
+        <Button Grid.Column="3" Classes="nav" Content="Server" Command="{Binding ShowSettingsCommand}" />
+      </Grid>
+    </Border>
+  </Grid>
+</UserControl>

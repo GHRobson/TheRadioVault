@@ -165,6 +165,7 @@ var tests = new (string Name, Action Run)[]
     ("Repeated iPhone handoffs bypass dormant decoder gating", RepeatedIphoneHandoffsBypassDormantDecoderGating),
     ("Native handoff preserves the Windows volume session", NativeHandoffPreservesWindowsVolumeSession),
     ("Mac Client uses native AVFoundation and existing server contracts", MacClientUsesNativeAvFoundationAndExistingServerContracts),
+    ("iOS Client preserves native platform and server boundaries", IosClientPreservesNativePlatformAndServerBoundaries),
     ("Canonical audio ranges are cache-combinable", CanonicalAudioRangesAreCacheCombinable),
     ("Positioned web audio is stable across Safari ranges", PositionedWebAudioIsStableAcrossSafariRanges),
     ("Alpha 19 uses a truthful cache-first startup", Alpha19UsesTruthfulCacheFirstStartup),
@@ -1292,6 +1293,55 @@ static void MacClientUsesNativeAvFoundationAndExistingServerContracts()
     True(package.Contains("osx-arm64", StringComparison.Ordinal));
     True(package.Contains("--self-contained true", StringComparison.Ordinal));
     True(package.Contains("Radio Vault.app", StringComparison.Ordinal));
+}
+
+static void IosClientPreservesNativePlatformAndServerBoundaries()
+{
+    var iosProject = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "TheRadioVault.Client.iOS.csproj"));
+    True(iosProject.Contains("net10.0-ios", StringComparison.Ordinal));
+    True(iosProject.Contains("Avalonia.iOS", StringComparison.Ordinal));
+    True(iosProject.Contains("TheRadioVault.Client.Mobile", StringComparison.Ordinal));
+    True(!iosProject.Contains("TheRadioVault.Infrastructure", StringComparison.Ordinal));
+    True(!iosProject.Contains("TheRadioVault.Server", StringComparison.Ordinal));
+
+    var mobileProject = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "TheRadioVault.Client.Mobile.csproj"));
+    True(mobileProject.Contains("TheRadioVault.Protocol", StringComparison.Ordinal));
+    True(!mobileProject.Contains("TheRadioVault.Web.csproj", StringComparison.Ordinal));
+    True(mobileProject.Contains("AvaloniaUseCompiledBindingsByDefault", StringComparison.Ordinal));
+
+    var protocolProject = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Protocol", "TheRadioVault.Protocol.csproj"));
+    True(protocolProject.Contains("WebApiRoutes.cs", StringComparison.Ordinal));
+    True(protocolProject.Contains("WebModels.cs", StringComparison.Ordinal));
+
+    var engine = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "IosAvPlayerEngine.cs"));
+    True(engine.Contains("AVPlayer", StringComparison.Ordinal));
+    True(engine.Contains("AVAudioSessionCategory.Playback", StringComparison.Ordinal));
+
+    var keychain = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "IosKeychainConnectionStore.cs"));
+    True(keychain.Contains("SecKeyChain", StringComparison.Ordinal));
+    True(keychain.Contains("AfterFirstUnlockThisDeviceOnly", StringComparison.Ordinal));
+
+    var client = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileServerClient.cs"));
+    True(client.Contains("WebApiRoutes", StringComparison.Ordinal));
+    True(client.Contains("X-RadioVault-Token", StringComparison.Ordinal));
+    True(client.Contains("ServerCertificateCustomValidationCallback", StringComparison.Ordinal));
+
+    var plist = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "Info.plist"));
+    True(plist.Contains("NSLocalNetworkUsageDescription", StringComparison.Ordinal));
+    True(plist.Contains("NSAllowsLocalNetworking", StringComparison.Ordinal));
+    True(plist.Contains("UIBackgroundModes", StringComparison.Ordinal));
+    True(plist.Contains("<string>audio</string>", StringComparison.Ordinal));
+
+    var entitlements = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "Entitlements.device.plist"));
+    True(entitlements.Contains("com.apple.developer.networking.multicast", StringComparison.Ordinal));
 }
 
 static void PositionedWebAudioIsStableAcrossSafariRanges()

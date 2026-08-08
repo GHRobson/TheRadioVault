@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>TheRadioVault.Web</RootNamespace>
+    <DefineConstants>$(DefineConstants);RADIOVAULT_PROTOCOL</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\TheRadioVault.Web\Contracts\WebApiRoutes.cs" Link="Contracts\WebApiRoutes.cs" />
+    <Compile Include="..\TheRadioVault.Web\Models\WebModels.cs" Link="Models\WebModels.cs" />
+  </ItemGroup>
+</Project>
