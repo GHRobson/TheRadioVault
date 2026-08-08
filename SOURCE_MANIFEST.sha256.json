@@ -1,6 +1,6 @@
 {
   "version": "0.35.0-alpha9-buildfix3",
-  "generatedAtUtc": "2026-08-08T22:42:28.2181550Z",
+  "generatedAtUtc": "2026-08-08T22:45:46.7629150Z",
   "fileCount": 974,
   "files": [
     {
@@ -15,8 +15,8 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "bytes": 5115,
-      "sha256": "03c2960f98bb3582835d9e38a27fc8fcf751aa6372fbf2b8a8f1f85f04231ad4"
+      "bytes": 5236,
+      "sha256": "f1946aa15f7bdcd592e14459e04190f83a3523b452b2ca480ab5e63c21572149"
     },
     {
       "path": ".gitignore",
@@ -100,8 +100,8 @@
     },
     {
       "path": "BUILDING.md",
-      "bytes": 4204,
-      "sha256": "cfe5b765cf399e8788b3b53becebcaf650325c7e146704c8193aad0abae8f0f1"
+      "bytes": 4206,
+      "sha256": "d5f03c6bd48aee460ae818e5cfac2855a585525b76b5613230bf85c40568cf6b"
     },
     {
       "path": "CATALOGUE-STYLE-IMPORT-ACCEPTANCE.md",

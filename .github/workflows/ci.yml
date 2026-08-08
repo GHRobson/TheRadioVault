@@ -126,7 +126,7 @@ jobs:
 
   ios:
     name: iOS client
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - name: Check out source
@@ -138,6 +138,9 @@ jobs:
           dotnet-version: |
             8.0.423
             10.0.302
+
+      - name: Select Xcode 26.6
+        run: sudo xcode-select --switch /Applications/Xcode_26.6.app/Contents/Developer
 
       - name: Install pinned iOS workload
         run: dotnet workload install ios

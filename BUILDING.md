@@ -6,7 +6,7 @@
 - PowerShell on Windows
 - Windows x64 for Windows Client, Server and installer builds
 - macOS 13 or later on Apple Silicon for native Mac validation
-- Xcode 26 and the .NET iOS workload for iPhone/iPad Simulator builds
+- Xcode 26.6 and the .NET iOS workload for iPhone/iPad Simulator builds
 - Inno Setup 6 only when producing the standard Windows installers
 
 The applications target .NET 8, while Avalonia 12's source generators require
