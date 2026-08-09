@@ -28,3 +28,8 @@ public interface IMobileStreamingPlaybackEngine
 {
     void Open(MobilePlaybackSource source);
 }
+
+public interface IMobilePlaybackDiagnostics
+{
+    void WritePlaybackDiagnostic(string message);
+}

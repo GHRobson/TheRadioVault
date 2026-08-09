@@ -959,7 +959,12 @@ public sealed class MobileClientSession : IDisposable
     public async Task PlayAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (!IsPaired || IsPreparingPlayback) return;
+        TracePlayback($"Play requested: episode={broadcast.EpisodeId}; title={broadcast.Title}; paired={IsPaired}; preparing={IsPreparingPlayback}; busy={IsBusy}");
+        if (!IsPaired || IsPreparingPlayback)
+        {
+            TracePlayback("Play request ignored by the paired/preparing guard.");
+            return;
+        }
         SelectedBroadcast = broadcast;
         NowPlayingTitle = broadcast.Title;
         NowPlayingSubtitle = broadcast.Subtitle;
@@ -973,6 +978,7 @@ public sealed class MobileClientSession : IDisposable
             await Task.Delay(100).ConfigureAwait(false);
         if (IsBusy)
         {
+            TracePlayback("Play request timed out waiting for startup synchronization.");
             PreparingPlaybackEpisodeId = null;
             PlaybackStatus = "Playback is waiting for the Library startup sync. Try again in a moment.";
             Notify();
@@ -985,6 +991,7 @@ public sealed class MobileClientSession : IDisposable
         var transferCommitted = false;
         try
         {
+            TracePlayback("Flushing previous playback state.");
             await FlushPlaybackAsync().ConfigureAwait(false);
             try
             {
@@ -998,7 +1005,9 @@ public sealed class MobileClientSession : IDisposable
             _offlinePlayback = false;
             _activeDownload = null;
             _ownsPlayback = false;
+            TracePlayback($"Requesting media manifest for episode {broadcast.EpisodeId}.");
             var manifest = await _server.GetMediaManifestAsync(broadcast.EpisodeId).ConfigureAwait(false);
+            TracePlayback($"Media manifest received: parts={manifest.Parts.Count}; durationMs={manifest.DurationMs}.");
             if (manifest.Parts.Count == 0)
                 throw new InvalidOperationException("This broadcast has no playable media parts.");
 
@@ -1007,7 +1016,9 @@ public sealed class MobileClientSession : IDisposable
                 Math.Max(0, manifest.DurationMs),
                 _parts.Max(part => Math.Max(0, part.LogicalEndMs)));
             var logicalPosition = Math.Clamp(broadcast.Source.PositionMs, 0, _logicalDurationMs);
+            TracePlayback($"Requesting shared playback session at position {logicalPosition}.");
             var shared = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
+            TracePlayback($"Shared playback received: generation={shared.Generation}; owner={shared.OwnerClientId}; active={HasActivePlayback(shared)}.");
             _playbackGeneration = Math.Max(0, shared.Generation);
             var anotherDeviceOwnsPlayback = HasActivePlayback(shared) && !IsOwnedByThisDevice(shared);
             var desiredPlaying = true;
@@ -1048,6 +1059,7 @@ public sealed class MobileClientSession : IDisposable
             NowPlayingTitle = broadcast.Title;
             NowPlayingSubtitle = broadcast.Subtitle;
             _incrementPlayCountPending = true;
+            TracePlayback($"Opening episode {broadcast.EpisodeId} at {logicalPosition} ms; transfer={transfer is not null}.");
             OpenLogicalPosition(logicalPosition, desiredPlaying, muted: transfer is not null);
 
             if (transfer is not null)
@@ -1086,9 +1098,11 @@ public sealed class MobileClientSession : IDisposable
             _remotePlaybackBroadcast = null;
             _remotePlaybackOwner = string.Empty;
             await SaveDurableProgressAsync().ConfigureAwait(false);
+            TracePlayback($"Play preparation completed: episode={SelectedBroadcast?.EpisodeId}; playing={IsPlaying}; owns={_ownsPlayback}.");
         }
         catch (Exception exception)
         {
+            TracePlayback("Play preparation failed: " + exception);
             if (transfer is not null && !transferCommitted)
             {
                 try
@@ -1105,6 +1119,7 @@ public sealed class MobileClientSession : IDisposable
         }
         finally
         {
+            TracePlayback($"Play request finished: selected={SelectedBroadcast?.EpisodeId}; status={PlaybackStatus}.");
             PreparingPlaybackEpisodeId = null;
             IsBusy = false;
             Notify();
@@ -1205,12 +1220,14 @@ public sealed class MobileClientSession : IDisposable
             var localPart = download.Parts.FirstOrDefault(value => value.MediaFileId == part.MediaFileId)
                 ?? throw new FileNotFoundException("A downloaded media part is missing from its index.");
             url = _downloads.GetPartUri(download, localPart);
+            TracePlayback($"Opening downloaded part {part.MediaFileId} from {url}.");
         }
         else
         {
             var serverPath = WebApiRoutes.MediaPart(SelectedBroadcast.EpisodeId, part.MediaFileId);
             if (_playback is IMobileStreamingPlaybackEngine nativeStreaming)
             {
+                TracePlayback($"Opening native streamed part {part.MediaFileId} from {serverPath}.");
                 nativeStreaming.Open(new MobilePlaybackSource(
                     serverPath,
                     (range, cancellationToken) => _server.OpenResponseAsync(
@@ -1219,6 +1236,7 @@ public sealed class MobileClientSession : IDisposable
             }
             else
             {
+                TracePlayback($"Opening proxy streamed part {part.MediaFileId} from {serverPath}.");
                 _mediaProxy ??= new MobileMediaProxy(_server);
                 url = _mediaProxy.Register(serverPath);
             }
@@ -1233,6 +1251,12 @@ public sealed class MobileClientSession : IDisposable
         if (play) _playback.Play(); else _playback.Pause();
         _logicalPositionMs = logicalPositionMs;
         PlaybackStatus = _parts.Count > 1 ? $"Playing part {_partIndex + 1} of {_parts.Count}" : "Playing";
+    }
+
+    private void TracePlayback(string message)
+    {
+        if (_playback is IMobilePlaybackDiagnostics diagnostics)
+            diagnostics.WritePlaybackDiagnostic($"[RadioVault iOS session] {message}");
     }
 
     private void SeekRelative(TimeSpan amount)

@@ -5,7 +5,7 @@ using TheRadioVault.Client.Mobile.Platform;
 
 namespace TheRadioVault.Client.iOS;
 
-public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingPlaybackEngine
+public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingPlaybackEngine, IMobilePlaybackDiagnostics
 {
     private readonly object _gate = new();
     private readonly Timer _timer;
@@ -32,6 +32,8 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
     public event EventHandler<MobilePlaybackSnapshot>? StateChanged;
     public event EventHandler? MediaEnded;
     public MobilePlaybackSnapshot Current { get { lock (_gate) return _current; } }
+
+    public void WritePlaybackDiagnostic(string message) => IosPlaybackDiagnostics.Write(message);
 
     public void Open(string url)
     {
