@@ -1,7 +1,6 @@
 using Foundation;
 using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Models;
-using TheRadioVault.Web.Models;
 using UIKit;
 
 namespace TheRadioVault.Client.iOS;
@@ -12,292 +11,308 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
     {
         ObscuresBackgroundDuringPresentation = false
     };
-    private readonly UISwitch _transcriptSwitch = new();
-    private WebClientLibrarySearchFacets? _facets;
-    private IReadOnlyList<WebClientLibrarySearchSuggestion> _suggestions = [];
-    private IReadOnlyList<MobileBroadcastItem> _results = [];
-    private int? _collectionId;
-    private string _showTitle = "All shows";
-    private string _filter = "All";
-    private string _filterTitle = "Any status";
-    private int? _year;
-    private string _scope = "All";
-    private string _scopeTitle = "Everything";
+    private MobileExploreDashboard? _dashboard;
+    private IReadOnlyList<MobileWikiPageSummary> _visiblePages = [];
+    private bool _browseAll;
     private bool _loading;
 
-    public ExploreViewController(MobileClientSession session) : base(session) => Title = "Explore";
+    public ExploreViewController(MobileClientSession session) : base(session)
+    {
+        Title = "Explore";
+        NavigationItem.Title = "Explore";
+    }
 
-    private bool HasActiveSearch => !string.IsNullOrWhiteSpace(_searchController.SearchBar.Text) ||
-                                    _collectionId.HasValue || _year.HasValue || _transcriptSwitch.On ||
-                                    !_filter.Equals("All", StringComparison.OrdinalIgnoreCase) ||
-                                    !_scope.Equals("All", StringComparison.OrdinalIgnoreCase);
+    private bool IsBrowseMode => _browseAll || !string.IsNullOrWhiteSpace(_searchController.SearchBar.Text);
 
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
-        _searchController.SearchBar.Placeholder = "Show, person, topic, date or transcript phrase";
+        NavigationController!.NavigationBar.PrefersLargeTitles = true;
+        _searchController.SearchBar.Placeholder = "Search people, shows, places, events or articles";
         _searchController.SearchBar.Delegate = this;
         NavigationItem.SearchController = _searchController;
         NavigationItem.HidesSearchBarWhenScrolling = false;
+        NavigationItem.RightBarButtonItem = new UIBarButtonItem(
+            "Browse All",
+            UIBarButtonItemStyle.Plain,
+            (_, _) => ToggleBrowseAll());
         DefinesPresentationContext = true;
-        _transcriptSwitch.ValueChanged += TranscriptFilterChanged;
         RefreshControl = new UIRefreshControl();
         RefreshControl.ValueChanged += (_, _) => _ = LoadAsync();
         _ = LoadAsync();
     }
 
-    public override nint NumberOfSections(UITableView tableView) => 4;
-
-    public override nint RowsInSection(UITableView tableView, nint section) => section switch
+    public override void ViewWillAppear(bool animated)
     {
-        0 => 5,
-        1 => _suggestions.Count,
-        2 => HasActiveSearch ? Math.Max(1, _results.Count) : 5,
-        3 => HasActiveSearch ? 0 : Math.Max(1, Session.LibraryCollections.Count),
-        _ => 0
-    };
+        base.ViewWillAppear(animated);
+        if (_dashboard is null && !_loading && !Session.IsBusy) _ = LoadAsync();
+    }
 
-    public override string? TitleForHeader(UITableView tableView, nint section) => section switch
+    public override nint NumberOfSections(UITableView tableView)
     {
-        0 => "Narrow the results",
-        1 when _suggestions.Count > 0 => "Suggestions",
-        2 => HasActiveSearch ? "Search results · most relevant first" : "Ways into the archive",
-        3 when !HasActiveSearch => "Browse by show",
-        _ => null
-    };
+        if (IsBrowseMode) return 1;
+        return 10;
+    }
+
+    public override nint RowsInSection(UITableView tableView, nint section)
+    {
+        if (IsBrowseMode) return Math.Max(1, _visiblePages.Count);
+        if (_dashboard is null) return section == 0 ? 1 : 0;
+        return section switch
+        {
+            0 => 1,
+            1 => 4,
+            2 => _dashboard.Highlights.OnThisDay.Count,
+            3 => _dashboard.FeaturedPages.Count,
+            4 => _dashboard.RecentPages.Count,
+            5 => _dashboard.ShowPages.Count,
+            6 => _dashboard.PeoplePages.Count,
+            7 => _dashboard.TopicPages.Count,
+            8 => _dashboard.Highlights.Eras.Count,
+            9 => _dashboard.TimelinePages.Count,
+            _ => 0
+        };
+    }
+
+    public override string? TitleForHeader(UITableView tableView, nint section)
+    {
+        if (IsBrowseMode) return _browseAll && string.IsNullOrWhiteSpace(_searchController.SearchBar.Text)
+            ? "All Explore articles"
+            : "Search results";
+        return section switch
+        {
+            1 => "The Explore archive",
+            2 => "On this date",
+            3 => "Featured starting points",
+            4 => "Recently updated",
+            5 => "Shows",
+            6 => "People",
+            7 => "Topics and stories",
+            8 => "Explore by era",
+            9 => "Travel through the timelines",
+            _ => null
+        };
+    }
 
     public override string? TitleForFooter(UITableView tableView, nint section)
-        => section == 0 ? Session.StatusText : null;
+        => !IsBrowseMode && section == 0
+            ? "A human-editable history of the archive, grounded in citations, dated images and broadcasts."
+            : null;
 
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
+        if (IsBrowseMode)
+        {
+            if (_visiblePages.Count == 0)
+                return DetailCell(
+                    "explore-empty",
+                    _loading ? "Loading Explore…" : "No matching articles",
+                    _loading ? Session.StatusText : "Try another person, show, place, event or phrase.");
+            return PageCell("explore-browse", _visiblePages[indexPath.Row]);
+        }
+
+        if (_dashboard is null)
+            return HeroCell(
+                _loading ? "Loading the story of the archive…" : "Explore is unavailable",
+                Session.StatusText);
+
         if (indexPath.Section == 0)
         {
-            if (indexPath.Row == 4)
-            {
-                var transcript = DetailCell(
-                    "explore-transcript",
-                    "Has transcript",
-                    _facets is null ? "Only broadcasts with transcripts" : $"{_facets.TranscriptCount:N0} available");
-                transcript.AccessoryView = _transcriptSwitch;
-                transcript.SelectionStyle = UITableViewCellSelectionStyle.None;
-                return transcript;
-            }
-            var values = new[]
-            {
-                ("Search in", _scopeTitle),
-                ("Listening status", _filterTitle),
-                ("Show", _showTitle),
-                ("Year", _year?.ToString() ?? "All years")
-            };
-            var value = values[indexPath.Row];
-            var cell = DetailCell("explore-filter", value.Item1, value.Item2);
-            cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
-            return cell;
+            var overview = _dashboard.Overview;
+            return HeroCell(
+                "Explore the stories behind the archive",
+                $"Shows, people, stories and turning points—connected directly to the broadcasts that preserve them.\n\nExplore {overview.PageCount:N0} articles, {overview.TimelineEventCount:N0} dated events, {overview.SourceCount:N0} sources and {overview.ImageCount:N0} historical images.");
         }
 
         if (indexPath.Section == 1)
         {
-            var suggestion = _suggestions[indexPath.Row];
-            var cell = DetailCell(
-                "explore-suggestion",
-                suggestion.Value,
-                $"{suggestion.Kind} · {suggestion.MatchCount:N0} matches");
-            cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+            var overview = _dashboard.Overview;
+            var stats = new[]
+            {
+                ("Articles", overview.PageCount),
+                ("Dated events", overview.TimelineEventCount),
+                ("Sources", overview.SourceCount),
+                ("Images", overview.ImageCount)
+            };
+            var stat = stats[indexPath.Row];
+            var cell = DetailCell("explore-stat", stat.Item1, stat.Item2.ToString("N0"));
+            cell.SelectionStyle = UITableViewCellSelectionStyle.None;
             return cell;
-        }
-
-        if (indexPath.Section == 2 && HasActiveSearch)
-        {
-            if (_results.Count == 0)
-                return DetailCell(
-                    "explore-empty",
-                    _loading ? "Searching the archive…" : "No matching broadcasts",
-                    _loading ? Session.StatusText : "Try a broader phrase or remove a filter.");
-            var result = _results[indexPath.Row];
-            var context = string.IsNullOrWhiteSpace(result.Source.SearchContext)
-                ? $"{result.Subtitle} · {result.Status}"
-                : $"{result.Subtitle} · {result.Source.SearchContext}";
-            var resultCell = DetailCell("explore-result", result.Title, context);
-            resultCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
-            return resultCell;
         }
 
         if (indexPath.Section == 2)
         {
-            var quick = new[]
-            {
-                ("Continue listening", "Broadcasts already in progress", RadioVaultIcon.Play),
-                ("Favourites", "Broadcasts saved for an easy return", RadioVaultIcon.Favourite),
-                ("Recently added", "The newest additions to the archive", RadioVaultIcon.Download),
-                ("Unplayed", "Broadcasts you have not started", RadioVaultIcon.Radio),
-                ("On this day", "Broadcasts from today's date", RadioVaultIcon.Completed)
-            };
-            var value = quick[indexPath.Row];
-            var cell = new UITableViewCell(UITableViewCellStyle.Default, "explore-quick");
-            var content = cell.DefaultContentConfiguration;
-            content.Text = value.Item1;
-            content.SecondaryText = value.Item2;
-            content.Image = RadioVaultIcons.Image(value.Item3);
-            RadioVaultTheme.StyleCell(cell, content);
-            cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
-            return cell;
+            var item = _dashboard.Highlights.OnThisDay[indexPath.Row];
+            return DetailCell(
+                "explore-today",
+                $"{item.Event.YearText} · {item.Event.Title}",
+                string.IsNullOrWhiteSpace(item.Event.Summary) ? item.Page.Title : item.Event.Summary);
         }
 
-        if (Session.LibraryCollections.Count == 0)
-            return DetailCell("explore-no-shows", "No shows found", Session.StatusText);
-        var show = Session.LibraryCollections[indexPath.Row];
-        var showCell = DetailCell("explore-show", show.CollectionName, $"{show.BroadcastCount:N0} broadcasts");
-        showCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
-        return showCell;
+        if (indexPath.Section is >= 3 and <= 7 or 9)
+            return PageCell("explore-page", PagesForSection(indexPath.Section)[indexPath.Row]);
+
+        var era = _dashboard.Highlights.Eras[indexPath.Row];
+        var eraCell = DetailCell("explore-era", era.Label, era.Summary);
+        eraCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+        return eraCell;
     }
 
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (indexPath.Section == 0 && indexPath.Row < 4)
+        if (IsBrowseMode)
         {
-            ShowFilter(indexPath);
+            if (indexPath.Row < _visiblePages.Count) OpenPage(_visiblePages[indexPath.Row]);
             return;
         }
-        if (indexPath.Section == 1 && indexPath.Row < _suggestions.Count)
+        if (_dashboard is null || indexPath.Section < 2) return;
+        if (indexPath.Section == 2)
         {
-            _searchController.SearchBar.Text = _suggestions[indexPath.Row].Value;
-            _searchController.SearchBar.ResignFirstResponder();
-            _ = LoadAsync();
+            OpenPage(_dashboard.Highlights.OnThisDay[indexPath.Row].Page);
             return;
         }
-        if (indexPath.Section == 2 && HasActiveSearch && indexPath.Row < _results.Count)
+        if (indexPath.Section is >= 3 and <= 7 or 9)
         {
-            NavigationController?.PushViewController(
-                new BroadcastDetailsViewController(Session, _results[indexPath.Row]), true);
+            OpenPage(PagesForSection(indexPath.Section)[indexPath.Row]);
             return;
         }
-        if (indexPath.Section == 2 && !HasActiveSearch)
+        if (indexPath.Section == 8)
         {
-            var filters = new[]
-            {
-                ("ContinueListening", "Continue Listening"),
-                ("Favourites", "Favourites"),
-                ("RecentlyAdded", "Recently Added"),
-                ("Unplayed", "Unplayed"),
-                ("OnThisDay", "On This Day")
-            };
-            var filter = filters[indexPath.Row];
-            NavigationController?.PushViewController(
-                new ShowLibraryViewController(Session, null, filter.Item2, filter.Item1), true);
-            return;
+            var era = _dashboard.Highlights.Eras[indexPath.Row];
+            _browseAll = true;
+            _visiblePages = _dashboard.TimelinePages;
+            _searchController.SearchBar.Text = string.Empty;
+            NavigationItem.RightBarButtonItem!.Title = "Dashboard";
+            Title = era.Label;
+            NavigationItem.Title = era.Label;
+            TableView.ReloadData();
         }
-        if (indexPath.Section == 3 && indexPath.Row < Session.LibraryCollections.Count)
-        {
-            var show = Session.LibraryCollections[indexPath.Row];
-            NavigationController?.PushViewController(
-                new ShowLibraryViewController(Session, show.CollectionId, show.CollectionName), true);
-        }
+    }
+
+    [Export("searchBar:searchTextDidChange:")]
+    public void TextChanged(UISearchBar searchBar, string searchText)
+    {
+        ApplySearch(searchText);
     }
 
     [Export("searchBarSearchButtonClicked:")]
     public void SearchButtonClicked(UISearchBar searchBar)
     {
         searchBar.ResignFirstResponder();
-        _ = LoadAsync();
+        ApplySearch(searchBar.Text);
     }
 
     [Export("searchBarCancelButtonClicked:")]
     public void CancelButtonClicked(UISearchBar searchBar)
     {
-        ClearFilters();
-        _ = LoadAsync();
+        searchBar.Text = string.Empty;
+        _browseAll = false;
+        ShowDashboard();
     }
 
-    private void ShowFilter(NSIndexPath indexPath)
+    private void ToggleBrowseAll()
     {
-        IEnumerable<(string Title, Action Select)> choices = indexPath.Row switch
+        if (IsBrowseMode)
         {
-            0 => new[]
-            {
-                ("Everything", (Action)(() => SetScope("All", "Everything"))),
-                ("Titles & summaries", (Action)(() => SetScope("TitlesAndSummaries", "Titles & summaries"))),
-                ("People", (Action)(() => SetScope("People", "People"))),
-                ("Topics", (Action)(() => SetScope("Topics", "Topics"))),
-                ("Research", (Action)(() => SetScope("Research", "Research"))),
-                ("Transcripts", (Action)(() => SetScope("Transcripts", "Transcripts")))
-            },
-            1 => new[]
-            {
-                ("Any status", (Action)(() => SetFilter("All", "Any status"))),
-                ("Unplayed", (Action)(() => SetFilter("Unplayed", "Unplayed"))),
-                ("In progress", (Action)(() => SetFilter("ContinueListening", "In progress"))),
-                ("Completed", (Action)(() => SetFilter("Completed", "Completed"))),
-                ("Favourites", (Action)(() => SetFilter("Favourites", "Favourites")))
-            },
-            2 => new[] { ("All shows", (Action)(() => SetShow(null, "All shows"))) }
-                .Concat(Session.LibraryCollections.Select(show =>
-                    (show.CollectionName, (Action)(() => SetShow(show.CollectionId, show.CollectionName))))),
-            _ => new[] { ("All years", (Action)(() => SetYear(null))) }
-                .Concat((_facets?.Years ?? []).Select(year =>
-                    (year.ToString(), (Action)(() => SetYear(year)))))
+            _searchController.SearchBar.Text = string.Empty;
+            _browseAll = false;
+            ShowDashboard();
+            return;
+        }
+        _browseAll = true;
+        _visiblePages = _dashboard?.AllPages ?? [];
+        NavigationItem.RightBarButtonItem!.Title = "Dashboard";
+        TableView.ReloadData();
+    }
+
+    private void ShowDashboard()
+    {
+        Title = "Explore";
+        NavigationItem.Title = "Explore";
+        NavigationItem.RightBarButtonItem!.Title = "Browse All";
+        _visiblePages = [];
+        TableView.ReloadData();
+    }
+
+    private void ApplySearch(string? text)
+    {
+        var query = text?.Trim() ?? string.Empty;
+        if (query.Length == 0)
+        {
+            if (_browseAll) _visiblePages = _dashboard?.AllPages ?? [];
+            else ShowDashboard();
+        }
+        else
+        {
+            _visiblePages = (_dashboard?.AllPages ?? [])
+                .Where(page => Contains(page.Title, query) || Contains(page.Summary, query) ||
+                               Contains(page.PageType, query) || Contains(page.Slug, query))
+                .OrderByDescending(page => page.Title.Equals(query, StringComparison.OrdinalIgnoreCase))
+                .ThenBy(page => page.Title, StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+            NavigationItem.RightBarButtonItem!.Title = "Dashboard";
+        }
+        TableView.ReloadData();
+    }
+
+    private static bool Contains(string? value, string query)
+        => value?.Contains(query, StringComparison.CurrentCultureIgnoreCase) == true;
+
+    private IReadOnlyList<MobileWikiPageSummary> PagesForSection(nint section)
+        => _dashboard is null ? [] : section switch
+        {
+            3 => _dashboard.FeaturedPages,
+            4 => _dashboard.RecentPages,
+            5 => _dashboard.ShowPages,
+            6 => _dashboard.PeoplePages,
+            7 => _dashboard.TopicPages,
+            9 => _dashboard.TimelinePages,
+            _ => []
         };
 
-        var alert = UIAlertController.Create("Choose " + FilterTitle(indexPath.Row), null, UIAlertControllerStyle.ActionSheet);
-        foreach (var choice in choices)
-            alert.AddAction(UIAlertAction.Create(choice.Title, UIAlertActionStyle.Default, _ => choice.Select()));
-        alert.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
-        if (alert.PopoverPresentationController is { } popover)
-        {
-            popover.SourceView = TableView;
-            popover.SourceRect = TableView.RectForRowAtIndexPath(indexPath);
-        }
-        PresentViewController(alert, true, null);
+    private void OpenPage(MobileWikiPageSummary page)
+        => NavigationController?.PushViewController(new ExploreArticleViewController(Session, page), true);
+
+    private static UITableViewCell PageCell(string identifier, MobileWikiPageSummary page)
+    {
+        var cell = DetailCell(identifier, page.Title,
+            string.IsNullOrWhiteSpace(page.Summary)
+                ? $"{page.PageType} · {page.EvidenceSummary}"
+                : $"{page.Summary}\n{page.PageType} · {page.EvidenceSummary}");
+        cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+        return cell;
     }
 
-    private static string FilterTitle(nint row) => row switch
+    private static UITableViewCell HeroCell(string title, string detail)
     {
-        0 => "search scope",
-        1 => "listening status",
-        2 => "show",
-        _ => "year"
-    };
-
-    private void SetScope(string value, string title) { _scope = value; _scopeTitle = title; _ = LoadAsync(); }
-    private void SetFilter(string value, string title) { _filter = value; _filterTitle = title; _ = LoadAsync(); }
-    private void SetShow(int? value, string title) { _collectionId = value; _showTitle = title; _ = LoadAsync(); }
-    private void SetYear(int? value) { _year = value; _ = LoadAsync(); }
-
-    private void TranscriptFilterChanged(object? sender, EventArgs eventArgs) => _ = LoadAsync();
-
-    private void ClearFilters()
-    {
-        _collectionId = null;
-        _showTitle = "All shows";
-        _filter = "All";
-        _filterTitle = "Any status";
-        _year = null;
-        _scope = "All";
-        _scopeTitle = "Everything";
-        _transcriptSwitch.On = false;
-        _suggestions = [];
-        _results = [];
+        var cell = new UITableViewCell(UITableViewCellStyle.Default, "explore-hero");
+        var content = cell.DefaultContentConfiguration;
+        content.Text = title;
+        content.SecondaryText = detail;
+        content.TextProperties.Font = UIFont.BoldSystemFontOfSize(22)!;
+        content.TextProperties.Color = RadioVaultTheme.Text;
+        content.SecondaryTextProperties.Font = UIFont.SystemFontOfSize(13)!;
+        content.SecondaryTextProperties.Color = RadioVaultTheme.MutedText;
+        content.SecondaryTextProperties.NumberOfLines = 0;
+        content.Image = RadioVaultIcons.Image(RadioVaultIcon.Knowledge, size: 42);
+        RadioVaultTheme.StyleCell(cell, content);
+        cell.BackgroundColor = RadioVaultTheme.SurfaceRaised;
+        cell.SelectionStyle = UITableViewCellSelectionStyle.None;
+        return cell;
     }
 
     private async Task LoadAsync()
     {
         if (_loading) return;
         _loading = true;
-        BeginInvokeOnMainThread(() => TableView.ReloadData());
-        var value = await Session.ExploreAsync(
-            _searchController.SearchBar.Text,
-            _collectionId,
-            _filter,
-            _year,
-            _scope,
-            _transcriptSwitch.On).ConfigureAwait(false);
+        TableView.ReloadData();
+        var dashboard = await Session.LoadExploreDashboardAsync().ConfigureAwait(false);
         BeginInvokeOnMainThread(() =>
         {
-            _facets = value.Facets ?? _facets;
-            _suggestions = value.Suggestions;
-            _results = value.Results;
+            _dashboard = dashboard ?? _dashboard;
+            if (_browseAll) _visiblePages = _dashboard?.AllPages ?? [];
             _loading = false;
             RefreshControl?.EndRefreshing();
             TableView.ReloadData();
@@ -306,11 +321,7 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing)
-        {
-            _transcriptSwitch.ValueChanged -= TranscriptFilterChanged;
-            _searchController.Dispose();
-        }
+        if (disposing) _searchController.Dispose();
         base.Dispose(disposing);
     }
 }

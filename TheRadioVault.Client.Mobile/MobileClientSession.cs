@@ -287,6 +287,64 @@ public sealed class MobileClientSession : IDisposable
         finally { SetBusy(false); }
     }
 
+    public async Task<MobileExploreDashboard?> LoadExploreDashboardAsync()
+    {
+        if (!IsPaired || IsBusy) return null;
+        SetBusy(true, "Loading Explore…");
+        try
+        {
+            var overview = await _server.GetWikiOverviewAsync().ConfigureAwait(false);
+            var all = await _server.BrowseWikiAsync(limit: 5000).ConfigureAwait(false);
+            var today = DateTime.Today;
+            var highlights = await _server.GetWikiDashboardHighlightsAsync(today.Month, today.Day)
+                .ConfigureAwait(false);
+            var dashboard = new MobileExploreDashboard(
+                overview,
+                all,
+                all.OrderByDescending(x => string.Equals(x.Status, "Published", StringComparison.OrdinalIgnoreCase))
+                    .ThenByDescending(x => x.CitationCount + x.ImageCount + x.TimelineEventCount)
+                    .ThenByDescending(x => x.UpdatedAt).Take(6).ToArray(),
+                all.OrderByDescending(x => x.UpdatedAt).Take(8).ToArray(),
+                all.Where(x => x.PageType.Equals("Show", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(x => x.TimelineEventCount).ThenBy(x => x.Title).Take(10).ToArray(),
+                all.Where(x => x.PageType.Equals("Person", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(x => x.CitationCount).ThenBy(x => x.Title).Take(10).ToArray(),
+                all.Where(x => x.PageType.Equals("Topic", StringComparison.OrdinalIgnoreCase))
+                    .OrderByDescending(x => x.CitationCount).ThenBy(x => x.Title).Take(10).ToArray(),
+                all.Where(x => x.TimelineEventCount > 0)
+                    .OrderByDescending(x => x.TimelineEventCount).ThenBy(x => x.Title).Take(8).ToArray(),
+                highlights);
+            StatusText = overview.PageCount == 1
+                ? "Explore contains 1 article."
+                : $"Explore contains {overview.PageCount:N0} articles.";
+            return dashboard;
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Explore failed: " + exception.Message;
+            return null;
+        }
+        finally { SetBusy(false); }
+    }
+
+    public async Task<MobileWikiPageDocument?> LoadExplorePageAsync(Guid pageId)
+    {
+        if (!IsPaired || IsBusy) return null;
+        SetBusy(true, "Opening Explore article…");
+        try
+        {
+            var page = await _server.GetWikiPageAsync(pageId).ConfigureAwait(false);
+            StatusText = page is null ? "That Explore article could not be found." : $"Loaded {page.Title}.";
+            return page;
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Explore article failed: " + exception.Message;
+            return null;
+        }
+        finally { SetBusy(false); }
+    }
+
     public async Task<WebClientBroadcastDetails?> LoadBroadcastDetailsAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);

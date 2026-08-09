@@ -15,9 +15,9 @@ public sealed class RadioVaultTabBarController : UITabBarController
         _miniPlayer = new RadioVaultMiniPlayerView(session);
         ViewControllers =
         [
-            Wrap(new HomeViewController(session), "Home", RadioVaultIcon.Home, 0),
+            Wrap(new HomeViewController(session), "Dashboard", RadioVaultIcon.Home, 0),
             Wrap(new LibraryViewController(session), "Library", RadioVaultIcon.Library, 1),
-            Wrap(new ExploreViewController(session), "Explore", RadioVaultIcon.Search, 2),
+            Wrap(new ExploreViewController(session), "Explore", RadioVaultIcon.Knowledge, 2),
             Wrap(new DownloadsViewController(session), "Downloads", RadioVaultIcon.Download, 3),
             Wrap(new ServerViewController(session), "Settings", RadioVaultIcon.Settings, 4)
         ];
@@ -50,10 +50,14 @@ public sealed class RadioVaultTabBarController : UITabBarController
 
     private static UINavigationController Wrap(UIViewController controller, string title, RadioVaultIcon icon, nint tag)
     {
+        controller.Title = title;
+        controller.NavigationItem.Title = title;
         var navigation = new UINavigationController(controller)
         {
             TabBarItem = new UITabBarItem(title, RadioVaultIcons.Image(icon), tag)
         };
+        navigation.NavigationBar.PrefersLargeTitles = true;
+        navigation.NavigationBar.Hidden = false;
         if (navigation.View is { } view) view.BackgroundColor = RadioVaultTheme.Background;
         return navigation;
     }

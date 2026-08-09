@@ -1325,6 +1325,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(!tabs.Contains("Wrap(new NowPlayingViewController", StringComparison.Ordinal));
     True(tabs.Contains("ServerViewController", StringComparison.Ordinal));
     True(tabs.Contains("RadioVaultIcons.Image", StringComparison.Ordinal));
+    True(tabs.Contains("\"Dashboard\"", StringComparison.Ordinal));
     True(tabs.Contains("\"Settings\"", StringComparison.Ordinal));
 
     var dashboard = File.ReadAllText(Path.Combine(
@@ -1368,13 +1369,21 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
 
     var explore = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreViewController.cs"));
-    True(explore.Contains("Search in", StringComparison.Ordinal));
-    True(explore.Contains("Listening status", StringComparison.Ordinal));
-    True(explore.Contains("Has transcript", StringComparison.Ordinal));
-    True(explore.Contains("Suggestions", StringComparison.Ordinal));
-    True(explore.Contains("Ways into the archive", StringComparison.Ordinal));
-    True(explore.Contains("Browse by show", StringComparison.Ordinal));
-    True(explore.Contains("ExploreAsync", StringComparison.Ordinal));
+    True(explore.Contains("Explore the stories behind the archive", StringComparison.Ordinal));
+    True(explore.Contains("Featured starting points", StringComparison.Ordinal));
+    True(explore.Contains("Recently updated", StringComparison.Ordinal));
+    True(explore.Contains("Explore by era", StringComparison.Ordinal));
+    True(explore.Contains("Travel through the timelines", StringComparison.Ordinal));
+    True(explore.Contains("ShowPages", StringComparison.Ordinal));
+    True(explore.Contains("PeoplePages", StringComparison.Ordinal));
+    True(explore.Contains("TopicPages", StringComparison.Ordinal));
+    True(explore.Contains("LoadExploreDashboardAsync", StringComparison.Ordinal));
+
+    var exploreArticle = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "ExploreArticleViewController.cs"));
+    True(exploreArticle.Contains("LoadExplorePageAsync", StringComparison.Ordinal));
+    True(exploreArticle.Contains("FormatMarkdown", StringComparison.Ordinal));
+    True(exploreArticle.Contains("Timeline", StringComparison.Ordinal));
 
     var theme = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultTheme.cs"));
@@ -1467,6 +1476,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("MiniPlayerShowsHandoff", StringComparison.Ordinal));
     True(mobileSession.Contains("QueueItems", StringComparison.Ordinal));
     True(mobileSession.Contains("IsDownloadPaused", StringComparison.Ordinal));
+    True(mobileSession.Contains("LoadExploreDashboardAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("LoadExplorePageAsync", StringComparison.Ordinal));
 
     var keychain = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosKeychainConnectionStore.cs"));
@@ -1488,6 +1499,10 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(client.Contains("QueueClear", StringComparison.Ordinal));
     True(client.Contains("Favourite(episodeId)", StringComparison.Ordinal));
     True(client.Contains("ClientLibraryArchivePeriods", StringComparison.Ordinal));
+    True(client.Contains("ClientWikiOperation(\"overview\")", StringComparison.Ordinal));
+    True(client.Contains("ClientWikiOperation(\"browse\")", StringComparison.Ordinal));
+    True(client.Contains("ClientWikiOperation(\"dashboard-highlights\")", StringComparison.Ordinal));
+    True(client.Contains("ClientWikiOperation(\"page\")", StringComparison.Ordinal));
 
     var plist = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "Info.plist"));

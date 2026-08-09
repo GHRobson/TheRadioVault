@@ -212,6 +212,51 @@ public sealed class MobileServerClient : IDisposable
             cancellationToken).ConfigureAwait(false)).Periods;
     }
 
+    public async Task<MobileWikiOverview> GetWikiOverviewAsync(CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientWikiOperation("overview"),
+            new MobileEmptyMutation(),
+            MobileJsonContext.Default.MobileEmptyMutation,
+            MobileJsonContext.Default.MobileWikiOverviewEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task<IReadOnlyList<MobileWikiPageSummary>> BrowseWikiAsync(
+        string? searchText = null,
+        string? pageType = null,
+        int limit = 500,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientWikiOperation("browse"),
+            new MobileWikiBrowseRequest(
+                searchText?.Trim() ?? string.Empty,
+                pageType?.Trim() ?? string.Empty,
+                string.Empty,
+                Math.Clamp(limit, 1, 5000)),
+            MobileJsonContext.Default.MobileWikiBrowseRequest,
+            MobileJsonContext.Default.MobileWikiBrowseEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task<MobileWikiDashboardHighlights> GetWikiDashboardHighlightsAsync(
+        int month,
+        int day,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientWikiOperation("dashboard-highlights"),
+            new MobileWikiDashboardRequest(month, day),
+            MobileJsonContext.Default.MobileWikiDashboardRequest,
+            MobileJsonContext.Default.MobileWikiHighlightsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task<MobileWikiPageDocument?> GetWikiPageAsync(
+        Guid pageId,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientWikiOperation("page"),
+            new MobileWikiPageRequest(pageId),
+            MobileJsonContext.Default.MobileWikiPageRequest,
+            MobileJsonContext.Default.MobileWikiPageEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
     public async Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
         long episodeId,
         CancellationToken cancellationToken = default)

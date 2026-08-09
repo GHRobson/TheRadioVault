@@ -23,6 +23,13 @@ public abstract class SessionTableViewController : UITableViewController
         TableView.SectionHeaderTopPadding = 12;
     }
 
+    public override void ViewWillAppear(bool animated)
+    {
+        base.ViewWillAppear(animated);
+        NavigationItem.Title = Title;
+        NavigationController?.SetNavigationBarHidden(false, animated);
+    }
+
     protected virtual void ReloadSession() => TableView.ReloadData();
 
     protected static UITableViewCell DetailCell(string reuseIdentifier, string title, string detail)

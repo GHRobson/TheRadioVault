@@ -55,4 +55,11 @@ public sealed record ProgressEnvelope(WebOfflineProgressResult Result);
 [JsonSerializable(typeof(WebPlaybackTransferCancelRequest))]
 [JsonSerializable(typeof(WebPlaybackTransferSourceStoppedRequest))]
 [JsonSerializable(typeof(WebOfflineProgressUpdate))]
+[JsonSerializable(typeof(MobileWikiOverviewEnvelope))]
+[JsonSerializable(typeof(MobileWikiBrowseEnvelope))]
+[JsonSerializable(typeof(MobileWikiHighlightsEnvelope))]
+[JsonSerializable(typeof(MobileWikiPageEnvelope))]
+[JsonSerializable(typeof(MobileWikiBrowseRequest))]
+[JsonSerializable(typeof(MobileWikiPageRequest))]
+[JsonSerializable(typeof(MobileWikiDashboardRequest))]
 public partial class MobileJsonContext : JsonSerializerContext;
