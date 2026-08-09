@@ -1,15 +1,20 @@
-using Avalonia;
-using Avalonia.iOS;
 using Foundation;
-using TheRadioVault.Client.Mobile;
+using UIKit;
 
 namespace TheRadioVault.Client.iOS;
 
 [Register("AppDelegate")]
 #pragma warning disable CA1711
-public partial class AppDelegate : AvaloniaAppDelegate<App>
+public sealed class AppDelegate : UIResponder, IUIApplicationDelegate
 #pragma warning restore CA1711
 {
-    protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
-        => base.CustomizeAppBuilder(builder).LogToTrace();
+    [Export("application:didFinishLaunchingWithOptions:")]
+    public bool FinishedLaunching(UIApplication application, NSDictionary? launchOptions) => true;
+
+    [Export("application:configurationForConnectingSceneSession:options:")]
+    public UISceneConfiguration GetConfiguration(
+        UIApplication application,
+        UISceneSession connectingSceneSession,
+        UISceneConnectionOptions options)
+        => UISceneConfiguration.Create("Default Configuration", connectingSceneSession.Role);
 }

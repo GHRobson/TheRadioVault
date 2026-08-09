@@ -26,8 +26,8 @@ On Windows, run the complete release gate:
 ./release-gate.ps1
 ```
 
-On Apple Silicon macOS, build the native desktop and iOS clients and test their
-platform boundaries:
+On Apple Silicon macOS, build the native desktop and UIKit iOS clients and test
+their platform boundaries:
 
 ```zsh
 dotnet restore TheRadioVault.sln

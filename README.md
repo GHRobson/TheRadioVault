@@ -47,9 +47,10 @@ The macOS Client is currently an Apple Silicon alpha. It connects to the same
 Windows Server and uses the same pairing, cache, download, playback and handoff
 contracts. See [MACOS-CLIENT.md](MACOS-CLIENT.md) for build and on-Mac acceptance instructions.
 
-The iOS Client is an early iPhone and iPad alpha. Its first milestone provides
-local-network discovery and pairing, a mobile Dashboard and Library, canonical
-multipart playback, Now Playing controls and secure Keychain storage. It uses
+The iOS Client is an early iPhone and iPad alpha built with native UIKit
+controls and navigation. It provides local-network discovery and pairing, a
+mobile Dashboard and searchable Library, canonical multipart playback, native
+Now Playing controls and secure Keychain storage. It uses
 the existing Server v1 API with certificate pinning; no iOS-specific Server is
 required. See [BUILDING.md](BUILDING.md#ios-client) for the Simulator build.
 

@@ -4,15 +4,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>TheRadioVault.Client.Mobile</RootNamespace>
-    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
   </PropertyGroup>
   <ItemGroup>
-    <PackageReference Include="Avalonia" Version="12.1.0" />
-    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.0" />
-  </ItemGroup>
-  <ItemGroup>
-    <AvaloniaResource Include="..\TheRadioVault.Desktop.Avalonia\Assets\RadioVault-Logo.png"
-                      Link="Assets\RadioVault-Logo.png" />
     <ProjectReference Include="..\TheRadioVault.Protocol\TheRadioVault.Protocol.csproj" />
   </ItemGroup>
 </Project>

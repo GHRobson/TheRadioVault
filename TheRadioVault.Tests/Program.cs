@@ -1300,7 +1300,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     var iosProject = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "TheRadioVault.Client.iOS.csproj"));
     True(iosProject.Contains("net10.0-ios", StringComparison.Ordinal));
-    True(iosProject.Contains("Avalonia.iOS", StringComparison.Ordinal));
+    True(!iosProject.Contains("Avalonia", StringComparison.Ordinal));
     True(iosProject.Contains("TheRadioVault.Client.Mobile", StringComparison.Ordinal));
     True(!iosProject.Contains("TheRadioVault.Infrastructure", StringComparison.Ordinal));
     True(!iosProject.Contains("TheRadioVault.Server", StringComparison.Ordinal));
@@ -1309,7 +1309,26 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         SourceRoot(), "TheRadioVault.Client.Mobile", "TheRadioVault.Client.Mobile.csproj"));
     True(mobileProject.Contains("TheRadioVault.Protocol", StringComparison.Ordinal));
     True(!mobileProject.Contains("TheRadioVault.Web.csproj", StringComparison.Ordinal));
-    True(mobileProject.Contains("AvaloniaUseCompiledBindingsByDefault", StringComparison.Ordinal));
+    True(!mobileProject.Contains("Avalonia", StringComparison.Ordinal));
+
+    var tabs = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultTabBarController.cs"));
+    True(tabs.Contains("UITabBarController", StringComparison.Ordinal));
+    True(tabs.Contains("UINavigationController", StringComparison.Ordinal));
+    True(tabs.Contains("HomeViewController", StringComparison.Ordinal));
+    True(tabs.Contains("LibraryViewController", StringComparison.Ordinal));
+    True(tabs.Contains("NowPlayingViewController", StringComparison.Ordinal));
+    True(tabs.Contains("ServerViewController", StringComparison.Ordinal));
+
+    var library = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
+    True(library.Contains("UISearchController", StringComparison.Ordinal));
+    True(library.Contains("UITableView", StringComparison.Ordinal));
+
+    var scene = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "SceneDelegate.cs"));
+    True(scene.Contains("IUIWindowSceneDelegate", StringComparison.Ordinal));
+    True(scene.Contains("RadioVaultTabBarController", StringComparison.Ordinal));
 
     var protocolProject = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Protocol", "TheRadioVault.Protocol.csproj"));
@@ -1338,6 +1357,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(plist.Contains("NSAllowsLocalNetworking", StringComparison.Ordinal));
     True(plist.Contains("UIBackgroundModes", StringComparison.Ordinal));
     True(plist.Contains("<string>audio</string>", StringComparison.Ordinal));
+    True(plist.Contains("UIApplicationSceneManifest", StringComparison.Ordinal));
 
     var entitlements = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "Entitlements.device.plist"));

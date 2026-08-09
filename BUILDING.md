@@ -49,8 +49,11 @@ The retired WPF shell is not part of the solution or release payload.
 ## iOS Client
 
 The iOS project is kept outside `TheRadioVault.sln` so the Windows release gate
-does not attempt to load Apple's workload. On an Apple Silicon Mac, install the
-workload once and build the unsigned Simulator app with:
+does not attempt to load Apple's workload. Its interface uses native UIKit tabs,
+navigation, tables, search and playback controls; the portable mobile project
+contains the shared server/session logic without a UI framework dependency. On
+an Apple Silicon Mac, install the workload once and build the unsigned Simulator
+app with:
 
 ```zsh
 dotnet workload install ios

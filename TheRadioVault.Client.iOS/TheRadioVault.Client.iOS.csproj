@@ -12,13 +12,7 @@
     <ApplicationDisplayVersion>0.35.0</ApplicationDisplayVersion>
     <ApplicationVersion>35</ApplicationVersion>
     <CodesignEntitlements Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">Entitlements.device.plist</CodesignEntitlements>
-    <!-- Avalonia 12.1's design-time helper emits an aggregate linker warning;
-         application and framework warnings remain errors in CI. -->
-    <NoWarn>$(NoWarn);IL2104</NoWarn>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="Avalonia.iOS" Version="12.1.0" />
-  </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\TheRadioVault.Client.Mobile\TheRadioVault.Client.Mobile.csproj" />
   </ItemGroup>
