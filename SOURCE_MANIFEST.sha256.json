@@ -1,6 +1,6 @@
 {
   "version": "0.35.0-alpha9-buildfix3",
-  "generatedAtUtc": "2026-08-09T07:31:26.2352660Z",
+  "generatedAtUtc": "2026-08-09T07:46:17.3859910Z",
   "fileCount": 977,
   "files": [
     {
@@ -465,8 +465,8 @@
     },
     {
       "path": "TheRadioVault.Client.iOS/Info.plist",
-      "bytes": 1996,
-      "sha256": "82400c2a9a6bedb6123565b765d16b3fbfd3d78ea83c84c62d6a4cf13551de75"
+      "bytes": 2034,
+      "sha256": "1b4c36e42f08d87e01936f4c1b5e7eac42a31b80dec24e4241235825af2b8d23"
     },
     {
       "path": "TheRadioVault.Client.iOS/IosAvPlayerEngine.cs",
@@ -1985,8 +1985,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 518399,
-      "sha256": "4e417999ae8f8b1eca0520400210931eea3b1321c2b35a6f6a7092a377217c49"
+      "bytes": 518469,
+      "sha256": "44c10111f84744b86d56927f04079853752d81feb82b09ea1834f7bdd94eae98"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",

@@ -1378,6 +1378,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(plist.Contains("UIBackgroundModes", StringComparison.Ordinal));
     True(plist.Contains("<string>audio</string>", StringComparison.Ordinal));
     True(plist.Contains("UIApplicationSceneManifest", StringComparison.Ordinal));
+    True(plist.Contains("UILaunchScreen", StringComparison.Ordinal));
 
     var entitlements = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "Entitlements.device.plist"));
