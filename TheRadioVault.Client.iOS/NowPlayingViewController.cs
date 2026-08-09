@@ -78,11 +78,11 @@ public sealed class NowPlayingViewController : UIViewController
         _progressSlider.TouchUpOutside += ProgressSliderFinished;
         _progressSlider.TouchCancel += ProgressSliderFinished;
 
-        ConfigureButton(_backButton, RadioVaultIcons.Image(RadioVaultIcon.SkipBack, size: 42), "Back 15 seconds", _session.SkipBack);
-        ConfigureButton(_playButton, RadioVaultIcons.Image(RadioVaultIcon.Play, size: 68, strokeWidth: 1.5f), "Play or pause", _session.MiniPlayerAction);
-        ConfigureButton(_forwardButton, RadioVaultIcons.Image(RadioVaultIcon.SkipForward, size: 42), "Forward 30 seconds", _session.SkipForward);
-        _backButton.TintColor = RadioVaultTheme.Text;
-        _forwardButton.TintColor = RadioVaultTheme.Text;
+        ConfigureButton(_backButton, RadioVaultIcons.Image(RadioVaultIcon.SkipBack, RadioVaultTheme.Accent, 42), "Back 15 seconds", _session.SkipBack);
+        ConfigureButton(_playButton, RadioVaultIcons.Image(RadioVaultIcon.Play, RadioVaultTheme.Accent, 68, 1.5f), "Play or pause", _session.MiniPlayerAction);
+        ConfigureButton(_forwardButton, RadioVaultIcons.Image(RadioVaultIcon.SkipForward, RadioVaultTheme.Accent, 42), "Forward 30 seconds", _session.SkipForward);
+        _backButton.TintColor = RadioVaultTheme.Accent;
+        _forwardButton.TintColor = RadioVaultTheme.Accent;
         _speedButton.TouchUpInside += (_, _) => _session.CycleSpeed();
         _speedButton.TitleLabel!.Font = UIFont.SystemFontOfSize(16, UIFontWeight.Semibold)!;
         _speedButton.SetTitleColor(RadioVaultTheme.Text, UIControlState.Normal);
@@ -234,10 +234,10 @@ public sealed class NowPlayingViewController : UIViewController
         if (!_isScrubbing) _progressSlider.Value = (float)_session.PlaybackProgress;
         _playButton.SetImage(
             _session.MiniPlayerShowsHandoff
-                ? RadioVaultIcons.Image(RadioVaultIcon.Handoff, size: 68, strokeWidth: 1.5)
-                : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play, size: 68, strokeWidth: 1.5f),
+                ? RadioVaultIcons.Image(RadioVaultIcon.Handoff, RadioVaultTheme.Accent, 68, 1.5)
+                : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play, RadioVaultTheme.Accent, 68, 1.5f),
             UIControlState.Normal);
-        _playButton.TintColor = RadioVaultTheme.Progress;
+        _playButton.TintColor = RadioVaultTheme.Accent;
         _backButton.Enabled = _session.CanControlPlayback;
         _playButton.Enabled = _session.MiniPlayerCanAct;
         _forwardButton.Enabled = _session.CanControlPlayback;

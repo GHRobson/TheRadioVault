@@ -82,6 +82,26 @@ internal sealed class MobileMetadataCache
         }
     }
 
+    public void ReplaceCompleteLibrary(
+        string serverInstanceId,
+        IReadOnlyList<WebClientLibraryBroadcastSummary> broadcasts,
+        WebClientLibraryOverview overview)
+    {
+        lock (_gate)
+        {
+            _snapshot = _snapshot with
+            {
+                ServerInstanceId = serverInstanceId,
+                Broadcasts = broadcasts
+                    .OrderByDescending(value => value.AirDate)
+                    .ThenByDescending(value => value.DateAdded)
+                    .ToArray(),
+                Overview = overview,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+        }
+    }
+
     public void SetExplore(
         MobileWikiOverview overview,
         IReadOnlyList<MobileWikiPageSummary> pages,

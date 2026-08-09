@@ -14,6 +14,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         => Session.LibraryCollectionsFor(_hideCompleted);
 
     public LibraryViewController(MobileClientSession session) : base(session) => Title = "Library";
+    protected override bool UsesInlinePageHeading => true;
 
     public override void ViewDidLoad()
     {

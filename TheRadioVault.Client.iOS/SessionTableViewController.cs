@@ -8,7 +8,7 @@ namespace TheRadioVault.Client.iOS;
 
 public abstract class SessionTableViewController : UITableViewController
 {
-    private const nint OfflineIndicatorTag = 8247;
+    private const nint ConnectionIndicatorTag = 8247;
     protected SessionTableViewController(MobileClientSession session)
         : base(UITableViewStyle.InsetGrouped)
     {
@@ -19,6 +19,7 @@ public abstract class SessionTableViewController : UITableViewController
     protected MobileClientSession Session { get; }
     protected virtual string? PageHeading => null;
     protected virtual string PageDescription => string.Empty;
+    protected virtual bool UsesInlinePageHeading => !string.IsNullOrWhiteSpace(PageHeading);
 
     public override void ViewDidLoad()
     {
@@ -34,7 +35,7 @@ public abstract class SessionTableViewController : UITableViewController
     public override void ViewWillAppear(bool animated)
     {
         base.ViewWillAppear(animated);
-        NavigationItem.Title = Title;
+        NavigationItem.Title = UsesInlinePageHeading ? string.Empty : Title;
         NavigationController?.SetNavigationBarHidden(false, animated);
         UpdateConnectionIndicator();
     }
@@ -115,21 +116,43 @@ public abstract class SessionTableViewController : UITableViewController
     private void UpdateConnectionIndicator()
     {
         var current = (NavigationItem.RightBarButtonItems ?? [])
-            .Where(item => item.Tag != OfflineIndicatorTag)
+            .Where(item => item.Tag != ConnectionIndicatorTag)
             .ToList();
-        if (Session.ShowsOfflineIndicator)
+        if (Session.ShowsSyncIndicator)
+        {
+            var syncing = new UIBarButtonItem(
+                RadioVaultIcons.Image(RadioVaultIcon.Sync, RadioVaultTheme.Progress),
+                UIBarButtonItemStyle.Plain,
+                (_, _) => PresentSyncExplanation())
+            {
+                Tag = ConnectionIndicatorTag,
+                AccessibilityLabel = "Syncing the saved Radio Vault catalogue"
+            };
+            current.Insert(0, syncing);
+        }
+        else if (Session.ShowsOfflineIndicator)
         {
             var offline = new UIBarButtonItem(
                 RadioVaultIcons.Image(RadioVaultIcon.Offline, RadioVaultTheme.Settings),
                 UIBarButtonItemStyle.Plain,
                 (_, _) => PresentOfflineExplanation())
             {
-                Tag = OfflineIndicatorTag,
+                Tag = ConnectionIndicatorTag,
                 AccessibilityLabel = "Offline · showing saved Radio Vault data"
             };
             current.Insert(0, offline);
         }
         NavigationItem.RightBarButtonItems = current.Count == 0 ? null : current.ToArray();
+    }
+
+    private void PresentSyncExplanation()
+    {
+        var alert = UIAlertController.Create(
+            "Syncing Radio Vault",
+            "This iPhone is updating its complete saved catalogue and Explore archive. You can continue using the app while it finishes.",
+            UIAlertControllerStyle.Alert);
+        alert.AddAction(UIAlertAction.Create("OK", UIAlertActionStyle.Default, null));
+        PresentViewController(alert, true, null);
     }
 
     private void PresentOfflineExplanation()

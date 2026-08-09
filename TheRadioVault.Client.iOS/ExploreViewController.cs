@@ -20,7 +20,6 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
     public ExploreViewController(MobileClientSession session) : base(session)
     {
         Title = "Explore";
-        NavigationItem.Title = "Explore";
     }
 
     private bool IsBrowseMode => _browseAll || !string.IsNullOrWhiteSpace(_searchController.SearchBar.Text);
@@ -210,8 +209,6 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
             _visiblePages = _dashboard.TimelinePages;
             _searchController.SearchBar.Text = string.Empty;
             _browseButton!.Title = "Dashboard";
-            Title = era.Label;
-            NavigationItem.Title = era.Label;
             TableView.ReloadData();
         }
     }
@@ -255,7 +252,6 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
     private void ShowDashboard()
     {
         Title = "Explore";
-        NavigationItem.Title = "Explore";
         _browseButton!.Title = "Browse All";
         _visiblePages = [];
         TableView.ReloadData();

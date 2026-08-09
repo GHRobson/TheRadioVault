@@ -51,7 +51,6 @@ public sealed class RadioVaultTabBarController : UITabBarController
     private static UINavigationController Wrap(UIViewController controller, string title, RadioVaultIcon icon, nint tag)
     {
         controller.Title = title;
-        controller.NavigationItem.Title = title;
         var tabColor = RadioVaultIcons.ColorFor(icon);
         var tabItem = new UITabBarItem(title, RadioVaultIcons.Image(icon), tag);
         tabItem.SetTitleTextAttributes(

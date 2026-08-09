@@ -1,4 +1,5 @@
 using CoreGraphics;
+using Foundation;
 using UIKit;
 
 namespace TheRadioVault.Client.iOS;
@@ -96,7 +97,8 @@ public enum RadioVaultIcon
     SkipBack,
     SkipForward,
     Moment,
-    Offline
+    Offline,
+    Sync
 }
 
 public static class RadioVaultIcons
@@ -116,7 +118,7 @@ public static class RadioVaultIcons
             context.SetLineCap(CGLineCap.Round);
             context.SetLineJoin(CGLineJoin.Round);
 
-            Draw(context, icon);
+            Draw(context, icon, color);
         });
         return image.ImageWithRenderingMode(UIImageRenderingMode.AlwaysOriginal);
     }
@@ -128,6 +130,7 @@ public static class RadioVaultIcons
         RadioVaultIcon.Favourite => RadioVaultTheme.Favourite,
         RadioVaultIcon.Knowledge => RadioVaultTheme.Wiki,
         RadioVaultIcon.Download or RadioVaultIcon.Settings or RadioVaultIcon.Remove or RadioVaultIcon.Offline => RadioVaultTheme.Settings,
+        RadioVaultIcon.Sync => RadioVaultTheme.Progress,
         RadioVaultIcon.Completed => RadioVaultTheme.Completed,
         RadioVaultIcon.Search => Color(0x78, 0xB6, 0xD8),
         _ => RadioVaultTheme.Accent
@@ -135,7 +138,7 @@ public static class RadioVaultIcons
 
     private static UIColor Color(byte red, byte green, byte blue) => UIColor.FromRGB(red, green, blue);
 
-    private static void Draw(CGContext context, RadioVaultIcon icon)
+    private static void Draw(CGContext context, RadioVaultIcon icon, UIColor color)
     {
         switch (icon)
         {
@@ -281,18 +284,10 @@ public static class RadioVaultIcons
                 Lines(context, (19, 5), (5, 19));
                 break;
             case RadioVaultIcon.SkipBack:
-                context.AddArc(12, 12, 8, (nfloat)(Math.PI * 0.2), (nfloat)(Math.PI * 1.75), true);
-                context.StrokePath();
-                Lines(context, (4, 7), (4, 13), (9, 10));
-                Lines(context, (10, 9), (12, 7), (12, 16));
-                Lines(context, (18, 8), (14.5, 8), (14.5, 12), (18, 12), (18, 16), (14.5, 16));
+                DrawSkip(context, color, "15", forward: false);
                 break;
             case RadioVaultIcon.SkipForward:
-                context.AddArc(12, 12, 8, (nfloat)(Math.PI * 0.8), (nfloat)(Math.PI * 1.25), false);
-                context.StrokePath();
-                Lines(context, (20, 7), (20, 13), (15, 10));
-                Lines(context, (7, 8), (10.5, 8), (10.5, 12), (7, 12), (7, 16), (10.5, 16));
-                context.StrokeEllipseInRect(new CGRect(13, 8, 4, 8));
+                DrawSkip(context, color, "30", forward: true);
                 break;
             case RadioVaultIcon.Moment:
                 Lines(context, (6, 3), (18, 3), (18, 21), (12, 17), (6, 21), (6, 3));
@@ -308,7 +303,42 @@ public static class RadioVaultIcons
                 context.StrokePath();
                 Lines(context, (4, 4), (20, 20));
                 break;
+            case RadioVaultIcon.Sync:
+                context.AddArc(12, 12, 8, (nfloat)(Math.PI * 1.08), (nfloat)(Math.PI * 1.92), false);
+                context.StrokePath();
+                Lines(context, (17.5, 4.8), (20.2, 5), (19.8, 7.7));
+                context.AddArc(12, 12, 8, (nfloat)(Math.PI * 0.08), (nfloat)(Math.PI * 0.92), false);
+                context.StrokePath();
+                Lines(context, (6.5, 19.2), (3.8, 19), (4.2, 16.3));
+                break;
         }
+    }
+
+    private static void DrawSkip(CGContext context, UIColor color, string seconds, bool forward)
+    {
+        if (forward)
+        {
+            context.AddArc(12, 12, 8.5f, (nfloat)(Math.PI * 0.72), (nfloat)(Math.PI * 2.08), false);
+            context.StrokePath();
+            Lines(context, (19.2, 4.2), (20.5, 8), (16.5, 7.2));
+        }
+        else
+        {
+            context.AddArc(12, 12, 8.5f, (nfloat)(Math.PI * 0.92), (nfloat)(Math.PI * 2.28), false);
+            context.StrokePath();
+            Lines(context, (4.8, 4.2), (3.5, 8), (7.5, 7.2));
+        }
+
+        using var label = new NSString(seconds);
+        var attributes = new UIStringAttributes
+        {
+            ForegroundColor = color,
+            Font = UIFont.BoldSystemFontOfSize(7.5f)
+        };
+        var measured = label.GetSizeUsingAttributes(attributes);
+        label.DrawString(
+            new CGPoint(12 - measured.Width / 2, 12 - measured.Height / 2),
+            attributes);
     }
 
     private static void RoundedRect(CGContext context, CGRect rect, double radius)

@@ -41,6 +41,7 @@ public sealed class MobileClientSession : IDisposable
     private bool _offlinePlayback;
     private bool _downloadPauseRequested;
     private bool _downloadCancelRequested;
+    private int _metadataSyncActivity;
     private bool _disposed;
 
     public MobileClientSession(
@@ -84,7 +85,9 @@ public sealed class MobileClientSession : IDisposable
     public bool IsBusy { get; private set; }
     public bool IsPaired { get; private set; }
     public bool IsLiveConnected => _server.IsReachable;
+    public bool IsMetadataSyncing => Volatile.Read(ref _metadataSyncActivity) > 0;
     public bool ShowsOfflineIndicator => IsPaired && !IsLiveConnected;
+    public bool ShowsSyncIndicator => IsPaired && IsLiveConnected && IsMetadataSyncing;
     public string StatusText { get; private set; } = "Pair this iPhone with your Radio Vault Server.";
     public string ServerName => _server.Connection?.ServerDisplayName ?? "No server paired";
     public string ServerAddress => _server.Connection is { } connection
@@ -166,10 +169,22 @@ public sealed class MobileClientSession : IDisposable
     {
         if (!IsPaired || IsBusy) return;
         SetBusy(true, $"Connecting to {ServerName}…");
+        BeginMetadataSync();
         try
         {
             var bootstrap = await _server.TestConnectionAsync().ConfigureAwait(false);
+            var overview = await _server.GetOverviewAsync().ConfigureAwait(false);
+            ApplyOnlineOverview(overview);
             await SynchronizeMetadataCacheAsync(forceExploreRefresh: true).ConfigureAwait(false);
+            if (_metadataCache.Snapshot.Broadcasts.Count == 0)
+            {
+                var completeLibrary = await FetchCompleteLibraryAsync().ConfigureAwait(false);
+                _metadataCache.ReplaceCompleteLibrary(bootstrap.Server.InstanceId, completeLibrary, overview);
+                await _metadataCache.SaveAsync().ConfigureAwait(false);
+                ApplyMetadataSnapshot();
+            }
+            if (_metadataCache.Snapshot.ExploreOverview is null)
+                await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
             DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
             await RefreshDownloadStorageAsync().ConfigureAwait(false);
             QueueItems = await _server.GetQueueAsync().ConfigureAwait(false);
@@ -185,7 +200,11 @@ public sealed class MobileClientSession : IDisposable
                 : "Could not reach the paired server: " + exception.Message;
             ApplyMetadataSnapshot();
         }
-        finally { SetBusy(false); }
+        finally
+        {
+            EndMetadataSync();
+            SetBusy(false);
+        }
     }
 
     public async Task SearchAsync(string searchText, bool hideCompleted = false)
@@ -1398,7 +1417,8 @@ public sealed class MobileClientSession : IDisposable
     private async Task SynchronizeMetadataCacheAsync(bool forceExploreRefresh = false)
     {
         if (_disposed || !IsPaired) return;
-        if (!await _metadataSyncGate.WaitAsync(0).ConfigureAwait(false)) return;
+        await _metadataSyncGate.WaitAsync().ConfigureAwait(false);
+        BeginMetadataSync();
         var warmExplore = false;
         try
         {
@@ -1464,6 +1484,7 @@ public sealed class MobileClientSession : IDisposable
         }
         finally
         {
+            EndMetadataSync();
             _metadataSyncGate.Release();
         }
         if (warmExplore) _ = RefreshExploreCacheAsync(warmEntireCache: true);
@@ -1549,6 +1570,30 @@ public sealed class MobileClientSession : IDisposable
         Notify();
     }
 
+    private void ApplyOnlineOverview(WebClientLibraryOverview overview)
+    {
+        TotalBroadcasts = overview.TotalBroadcasts;
+        CompletedBroadcasts = overview.CompletedBroadcasts;
+        InProgressBroadcasts = overview.InProgressBroadcasts;
+        FavouriteBroadcasts = overview.FavouriteBroadcasts;
+        LibraryCollections = overview.Collections;
+        _incompleteLibraryCollections = overview.Collections;
+        ContinueListening = Convert(overview.ContinueListening);
+        RecentBroadcasts = Convert(overview.RecentBroadcasts);
+        OnThisDay = Convert(overview.OnThisDay);
+        Notify();
+    }
+
+    private void BeginMetadataSync()
+    {
+        if (Interlocked.Increment(ref _metadataSyncActivity) == 1) Notify();
+    }
+
+    private void EndMetadataSync()
+    {
+        if (Interlocked.Decrement(ref _metadataSyncActivity) == 0) Notify();
+    }
+
     private IReadOnlyList<MobileBroadcastItem> QueryCachedBroadcasts(
         int? collectionId,
         string searchText,
@@ -1627,6 +1672,7 @@ public sealed class MobileClientSession : IDisposable
     {
         if (!IsPaired || !IsLiveConnected) return;
         await _exploreSyncGate.WaitAsync().ConfigureAwait(false);
+        BeginMetadataSync();
         try
         {
             var overview = await _server.GetWikiOverviewAsync().ConfigureAwait(false);
@@ -1674,6 +1720,7 @@ public sealed class MobileClientSession : IDisposable
         }
         finally
         {
+            EndMetadataSync();
             _exploreSyncGate.Release();
         }
     }
