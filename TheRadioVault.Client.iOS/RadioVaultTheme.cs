@@ -323,28 +323,32 @@ public static class RadioVaultIcons
     {
         if (forward)
         {
-            context.MoveTo(5, 9);
-            context.AddCurveToPoint(6, 3.5f, 17, 2.5f, 20, 8);
+            context.MoveTo(10, 3.5f);
+            context.AddCurveToPoint(5, 4.5f, 2.8f, 9.5f, 4.5f, 14.5f);
+            context.AddCurveToPoint(6, 19, 11, 21, 15.2f, 19);
+            context.AddCurveToPoint(18.7f, 17.3f, 20.5f, 12, 19, 8);
             context.StrokePath();
-            Lines(context, (15.5, 6), (20, 8), (18.2, 12.2));
+            Lines(context, (14, 7.4), (19, 8), (17.7, 3.2));
         }
         else
         {
-            context.MoveTo(19, 9);
-            context.AddCurveToPoint(18, 3.5f, 7, 2.5f, 4, 8);
+            context.MoveTo(14, 3.5f);
+            context.AddCurveToPoint(19, 4.5f, 21.2f, 9.5f, 19.5f, 14.5f);
+            context.AddCurveToPoint(18, 19, 13, 21, 8.8f, 19);
+            context.AddCurveToPoint(5.3f, 17.3f, 3.5f, 12, 5, 8);
             context.StrokePath();
-            Lines(context, (8.5, 6), (4, 8), (5.8, 12.2));
+            Lines(context, (10, 7.4), (5, 8), (6.3, 3.2));
         }
 
         using var label = new NSString(seconds);
         var attributes = new UIStringAttributes
         {
             ForegroundColor = color,
-            Font = UIFont.BoldSystemFontOfSize(9.5f)
+            Font = UIFont.BoldSystemFontOfSize(8.2f)
         };
         var measured = label.GetSizeUsingAttributes(attributes);
         label.DrawString(
-            new CGPoint(12 - measured.Width / 2, 10.5),
+            new CGPoint(12 - measured.Width / 2, 7.4),
             attributes);
     }
 
