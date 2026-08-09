@@ -1585,12 +1585,14 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(theme.Contains("RadioVaultIcon.Moment", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Offline", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Sync", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.InProgress", StringComparison.Ordinal));
     True(theme.Contains("DrawSkip", StringComparison.Ordinal));
-    True(theme.Contains("ArrowHead", StringComparison.Ordinal));
+    True(theme.Contains("DrawSync", StringComparison.Ordinal));
     True(theme.Contains("ConfigureWithTransparentBackground", StringComparison.Ordinal));
-    True(theme.Contains("Polygon(context, true, tip", StringComparison.Ordinal));
-    True(theme.Contains("Lines(context, (4, 6), (20, 6))", StringComparison.Ordinal));
-    True(theme.Contains("ArrowHead(context, (20, 6), (14, 1.5), (14, 10.5))", StringComparison.Ordinal));
+    True(!theme.Contains("ArrowHead", StringComparison.Ordinal));
+    True(theme.Contains("context.AddCurveToPoint(6, 3.5f, 17, 2.5f, 20, 8)", StringComparison.Ordinal));
+    True(theme.Contains("Lines(context, (15.5, 6), (20, 8), (18.2, 12.2))", StringComparison.Ordinal));
+    True(theme.Contains("Lines(context, (8.5, 18), (4, 16.5), (5.5, 12))", StringComparison.Ordinal));
     True(!theme.Contains("(14.5, 4.5), (18, 6), (16.5, 9.5)", StringComparison.Ordinal));
     True(!theme.Contains("(16, 7), (20, 8), (18.5, 11.8)", StringComparison.Ordinal));
     True(theme.Contains("(3, 10.5), (13, 10.5)", StringComparison.Ordinal));

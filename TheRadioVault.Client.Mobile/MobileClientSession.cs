@@ -155,6 +155,10 @@ public sealed class MobileClientSession : IDisposable
         ? $"{FormatTime(TimeSpan.FromMilliseconds(remote.Source.PositionMs))} / " +
           FormatTime(TimeSpan.FromMilliseconds(remote.Source.DurationMs))
         : PlaybackTime;
+    public string MiniPlayerElapsedTime => FormatTime(TimeSpan.FromMilliseconds(MiniPlayerPositionMs));
+    public string MiniPlayerRemainingTime => $"-{FormatTime(TimeSpan.FromMilliseconds(
+        Math.Max(0, MiniPlayerDurationMs - MiniPlayerPositionMs)))}";
+    public string MiniPlayerTotalTime => FormatTime(TimeSpan.FromMilliseconds(MiniPlayerDurationMs));
     public bool MiniPlayerCanAct => MiniPlayerShowsHandoff || CanControlPlayback;
     public MobileBroadcastItem? CurrentBroadcast => _remotePlaybackBroadcast ?? SelectedBroadcast;
 
@@ -1310,6 +1314,24 @@ public sealed class MobileClientSession : IDisposable
             }
             if (await StopForCommittedTransferAsync(session).ConfigureAwait(false)) return;
             if (IsBusy && !allowWhileBusy) return;
+            if (!_ownsPlayback)
+            {
+                // An open decoder is not authority to reclaim an idle shared
+                // session. This is especially important after a transfer away:
+                // the old phone output can remain prepared, but only a fresh user
+                // play/handoff action may make it owner again.
+                if (IsOwnedByThisDevice(session))
+                {
+                    _ownsPlayback = true;
+                }
+                else
+                {
+                    if (_playback.Current.IsPlaying) _playback.Pause();
+                    await ObserveSharedPlaybackAsync(session).ConfigureAwait(false);
+                    NotifyPlayback();
+                    return;
+                }
+            }
             if (HasActivePlayback(session) && !IsOwnedByThisDevice(session))
             {
                 if (!ConfirmForeignOwner(session)) return;
@@ -1576,6 +1598,12 @@ public sealed class MobileClientSession : IDisposable
 
     private static string OwnerName(WebPlaybackSession session)
         => string.IsNullOrWhiteSpace(session.Player.Device) ? session.OwnerDevice : session.Player.Device;
+
+    private long MiniPlayerPositionMs => _remotePlaybackBroadcast?.Source.PositionMs
+        ?? Math.Clamp(_logicalPositionMs, 0, Math.Max(0, _logicalDurationMs));
+
+    private long MiniPlayerDurationMs => _remotePlaybackBroadcast?.Source.DurationMs
+        ?? Math.Max(0, _logicalDurationMs);
 
     private static long ProjectPosition(WebPlaybackState state)
     {

@@ -9,7 +9,7 @@ public sealed class DownloadsViewController : SessionTableViewController
 {
     public DownloadsViewController(MobileClientSession session) : base(session) => Title = "Downloads";
     protected override string? PageHeading => "Downloads";
-    protected override string PageDescription => "Broadcasts saved on this iPhone for listening without streaming.";
+    protected override string PageDescription => "Saved for offline listening.";
 
     public override void ViewDidLoad()
     {

@@ -24,7 +24,7 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
 
     private bool IsBrowseMode => _browseAll || !string.IsNullOrWhiteSpace(_searchController.SearchBar.Text);
     protected override string? PageHeading => "Explore";
-    protected override string PageDescription => "People, shows, stories and moments connected directly to your broadcasts.";
+    protected override string PageDescription => "Stories behind your broadcasts.";
 
     public override void ViewDidLoad()
     {

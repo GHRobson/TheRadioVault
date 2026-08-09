@@ -8,11 +8,14 @@ namespace TheRadioVault.Client.iOS;
 
 public sealed class ShowLibraryViewController : SessionTableViewController, IUISearchBarDelegate
 {
+    private const string GridPreferenceKey = "radiovault.library.prefers-grid";
+    private const string GridPreferenceSetKey = "radiovault.library.view-choice-set";
     private enum ArchiveLevel { Years, Months, Broadcasts }
 
     private readonly int? _collectionId;
     private readonly string _rootTitle;
     private readonly string _filter;
+    private readonly bool _supportsViewModes;
     private readonly LibraryControlsHeaderView _header;
     private IReadOnlyList<MobileBroadcastItem> _broadcasts = [];
     private IReadOnlyList<WebClientLibraryArchivePeriodSummary> _periods = [];
@@ -36,10 +39,11 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
         _collectionId = collectionId;
         _rootTitle = title;
         _filter = filter;
-        _isGridView = filter.Equals("All", StringComparison.OrdinalIgnoreCase);
+        _supportsViewModes = filter.Equals("All", StringComparison.OrdinalIgnoreCase);
+        _isGridView = _supportsViewModes && PreferredGridMode();
         _header = new LibraryControlsHeaderView(
             includesPageHeading: false,
-            includesViewModes: _isGridView);
+            includesViewModes: _supportsViewModes);
         _hideCompleted = hideCompleted && !filter.Equals("Completed", StringComparison.OrdinalIgnoreCase);
         _level = _isGridView
             ? ArchiveLevel.Years
@@ -145,6 +149,11 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
     {
         if (!string.IsNullOrWhiteSpace(searchText) || string.IsNullOrWhiteSpace(_searchText)) return;
         _searchText = null;
+        _year = null;
+        _month = null;
+        _isGridView = _supportsViewModes && PreferredGridMode();
+        _level = _isGridView ? ArchiveLevel.Years : ArchiveLevel.Broadcasts;
+        UpdateNavigation();
         _ = LoadAsync();
     }
 
@@ -154,7 +163,7 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
         _searchText = null;
         _year = null;
         _month = null;
-        _isGridView = _filter.Equals("All", StringComparison.OrdinalIgnoreCase);
+        _isGridView = _supportsViewModes && PreferredGridMode();
         _level = _isGridView
             ? ArchiveLevel.Years
             : ArchiveLevel.Broadcasts;
@@ -212,9 +221,9 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
         _header.SetMode(_isGridView);
         NavigationItem.LeftBarButtonItem = _level switch
         {
-            ArchiveLevel.Months => new UIBarButtonItem("Years", UIBarButtonItemStyle.Plain, (_, _) => NavigateUp()),
+            ArchiveLevel.Months => CreateBackButton("Years"),
             ArchiveLevel.Broadcasts when _year.HasValue =>
-                new UIBarButtonItem("Months", UIBarButtonItemStyle.Plain, (_, _) => NavigateUp()),
+                CreateBackButton("Months"),
             _ => null
         };
     }
@@ -235,6 +244,8 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
         _header.SearchBar.Text = string.Empty;
         _searchText = null;
         _isGridView = true;
+        NSUserDefaults.StandardUserDefaults.SetBool(true, GridPreferenceKey);
+        NSUserDefaults.StandardUserDefaults.SetBool(true, GridPreferenceSetKey);
         _year = null;
         _month = null;
         _level = ArchiveLevel.Years;
@@ -245,6 +256,8 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
     private void ListButtonTapped(object? sender, EventArgs eventArgs)
     {
         _isGridView = false;
+        NSUserDefaults.StandardUserDefaults.SetBool(false, GridPreferenceKey);
+        NSUserDefaults.StandardUserDefaults.SetBool(true, GridPreferenceSetKey);
         _year = null;
         _month = null;
         _level = ArchiveLevel.Broadcasts;
@@ -256,6 +269,25 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
     {
         _header.CompletedButton.Enabled = !_filter.Equals("Completed", StringComparison.OrdinalIgnoreCase);
         _header.SetHideCompleted(_hideCompleted);
+    }
+
+    private static bool PreferredGridMode()
+    {
+        var defaults = NSUserDefaults.StandardUserDefaults;
+        return !defaults.BoolForKey(GridPreferenceSetKey) || defaults.BoolForKey(GridPreferenceKey);
+    }
+
+    private UIBarButtonItem CreateBackButton(string title)
+    {
+        var button = UIButton.FromType(UIButtonType.System);
+        button.SetImage(RadioVaultIcons.Image(RadioVaultIcon.Back, RadioVaultTheme.Accent, 18), UIControlState.Normal);
+        button.SetTitle($" {title}", UIControlState.Normal);
+        button.SetTitleColor(RadioVaultTheme.Accent, UIControlState.Normal);
+        button.TitleLabel!.Font = UIFont.SystemFontOfSize(16, UIFontWeight.Medium)!;
+        button.AccessibilityLabel = $"Back to {title}";
+        button.TouchUpInside += (_, _) => NavigateUp();
+        button.SizeToFit();
+        return new UIBarButtonItem(button);
     }
 
     private async Task LoadAsync(string? searchText = null)

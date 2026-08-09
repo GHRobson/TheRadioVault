@@ -37,7 +37,7 @@ public sealed class HomeViewController : SessionTableViewController
         }
     }
     protected override string? PageHeading => "Dashboard";
-    protected override string PageDescription => "Continue listening, rediscover the archive, or choose something unexpected.";
+    protected override string PageDescription => "Your archive at a glance.";
 
     public override void ViewDidLoad()
     {
@@ -70,8 +70,8 @@ public sealed class HomeViewController : SessionTableViewController
     public override string? TitleForHeader(UITableView tableView, nint section) => section switch
     {
         0 => "Your Library",
-        1 => "Continue listening",
-        2 => "Not sure what to play?",
+        1 => "Not sure what to play?",
+        2 => "Continue listening",
         3 => "Up next",
         4 => "On this day",
         5 => "Recently added",
@@ -81,8 +81,8 @@ public sealed class HomeViewController : SessionTableViewController
 
     public override string? TitleForFooter(UITableView tableView, nint section) => section switch
     {
-        1 when FeaturedContinue is null => "Choose something from the Library or let Radio Vault pick for you.",
-        2 => "Choose a random unheard broadcast.",
+        1 => "Choose a random unheard broadcast.",
+        2 when FeaturedContinue is null => "Choose something from the Library or let Radio Vault pick for you.",
         _ => null
     };
 
@@ -94,7 +94,7 @@ public sealed class HomeViewController : SessionTableViewController
             stats.ConfigureInteractive(
                 ("Broadcasts", Session.TotalBroadcasts, RadioVaultIcon.Library,
                     () => OpenLibrarySection("All Broadcasts", "All")),
-                ("In progress", Session.InProgressBroadcasts, RadioVaultIcon.Play,
+                ("In progress", Session.InProgressBroadcasts, RadioVaultIcon.InProgress,
                     () => OpenLibrarySection("Continue Listening", "ContinueListening")),
                 ("Completed", Session.CompletedBroadcasts, RadioVaultIcon.Completed,
                     () => OpenLibrarySection("Completed", "Completed")),
@@ -104,20 +104,6 @@ public sealed class HomeViewController : SessionTableViewController
         }
 
         if (indexPath.Section == 1)
-        {
-            if (FeaturedContinue is not { } featured)
-                return DetailCell("dashboard-featured-empty", "Nothing waiting to resume", Session.StatusText);
-            var cell = new DashboardContinueCell();
-            cell.Configure(
-                Session,
-                featured,
-                Session.PreparingPlaybackEpisodeId == featured.EpisodeId,
-                Session.IsPlayingBroadcast(featured.EpisodeId),
-                () => HandleFeaturedPlayback(featured));
-            return cell;
-        }
-
-        if (indexPath.Section == 2)
         {
             var cell = new UITableViewCell(UITableViewCellStyle.Default, "dashboard-surprise");
             var content = cell.DefaultContentConfiguration;
@@ -129,6 +115,20 @@ public sealed class HomeViewController : SessionTableViewController
             cell.SelectionStyle = Session.UnheardBroadcasts.Count == 0
                 ? UITableViewCellSelectionStyle.None
                 : UITableViewCellSelectionStyle.Default;
+            return cell;
+        }
+
+        if (indexPath.Section == 2)
+        {
+            if (FeaturedContinue is not { } featured)
+                return DetailCell("dashboard-featured-empty", "Nothing waiting to resume", Session.StatusText);
+            var cell = new DashboardContinueCell();
+            cell.Configure(
+                Session,
+                featured,
+                Session.PreparingPlaybackEpisodeId == featured.EpisodeId,
+                Session.IsPlayingBroadcast(featured.EpisodeId),
+                () => HandleFeaturedPlayback(featured));
             return cell;
         }
 
@@ -157,15 +157,15 @@ public sealed class HomeViewController : SessionTableViewController
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (indexPath.Section == 1 && FeaturedContinue is { } featured)
-        {
-            HandleFeaturedPlayback(featured);
-            return;
-        }
-        if (indexPath.Section == 2)
+        if (indexPath.Section == 1)
         {
             var pool = Session.UnheardBroadcasts;
             if (pool.Count > 0) _ = Session.PlayAsync(pool[Random.Shared.Next(pool.Count)]);
+            return;
+        }
+        if (indexPath.Section == 2 && FeaturedContinue is { } featured)
+        {
+            HandleFeaturedPlayback(featured);
             return;
         }
         if (indexPath.Section < 3) return;
@@ -177,7 +177,7 @@ public sealed class HomeViewController : SessionTableViewController
 
     protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
     {
-        if (indexPath.Section == 1) return FeaturedContinue;
+        if (indexPath.Section == 2) return FeaturedContinue;
         if (indexPath.Section < 3) return null;
         var values = ValuesForSection(indexPath.Section);
         return indexPath.Row < values.Count ? values[indexPath.Row] : null;

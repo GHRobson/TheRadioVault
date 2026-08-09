@@ -8,7 +8,7 @@ namespace TheRadioVault.Client.iOS;
 public sealed class ServerViewController : SessionTableViewController
 {
     protected override string? PageHeading => "Settings";
-    protected override string PageDescription => "Connection, downloads and Radio Vault preferences.";
+    protected override string PageDescription => "Connection, downloads and preferences.";
     private readonly UISwitch _wifiOnlySwitch = new();
     private readonly UITextField _codeField = new()
     {

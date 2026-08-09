@@ -9,7 +9,9 @@ public sealed class NowPlayingViewController : UIViewController
     private readonly UILabel _titleLabel = new();
     private readonly UILabel _subtitleLabel = new();
     private readonly UILabel _statusLabel = new();
-    private readonly UILabel _timeLabel = new();
+    private readonly UILabel _elapsedLabel = new();
+    private readonly UILabel _remainingLabel = new();
+    private readonly UILabel _totalLabel = new();
     private readonly UIView _artworkPanel = new();
     private readonly UIImageView _artworkIcon = new();
     private readonly UISlider _progressSlider = new();
@@ -83,9 +85,9 @@ public sealed class NowPlayingViewController : UIViewController
         _statusLabel.TextColor = RadioVaultTheme.MutedText;
         _statusLabel.Lines = 0;
         _statusLabel.TextAlignment = UITextAlignment.Center;
-        _timeLabel.Font = UIFont.MonospacedDigitSystemFontOfSize(13, UIFontWeight.Regular)!;
-        _timeLabel.TextAlignment = UITextAlignment.Center;
-        _timeLabel.TextColor = RadioVaultTheme.MutedText;
+        ConfigureTimeLabel(_elapsedLabel, UITextAlignment.Left);
+        ConfigureTimeLabel(_remainingLabel, UITextAlignment.Center);
+        ConfigureTimeLabel(_totalLabel, UITextAlignment.Right);
 
         _progressSlider.MinValue = 0;
         _progressSlider.MaxValue = 1;
@@ -129,7 +131,13 @@ public sealed class NowPlayingViewController : UIViewController
             Distribution = UIStackViewDistribution.Fill,
             Spacing = 6
         };
-        var progress = new UIStackView([_progressSlider, _timeLabel])
+        var times = new UIStackView([_elapsedLabel, _remainingLabel, _totalLabel])
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Alignment = UIStackViewAlignment.Fill,
+            Distribution = UIStackViewDistribution.FillEqually
+        };
+        var progress = new UIStackView([_progressSlider, times])
         {
             Axis = UILayoutConstraintAxis.Vertical,
             Alignment = UIStackViewAlignment.Fill,
@@ -186,6 +194,15 @@ public sealed class NowPlayingViewController : UIViewController
         button.SetImage(image, UIControlState.Normal);
         button.AccessibilityLabel = accessibilityLabel;
         button.TouchUpInside += (_, _) => action();
+    }
+
+    private static void ConfigureTimeLabel(UILabel label, UITextAlignment alignment)
+    {
+        label.Font = UIFont.MonospacedDigitSystemFontOfSize(11, UIFontWeight.Medium)!;
+        label.TextAlignment = alignment;
+        label.TextColor = RadioVaultTheme.MutedText;
+        label.AdjustsFontSizeToFitWidth = true;
+        label.MinimumScaleFactor = 0.75f;
     }
 
     private static void ConfigureActionButton(
@@ -252,7 +269,10 @@ public sealed class NowPlayingViewController : UIViewController
         _statusLabel.Text = _session.MiniPlayerShowsHandoff
             ? $"Tap the large Radio Vault hand-off button to move playback from {_session.MiniPlayerSubtitle.Replace("Playing on ", string.Empty, StringComparison.Ordinal)} to this iPhone."
             : _session.PlaybackStatus;
-        _timeLabel.Text = _session.MiniPlayerTime;
+        _elapsedLabel.Text = $"Elapsed  {_session.MiniPlayerElapsedTime}";
+        _remainingLabel.Text = $"Remaining  {_session.MiniPlayerRemainingTime}";
+        _totalLabel.Text = $"Total  {_session.MiniPlayerTotalTime}";
+        _progressSlider.AccessibilityValue = _session.MiniPlayerTime;
         if (!_isScrubbing) _progressSlider.Value = (float)_session.MiniPlayerProgress;
         var loading = _session.IsPreparingPlayback;
         if (loading) _playActivity.StartAnimating(); else _playActivity.StopAnimating();

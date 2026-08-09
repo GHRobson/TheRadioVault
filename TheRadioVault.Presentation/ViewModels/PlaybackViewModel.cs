@@ -72,6 +72,10 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     private long _lastResolveDurationMs;
     private long _lastDecoderOpenDurationMs;
     private long _lastStartupDurationMs;
+    private long? _remoteProjectionEpisodeId;
+    private long _remoteProjectionGeneration = -1;
+    private string _remoteProjectionOwnerId = string.Empty;
+    private long _remoteProjectionPositionMs;
     private bool _disposed;
 
     public PlaybackViewModel(
@@ -1823,6 +1827,25 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     private void ApplyProjectedRemoteState(PlaybackDeviceState active)
     {
         var projectedPosition = active.ProjectedPositionMs(DateTimeOffset.UtcNow);
+        var snapshot = _handoffSnapshot;
+        var sameRemoteRun = active.IsPlaying &&
+            active.RepresentativeEpisodeId == _remoteProjectionEpisodeId &&
+            snapshot?.Generation == _remoteProjectionGeneration &&
+            string.Equals(snapshot.OwnerDeviceId, _remoteProjectionOwnerId, StringComparison.Ordinal);
+
+        // Network heartbeats arrive around once a second and may be a few hundred
+        // milliseconds behind the locally projected sample. Keep the remote Mac
+        // playhead monotonic within one ownership generation so it does not visibly
+        // twitch backwards while an iPhone is playing. A larger backwards movement
+        // is treated as an intentional remote seek; a new handoff or broadcast also
+        // establishes a fresh projection baseline.
+        if (sameRemoteRun && projectedPosition >= _remoteProjectionPositionMs - 3_000)
+            projectedPosition = Math.Max(projectedPosition, _remoteProjectionPositionMs);
+
+        _remoteProjectionEpisodeId = active.RepresentativeEpisodeId;
+        _remoteProjectionGeneration = snapshot?.Generation ?? -1;
+        _remoteProjectionOwnerId = snapshot?.OwnerDeviceId ?? string.Empty;
+        _remoteProjectionPositionMs = projectedPosition;
         PositionMs = projectedPosition;
         if (active.DurationMs > 0) DurationMs = active.DurationMs;
         if (Math.Abs(Speed - active.Speed) >= 0.001d) Speed = active.Speed;

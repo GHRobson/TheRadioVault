@@ -97,7 +97,7 @@ internal sealed class LibraryControlsHeaderView : UIView
             };
             var subtitle = new UILabel
             {
-                Text = "Search, browse and rediscover every show in your archive.",
+                Text = "Search and browse your archive.",
                 Font = UIFont.SystemFontOfSize(13)!,
                 TextColor = RadioVaultTheme.MutedText,
                 Lines = 0

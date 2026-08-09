@@ -84,6 +84,7 @@ public enum RadioVaultIcon
     Download,
     Settings,
     Completed,
+    InProgress,
     UpNext,
     Radio,
     Handoff,
@@ -93,6 +94,7 @@ public enum RadioVaultIcon
     Queue,
     Remove,
     Info,
+    Back,
     Close,
     SkipBack,
     SkipForward,
@@ -132,6 +134,7 @@ public static class RadioVaultIcons
         RadioVaultIcon.Download or RadioVaultIcon.Settings or RadioVaultIcon.Remove or RadioVaultIcon.Offline => RadioVaultTheme.Settings,
         RadioVaultIcon.Sync => RadioVaultTheme.Progress,
         RadioVaultIcon.Completed => RadioVaultTheme.Completed,
+        RadioVaultIcon.InProgress => RadioVaultTheme.Progress,
         RadioVaultIcon.Search => Color(0x78, 0xB6, 0xD8),
         _ => RadioVaultTheme.Accent
     };
@@ -207,6 +210,10 @@ public static class RadioVaultIcons
             case RadioVaultIcon.Completed:
                 Lines(context, (3, 13), (9, 19), (21, 6));
                 break;
+            case RadioVaultIcon.InProgress:
+                context.StrokeEllipseInRect(new CGRect(3, 3, 18, 18));
+                Lines(context, (12, 7), (12, 12), (16, 14));
+                break;
             case RadioVaultIcon.UpNext:
                 Lines(context, (4, 7), (15, 7));
                 Lines(context, (4, 12), (15, 12));
@@ -279,6 +286,9 @@ public static class RadioVaultIcons
                 context.FillEllipseInRect(new CGRect(11, 7, 2, 2));
                 Lines(context, (12, 11), (12, 17));
                 break;
+            case RadioVaultIcon.Back:
+                Lines(context, (15.5, 5), (8.5, 12), (15.5, 19));
+                break;
             case RadioVaultIcon.Close:
                 Lines(context, (5, 5), (19, 19));
                 Lines(context, (19, 5), (5, 19));
@@ -304,10 +314,7 @@ public static class RadioVaultIcons
                 Lines(context, (4, 4), (20, 20));
                 break;
             case RadioVaultIcon.Sync:
-                Lines(context, (4, 7), (20, 7));
-                ArrowHead(context, (20, 7), (15, 3), (15, 11));
-                Lines(context, (20, 17), (4, 17));
-                ArrowHead(context, (4, 17), (9, 13), (9, 21));
+                DrawSync(context);
                 break;
         }
     }
@@ -316,33 +323,43 @@ public static class RadioVaultIcons
     {
         if (forward)
         {
-            Lines(context, (4, 6), (20, 6));
-            ArrowHead(context, (20, 6), (14, 1.5), (14, 10.5));
+            context.MoveTo(5, 9);
+            context.AddCurveToPoint(6, 3.5f, 17, 2.5f, 20, 8);
+            context.StrokePath();
+            Lines(context, (15.5, 6), (20, 8), (18.2, 12.2));
         }
         else
         {
-            Lines(context, (20, 6), (4, 6));
-            ArrowHead(context, (4, 6), (10, 1.5), (10, 10.5));
+            context.MoveTo(19, 9);
+            context.AddCurveToPoint(18, 3.5f, 7, 2.5f, 4, 8);
+            context.StrokePath();
+            Lines(context, (8.5, 6), (4, 8), (5.8, 12.2));
         }
 
         using var label = new NSString(seconds);
         var attributes = new UIStringAttributes
         {
             ForegroundColor = color,
-            Font = UIFont.BoldSystemFontOfSize(8.5f)
+            Font = UIFont.BoldSystemFontOfSize(9.5f)
         };
         var measured = label.GetSizeUsingAttributes(attributes);
         label.DrawString(
-            new CGPoint(12 - measured.Width / 2, 13),
+            new CGPoint(12 - measured.Width / 2, 10.5),
             attributes);
     }
 
-    private static void ArrowHead(
-        CGContext context,
-        (double X, double Y) tip,
-        (double X, double Y) firstBase,
-        (double X, double Y) secondBase)
-        => Polygon(context, true, tip, firstBase, secondBase);
+    private static void DrawSync(CGContext context)
+    {
+        context.MoveTo(4, 10);
+        context.AddCurveToPoint(5.5f, 4, 15.5f, 2.8f, 20, 7.5f);
+        context.StrokePath();
+        Lines(context, (15.5, 6), (20, 7.5), (18.5, 12));
+
+        context.MoveTo(20, 14);
+        context.AddCurveToPoint(18.5f, 20, 8.5f, 21.2f, 4, 16.5f);
+        context.StrokePath();
+        Lines(context, (8.5, 18), (4, 16.5), (5.5, 12));
+    }
 
     private static void RoundedRect(CGContext context, CGRect rect, double radius)
     {

@@ -76,7 +76,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
             {
                 ("Up Next", $"{Session.QueueItems.Count:N0} queued", RadioVaultIcon.UpNext),
                 ("Favourites", $"{Session.FavouriteBroadcasts:N0} broadcasts", RadioVaultIcon.Favourite),
-                ("Continue Listening", $"{Session.InProgressBroadcasts:N0} broadcasts", RadioVaultIcon.Play),
+                ("Continue Listening", $"{Session.InProgressBroadcasts:N0} broadcasts", RadioVaultIcon.InProgress),
                 ("Recently Added", "Newest broadcasts", RadioVaultIcon.Download),
                 ("Unplayed", $"{unplayed:N0} broadcasts", RadioVaultIcon.Radio),
                 ("Completed", $"{Session.CompletedBroadcasts:N0} broadcasts", RadioVaultIcon.Completed)
