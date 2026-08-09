@@ -83,11 +83,14 @@ internal sealed class IosMediaResourceLoader : AVAssetResourceLoaderDelegate
                 loadingRequest.FinishLoading();
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested || loadingRequest.IsCancelled) { }
-        catch
+        catch (Exception exception)
         {
             if (!loadingRequest.IsCancelled)
             {
-                using var error = NSError.FromDomain(ErrorDomain, -1);
+                using var description = new NSString(exception.Message);
+                using var descriptionKey = new NSString("NSLocalizedDescription");
+                using var details = NSDictionary.FromObjectAndKey(description, descriptionKey);
+                using var error = NSError.FromDomain(ErrorDomain, -1, details);
                 loadingRequest.FinishLoadingWithError(error);
             }
         }
