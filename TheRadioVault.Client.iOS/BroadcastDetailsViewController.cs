@@ -70,21 +70,23 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
             var content = cell.DefaultContentConfiguration;
             (content.Text, content.Image) = indexPath.Row switch
             {
-                0 => (_broadcast.HasProgress ? "Resume" : "Play", UIImage.GetSystemImage("play.fill")),
+                0 => (_broadcast.HasProgress ? "Resume" : "Play", RadioVaultIcons.Image(RadioVaultIcon.Play)),
                 1 => (_broadcast.Source.Favourite ? "Remove from Favourites" : "Add to Favourites",
-                    UIImage.GetSystemImage(_broadcast.Source.Favourite ? "heart.fill" : "heart")),
-                2 => ("Play Next", UIImage.GetSystemImage("text.line.first.and.arrowtriangle.forward")),
-                3 => ("Play Last", UIImage.GetSystemImage("text.badge.plus")),
+                    RadioVaultIcons.Image(RadioVaultIcon.Favourite)),
+                2 => ("Play Next", RadioVaultIcons.Image(RadioVaultIcon.UpNext)),
+                3 => ("Play Last", RadioVaultIcons.Image(RadioVaultIcon.UpNext, RadioVaultTheme.MutedText)),
                 _ when Session.IsDownloading && Session.ActiveDownloadEpisodeId == _broadcast.EpisodeId
-                    => ("Downloading…", UIImage.GetSystemImage("arrow.down.circle")),
+                    => ("Downloading…", RadioVaultIcons.Image(RadioVaultIcon.Download)),
                 _ when Session.IsDownloadPaused && Session.ActiveDownloadEpisodeId == _broadcast.EpisodeId
                     => ("Resume Download", UIImage.GetSystemImage("arrow.clockwise.circle")),
                 _ when _isDownloaded => ("Remove Download", UIImage.GetSystemImage("trash")),
-                _ => ("Download to this iPhone", UIImage.GetSystemImage("arrow.down.circle"))
+                _ => ("Download to this iPhone", RadioVaultIcons.Image(RadioVaultIcon.Download))
             };
             content.TextProperties.Color = indexPath.Row == 4 && _isDownloaded
-                ? UIColor.SystemRed
-                : UIColor.SystemBlue;
+                ? RadioVaultTheme.Danger
+                : RadioVaultTheme.Accent;
+            content.SecondaryTextProperties.Color = RadioVaultTheme.MutedText;
+            cell.BackgroundColor = RadioVaultTheme.Surface;
             cell.ContentConfiguration = content;
             cell.SelectionStyle = Session.IsBusy || Session.IsDownloading
                 ? UITableViewCellSelectionStyle.None
@@ -231,7 +233,8 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         var content = cell.DefaultContentConfiguration;
         content.Text = text;
         content.TextProperties.NumberOfLines = 0;
-        content.TextProperties.Color = UIColor.SecondaryLabel;
+        content.TextProperties.Color = RadioVaultTheme.MutedText;
+        cell.BackgroundColor = RadioVaultTheme.Surface;
         cell.ContentConfiguration = content;
         cell.SelectionStyle = UITableViewCellSelectionStyle.None;
         return cell;

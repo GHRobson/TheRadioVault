@@ -9,7 +9,11 @@ public sealed class AppDelegate : UIResponder, IUIApplicationDelegate
 #pragma warning restore CA1711
 {
     [Export("application:didFinishLaunchingWithOptions:")]
-    public bool FinishedLaunching(UIApplication application, NSDictionary? launchOptions) => true;
+    public bool FinishedLaunching(UIApplication application, NSDictionary? launchOptions)
+    {
+        RadioVaultTheme.ApplyGlobalAppearance();
+        return true;
+    }
 
     [Export("application:configurationForConnectingSceneSession:options:")]
     public UISceneConfiguration GetConfiguration(

@@ -7,6 +7,7 @@ namespace TheRadioVault.Client.iOS;
 public sealed class LibraryViewController : SessionTableViewController, IUISearchResultsUpdating, IUISearchBarDelegate
 {
     private UISearchController? _searchController;
+    private bool _hideCompleted;
     private bool IsShowingSearchResults => !string.IsNullOrWhiteSpace(_searchController?.SearchBar.Text);
 
     public LibraryViewController(MobileClientSession session) : base(session) => Title = "Library";
@@ -24,11 +25,16 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         _searchController.SearchBar.Delegate = this;
         NavigationItem.SearchController = _searchController;
         NavigationItem.HidesSearchBarWhenScrolling = false;
+        NavigationItem.RightBarButtonItem = new UIBarButtonItem(
+            RadioVaultIcons.Image(RadioVaultIcon.Completed),
+            UIBarButtonItemStyle.Plain,
+            (_, _) => ToggleHideCompleted());
+        UpdateHideCompletedButton();
         DefinesPresentationContext = true;
         RefreshControl = new UIRefreshControl();
         RefreshControl.ValueChanged += async (_, _) =>
         {
-            await Session.SearchAsync(_searchController?.SearchBar.Text ?? string.Empty);
+            await Session.SearchAsync(_searchController?.SearchBar.Text ?? string.Empty, _hideCompleted);
             BeginInvokeOnMainThread(() => RefreshControl?.EndRefreshing());
         };
     }
@@ -71,20 +77,20 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
             var unplayed = Math.Max(0, Session.TotalBroadcasts - Session.CompletedBroadcasts - Session.InProgressBroadcasts);
             var values = new[]
             {
-                ("Up Next", $"{Session.QueueItems.Count:N0} queued", "text.line.first.and.arrowtriangle.forward"),
-                ("Favourites", $"{Session.FavouriteBroadcasts:N0} broadcasts", "heart.fill"),
-                ("Continue Listening", $"{Session.InProgressBroadcasts:N0} broadcasts", "play.circle"),
-                ("Recently Added", "Newest broadcasts", "clock"),
-                ("Unplayed", $"{unplayed:N0} broadcasts", "circle"),
-                ("Completed", $"{Session.CompletedBroadcasts:N0} broadcasts", "checkmark.circle")
+                ("Up Next", $"{Session.QueueItems.Count:N0} queued", RadioVaultIcon.UpNext),
+                ("Favourites", $"{Session.FavouriteBroadcasts:N0} broadcasts", RadioVaultIcon.Favourite),
+                ("Continue Listening", $"{Session.InProgressBroadcasts:N0} broadcasts", RadioVaultIcon.Play),
+                ("Recently Added", "Newest broadcasts", RadioVaultIcon.Download),
+                ("Unplayed", $"{unplayed:N0} broadcasts", RadioVaultIcon.Radio),
+                ("Completed", $"{Session.CompletedBroadcasts:N0} broadcasts", RadioVaultIcon.Completed)
             };
             var value = values[indexPath.Row];
             var smart = new UITableViewCell(UITableViewCellStyle.Default, "smart-library");
             var content = smart.DefaultContentConfiguration;
             content.Text = value.Item1;
             content.SecondaryText = value.Item2;
-            content.Image = UIImage.GetSystemImage(value.Item3);
-            smart.ContentConfiguration = content;
+            content.Image = RadioVaultIcons.Image(value.Item3);
+            RadioVaultTheme.StyleCell(smart, content);
             smart.Accessory = UITableViewCellAccessory.DisclosureIndicator;
             return smart;
         }
@@ -132,14 +138,14 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
             };
             var filter = filters[indexPath.Row - 1];
             NavigationController?.PushViewController(
-                new ShowLibraryViewController(Session, null, filter.Item2, filter.Item1), true);
+                new ShowLibraryViewController(Session, null, filter.Item2, filter.Item1, _hideCompleted), true);
             return;
         }
 
         if (indexPath.Section == 1)
         {
             NavigationController?.PushViewController(
-                new ShowLibraryViewController(Session, null, "All Broadcasts"), true);
+                new ShowLibraryViewController(Session, null, "All Broadcasts", hideCompleted: _hideCompleted), true);
             return;
         }
 
@@ -147,7 +153,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         {
             var show = Session.LibraryCollections[indexPath.Row];
             NavigationController?.PushViewController(
-                new ShowLibraryViewController(Session, show.CollectionId, show.CollectionName), true);
+                new ShowLibraryViewController(Session, show.CollectionId, show.CollectionName, hideCompleted: _hideCompleted), true);
         }
     }
 
@@ -157,11 +163,32 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
     public void SearchButtonClicked(UISearchBar searchBar)
     {
         searchBar.ResignFirstResponder();
-        _ = Session.SearchAsync(searchBar.Text ?? string.Empty);
+        _ = Session.SearchAsync(searchBar.Text ?? string.Empty, _hideCompleted);
     }
 
     [Export("searchBarCancelButtonClicked:")]
-    public void CancelButtonClicked(UISearchBar searchBar) => _ = Session.SearchAsync(string.Empty);
+    public void CancelButtonClicked(UISearchBar searchBar) => _ = Session.SearchAsync(string.Empty, _hideCompleted);
+
+    private void ToggleHideCompleted()
+    {
+        _hideCompleted = !_hideCompleted;
+        UpdateHideCompletedButton();
+        if (IsShowingSearchResults)
+            _ = Session.SearchAsync(_searchController?.SearchBar.Text ?? string.Empty, _hideCompleted);
+        else
+            TableView.ReloadData();
+    }
+
+    private void UpdateHideCompletedButton()
+    {
+        var button = NavigationItem.RightBarButtonItem;
+        if (button is null) return;
+        button.Image = RadioVaultIcons.Image(
+            RadioVaultIcon.Completed,
+            _hideCompleted ? RadioVaultTheme.Accent : RadioVaultTheme.MutedText);
+        button.AccessibilityLabel = _hideCompleted ? "Show completed broadcasts" : "Hide completed broadcasts";
+        button.AccessibilityValue = _hideCompleted ? "Completed broadcasts hidden" : "Completed broadcasts shown";
+    }
 
     protected override void Dispose(bool disposing)
     {

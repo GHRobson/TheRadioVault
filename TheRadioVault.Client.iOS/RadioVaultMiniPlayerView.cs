@@ -15,16 +15,19 @@ public sealed class RadioVaultMiniPlayerView : UIView
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
         TranslatesAutoresizingMaskIntoConstraints = false;
-        BackgroundColor = UIColor.SecondarySystemBackground;
+        BackgroundColor = RadioVaultTheme.SurfaceRaised;
+        Layer.BorderColor = RadioVaultTheme.Border.CGColor;
+        Layer.BorderWidth = 1;
         Layer.CornerRadius = 12;
         Layer.MasksToBounds = true;
         AccessibilityTraits = UIAccessibilityTrait.Button;
 
         _titleLabel.Font = (UIFont.PreferredSubheadline ?? UIFont.SystemFontOfSize(15, UIFontWeight.Semibold))!;
+        _titleLabel.TextColor = RadioVaultTheme.Text;
         _titleLabel.Lines = 1;
         _titleLabel.LineBreakMode = UILineBreakMode.TailTruncation;
         _subtitleLabel.Font = (UIFont.PreferredCaption1 ?? UIFont.SystemFontOfSize(12))!;
-        _subtitleLabel.TextColor = UIColor.SecondaryLabel;
+        _subtitleLabel.TextColor = RadioVaultTheme.MutedText;
         _subtitleLabel.Lines = 1;
         _subtitleLabel.LineBreakMode = UILineBreakMode.TailTruncation;
         _actionButton.TouchUpInside += (_, _) => _session.MiniPlayerAction();
@@ -77,10 +80,12 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _titleLabel.Text = _session.MiniPlayerTitle;
         _subtitleLabel.Text = _session.MiniPlayerSubtitle;
         _progress.Progress = (float)_session.MiniPlayerProgress;
-        var symbol = _session.MiniPlayerShowsHandoff
-            ? "airplayaudio"
-            : _session.IsPlaying ? "pause.fill" : "play.fill";
-        _actionButton.SetImage(UIImage.GetSystemImage(symbol), UIControlState.Normal);
+        _actionButton.SetImage(
+            _session.MiniPlayerShowsHandoff
+                ? RadioVaultIcons.Image(RadioVaultIcon.Handoff)
+                : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play),
+            UIControlState.Normal);
+        _actionButton.TintColor = RadioVaultTheme.Progress;
         _actionButton.Enabled = _session.MiniPlayerCanAct;
         _actionButton.AccessibilityLabel = _session.MiniPlayerShowsHandoff
             ? "Move playback to this iPhone"

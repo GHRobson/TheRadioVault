@@ -31,21 +31,18 @@ public sealed class NowPlayingViewController : UIViewController
     {
         base.ViewDidLoad();
         if (View is not { } view) return;
-        view.BackgroundColor = UIColor.SystemBackground;
+        view.BackgroundColor = RadioVaultTheme.Background;
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
         NavigationItem.LeftBarButtonItem = new UIBarButtonItem(
-            UIImage.GetSystemImage("list.bullet")!,
+            RadioVaultIcons.Image(RadioVaultIcon.UpNext),
             UIBarButtonItemStyle.Plain,
             (_, _) => NavigationController?.PushViewController(new UpNextViewController(_session), true));
         NavigationItem.LeftBarButtonItem.AccessibilityLabel = "Up Next";
 
-        _artworkPanel.BackgroundColor = UIColor.SecondarySystemBackground;
+        _artworkPanel.BackgroundColor = RadioVaultTheme.Surface;
         _artworkPanel.Layer.CornerRadius = 24;
         _artworkPanel.Layer.MasksToBounds = true;
-        _artworkIcon.Image = UIImage.GetSystemImage(
-            "radio.fill",
-            UIImageSymbolConfiguration.Create(82, UIImageSymbolWeight.Regular));
-        _artworkIcon.TintColor = UIColor.SystemBlue;
+        _artworkIcon.Image = RadioVaultIcons.Image(RadioVaultIcon.Radio, size: 96, strokeWidth: 1.6f);
         _artworkIcon.ContentMode = UIViewContentMode.Center;
         _artworkIcon.TranslatesAutoresizingMaskIntoConstraints = false;
         _artworkPanel.AddSubview(_artworkIcon);
@@ -55,19 +52,20 @@ public sealed class NowPlayingViewController : UIViewController
         ]);
 
         _titleLabel.Font = (UIFont.PreferredTitle2 ?? UIFont.SystemFontOfSize(24, UIFontWeight.Bold))!;
+        _titleLabel.TextColor = RadioVaultTheme.Text;
         _titleLabel.Lines = 0;
         _titleLabel.TextAlignment = UITextAlignment.Center;
         _subtitleLabel.Font = (UIFont.PreferredBody ?? UIFont.SystemFontOfSize(17))!;
-        _subtitleLabel.TextColor = UIColor.SecondaryLabel;
+        _subtitleLabel.TextColor = RadioVaultTheme.MutedText;
         _subtitleLabel.Lines = 0;
         _subtitleLabel.TextAlignment = UITextAlignment.Center;
         _statusLabel.Font = (UIFont.PreferredFootnote ?? UIFont.SystemFontOfSize(13))!;
-        _statusLabel.TextColor = UIColor.SecondaryLabel;
+        _statusLabel.TextColor = RadioVaultTheme.MutedText;
         _statusLabel.Lines = 0;
         _statusLabel.TextAlignment = UITextAlignment.Center;
         _timeLabel.Font = UIFont.MonospacedDigitSystemFontOfSize(13, UIFontWeight.Regular)!;
         _timeLabel.TextAlignment = UITextAlignment.Center;
-        _timeLabel.TextColor = UIColor.SecondaryLabel;
+        _timeLabel.TextColor = RadioVaultTheme.MutedText;
 
         _progressSlider.MinValue = 0;
         _progressSlider.MaxValue = 1;
@@ -78,12 +76,14 @@ public sealed class NowPlayingViewController : UIViewController
         _progressSlider.TouchCancel += ProgressSliderFinished;
 
         ConfigureButton(_backButton, "gobackward.15", 36, "Back 15 seconds", _session.SkipBack);
-        ConfigureButton(_playButton, "play.circle.fill", 68, "Play or pause", _session.MiniPlayerAction);
+        ConfigureButton(_playButton, RadioVaultIcons.Image(RadioVaultIcon.Play, size: 68, strokeWidth: 1.5f), "Play or pause", _session.MiniPlayerAction);
         ConfigureButton(_forwardButton, "goforward.30", 36, "Forward 30 seconds", _session.SkipForward);
-        _playButton.TintColor = UIColor.Label;
+        _backButton.TintColor = RadioVaultTheme.Text;
+        _forwardButton.TintColor = RadioVaultTheme.Text;
         _speedButton.TouchUpInside += (_, _) => _session.CycleSpeed();
         _speedButton.TitleLabel!.Font = UIFont.SystemFontOfSize(16, UIFontWeight.Semibold)!;
-        _speedButton.BackgroundColor = UIColor.TertiarySystemFill;
+        _speedButton.SetTitleColor(RadioVaultTheme.Text, UIControlState.Normal);
+        _speedButton.BackgroundColor = RadioVaultTheme.SurfaceRaised;
         _speedButton.Layer.CornerRadius = 19;
         _speedButton.AccessibilityLabel = "Playback speed";
 
@@ -155,6 +155,17 @@ public sealed class NowPlayingViewController : UIViewController
         button.TouchUpInside += (_, _) => action();
     }
 
+    private static void ConfigureButton(
+        UIButton button,
+        UIImage image,
+        string accessibilityLabel,
+        Action action)
+    {
+        button.SetImage(image, UIControlState.Normal);
+        button.AccessibilityLabel = accessibilityLabel;
+        button.TouchUpInside += (_, _) => action();
+    }
+
     private void ProgressSliderFinished(object? sender, EventArgs eventArgs)
     {
         if (!_isScrubbing) return;
@@ -174,9 +185,12 @@ public sealed class NowPlayingViewController : UIViewController
             : _session.PlaybackStatus;
         _timeLabel.Text = _session.PlaybackTime;
         if (!_isScrubbing) _progressSlider.Value = (float)_session.PlaybackProgress;
-        _playButton.SetImage(UIImage.GetSystemImage(
-            _session.MiniPlayerShowsHandoff ? "airplayaudio.circle.fill" :
-            _session.IsPlaying ? "pause.circle.fill" : "play.circle.fill"), UIControlState.Normal);
+        _playButton.SetImage(
+            _session.MiniPlayerShowsHandoff
+                ? RadioVaultIcons.Image(RadioVaultIcon.Handoff, size: 68, strokeWidth: 1.5)
+                : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play, size: 68, strokeWidth: 1.5f),
+            UIControlState.Normal);
+        _playButton.TintColor = RadioVaultTheme.Progress;
         _backButton.Enabled = _session.CanControlPlayback;
         _playButton.Enabled = _session.MiniPlayerCanAct;
         _forwardButton.Enabled = _session.CanControlPlayback;

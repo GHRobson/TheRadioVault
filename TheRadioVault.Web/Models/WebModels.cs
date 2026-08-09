@@ -252,7 +252,8 @@ public sealed record WebClientLibraryBrowseRequest(
     int Offset,
     bool NewestFirst,
     string SearchScope,
-    bool HasTranscript);
+    bool HasTranscript,
+    bool HideCompleted = false);
 
 public sealed record WebClientLibraryBroadcastSummary(
     string CanonicalKey,

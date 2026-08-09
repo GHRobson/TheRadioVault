@@ -14,6 +14,15 @@ public abstract class SessionTableViewController : UITableViewController
 
     protected MobileClientSession Session { get; }
 
+    public override void ViewDidLoad()
+    {
+        base.ViewDidLoad();
+        View!.BackgroundColor = RadioVaultTheme.Background;
+        TableView.BackgroundColor = RadioVaultTheme.Background;
+        TableView.SeparatorColor = RadioVaultTheme.Border;
+        TableView.SectionHeaderTopPadding = 12;
+    }
+
     protected virtual void ReloadSession() => TableView.ReloadData();
 
     protected static UITableViewCell DetailCell(string reuseIdentifier, string title, string detail)
@@ -23,7 +32,7 @@ public abstract class SessionTableViewController : UITableViewController
         content.Text = title;
         content.SecondaryText = detail;
         content.SecondaryTextProperties.NumberOfLines = 2;
-        cell.ContentConfiguration = content;
+        RadioVaultTheme.StyleCell(cell, content);
         return cell;
     }
 

@@ -159,16 +159,57 @@ public sealed class MobileServerClient : IDisposable
         int limit = 100,
         int? collectionId = null,
         string filter = "All",
+        int? year = null,
+        int? month = null,
+        bool hideCompleted = false,
+        string searchScope = "All",
+        bool hasTranscript = false,
         CancellationToken cancellationToken = default)
     {
         var query = "?q=" + Uri.EscapeDataString(searchText?.Trim() ?? string.Empty) +
                     (collectionId is > 0 ? "&collectionId=" + collectionId.Value : string.Empty) +
+                    (year is > 0 ? "&year=" + year.Value : string.Empty) +
+                    (month is > 0 ? "&month=" + month.Value : string.Empty) +
                     "&filter=" + Uri.EscapeDataString(filter) + "&limit=" + Math.Clamp(limit, 1, 250) +
-                    "&offset=0&newestFirst=true&scope=All&hasTranscript=false";
+                    "&offset=0&newestFirst=true&scope=" + Uri.EscapeDataString(searchScope) +
+                    "&hasTranscript=" + hasTranscript + "&hideCompleted=" + hideCompleted;
         return (await GetJsonAsync(
             WebApiRoutes.ClientLibraryBrowse + query,
             MobileJsonContext.Default.BrowseEnvelope,
             cancellationToken).ConfigureAwait(false)).Result;
+    }
+
+    public async Task<WebClientLibrarySearchFacets> GetSearchFacetsAsync(CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.ClientLibrarySearchFacets,
+            MobileJsonContext.Default.SearchFacetsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Facets;
+
+    public async Task<IReadOnlyList<WebClientLibrarySearchSuggestion>> GetSearchSuggestionsAsync(
+        string prefix,
+        int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        var query = "?prefix=" + Uri.EscapeDataString(prefix.Trim()) + "&limit=" + Math.Clamp(limit, 1, 25);
+        return (await GetJsonAsync(
+            WebApiRoutes.ClientLibrarySearchSuggestions + query,
+            MobileJsonContext.Default.SearchSuggestionsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Suggestions;
+    }
+
+    public async Task<IReadOnlyList<WebClientLibraryArchivePeriodSummary>> GetArchivePeriodsAsync(
+        int? collectionId,
+        int? year = null,
+        bool hideCompleted = false,
+        CancellationToken cancellationToken = default)
+    {
+        var query = "?hideCompleted=" + hideCompleted +
+                    (collectionId is > 0 ? "&collectionId=" + collectionId.Value : string.Empty) +
+                    (year is > 0 ? "&year=" + year.Value : string.Empty);
+        return (await GetJsonAsync(
+            WebApiRoutes.ClientLibraryArchivePeriods + query,
+            MobileJsonContext.Default.ArchivePeriodsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Periods;
     }
 
     public async Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(

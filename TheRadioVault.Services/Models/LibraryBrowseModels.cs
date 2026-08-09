@@ -32,7 +32,8 @@ public sealed record LibraryBrowseRequest(
     int Offset = 0,
     bool NewestFirst = true,
     LibrarySearchScope SearchScope = LibrarySearchScope.All,
-    bool HasTranscript = false);
+    bool HasTranscript = false,
+    bool HideCompleted = false);
 
 public sealed record LibrarySearchFacets(
     IReadOnlyList<int> Years,

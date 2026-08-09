@@ -12,11 +12,16 @@ public sealed class UpNextViewController : SessionTableViewController
     {
         base.ViewDidLoad();
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
-        NavigationItem.RightBarButtonItem = EditButtonItem;
         NavigationItem.LeftBarButtonItem = new UIBarButtonItem(
+            "Now Playing",
+            UIBarButtonItemStyle.Plain,
+            (_, _) => ReturnToNowPlaying());
+        NavigationItem.LeftBarButtonItem.AccessibilityLabel = "Back to Now Playing";
+        var clearButton = new UIBarButtonItem(
             "Clear",
             UIBarButtonItemStyle.Plain,
             (_, _) => ConfirmClear());
+        NavigationItem.RightBarButtonItems = [EditButtonItem, clearButton];
         RefreshControl = new UIRefreshControl();
         RefreshControl.ValueChanged += async (_, _) =>
         {
@@ -88,5 +93,18 @@ public sealed class UpNextViewController : SessionTableViewController
             _ = Session.ClearQueueAsync();
         }));
         PresentViewController(alert, true, null);
+    }
+
+    private void ReturnToNowPlaying()
+    {
+        var existing = NavigationController?.ViewControllers?
+            .OfType<NowPlayingViewController>()
+            .LastOrDefault();
+        if (existing is not null)
+        {
+            NavigationController?.PopToViewController(existing, true);
+            return;
+        }
+        NavigationController?.PushViewController(new NowPlayingViewController(Session), true);
     }
 }

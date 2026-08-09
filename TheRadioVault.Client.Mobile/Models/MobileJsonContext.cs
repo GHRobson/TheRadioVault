@@ -7,6 +7,9 @@ public sealed record PairingEnvelope(WebDesktopPairingResult Result);
 public sealed record BootstrapEnvelope(WebFederationBootstrap FederationBootstrap);
 public sealed record OverviewEnvelope(WebClientLibraryOverview Overview);
 public sealed record BrowseEnvelope(WebClientLibraryBrowseResult Result);
+public sealed record ArchivePeriodsEnvelope(IReadOnlyList<WebClientLibraryArchivePeriodSummary> Periods);
+public sealed record SearchFacetsEnvelope(WebClientLibrarySearchFacets Facets);
+public sealed record SearchSuggestionsEnvelope(IReadOnlyList<WebClientLibrarySearchSuggestion> Suggestions);
 public sealed record BroadcastSummaryEnvelope(WebClientLibraryBroadcastSummary Broadcast);
 public sealed record BroadcastDetailsEnvelope(WebClientBroadcastDetails Broadcast);
 public sealed record MutationEnvelope(WebMutationResult Result);
@@ -27,6 +30,9 @@ public sealed record ProgressEnvelope(WebOfflineProgressResult Result);
 [JsonSerializable(typeof(BootstrapEnvelope))]
 [JsonSerializable(typeof(OverviewEnvelope))]
 [JsonSerializable(typeof(BrowseEnvelope))]
+[JsonSerializable(typeof(ArchivePeriodsEnvelope))]
+[JsonSerializable(typeof(SearchFacetsEnvelope))]
+[JsonSerializable(typeof(SearchSuggestionsEnvelope))]
 [JsonSerializable(typeof(BroadcastSummaryEnvelope))]
 [JsonSerializable(typeof(BroadcastDetailsEnvelope))]
 [JsonSerializable(typeof(MutationEnvelope))]

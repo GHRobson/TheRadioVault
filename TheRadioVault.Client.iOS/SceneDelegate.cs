@@ -27,7 +27,12 @@ public sealed class SceneDelegate : UIResponder, IUIWindowSceneDelegate
             services.NowPlayingService,
             services.DownloadPolicy);
         var tabs = new RadioVaultTabBarController(_session);
-        Window = new UIWindow(windowScene) { RootViewController = tabs };
+        Window = new UIWindow(windowScene)
+        {
+            RootViewController = tabs,
+            OverrideUserInterfaceStyle = UIUserInterfaceStyle.Dark,
+            BackgroundColor = RadioVaultTheme.Background
+        };
         Window.MakeKeyAndVisible();
         _ = _session.InitializeAsync();
     }

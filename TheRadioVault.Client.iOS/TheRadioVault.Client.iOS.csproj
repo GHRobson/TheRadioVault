@@ -11,6 +11,7 @@
     <ApplicationId>com.ghrobson.theradiovault</ApplicationId>
     <ApplicationDisplayVersion>0.35.0</ApplicationDisplayVersion>
     <ApplicationVersion>35</ApplicationVersion>
+    <AppIcon>AppIcon</AppIcon>
     <CodesignEntitlements Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">Entitlements.device.plist</CodesignEntitlements>
   </PropertyGroup>
   <ItemGroup>

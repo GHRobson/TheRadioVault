@@ -37,7 +37,8 @@ public sealed partial class LocalWebServer
             Math.Max(0, QueryInt(query, "offset") ?? 0),
             QueryBool(query, "newestFirst", true),
             QueryText(query, "scope", "All"),
-            QueryBool(query, "hasTranscript", false));
+            QueryBool(query, "hasTranscript", false),
+            QueryBool(query, "hideCompleted", false));
         var result = _archive.BrowseClientLibrary(request);
         await WriteClientJsonAsync(stream, new { apiVersion = WebApiRoutes.Version, result }, headOnly, cancellationToken).ConfigureAwait(false);
     }

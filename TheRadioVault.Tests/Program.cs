@@ -1302,6 +1302,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosProject.Contains("net10.0-ios", StringComparison.Ordinal));
     True(!iosProject.Contains("Avalonia", StringComparison.Ordinal));
     True(iosProject.Contains("TheRadioVault.Client.Mobile", StringComparison.Ordinal));
+    True(iosProject.Contains("<AppIcon>AppIcon</AppIcon>", StringComparison.Ordinal));
     True(!iosProject.Contains("TheRadioVault.Infrastructure", StringComparison.Ordinal));
     True(!iosProject.Contains("TheRadioVault.Server", StringComparison.Ordinal));
 
@@ -1317,10 +1318,23 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(tabs.Contains("UINavigationController", StringComparison.Ordinal));
     True(tabs.Contains("HomeViewController", StringComparison.Ordinal));
     True(tabs.Contains("LibraryViewController", StringComparison.Ordinal));
+    True(tabs.Contains("ExploreViewController", StringComparison.Ordinal));
+    True(!tabs.Contains("Wrap(new KnowledgeViewController", StringComparison.Ordinal));
     True(tabs.Contains("DownloadsViewController", StringComparison.Ordinal));
     True(tabs.Contains("RadioVaultMiniPlayerView", StringComparison.Ordinal));
     True(!tabs.Contains("Wrap(new NowPlayingViewController", StringComparison.Ordinal));
     True(tabs.Contains("ServerViewController", StringComparison.Ordinal));
+    True(tabs.Contains("RadioVaultIcons.Image", StringComparison.Ordinal));
+    True(tabs.Contains("\"Settings\"", StringComparison.Ordinal));
+
+    var dashboard = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "HomeViewController.cs"));
+    True(dashboard.Contains("Title = \"Dashboard\"", StringComparison.Ordinal));
+    True(dashboard.Contains("Continue listening", StringComparison.Ordinal));
+    True(dashboard.Contains("Surprise me", StringComparison.Ordinal));
+    True(dashboard.Contains("On this day", StringComparison.Ordinal));
+    True(dashboard.Contains("Recently added", StringComparison.Ordinal));
+    True(dashboard.Contains("Unheard broadcasts", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
@@ -1331,6 +1345,16 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(library.Contains("Favourites", StringComparison.Ordinal));
     True(library.Contains("ContinueListening", StringComparison.Ordinal));
     True(library.Contains("UpNextViewController", StringComparison.Ordinal));
+    True(library.Contains("ToggleHideCompleted", StringComparison.Ordinal));
+    True(library.Contains("RadioVaultIcon.Completed", StringComparison.Ordinal));
+
+    var showLibrary = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "ShowLibraryViewController.cs"));
+    True(showLibrary.Contains("UISegmentedControl", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveViewMode.Years", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveViewMode.Months", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveViewMode.Broadcasts", StringComparison.Ordinal));
+    True(showLibrary.Contains("LoadArchivePeriodsAsync", StringComparison.Ordinal));
 
     var upNext = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "UpNextViewController.cs"));
@@ -1339,11 +1363,32 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(upNext.Contains("RemoveQueueItemAsync", StringComparison.Ordinal));
     True(upNext.Contains("ClearQueueAsync", StringComparison.Ordinal));
     True(upNext.Contains("PlayQueueItemAsync", StringComparison.Ordinal));
+    True(upNext.Contains("ReturnToNowPlaying", StringComparison.Ordinal));
+    True(upNext.Contains("Back to Now Playing", StringComparison.Ordinal));
+
+    var explore = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "ExploreViewController.cs"));
+    True(explore.Contains("Search in", StringComparison.Ordinal));
+    True(explore.Contains("Listening status", StringComparison.Ordinal));
+    True(explore.Contains("Has transcript", StringComparison.Ordinal));
+    True(explore.Contains("Suggestions", StringComparison.Ordinal));
+    True(explore.Contains("Ways into the archive", StringComparison.Ordinal));
+    True(explore.Contains("Browse by show", StringComparison.Ordinal));
+    True(explore.Contains("ExploreAsync", StringComparison.Ordinal));
+
+    var theme = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultTheme.cs"));
+    True(theme.Contains("0x11, 0x13, 0x17", StringComparison.Ordinal));
+    True(theme.Contains("0xF2, 0xC9, 0x4C", StringComparison.Ordinal));
+    True(theme.Contains("UIGraphicsImageRenderer", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.Knowledge", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.Handoff", StringComparison.Ordinal));
+    True(theme.Contains("(3, 10.5), (13, 10.5)", StringComparison.Ordinal));
 
     var miniPlayer = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultMiniPlayerView.cs"));
     True(miniPlayer.Contains("MiniPlayerShowsHandoff", StringComparison.Ordinal));
-    True(miniPlayer.Contains("airplayaudio", StringComparison.Ordinal));
+    True(miniPlayer.Contains("RadioVaultIcon.Handoff", StringComparison.Ordinal));
     True(miniPlayer.Contains("Move playback to this iPhone", StringComparison.Ordinal));
 
     var nowPlayingView = File.ReadAllText(Path.Combine(
@@ -1370,7 +1415,14 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(downloadsView.Contains("PauseDownload", StringComparison.Ordinal));
     True(downloadsView.Contains("ResumeDownloadAsync", StringComparison.Ordinal));
     True(downloadsView.Contains("CancelDownload", StringComparison.Ordinal));
-    True(downloadsView.Contains("WifiOnlyDownloads", StringComparison.Ordinal));
+    True(!downloadsView.Contains("WifiOnlyDownloads", StringComparison.Ordinal));
+
+    var settingsView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "ServerViewController.cs"));
+    True(settingsView.Contains("Title = \"Settings\"", StringComparison.Ordinal));
+    True(settingsView.Contains("Download Settings", StringComparison.Ordinal));
+    True(settingsView.Contains("WifiOnlyDownloads", StringComparison.Ordinal));
+    True(settingsView.Contains("DownloadStorageText", StringComparison.Ordinal));
 
     var downloadPolicy = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosDownloadPolicy.cs"));
@@ -1435,6 +1487,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(client.Contains("QueueMove", StringComparison.Ordinal));
     True(client.Contains("QueueClear", StringComparison.Ordinal));
     True(client.Contains("Favourite(episodeId)", StringComparison.Ordinal));
+    True(client.Contains("ClientLibraryArchivePeriods", StringComparison.Ordinal));
 
     var plist = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "Info.plist"));
@@ -1444,6 +1497,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(plist.Contains("<string>audio</string>", StringComparison.Ordinal));
     True(plist.Contains("UIApplicationSceneManifest", StringComparison.Ordinal));
     True(plist.Contains("UILaunchScreen", StringComparison.Ordinal));
+    True(File.Exists(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "Assets.xcassets", "AppIcon.appiconset", "AppIcon-1024.png")));
 
     var entitlements = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "Entitlements.device.plist"));

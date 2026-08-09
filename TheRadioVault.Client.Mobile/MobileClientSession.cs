@@ -79,6 +79,8 @@ public sealed class MobileClientSession : IDisposable
     public IReadOnlyList<WebClientLibraryCollectionSummary> LibraryCollections { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> ContinueListening { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> RecentBroadcasts { get; private set; } = [];
+    public IReadOnlyList<MobileBroadcastItem> OnThisDay { get; private set; } = [];
+    public IReadOnlyList<MobileBroadcastItem> UnheardBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> LibraryBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> DownloadedBroadcasts { get; private set; } = [];
     public IReadOnlyList<WebQueueItem> QueueItems { get; private set; } = [];
@@ -128,7 +130,7 @@ public sealed class MobileClientSession : IDisposable
         Notify();
         if (!IsPaired)
         {
-            TabRequested?.Invoke(3);
+            TabRequested?.Invoke(4);
             return;
         }
 
@@ -151,6 +153,9 @@ public sealed class MobileClientSession : IDisposable
             LibraryCollections = overview.Collections;
             ContinueListening = Convert(overview.ContinueListening);
             RecentBroadcasts = Convert(overview.RecentBroadcasts);
+            OnThisDay = Convert(overview.OnThisDay);
+            UnheardBroadcasts = Convert((await _server.BrowseAsync(
+                string.Empty, limit: 5, filter: "Unplayed").ConfigureAwait(false)).Broadcasts);
             if (LibraryBroadcasts.Count == 0)
                 LibraryBroadcasts = Convert((await _server.BrowseAsync(string.Empty).ConfigureAwait(false)).Broadcasts);
             DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
@@ -162,19 +167,20 @@ public sealed class MobileClientSession : IDisposable
         catch (Exception exception)
         {
             StatusText = "Could not reach the paired server: " + exception.Message;
-            TabRequested?.Invoke(3);
+            TabRequested?.Invoke(4);
         }
         finally { SetBusy(false); }
     }
 
-    public async Task SearchAsync(string searchText)
+    public async Task SearchAsync(string searchText, bool hideCompleted = false)
     {
         if (!IsPaired || IsBusy) return;
         var search = searchText?.Trim() ?? string.Empty;
         SetBusy(true, search.Length == 0 ? "Loading the Library…" : $"Searching for “{search}”…");
         try
         {
-            LibraryBroadcasts = Convert((await _server.BrowseAsync(search).ConfigureAwait(false)).Broadcasts);
+            LibraryBroadcasts = Convert((await _server.BrowseAsync(
+                search, hideCompleted: hideCompleted).ConfigureAwait(false)).Broadcasts);
             StatusText = $"{LibraryBroadcasts.Count:N0} broadcast{(LibraryBroadcasts.Count == 1 ? string.Empty : "s")} shown";
         }
         catch (Exception exception) { StatusText = "Search failed: " + exception.Message; }
@@ -184,7 +190,10 @@ public sealed class MobileClientSession : IDisposable
     public async Task<IReadOnlyList<MobileBroadcastItem>> BrowseCollectionAsync(
         int? collectionId,
         string? searchText = null,
-        string filter = "All")
+        string filter = "All",
+        int? year = null,
+        int? month = null,
+        bool hideCompleted = false)
     {
         if (!IsPaired || IsBusy) return [];
         var search = searchText?.Trim() ?? string.Empty;
@@ -192,7 +201,12 @@ public sealed class MobileClientSession : IDisposable
         try
         {
             var result = await _server.BrowseAsync(
-                search, collectionId: collectionId, filter: filter).ConfigureAwait(false);
+                search,
+                collectionId: collectionId,
+                filter: filter,
+                year: year,
+                month: month,
+                hideCompleted: hideCompleted).ConfigureAwait(false);
             var broadcasts = Convert(result.Broadcasts);
             StatusText = $"{broadcasts.Count:N0} broadcast{(broadcasts.Count == 1 ? string.Empty : "s")} shown";
             return broadcasts;
@@ -201,6 +215,74 @@ public sealed class MobileClientSession : IDisposable
         {
             StatusText = "Library failed: " + exception.Message;
             return [];
+        }
+        finally { SetBusy(false); }
+    }
+
+    public async Task<IReadOnlyList<WebClientLibraryArchivePeriodSummary>> LoadArchivePeriodsAsync(
+        int? collectionId,
+        int? year = null,
+        bool hideCompleted = false)
+    {
+        if (!IsPaired || IsBusy) return [];
+        SetBusy(true, year.HasValue ? "Loading months…" : "Loading years…");
+        try
+        {
+            var periods = await _server.GetArchivePeriodsAsync(
+                collectionId, year, hideCompleted).ConfigureAwait(false);
+            StatusText = $"{periods.Count:N0} archive period{(periods.Count == 1 ? string.Empty : "s")} shown";
+            return periods;
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Archive periods failed: " + exception.Message;
+            return [];
+        }
+        finally { SetBusy(false); }
+    }
+
+    public async Task<(
+        WebClientLibrarySearchFacets? Facets,
+        IReadOnlyList<WebClientLibrarySearchSuggestion> Suggestions,
+        IReadOnlyList<MobileBroadcastItem> Results)> ExploreAsync(
+        string? searchText,
+        int? collectionId,
+        string filter,
+        int? year,
+        string searchScope,
+        bool hasTranscript)
+    {
+        if (!IsPaired || IsBusy) return (null, [], []);
+        var search = searchText?.Trim() ?? string.Empty;
+        var hasFilters = collectionId.HasValue || year.HasValue || hasTranscript ||
+                         !filter.Equals("All", StringComparison.OrdinalIgnoreCase) ||
+                         !searchScope.Equals("All", StringComparison.OrdinalIgnoreCase);
+        SetBusy(true, search.Length == 0 ? "Exploring the archive…" : $"Searching for “{search}”…");
+        try
+        {
+            var facets = await _server.GetSearchFacetsAsync().ConfigureAwait(false);
+            var suggestions = search.Length < 2
+                ? Array.Empty<WebClientLibrarySearchSuggestion>()
+                : await _server.GetSearchSuggestionsAsync(search).ConfigureAwait(false);
+            var results = search.Length == 0 && !hasFilters
+                ? Array.Empty<MobileBroadcastItem>()
+                : Convert((await _server.BrowseAsync(
+                    search,
+                    limit: 250,
+                    collectionId: collectionId,
+                    filter: filter,
+                    year: year,
+                    searchScope: searchScope,
+                    hasTranscript: hasTranscript).ConfigureAwait(false)).Broadcasts);
+            StatusText = search.Length == 0 && !hasFilters
+                ? "Choose a way into the archive or browse by show."
+                : results.Count == 1 ? "1 matching broadcast." : $"{results.Count:N0} matching broadcasts.";
+            return (facets, suggestions, results);
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Explore failed: " + exception.Message;
+            return (null, [], []);
         }
         finally { SetBusy(false); }
     }
@@ -612,6 +694,8 @@ public sealed class MobileClientSession : IDisposable
         Servers = [];
         ContinueListening = [];
         RecentBroadcasts = [];
+        OnThisDay = [];
+        UnheardBroadcasts = [];
         LibraryBroadcasts = [];
         LibraryCollections = [];
         QueueItems = [];
@@ -621,7 +705,7 @@ public sealed class MobileClientSession : IDisposable
         FavouriteBroadcasts = 0;
         StatusText = "Pairing removed from this iPhone.";
         Notify();
-        TabRequested?.Invoke(3);
+        TabRequested?.Invoke(4);
     }
 
     public async Task PlayAsync(MobileBroadcastItem broadcast)
@@ -1168,6 +1252,8 @@ public sealed class MobileClientSession : IDisposable
     {
         ContinueListening = Replace(ContinueListening, episodeId, replacement);
         RecentBroadcasts = Replace(RecentBroadcasts, episodeId, replacement);
+        OnThisDay = Replace(OnThisDay, episodeId, replacement);
+        UnheardBroadcasts = Replace(UnheardBroadcasts, episodeId, replacement);
         LibraryBroadcasts = Replace(LibraryBroadcasts, episodeId, replacement);
         DownloadedBroadcasts = Replace(DownloadedBroadcasts, episodeId, replacement);
         if (SelectedBroadcast?.EpisodeId == episodeId) SelectedBroadcast = replacement;

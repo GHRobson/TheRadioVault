@@ -90,6 +90,8 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
             query = query.Where(x => x.AirDate?.Year == request.Year.Value);
         if (request.Month.HasValue)
             query = query.Where(x => x.AirDate?.Month == request.Month.Value);
+        if (request.HideCompleted)
+            query = query.Where(x => !x.Completed);
 
         var today = DateOnly.FromDateTime(DateTime.Today);
         query = request.Filter switch

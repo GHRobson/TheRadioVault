@@ -47,7 +47,8 @@ internal sealed partial class WebArchiveProvider
             request.Offset,
             request.NewestFirst,
             scope,
-            request.HasTranscript)).GetAwaiter().GetResult();
+            request.HasTranscript,
+            request.HideCompleted)).GetAwaiter().GetResult();
         return new WebClientLibraryBrowseResult(
             value.Broadcasts.Select(Map).ToArray(),
             value.TotalMatching,
