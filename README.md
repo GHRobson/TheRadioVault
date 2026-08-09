@@ -87,6 +87,16 @@ Radio Vault is under active development and is currently an **alpha** release.
 
 The project is already suitable for hands-on testing with a real collection, but installers and features are still being refined before a wider public release.
 
+## Download the latest test builds
+
+New test builds are created automatically whenever Radio Vault is updated. Use the links below, open the newest run with a green tick, then scroll to **Artifacts** and choose the download for your device.
+
+- [Windows client and server](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `windows-client-and-server`.
+- [Mac client for Apple Silicon](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `macos-client-osx-arm64-unsigned`.
+- [iPhone and iPad simulator build](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `ios-client-simulator-arm64-unsigned`.
+
+These are alpha test builds rather than finished public installers. Because the repository is currently private, GitHub will ask you to sign in before downloading them. The iPhone and iPad download is for Apple's simulator; installing Radio Vault on a physical device still requires signing through Xcode.
+
 ## Getting started
 
 1. Install Radio Vault Server on the Windows computer that holds your collection.
@@ -103,3 +113,9 @@ Radio Vault grew from a simple idea: old radio recordings should feel like a liv
 The Windows Server, Windows client, Mac client, iPhone and iPad app, and browser experience are maintained together in this repository so that the library and listening experience can stay consistent across every device.
 
 For contributors, [DEVELOPMENT.md](DEVELOPMENT.md) explains the shared development workflow. Earlier release and acceptance notes are preserved in the [historical release archive](docs/history/release-notes/README.md).
+
+## AI disclosure
+
+Radio Vault has been designed and developed with extensive assistance from generative AI tools. AI has helped turn the creator's ideas into interface designs, code, tests and documentation. The direction of the product and hands-on testing remain human-led.
+
+The Radio Vault application does not contain a generative-AI assistant and does not send your recordings, library or listening history to an AI service. Its everyday organising and playback features work without AI. If you choose to use the optional transcription and speaker tools, they use speech-recognition models installed and run locally on your own Windows Server computer.

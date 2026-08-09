@@ -1896,6 +1896,14 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
     True(readme.Contains("Your collection stays on your own hardware", StringComparison.Ordinal));
     True(readme.Contains("should not be exposed directly to the public internet", StringComparison.Ordinal));
     True(readme.Contains("currently an **alpha** release", StringComparison.Ordinal));
+    True(readme.Contains("## Download the latest test builds", StringComparison.Ordinal));
+    True(readme.Contains("actions/workflows/ci.yml?query=branch%3Amain", StringComparison.Ordinal));
+    True(readme.Contains("windows-client-and-server", StringComparison.Ordinal));
+    True(readme.Contains("macos-client-osx-arm64-unsigned", StringComparison.Ordinal));
+    True(readme.Contains("ios-client-simulator-arm64-unsigned", StringComparison.Ordinal));
+    True(readme.Contains("## AI disclosure", StringComparison.Ordinal));
+    True(readme.Contains("does not contain a generative-AI assistant", StringComparison.Ordinal));
+    True(readme.Contains("speech-recognition models installed and run locally", StringComparison.Ordinal));
 
     var building = File.ReadAllText(Path.Combine(SourceRoot(), "BUILDING.md"));
     True(building.StartsWith("# Building Radio Vault 0.35.0 Alpha 9 Buildfix 3", StringComparison.Ordinal));

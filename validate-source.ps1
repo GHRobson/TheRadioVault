@@ -1005,7 +1005,7 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA9-
 $stableReadmeText = Get-Content (Join-Path $root "README.md") -Raw
 $stableBuildingText = Get-Content (Join-Path $root "BUILDING.md") -Raw
 $stableFoundationText = Get-Content (Join-Path $root "tools\Test-AvaloniaFoundation.ps1") -Raw
-foreach ($marker in @('<h1 align="center">Radio Vault</h1>', 'Bring your old radio collection back to life.', 'browse your collection by show, year, month and broadcast', 'Radio Vault Server', 'Radio Vault Web', 'Your collection stays on your own hardware', 'should not be exposed directly to the public internet')) {
+foreach ($marker in @('<h1 align="center">Radio Vault</h1>', 'Bring your old radio collection back to life.', 'browse your collection by show, year, month and broadcast', 'Radio Vault Server', 'Radio Vault Web', 'Your collection stays on your own hardware', 'should not be exposed directly to the public internet', '## Download the latest test builds', 'actions/workflows/ci.yml?query=branch%3Amain', 'windows-client-and-server', 'macos-client-osx-arm64-unsigned', 'ios-client-simulator-arm64-unsigned', '## AI disclosure', 'does not contain a generative-AI assistant', 'speech-recognition models installed and run locally')) {
     if ($stableReadmeText -notmatch [regex]::Escape($marker)) { throw "Radio Vault marketing README marker missing: $marker" }
 }
 foreach ($marker in @('# Building Radio Vault 0.35.0 Alpha 9', 'package-server-installer.ps1', 'package-client-installer.ps1', 'SOURCE_MANIFEST.sha256.json')) {

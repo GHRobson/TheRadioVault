@@ -1,6 +1,6 @@
 {
   "version": "0.35.0-alpha9-buildfix3",
-  "generatedAtUtc": "2026-08-09T12:48:27.0000000Z",
+  "generatedAtUtc": "2026-08-09T12:57:17.0000000Z",
   "fileCount": 995,
   "files": [
     {
@@ -65,8 +65,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 6373,
-      "sha256": "5301e6096cddd6d9a5c39d377d269f60cfd43f6f5dc6865f8f03d6ded0be7f56"
+      "bytes": 8081,
+      "sha256": "a60d694381f121cde2258a77edb068031098753240aedfaf054a7cb7616a71b2"
     },
     {
       "path": "RUN-RADIO-VAULT-SERVER.cmd",
@@ -1970,8 +1970,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 532373,
-      "sha256": "3a9a0898c6f1319fba3241748a778a7c2a3eedf4408bc01f1c8ebcea54269d03"
+      "bytes": 533107,
+      "sha256": "df1b0ea51f3d2bb8ebc4aacb939ba42798cea656d67695bf9cab788fa13132c6"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",
@@ -4975,8 +4975,8 @@
     },
     {
       "path": "validate-source.ps1",
-      "bytes": 82041,
-      "sha256": "76dca2ca2d2dd95c2634fa777578d164c9ab4a163d5e16022c6914b6bcd1afe4"
+      "bytes": 82351,
+      "sha256": "a264ca0bb67744b01d2499d30e27dbd7e67f9974974a0a7e2fd983ad3de37a35"
     }
   ]
 }
