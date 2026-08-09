@@ -1,7 +1,7 @@
 {
   "version": "0.35.0-alpha9-buildfix3",
-  "generatedAtUtc": "2026-08-09T11:54:44.6986340Z",
-  "fileCount": 994,
+  "generatedAtUtc": "2026-08-09T12:04:31.7014650Z",
+  "fileCount": 995,
   "files": [
     {
       "path": ".editorconfig",
@@ -29,71 +29,6 @@
       "sha256": "1b776651724716fa152763143ac45aeb70de04ee052d348ab25a7b9bc4c926cf"
     },
     {
-      "path": "ALPHA13-CATALOGUE-RESEARCH-ACCEPTANCE.md",
-      "bytes": 1147,
-      "sha256": "5142f5db5be56e8e0ac12fd396f3158c425cd70f446949d7249a2ffaa171e5e6"
-    },
-    {
-      "path": "ALPHA13-LIBRARY-DASHBOARD-PASS3-ACCEPTANCE.md",
-      "bytes": 1810,
-      "sha256": "e913cb1405b6caa3bf891d72e5d210c49be300f1bf4061492943c87d64e9b18d"
-    },
-    {
-      "path": "ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX1-ACCEPTANCE.md",
-      "bytes": 449,
-      "sha256": "7c42b9139650349dc80105511fc88786d2ffe3ac7ca7e525181492d3155d998d"
-    },
-    {
-      "path": "ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX1-ACCEPTANCE.md",
-      "bytes": 969,
-      "sha256": "c6916a79d8c2eadf482dc1124b526703273b0d0835d24aa6b7624289a9949315"
-    },
-    {
-      "path": "ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX2-ACCEPTANCE.md",
-      "bytes": 624,
-      "sha256": "b5a563def29b5842e4bf3bbf6913a23737de184c98abb32976169a5d17c35eae"
-    },
-    {
-      "path": "ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX3-ACCEPTANCE.md",
-      "bytes": 724,
-      "sha256": "c6ad33044df44b95d7105ed71e52615c010a29821033b52c5385edf573c65a05"
-    },
-    {
-      "path": "ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX4-ACCEPTANCE.md",
-      "bytes": 2916,
-      "sha256": "e7675eaab560032bcc7c24f78b79ebe6ef7a6321c67c4f9eb023f5cef5594d77"
-    },
-    {
-      "path": "ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX5-ACCEPTANCE.md",
-      "bytes": 1389,
-      "sha256": "ff8190f86460ccc00a4ff37ddc89e3b45426074ffb719391f3faeb007a73ff1e"
-    },
-    {
-      "path": "ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX6-ACCEPTANCE.md",
-      "bytes": 1804,
-      "sha256": "4ac9dbe70d50bad222d1a0c6500173deaa8b20b3d1209b72380b927ec2da47db"
-    },
-    {
-      "path": "ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-DATE-REVIEW-ACCEPTANCE.md",
-      "bytes": 2298,
-      "sha256": "bbce1b7502352600a6f51566db60e7b01568bdebf53aea6752fe2dcdfd32643d"
-    },
-    {
-      "path": "ALPHA13-LOCAL-UX-PASS1-ACCEPTANCE.md",
-      "bytes": 813,
-      "sha256": "6f0ba14fdb12e9d7199b21319dc3a6b23a4657b62dc312a34c9ae8b4935ebd62"
-    },
-    {
-      "path": "ALPHA13-PLAYBACK-NOW-PLAYING-PASS2-ACCEPTANCE.md",
-      "bytes": 1451,
-      "sha256": "649d7866ac9c6481e6383101d6b046b5b6209294bdf5fd68c7f9724f7a448d0b"
-    },
-    {
-      "path": "ALPHA13-SIDEBAR-ACTIVITY-ACCEPTANCE.md",
-      "bytes": 1553,
-      "sha256": "786c5e729ae6737a598a534dfd33a80db84273b59802c4b649aa1b2532351e32"
-    },
-    {
       "path": "BUILD-AND-RUN.cmd",
       "bytes": 872,
       "sha256": "603079c3928a119b2c4d60a2cdb3ff51da7555eea3ecf8e903da10bf75059b18"
@@ -102,11 +37,6 @@
       "path": "BUILDING.md",
       "bytes": 5447,
       "sha256": "3682702c13899c6bae0e9fe34f6083b152fc8ab79cc9343a804b30f97af41732"
-    },
-    {
-      "path": "CATALOGUE-STYLE-IMPORT-ACCEPTANCE.md",
-      "bytes": 1321,
-      "sha256": "ddc5d097a1f161a6b11578603a1dc5deb7111e766b114ce80ea033ccf503640e"
     },
     {
       "path": "CHANGELOG.md",
@@ -119,29 +49,14 @@
       "sha256": "13e0da6c81765c3201fb06ff107f72b6f19092c5fcb0ba6bdb0db6121ec453b3"
     },
     {
-      "path": "FOLDER-SHOW-ASSIGNMENT-ACCEPTANCE.md",
-      "bytes": 1164,
-      "sha256": "df47248a178583aece3f245ca06ecc689431c66a2e9922367b19b6282667824f"
-    },
-    {
       "path": "LEGACY-FEDERATION-SOURCE.txt",
       "bytes": 529,
       "sha256": "c17c0ed538cdc6508644644193ceecb3bcc4a2d84ebd0affc758544af9caef36"
     },
     {
-      "path": "LOCAL-ONLY-ACCEPTANCE.md",
-      "bytes": 1585,
-      "sha256": "4f743e52d5e4fd28fd3b75027d7a0e5e354b676110d7d2bafb7dd1e0cde7f7fd"
-    },
-    {
       "path": "MACOS-CLIENT.md",
       "bytes": 2026,
       "sha256": "0d9521195014a8e4c4ad9149d99be7e6a193fcbdb43848b3f1b9514c55c3e193"
-    },
-    {
-      "path": "RADIO-VAULT-ANYWHERE-ACCEPTANCE.md",
-      "bytes": 899,
-      "sha256": "9ab49b7c82bffc2d7cf53273b099b62ac833e7228c097e4a758ef5840e5ffb0d"
     },
     {
       "path": "RADIOVAULT-IOS-AGENT-HANDOFF.docx",
@@ -150,8 +65,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 7187,
-      "sha256": "544bd2326795747e8396b913b28a0c18c855ea3e59b2fa25c18b3118b7bb6b66"
+      "bytes": 7332,
+      "sha256": "9b1fd22f72d881a2bbeeb2c66e110217dd3786e9fb5d09f1bf69888f2be2d826"
     },
     {
       "path": "RUN-RADIO-VAULT-SERVER.cmd",
@@ -169,24 +84,9 @@
       "sha256": "1f55810f2208506e5df5e6754302162ca7067fb2d06f288177218870220d17cf"
     },
     {
-      "path": "SHOW-EXPANSION-ACCEPTANCE.md",
-      "bytes": 783,
-      "sha256": "b887fdaa98770728cb2bffdb5f75a672355332dbe0466815a09dd0a411aad0e2"
-    },
-    {
-      "path": "SHOW-PROJECTION-REPAIR-ACCEPTANCE.md",
-      "bytes": 945,
-      "sha256": "911aaf399779a18c5c240a4eed0a0884c2434dadb26a1bbaf7c6c23de8b6e665"
-    },
-    {
-      "path": "SIDEBAR-SHOW-SECTIONS-ACCEPTANCE.md",
-      "bytes": 842,
-      "sha256": "c9e8756ee5cc3a07dc5926f76a85938cf1f6169a4b5fa4a2b02bcd1b55e194b5"
-    },
-    {
       "path": "START-HERE-IOS-AGENT.md",
-      "bytes": 27911,
-      "sha256": "91f4d17af6426d32a8f67a7b70a3da11ad0e7320aff3dd5d91c58d1f0539f71c"
+      "bytes": 28181,
+      "sha256": "c2272badc3ef00223db06af54418e919a6d4df66892252d229b732fb75a5f272"
     },
     {
       "path": "TheRadioVault.Application/Abstractions/IAppThemeService.cs",
@@ -2070,8 +1970,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 531774,
-      "sha256": "b20e391a70e3a613298ddcfd939e91f5512af20f386430b54602a49ce234c84a"
+      "bytes": 532125,
+      "sha256": "eb014f6a6a7b4720cd990e16c957fb8bda819786e2033e42c2fda49e0c29f0c7"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",
@@ -2382,366 +2282,6 @@
       "path": "TheRadioVault.slnLaunch",
       "bytes": 213,
       "sha256": "761707b9365ddf2b6838643ce90634b8efdd31e5250e1a924fbdfea5822921c2"
-    },
-    {
-      "path": "V0.32.0-FINAL-ACCEPTANCE.md",
-      "bytes": 906,
-      "sha256": "ec7ce03c39a0258db1aff14ba7ee2530227b1e6eef7997c4028db6b371955f27"
-    },
-    {
-      "path": "V0.32.0-RC1-ACCEPTANCE.md",
-      "bytes": 1129,
-      "sha256": "1203df9859a2adb92582080a7e0eb1512b17d16575faee30bb3dbba4b71f15d1"
-    },
-    {
-      "path": "V0.33.0-ALPHA1-SHARED-INFRASTRUCTURE.md",
-      "bytes": 1180,
-      "sha256": "02deb5d4d147e3acbf186004d493e89b1ac4b92aba1a10ee4abc756fcab4224b"
-    },
-    {
-      "path": "V0.33.0-ALPHA2-BUILDFIX1-TRANSCRIPTION-MODEL-REPAIR.md",
-      "bytes": 992,
-      "sha256": "9501d1307b351e2206f4fb1720a2009ee75a2e23bf3c5c7cc5a08a3d8f3b264c"
-    },
-    {
-      "path": "V0.33.0-ALPHA2-LOCAL-TRANSCRIPTION.md",
-      "bytes": 1955,
-      "sha256": "88149d49d1807a10f7f0931ad9a10734a5be555bb1bcb9db53ea39343a87f866"
-    },
-    {
-      "path": "V0.33.0-ALPHA3-MULTI-SPEAKER-DIARIZATION.md",
-      "bytes": 1196,
-      "sha256": "5eadd627d9cba2f2f450f0391189c6ab8a4f20fd5a2b25723c30be988d7e7b52"
-    },
-    {
-      "path": "V0.33.0-ALPHA4-LAUNCH-TRANSCRIPTS-UI.md",
-      "bytes": 887,
-      "sha256": "c505dfe526db8af2c97026716b2dacf0047cb4032ee9eed4744ffd8ebddad080"
-    },
-    {
-      "path": "V0.33.0-ALPHA5-TRANSCRIPT-WORKFLOW.md",
-      "bytes": 1179,
-      "sha256": "2b66f2a864bf3ec81335c7e38b6a24a264bf8268797c29fc46eb7447edc6a912"
-    },
-    {
-      "path": "V0.33.0-ALPHA6-TRANSCRIPT-ACCESS-FACETED-SEARCH.md",
-      "bytes": 1274,
-      "sha256": "e252cd6fce6379e6cbe92f79f1adecfa3b9507d197069adba278a5011364c447"
-    },
-    {
-      "path": "V0.33.0-ALPHA7-TRANSCRIPT-REVIEW.md",
-      "bytes": 1744,
-      "sha256": "0270738497411c0660efdeda349dd3001628e4d3a182259428102a1d7701df65"
-    },
-    {
-      "path": "V0.33.0-ALPHA8-BATCH-TRANSCRIPTION.md",
-      "bytes": 1545,
-      "sha256": "76ebcd775570b50dd0a22d13285d83984c3e2ced8808b2a5ac945ed0abe26225"
-    },
-    {
-      "path": "V0.33.0-ALPHA8-BUILDFIX1-DEEP-RESEARCH-AUDIT.md",
-      "bytes": 1363,
-      "sha256": "c75e936a9e144ccb16624b3ea40f34846ca1f89f36e017cd68126d94e9f165e8"
-    },
-    {
-      "path": "V0.33.0-ALPHA8-BUILDFIX2-TRANSCRIPTION-CONTINUITY.md",
-      "bytes": 1481,
-      "sha256": "d6157c37ba35c9e85517bdec369e4624d78e2e91d29dc13f0e36ae25183f61a0"
-    },
-    {
-      "path": "V0.33.0-ALPHA8-BUILDFIX3-TRANSCRIPTION-WORKSPACE.md",
-      "bytes": 1680,
-      "sha256": "e7a9a912b01746bd5bb029ad62b37e4fa7afb236ccf91b621873d66e57b7d3e7"
-    },
-    {
-      "path": "V0.33.0-STABLE.md",
-      "bytes": 1578,
-      "sha256": "7ec08f6c1d60b472a01f07041ca7d74efeff5fd3c3afab35f7bdd1cb4a661b61"
-    },
-    {
-      "path": "V0.34.0-ALPHA1-DEDICATED-SERVER-FOUNDATION.md",
-      "bytes": 1403,
-      "sha256": "11b741006a58f9761a22430c0d20b709f856d6d6d9437ae9e7ca2f5fd60bf288"
-    },
-    {
-      "path": "V0.34.0-ALPHA10-BACKGROUND-SERVER-PAIRING.md",
-      "bytes": 2423,
-      "sha256": "f19112aa192c93e8b58c611579b22f5197c60ae193d1d0f95f3b699b6c45bb01"
-    },
-    {
-      "path": "V0.34.0-ALPHA11-BUILDFIX1-SETTINGS-THREAD-SAFETY.md",
-      "bytes": 1037,
-      "sha256": "90b6a09067d83dd9c97462dac5284369ae1321156a7f29f71531c5b8cda349df"
-    },
-    {
-      "path": "V0.34.0-ALPHA11-BUILDFIX2-SERVER-OWNERSHIP.md",
-      "bytes": 1491,
-      "sha256": "8335484e8c4f195327a76f923ce5591fa8b856a0d482e811062a43dea82509fc"
-    },
-    {
-      "path": "V0.34.0-ALPHA11-NATIVE-SERVER-CLIENT.md",
-      "bytes": 1900,
-      "sha256": "bbd56a9cc0c721b3f40e8bcb701e4e9cf944101aba58800243089b7b2e83366d"
-    },
-    {
-      "path": "V0.34.0-ALPHA12-SERVER-OWNERSHIP-UX.md",
-      "bytes": 1850,
-      "sha256": "7c029e096e5710fb9948fb797c17bfc95f2e426e81ca567eb4501073286f3820"
-    },
-    {
-      "path": "V0.34.0-ALPHA13-BUILDFIX1-FOLDERS-LISTENING-INSTALLERS.md",
-      "bytes": 1932,
-      "sha256": "681ea739d5a4bcbb0cafc47e78c71aa42928d5d6f24a4745cb343ff14c49d928"
-    },
-    {
-      "path": "V0.34.0-ALPHA13-REMOTE-CLIENT-INSTALLER.md",
-      "bytes": 2450,
-      "sha256": "c31f49abfa4cc2dfe3427cf883908a18d07e5d53033f2e3f5a0b4a4c159a6b68"
-    },
-    {
-      "path": "V0.34.0-ALPHA14-RADIO-VAULT-WEB-PHONE-CONNECTION.md",
-      "bytes": 2137,
-      "sha256": "6f26d409d6a346bfd9bb682a807b681023288f0c19352bd45cb966dc5bec4423"
-    },
-    {
-      "path": "V0.34.0-ALPHA15-SERVER-FOLDER-AUDIO-REPAIR.md",
-      "bytes": 1824,
-      "sha256": "619e9ba656ab6d91d8309e64fbada379f2b2992a81a9f34cb90fbe26438fefdf"
-    },
-    {
-      "path": "V0.34.0-ALPHA16-REMOTE-RESPONSIVENESS-OWNERSHIP.md",
-      "bytes": 2004,
-      "sha256": "8d90c34b61223703ae120c518ecd2a2e0d70a0ef9a466e6f8592c3bbb739d8ec"
-    },
-    {
-      "path": "V0.34.0-ALPHA17-LARGE-LIBRARY-HANDOFF.md",
-      "bytes": 1469,
-      "sha256": "59f8ba98c54e0e4e089459be79e4cd34dc57e79741c13fa9df133fc0261a8087"
-    },
-    {
-      "path": "V0.34.0-ALPHA18-BUILDFIX1-SAFARI-HANDOFF.md",
-      "bytes": 1175,
-      "sha256": "3159b619d98825b9c3e714336572368b8d9d98c0b73ce82084aface49cee2d46"
-    },
-    {
-      "path": "V0.34.0-ALPHA18-CONNECTED-RELIABILITY.md",
-      "bytes": 2847,
-      "sha256": "f7d3eab1be48f4787b512ecf0c921065600671717b6151269017e7a67bbc5616"
-    },
-    {
-      "path": "V0.34.0-ALPHA19-BUILDFIX1-TRANSCRIPTION-IOS-HANDOFF.md",
-      "bytes": 1709,
-      "sha256": "737ce6b69c13fe113e3530ca60f71685a1b0a3c2705139cf5a9c0221291b76d1"
-    },
-    {
-      "path": "V0.34.0-ALPHA19-BUILDFIX2-IPHONE-RANGE-PLAYBACK.md",
-      "bytes": 1823,
-      "sha256": "7ad7fcefc33a32a714e82972cfda3d9baeb6cdc49d9a37f3d41b3435f57412e6"
-    },
-    {
-      "path": "V0.34.0-ALPHA19-BUILDFIX3-IPHONE-DECODER-PROBE.md",
-      "bytes": 1743,
-      "sha256": "62f2c9f32d0c8ef3ef9892c0df8255b6b7619312c5b7657bcf5bd453e867b740"
-    },
-    {
-      "path": "V0.34.0-ALPHA19-BUILDFIX4-IPHONE-AUDIBLE-START.md",
-      "bytes": 1488,
-      "sha256": "2042a165db7524413156393f9b12fc8842687190cf4194b4a561c334759eee5b"
-    },
-    {
-      "path": "V0.34.0-ALPHA19-BUILDFIX5-UNOWNED-AUTHORITY.md",
-      "bytes": 940,
-      "sha256": "127de8713f5c82bdbbd428f78e550fce90a3050e51878d672aafb2542fffe688"
-    },
-    {
-      "path": "V0.34.0-ALPHA19-BUILDFIX6-POSITIONED-IPHONE-AUDIO.md",
-      "bytes": 1427,
-      "sha256": "b0704e13a9d87a6d5d85481ed8242885a54a19aabad6e85526ac6bffe34218e9"
-    },
-    {
-      "path": "V0.34.0-ALPHA19-BUILDFIX7-SYNCHRONOUS-AUDIO-BASE.md",
-      "bytes": 1123,
-      "sha256": "2e83328b4b6fe0f24445055aa62c60ecfd0c375ca3073b41705cf6cdd07e809f"
-    },
-    {
-      "path": "V0.34.0-ALPHA19-BUILDFIX8-CONSECUTIVE-IPHONE-SWITCHES.md",
-      "bytes": 1544,
-      "sha256": "438a4d284e1960c9e569fdb0cd70e0b84005a72d5d2a39abd112af27bdf15162"
-    },
-    {
-      "path": "V0.34.0-ALPHA19-CACHE-FIRST-STARTUP.md",
-      "bytes": 1608,
-      "sha256": "12145f7724848985f0f84f18dbb5d4aaa372120eb706511147fb61ac59887a7c"
-    },
-    {
-      "path": "V0.34.0-ALPHA2-NATIVE-HANDOFF.md",
-      "bytes": 2016,
-      "sha256": "a9d661f5475acae3efb2a739f13fac0af1d9b4e321d6c56e7098629c53391591"
-    },
-    {
-      "path": "V0.34.0-ALPHA20-BUILDFIX1-IPHONE-REPEATED-HANDOFF.md",
-      "bytes": 1789,
-      "sha256": "cb9d106e72f6b3ab847f4246738ea9eb90956cef1b63cd6e95079c0654749290"
-    },
-    {
-      "path": "V0.34.0-ALPHA20-BUILDFIX2-IPHONE-RANGE-CONTINUITY.md",
-      "bytes": 1866,
-      "sha256": "1c0251f2601f1df8e0c2f803bc9701ccfdd8bf8c91025fb138b257009f326625"
-    },
-    {
-      "path": "V0.34.0-ALPHA20-BUILDFIX3-DEVICE-LOCAL-VOLUME.md",
-      "bytes": 1293,
-      "sha256": "d4002a25b6b95bdf26c151bcdab339a0afbb364cf7b024b3da03cb17f6597716"
-    },
-    {
-      "path": "V0.34.0-ALPHA20-RELEASE-HARDENING.md",
-      "bytes": 2470,
-      "sha256": "0cd28ffef54c0458ba2ecf917bcadddc58b4d00386627aee2035d269ddfdcdf5"
-    },
-    {
-      "path": "V0.34.0-ALPHA3-SERVER-LIBRARY-READS.md",
-      "bytes": 1213,
-      "sha256": "1c2564fb7066d24be798b7f9c33a127221d642bfb343d904223066e718d7d730"
-    },
-    {
-      "path": "V0.34.0-ALPHA4-SERVER-USER-STATE.md",
-      "bytes": 1390,
-      "sha256": "6375426a818950f7063a125b0bc62e2945a316be55619ad0d2459090cebb2feb"
-    },
-    {
-      "path": "V0.34.0-ALPHA5-SERVER-RESEARCH-TRANSCRIPTS.md",
-      "bytes": 1780,
-      "sha256": "ac413c1e9f61f10d2a327bcf0dffa3c33fb8c59e60feed141532295cb5e86cb4"
-    },
-    {
-      "path": "V0.34.0-ALPHA6-SERVER-TRANSCRIPTION-WORKERS.md",
-      "bytes": 1544,
-      "sha256": "338a3be094b5a1cfab91c547fcde739ffb2dd3ed239ed6427d2f2f494545bc65"
-    },
-    {
-      "path": "V0.34.0-ALPHA7-ANYWHERE-TRANSCRIPTS.md",
-      "bytes": 1625,
-      "sha256": "a08244f8915128c7a369175934d78379c6641d6917d3cc832eb349a0de127257"
-    },
-    {
-      "path": "V0.34.0-ALPHA8-ANYWHERE-NATIVE-SHELL.md",
-      "bytes": 1870,
-      "sha256": "770bcd038fd00ecd6dde844f652817a3bc73389298312e06a63b410bb5c64a86"
-    },
-    {
-      "path": "V0.34.0-ALPHA8-BUILDFIX1-DASHBOARD-PLAYER-HANDOFF.md",
-      "bytes": 1375,
-      "sha256": "f35b399db54e28c2b513aac3930dcf6a926e1c09c52e449e26f5cd8c1aade0b2"
-    },
-    {
-      "path": "V0.34.0-ALPHA8-BUILDFIX2-AUDIBLE-PAUSED-PLAYBACK.md",
-      "bytes": 1171,
-      "sha256": "79f323813ab594a739e69cfa948d0afa3f2aacebb04143271869ae2e40d63261"
-    },
-    {
-      "path": "V0.34.0-ALPHA9-ANYWHERE-FULL-PARITY.md",
-      "bytes": 1786,
-      "sha256": "94d74eba40294cc2aa1b4443b9b200eaeede794c5ca7a5c1ca61a3d21d42035f"
-    },
-    {
-      "path": "V0.34.0-RC1-BUILDFIX1-RESEARCH-PACK-IMPORT.md",
-      "bytes": 1316,
-      "sha256": "a55398f9d169bc2cc779aac22c07bca46f46d820cdac303983e0b21d6fbf2db4"
-    },
-    {
-      "path": "V0.34.0-RC1-BUILDFIX2-NEW-BRAND.md",
-      "bytes": 1071,
-      "sha256": "5e18a82b9a25572b4e516a3c80b394ae7eae292bd7f93c9f1d861fc617bccd60"
-    },
-    {
-      "path": "V0.34.0-RC1-BUILDFIX3-SERVER-IDENTITY.md",
-      "bytes": 710,
-      "sha256": "39885429cac84a05978c0fcdf1de0cab36e08204a4ddf1ee47795a887d0a13b4"
-    },
-    {
-      "path": "V0.34.0-RC1-BUILDFIX4-CLIENT-UI-DOWNLOADS.md",
-      "bytes": 1599,
-      "sha256": "863b4dd64ccea2d52648bf54f272ae8766308128b5a0dc65cec419e5e668411a"
-    },
-    {
-      "path": "V0.34.0-RC1-BUILDFIX5-IPHONE-POSITIONED-FALLBACK.md",
-      "bytes": 1012,
-      "sha256": "83049f9a5bc803341f5cd9fb99cf10b13c1b82a0a64b99d464ec780ebebab0e5"
-    },
-    {
-      "path": "V0.34.0-RC1-STABILITY.md",
-      "bytes": 2742,
-      "sha256": "5e07277d4d322409a7294dc2c03015105882c3417d665ef0381d430d3647c01d"
-    },
-    {
-      "path": "V0.34.0-STABLE.md",
-      "bytes": 2101,
-      "sha256": "a8a254f68d49ca145484243655111d077dbf56b416e4035c4ee9b88bab94e24a"
-    },
-    {
-      "path": "V0.35.0-ALPHA1-BUILDFIX1-RESEARCH-PACK-TOLERANCE.md",
-      "bytes": 1295,
-      "sha256": "4b52c9367982614f3008899b424009b6caff64b6c42d45ce6d48fa90bec46bc2"
-    },
-    {
-      "path": "V0.35.0-ALPHA1-WIKI-FOUNDATION.md",
-      "bytes": 2508,
-      "sha256": "508914ecff3a1b762070779795ac1f16c4682d2b3a609b00f77bcb522cae835c"
-    },
-    {
-      "path": "V0.35.0-ALPHA2-WIKI-AUTHORING.md",
-      "bytes": 2420,
-      "sha256": "d8be3a258e2a884ba296327ffa262915ab14dc32d5e14ce7954085350b065074"
-    },
-    {
-      "path": "V0.35.0-ALPHA3-WIKI-DASHBOARD.md",
-      "bytes": 3845,
-      "sha256": "288541a6d45b6bc2a730a674c3e396274f197663570a3bb842a8e59873f1b442"
-    },
-    {
-      "path": "V0.35.0-ALPHA4-WIKI-REFINEMENT.md",
-      "bytes": 2505,
-      "sha256": "96aa6e9f5e8f65140067f9880e58e6edde7535742af7558b77d9d4c5b2326217"
-    },
-    {
-      "path": "V0.35.0-ALPHA5-CANONICAL-TOPICS.md",
-      "bytes": 1809,
-      "sha256": "19308e0976d6ecc0ab47a7e834b957500c79699a1c3f8880f5d9d6ac207e93bf"
-    },
-    {
-      "path": "V0.35.0-ALPHA6-UNIFIED-KNOWLEDGE.md",
-      "bytes": 1729,
-      "sha256": "0da5d127a781e36cfae9f3e7a39a4c2cdda86a61fddc843fb82e6527649ffd52"
-    },
-    {
-      "path": "V0.35.0-ALPHA7-KNOWLEDGE-EXPERIENCE.md",
-      "bytes": 1396,
-      "sha256": "9247595b9d410f5962d458d6f3b9cfaf14c658f38e65f36a2735041458154707"
-    },
-    {
-      "path": "V0.35.0-ALPHA8-EXPLORE-KNOWLEDGE.md",
-      "bytes": 963,
-      "sha256": "7ea0accea54f8618fb7db91ea6bdeefd70bbc07037792316b3e03063b141f173"
-    },
-    {
-      "path": "V0.35.0-ALPHA9-BUILDFIX1-KNOWLEDGE-IMPORT.md",
-      "bytes": 1397,
-      "sha256": "3abd1abaa0c56dcf835f74dc9f2496c6ce7336222836f41b94063036983cb285"
-    },
-    {
-      "path": "V0.35.0-ALPHA9-BUILDFIX2-ARCHIVE-WIDE-KNOWLEDGE-EXPORT.md",
-      "bytes": 835,
-      "sha256": "4246df68eb822815a546cdc6906483cd12bf21b72f103be40a9c56e7a270b3da"
-    },
-    {
-      "path": "V0.35.0-ALPHA9-BUILDFIX3-KNOWLEDGE-IMPORT-PROGRESS.md",
-      "bytes": 1466,
-      "sha256": "271695c65955dc9f76ec358bec330d017ade0da983fe41e27a0b91551cb4c1f5"
-    },
-    {
-      "path": "V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md",
-      "bytes": 2143,
-      "sha256": "e27a59768687fe5ac83151a61f3b7af114b82952585a056831eb5f9ef13ed094"
     },
     {
       "path": "VERSION.txt",
@@ -4074,6 +3614,471 @@
       "sha256": "45431d2af6fc2df8890cd893abb0356bf3f5e9f425184fe87e55524ad32dd853"
     },
     {
+      "path": "docs/history/release-notes/ALPHA13-CATALOGUE-RESEARCH-ACCEPTANCE.md",
+      "bytes": 1147,
+      "sha256": "5142f5db5be56e8e0ac12fd396f3158c425cd70f446949d7249a2ffaa171e5e6"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LIBRARY-DASHBOARD-PASS3-ACCEPTANCE.md",
+      "bytes": 1810,
+      "sha256": "e913cb1405b6caa3bf891d72e5d210c49be300f1bf4061492943c87d64e9b18d"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX1-ACCEPTANCE.md",
+      "bytes": 449,
+      "sha256": "7c42b9139650349dc80105511fc88786d2ffe3ac7ca7e525181492d3155d998d"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX1-ACCEPTANCE.md",
+      "bytes": 969,
+      "sha256": "c6916a79d8c2eadf482dc1124b526703273b0d0835d24aa6b7624289a9949315"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX2-ACCEPTANCE.md",
+      "bytes": 624,
+      "sha256": "b5a563def29b5842e4bf3bbf6913a23737de184c98abb32976169a5d17c35eae"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX3-ACCEPTANCE.md",
+      "bytes": 724,
+      "sha256": "c6ad33044df44b95d7105ed71e52615c010a29821033b52c5385edf573c65a05"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX4-ACCEPTANCE.md",
+      "bytes": 2916,
+      "sha256": "e7675eaab560032bcc7c24f78b79ebe6ef7a6321c67c4f9eb023f5cef5594d77"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX5-ACCEPTANCE.md",
+      "bytes": 1389,
+      "sha256": "ff8190f86460ccc00a4ff37ddc89e3b45426074ffb719391f3faeb007a73ff1e"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-BUILDFIX6-ACCEPTANCE.md",
+      "bytes": 1804,
+      "sha256": "4ac9dbe70d50bad222d1a0c6500173deaa8b20b3d1209b72380b927ec2da47db"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LIBRARY-DASHBOARD-PASS3-BUILDFIX2-DATE-REVIEW-ACCEPTANCE.md",
+      "bytes": 2298,
+      "sha256": "bbce1b7502352600a6f51566db60e7b01568bdebf53aea6752fe2dcdfd32643d"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-LOCAL-UX-PASS1-ACCEPTANCE.md",
+      "bytes": 813,
+      "sha256": "6f0ba14fdb12e9d7199b21319dc3a6b23a4657b62dc312a34c9ae8b4935ebd62"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-PLAYBACK-NOW-PLAYING-PASS2-ACCEPTANCE.md",
+      "bytes": 1451,
+      "sha256": "649d7866ac9c6481e6383101d6b046b5b6209294bdf5fd68c7f9724f7a448d0b"
+    },
+    {
+      "path": "docs/history/release-notes/ALPHA13-SIDEBAR-ACTIVITY-ACCEPTANCE.md",
+      "bytes": 1553,
+      "sha256": "786c5e729ae6737a598a534dfd33a80db84273b59802c4b649aa1b2532351e32"
+    },
+    {
+      "path": "docs/history/release-notes/CATALOGUE-STYLE-IMPORT-ACCEPTANCE.md",
+      "bytes": 1321,
+      "sha256": "ddc5d097a1f161a6b11578603a1dc5deb7111e766b114ce80ea033ccf503640e"
+    },
+    {
+      "path": "docs/history/release-notes/FOLDER-SHOW-ASSIGNMENT-ACCEPTANCE.md",
+      "bytes": 1164,
+      "sha256": "df47248a178583aece3f245ca06ecc689431c66a2e9922367b19b6282667824f"
+    },
+    {
+      "path": "docs/history/release-notes/LOCAL-ONLY-ACCEPTANCE.md",
+      "bytes": 1585,
+      "sha256": "4f743e52d5e4fd28fd3b75027d7a0e5e354b676110d7d2bafb7dd1e0cde7f7fd"
+    },
+    {
+      "path": "docs/history/release-notes/RADIO-VAULT-ANYWHERE-ACCEPTANCE.md",
+      "bytes": 899,
+      "sha256": "9ab49b7c82bffc2d7cf53273b099b62ac833e7228c097e4a758ef5840e5ffb0d"
+    },
+    {
+      "path": "docs/history/release-notes/README.md",
+      "bytes": 855,
+      "sha256": "d0fcded60176f00c379da4060a0b526b371d54c1ef39aa00274848804eb2e0ab"
+    },
+    {
+      "path": "docs/history/release-notes/SHOW-EXPANSION-ACCEPTANCE.md",
+      "bytes": 783,
+      "sha256": "b887fdaa98770728cb2bffdb5f75a672355332dbe0466815a09dd0a411aad0e2"
+    },
+    {
+      "path": "docs/history/release-notes/SHOW-PROJECTION-REPAIR-ACCEPTANCE.md",
+      "bytes": 945,
+      "sha256": "911aaf399779a18c5c240a4eed0a0884c2434dadb26a1bbaf7c6c23de8b6e665"
+    },
+    {
+      "path": "docs/history/release-notes/SIDEBAR-SHOW-SECTIONS-ACCEPTANCE.md",
+      "bytes": 842,
+      "sha256": "c9e8756ee5cc3a07dc5926f76a85938cf1f6169a4b5fa4a2b02bcd1b55e194b5"
+    },
+    {
+      "path": "docs/history/release-notes/V0.32.0-FINAL-ACCEPTANCE.md",
+      "bytes": 906,
+      "sha256": "ec7ce03c39a0258db1aff14ba7ee2530227b1e6eef7997c4028db6b371955f27"
+    },
+    {
+      "path": "docs/history/release-notes/V0.32.0-RC1-ACCEPTANCE.md",
+      "bytes": 1129,
+      "sha256": "1203df9859a2adb92582080a7e0eb1512b17d16575faee30bb3dbba4b71f15d1"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA1-SHARED-INFRASTRUCTURE.md",
+      "bytes": 1180,
+      "sha256": "02deb5d4d147e3acbf186004d493e89b1ac4b92aba1a10ee4abc756fcab4224b"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA2-BUILDFIX1-TRANSCRIPTION-MODEL-REPAIR.md",
+      "bytes": 992,
+      "sha256": "9501d1307b351e2206f4fb1720a2009ee75a2e23bf3c5c7cc5a08a3d8f3b264c"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA2-LOCAL-TRANSCRIPTION.md",
+      "bytes": 1955,
+      "sha256": "88149d49d1807a10f7f0931ad9a10734a5be555bb1bcb9db53ea39343a87f866"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA3-MULTI-SPEAKER-DIARIZATION.md",
+      "bytes": 1196,
+      "sha256": "5eadd627d9cba2f2f450f0391189c6ab8a4f20fd5a2b25723c30be988d7e7b52"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA4-LAUNCH-TRANSCRIPTS-UI.md",
+      "bytes": 887,
+      "sha256": "c505dfe526db8af2c97026716b2dacf0047cb4032ee9eed4744ffd8ebddad080"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA5-TRANSCRIPT-WORKFLOW.md",
+      "bytes": 1179,
+      "sha256": "2b66f2a864bf3ec81335c7e38b6a24a264bf8268797c29fc46eb7447edc6a912"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA6-TRANSCRIPT-ACCESS-FACETED-SEARCH.md",
+      "bytes": 1274,
+      "sha256": "e252cd6fce6379e6cbe92f79f1adecfa3b9507d197069adba278a5011364c447"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA7-TRANSCRIPT-REVIEW.md",
+      "bytes": 1744,
+      "sha256": "0270738497411c0660efdeda349dd3001628e4d3a182259428102a1d7701df65"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA8-BATCH-TRANSCRIPTION.md",
+      "bytes": 1545,
+      "sha256": "76ebcd775570b50dd0a22d13285d83984c3e2ced8808b2a5ac945ed0abe26225"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA8-BUILDFIX1-DEEP-RESEARCH-AUDIT.md",
+      "bytes": 1363,
+      "sha256": "c75e936a9e144ccb16624b3ea40f34846ca1f89f36e017cd68126d94e9f165e8"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA8-BUILDFIX2-TRANSCRIPTION-CONTINUITY.md",
+      "bytes": 1481,
+      "sha256": "d6157c37ba35c9e85517bdec369e4624d78e2e91d29dc13f0e36ae25183f61a0"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-ALPHA8-BUILDFIX3-TRANSCRIPTION-WORKSPACE.md",
+      "bytes": 1680,
+      "sha256": "e7a9a912b01746bd5bb029ad62b37e4fa7afb236ccf91b621873d66e57b7d3e7"
+    },
+    {
+      "path": "docs/history/release-notes/V0.33.0-STABLE.md",
+      "bytes": 1578,
+      "sha256": "7ec08f6c1d60b472a01f07041ca7d74efeff5fd3c3afab35f7bdd1cb4a661b61"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA1-DEDICATED-SERVER-FOUNDATION.md",
+      "bytes": 1403,
+      "sha256": "11b741006a58f9761a22430c0d20b709f856d6d6d9437ae9e7ca2f5fd60bf288"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA10-BACKGROUND-SERVER-PAIRING.md",
+      "bytes": 2423,
+      "sha256": "f19112aa192c93e8b58c611579b22f5197c60ae193d1d0f95f3b699b6c45bb01"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA11-BUILDFIX1-SETTINGS-THREAD-SAFETY.md",
+      "bytes": 1037,
+      "sha256": "90b6a09067d83dd9c97462dac5284369ae1321156a7f29f71531c5b8cda349df"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA11-BUILDFIX2-SERVER-OWNERSHIP.md",
+      "bytes": 1491,
+      "sha256": "8335484e8c4f195327a76f923ce5591fa8b856a0d482e811062a43dea82509fc"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA11-NATIVE-SERVER-CLIENT.md",
+      "bytes": 1900,
+      "sha256": "bbd56a9cc0c721b3f40e8bcb701e4e9cf944101aba58800243089b7b2e83366d"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA12-SERVER-OWNERSHIP-UX.md",
+      "bytes": 1850,
+      "sha256": "7c029e096e5710fb9948fb797c17bfc95f2e426e81ca567eb4501073286f3820"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA13-BUILDFIX1-FOLDERS-LISTENING-INSTALLERS.md",
+      "bytes": 1932,
+      "sha256": "681ea739d5a4bcbb0cafc47e78c71aa42928d5d6f24a4745cb343ff14c49d928"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA13-REMOTE-CLIENT-INSTALLER.md",
+      "bytes": 2450,
+      "sha256": "c31f49abfa4cc2dfe3427cf883908a18d07e5d53033f2e3f5a0b4a4c159a6b68"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA14-RADIO-VAULT-WEB-PHONE-CONNECTION.md",
+      "bytes": 2137,
+      "sha256": "6f26d409d6a346bfd9bb682a807b681023288f0c19352bd45cb966dc5bec4423"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA15-SERVER-FOLDER-AUDIO-REPAIR.md",
+      "bytes": 1824,
+      "sha256": "619e9ba656ab6d91d8309e64fbada379f2b2992a81a9f34cb90fbe26438fefdf"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA16-REMOTE-RESPONSIVENESS-OWNERSHIP.md",
+      "bytes": 2004,
+      "sha256": "8d90c34b61223703ae120c518ecd2a2e0d70a0ef9a466e6f8592c3bbb739d8ec"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA17-LARGE-LIBRARY-HANDOFF.md",
+      "bytes": 1469,
+      "sha256": "59f8ba98c54e0e4e089459be79e4cd34dc57e79741c13fa9df133fc0261a8087"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA18-BUILDFIX1-SAFARI-HANDOFF.md",
+      "bytes": 1175,
+      "sha256": "3159b619d98825b9c3e714336572368b8d9d98c0b73ce82084aface49cee2d46"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA18-CONNECTED-RELIABILITY.md",
+      "bytes": 2847,
+      "sha256": "f7d3eab1be48f4787b512ecf0c921065600671717b6151269017e7a67bbc5616"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX1-TRANSCRIPTION-IOS-HANDOFF.md",
+      "bytes": 1709,
+      "sha256": "737ce6b69c13fe113e3530ca60f71685a1b0a3c2705139cf5a9c0221291b76d1"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX2-IPHONE-RANGE-PLAYBACK.md",
+      "bytes": 1823,
+      "sha256": "7ad7fcefc33a32a714e82972cfda3d9baeb6cdc49d9a37f3d41b3435f57412e6"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX3-IPHONE-DECODER-PROBE.md",
+      "bytes": 1743,
+      "sha256": "62f2c9f32d0c8ef3ef9892c0df8255b6b7619312c5b7657bcf5bd453e867b740"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX4-IPHONE-AUDIBLE-START.md",
+      "bytes": 1488,
+      "sha256": "2042a165db7524413156393f9b12fc8842687190cf4194b4a561c334759eee5b"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX5-UNOWNED-AUTHORITY.md",
+      "bytes": 940,
+      "sha256": "127de8713f5c82bdbbd428f78e550fce90a3050e51878d672aafb2542fffe688"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX6-POSITIONED-IPHONE-AUDIO.md",
+      "bytes": 1427,
+      "sha256": "b0704e13a9d87a6d5d85481ed8242885a54a19aabad6e85526ac6bffe34218e9"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX7-SYNCHRONOUS-AUDIO-BASE.md",
+      "bytes": 1123,
+      "sha256": "2e83328b4b6fe0f24445055aa62c60ecfd0c375ca3073b41705cf6cdd07e809f"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX8-CONSECUTIVE-IPHONE-SWITCHES.md",
+      "bytes": 1544,
+      "sha256": "438a4d284e1960c9e569fdb0cd70e0b84005a72d5d2a39abd112af27bdf15162"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA19-CACHE-FIRST-STARTUP.md",
+      "bytes": 1608,
+      "sha256": "12145f7724848985f0f84f18dbb5d4aaa372120eb706511147fb61ac59887a7c"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA2-NATIVE-HANDOFF.md",
+      "bytes": 2016,
+      "sha256": "a9d661f5475acae3efb2a739f13fac0af1d9b4e321d6c56e7098629c53391591"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX1-IPHONE-REPEATED-HANDOFF.md",
+      "bytes": 1789,
+      "sha256": "cb9d106e72f6b3ab847f4246738ea9eb90956cef1b63cd6e95079c0654749290"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX2-IPHONE-RANGE-CONTINUITY.md",
+      "bytes": 1866,
+      "sha256": "1c0251f2601f1df8e0c2f803bc9701ccfdd8bf8c91025fb138b257009f326625"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX3-DEVICE-LOCAL-VOLUME.md",
+      "bytes": 1293,
+      "sha256": "d4002a25b6b95bdf26c151bcdab339a0afbb364cf7b024b3da03cb17f6597716"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA20-RELEASE-HARDENING.md",
+      "bytes": 2470,
+      "sha256": "0cd28ffef54c0458ba2ecf917bcadddc58b4d00386627aee2035d269ddfdcdf5"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA3-SERVER-LIBRARY-READS.md",
+      "bytes": 1213,
+      "sha256": "1c2564fb7066d24be798b7f9c33a127221d642bfb343d904223066e718d7d730"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA4-SERVER-USER-STATE.md",
+      "bytes": 1390,
+      "sha256": "6375426a818950f7063a125b0bc62e2945a316be55619ad0d2459090cebb2feb"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA5-SERVER-RESEARCH-TRANSCRIPTS.md",
+      "bytes": 1780,
+      "sha256": "ac413c1e9f61f10d2a327bcf0dffa3c33fb8c59e60feed141532295cb5e86cb4"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA6-SERVER-TRANSCRIPTION-WORKERS.md",
+      "bytes": 1544,
+      "sha256": "338a3be094b5a1cfab91c547fcde739ffb2dd3ed239ed6427d2f2f494545bc65"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA7-ANYWHERE-TRANSCRIPTS.md",
+      "bytes": 1625,
+      "sha256": "a08244f8915128c7a369175934d78379c6641d6917d3cc832eb349a0de127257"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA8-ANYWHERE-NATIVE-SHELL.md",
+      "bytes": 1870,
+      "sha256": "770bcd038fd00ecd6dde844f652817a3bc73389298312e06a63b410bb5c64a86"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA8-BUILDFIX1-DASHBOARD-PLAYER-HANDOFF.md",
+      "bytes": 1375,
+      "sha256": "f35b399db54e28c2b513aac3930dcf6a926e1c09c52e449e26f5cd8c1aade0b2"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA8-BUILDFIX2-AUDIBLE-PAUSED-PLAYBACK.md",
+      "bytes": 1171,
+      "sha256": "79f323813ab594a739e69cfa948d0afa3f2aacebb04143271869ae2e40d63261"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-ALPHA9-ANYWHERE-FULL-PARITY.md",
+      "bytes": 1786,
+      "sha256": "94d74eba40294cc2aa1b4443b9b200eaeede794c5ca7a5c1ca61a3d21d42035f"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-RC1-BUILDFIX1-RESEARCH-PACK-IMPORT.md",
+      "bytes": 1316,
+      "sha256": "a55398f9d169bc2cc779aac22c07bca46f46d820cdac303983e0b21d6fbf2db4"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-RC1-BUILDFIX2-NEW-BRAND.md",
+      "bytes": 1071,
+      "sha256": "5e18a82b9a25572b4e516a3c80b394ae7eae292bd7f93c9f1d861fc617bccd60"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-RC1-BUILDFIX3-SERVER-IDENTITY.md",
+      "bytes": 710,
+      "sha256": "39885429cac84a05978c0fcdf1de0cab36e08204a4ddf1ee47795a887d0a13b4"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-RC1-BUILDFIX4-CLIENT-UI-DOWNLOADS.md",
+      "bytes": 1599,
+      "sha256": "863b4dd64ccea2d52648bf54f272ae8766308128b5a0dc65cec419e5e668411a"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-RC1-BUILDFIX5-IPHONE-POSITIONED-FALLBACK.md",
+      "bytes": 1012,
+      "sha256": "83049f9a5bc803341f5cd9fb99cf10b13c1b82a0a64b99d464ec780ebebab0e5"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-RC1-STABILITY.md",
+      "bytes": 2742,
+      "sha256": "5e07277d4d322409a7294dc2c03015105882c3417d665ef0381d430d3647c01d"
+    },
+    {
+      "path": "docs/history/release-notes/V0.34.0-STABLE.md",
+      "bytes": 2101,
+      "sha256": "a8a254f68d49ca145484243655111d077dbf56b416e4035c4ee9b88bab94e24a"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA1-BUILDFIX1-RESEARCH-PACK-TOLERANCE.md",
+      "bytes": 1295,
+      "sha256": "4b52c9367982614f3008899b424009b6caff64b6c42d45ce6d48fa90bec46bc2"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA1-WIKI-FOUNDATION.md",
+      "bytes": 2508,
+      "sha256": "508914ecff3a1b762070779795ac1f16c4682d2b3a609b00f77bcb522cae835c"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA2-WIKI-AUTHORING.md",
+      "bytes": 2420,
+      "sha256": "d8be3a258e2a884ba296327ffa262915ab14dc32d5e14ce7954085350b065074"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA3-WIKI-DASHBOARD.md",
+      "bytes": 3845,
+      "sha256": "288541a6d45b6bc2a730a674c3e396274f197663570a3bb842a8e59873f1b442"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA4-WIKI-REFINEMENT.md",
+      "bytes": 2505,
+      "sha256": "96aa6e9f5e8f65140067f9880e58e6edde7535742af7558b77d9d4c5b2326217"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA5-CANONICAL-TOPICS.md",
+      "bytes": 1809,
+      "sha256": "19308e0976d6ecc0ab47a7e834b957500c79699a1c3f8880f5d9d6ac207e93bf"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA6-UNIFIED-KNOWLEDGE.md",
+      "bytes": 1729,
+      "sha256": "0da5d127a781e36cfae9f3e7a39a4c2cdda86a61fddc843fb82e6527649ffd52"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA7-KNOWLEDGE-EXPERIENCE.md",
+      "bytes": 1396,
+      "sha256": "9247595b9d410f5962d458d6f3b9cfaf14c658f38e65f36a2735041458154707"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA8-EXPLORE-KNOWLEDGE.md",
+      "bytes": 963,
+      "sha256": "7ea0accea54f8618fb7db91ea6bdeefd70bbc07037792316b3e03063b141f173"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA9-BUILDFIX1-KNOWLEDGE-IMPORT.md",
+      "bytes": 1397,
+      "sha256": "3abd1abaa0c56dcf835f74dc9f2496c6ce7336222836f41b94063036983cb285"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA9-BUILDFIX2-ARCHIVE-WIDE-KNOWLEDGE-EXPORT.md",
+      "bytes": 835,
+      "sha256": "4246df68eb822815a546cdc6906483cd12bf21b72f103be40a9c56e7a270b3da"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA9-BUILDFIX3-KNOWLEDGE-IMPORT-PROGRESS.md",
+      "bytes": 1466,
+      "sha256": "271695c65955dc9f76ec358bec330d017ade0da983fe41e27a0b91551cb4c1f5"
+    },
+    {
+      "path": "docs/history/release-notes/V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md",
+      "bytes": 2143,
+      "sha256": "e27a59768687fe5ac83151a61f3b7af114b82952585a056831eb5f9ef13ed094"
+    },
+    {
       "path": "docs/history/v0.29-alpha1/ALPHA1_STATIC_VALIDATION.md",
       "bytes": 660,
       "sha256": "5d7a860c5a37ed19e4d5a105714b779623e71d8b12258bd9c3c7a5fde8141f42"
@@ -4970,8 +4975,8 @@
     },
     {
       "path": "validate-source.ps1",
-      "bytes": 80320,
-      "sha256": "64aaeb587bbf3755011cb4a0ebe4a91fb737e7df72dd43a65bc7f6c55f00a10c"
+      "bytes": 81913,
+      "sha256": "f4091ce185b6658f21e01b707592b5aba94898e98ac5f9554e5259ee18d5f745"
     }
   ]
 }

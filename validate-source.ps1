@@ -95,7 +95,7 @@ foreach ($requiredShow in @("Ron & Fez", "Bennington", "Opie & Anthony", "The Ro
 if ($browseText -notmatch "LoadCollectionSummaries" -or $browseText -notmatch "KnownShowCatalog.Collections") {
     throw "First-class sidebar collection projection is missing."
 }
-if (-not (Test-Path (Join-Path $root "SIDEBAR-SHOW-SECTIONS-ACCEPTANCE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/SIDEBAR-SHOW-SECTIONS-ACCEPTANCE.md"))) {
     throw "Sidebar show-section acceptance guide is missing."
 }
 
@@ -111,7 +111,7 @@ $playbackViewModelText = Get-Content (Join-Path $root "TheRadioVault.Presentatio
 if ($playbackViewModelText -notmatch 'ShowMoveToThisDevice => _handoff\.IsAvailable && IsPlaybackElsewhere') {
     throw "Native reverse-handoff control is not enabled."
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA2-NATIVE-HANDOFF.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA2-NATIVE-HANDOFF.md"))) {
     throw "Alpha 2 native handoff acceptance guide is missing."
 }
 $loopbackReadsPath = Join-Path $root "TheRadioVault.Infrastructure\Services\LoopbackLibraryReadServices.cs"
@@ -123,7 +123,7 @@ foreach ($marker in @("LoopbackServerClient", "LoopbackLibraryBrowseService", "L
 foreach ($forbidden in @("new LibraryBrowseService", "new BroadcastDetailsService")) {
     if ($compositionText -match [regex]::Escape($forbidden)) { throw "Native composition reopened a direct database read boundary: $forbidden" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA3-SERVER-LIBRARY-READS.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA3-SERVER-LIBRARY-READS.md"))) {
     throw "Alpha 3 server-owned Library reads acceptance guide is missing."
 }
 $loopbackWritesPath = Join-Path $root "TheRadioVault.Infrastructure\Services\LoopbackUserStateServices.cs"
@@ -139,7 +139,7 @@ $webModelsText = Get-Content (Join-Path $root "TheRadioVault.Web\Models\WebModel
 if ($webRoutesText -notmatch "MomentUpdate" -or $webModelsText -notmatch "IncrementPlayCount") {
     throw "The complete Alpha 4 Moment/progress write contract is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA4-SERVER-USER-STATE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA4-SERVER-USER-STATE.md"))) {
     throw "Alpha 4 server-owned user-state acceptance guide is missing."
 }
 $loopbackResearchPath = Join-Path $root "TheRadioVault.Infrastructure\Services\LoopbackResearchServices.cs"
@@ -153,7 +153,7 @@ foreach ($marker in @("LoopbackResearchWorkspaceService", "LoopbackResearchPackT
 foreach ($forbidden in @("new ResearchWorkspaceService", "new LocalResearchPackTransferService", "new SqliteTranscriptRepository", "new SqliteSpeakerIdentityRepository")) {
     if ($compositionText -match [regex]::Escape($forbidden)) { throw "Native composition reopened a direct Alpha 5 database boundary: $forbidden" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA5-SERVER-RESEARCH-TRANSCRIPTS.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA5-SERVER-RESEARCH-TRANSCRIPTS.md"))) {
     throw "Alpha 5 server-owned Research and transcripts acceptance guide is missing."
 }
 $serverTranscriptionPath = Join-Path $root "TheRadioVault.Infrastructure\Services\ServerTranscriptionRuntime.cs"
@@ -168,32 +168,32 @@ foreach ($marker in @("LoopbackTranscriptionCoordinator", "LoopbackTranscription
 if ($compositionText -match 'RegisterSingleton<TranscriptionCoordinator>') {
     throw "The native client still owns a transcription worker."
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA6-SERVER-TRANSCRIPTION-WORKERS.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA6-SERVER-TRANSCRIPTION-WORKERS.md"))) {
     throw "Alpha 6 server transcription acceptance guide is missing."
 }
 $anywhereWebText = Get-Content (Join-Path $root "TheRadioVault.Web\Services\LocalWebServer.cs") -Raw -Encoding UTF8
 foreach ($marker in @('["transcription","Transcription studio"]', '--transcript: #43c7bd', 'loadTranscripts', 'data-transcription-action', 'data-transcript-export', 'data-transcribe-full', 'radio-vault-anywhere-shell-v67')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 7 Anywhere transcription marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA7-ANYWHERE-TRANSCRIPTS.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA7-ANYWHERE-TRANSCRIPTS.md"))) {
     throw "Alpha 7 Anywhere transcripts acceptance guide is missing."
 }
 foreach ($marker in @('THE RADIO VAULT', 'data-nav-search', 'data-nav-favourites', 'data-section="moments"', 'data-section="research"', 'data-section="settings"', 'id="sidebarShows"', 'width:224px', 'height:110px', 'id="miniSeek"', 'after(libraryTools)', 'setAttribute("aria-label"')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 8 native-style Anywhere shell marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA8-ANYWHERE-NATIVE-SHELL.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA8-ANYWHERE-NATIVE-SHELL.md"))) {
     throw "Alpha 8 Anywhere native-shell acceptance guide is missing."
 }
 foreach ($marker in @('nativeDashboardTop', 'Unheard broadcasts', 'id="miniFavourite"', 'id="miniMoment"', 'id="miniVolume"', 'Waiting for the existing dormant decoder preparation', 'Priming can advance or re-seek the media element')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 8 Buildfix 1 Dashboard, player or handoff marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA8-BUILDFIX1-DASHBOARD-PLAYER-HANDOFF.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA8-BUILDFIX1-DASHBOARD-PLAYER-HANDOFF.md"))) {
     throw "Alpha 8 Buildfix 1 acceptance guide is missing."
 }
 foreach ($marker in @('savedVolumeValue === null ? 1', 'heartbeatInterval = audio.paused ? 5000 : 1000')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 8 Buildfix 2 audible playback or paused ownership marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA8-BUILDFIX2-AUDIBLE-PAUSED-PLAYBACK.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA8-BUILDFIX2-AUDIBLE-PAUSED-PLAYBACK.md"))) {
     throw "Alpha 8 Buildfix 2 acceptance guide is missing."
 }
 foreach ($marker in @('loadMoments', 'loadResearch', 'Knowledge database', 'Export complete knowledge database', 'loadSettings', 'data-edit-metadata', 'visibilitychange')) {
@@ -214,7 +214,7 @@ $loopbackClientText = Get-Content $loopbackClientPath -Raw
 foreach ($marker in @('MaximumTransientAttempts', 'SendWithReconnectAsync', 'IsRetrySafe', 'GatewayTimeout')) {
     if ($loopbackClientText -notmatch [regex]::Escape($marker)) { throw "Alpha 9 reconnect marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA9-ANYWHERE-FULL-PARITY.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA9-ANYWHERE-FULL-PARITY.md"))) {
     throw "Alpha 9 full-parity acceptance guide is missing."
 }
 $webModelsContractText = Get-Content (Join-Path $root "TheRadioVault.Web\Models\WebModels.cs") -Raw
@@ -234,22 +234,22 @@ foreach ($marker in @('LoopbackWikiService', 'LoopbackWikiPackTransferService', 
 foreach ($marker in @('FederationWikiImportPreview', 'FederationWikiImportApply', 'FederationWikiExport', 'ClientWiki')) {
     if ($webRoutesText -notmatch [regex]::Escape($marker)) { throw "0.35 Wiki server route missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.35.0-ALPHA1-WIKI-FOUNDATION.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA1-WIKI-FOUNDATION.md"))) {
     throw "0.35 Alpha 1 Wiki acceptance guide is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.35.0-ALPHA1-BUILDFIX1-RESEARCH-PACK-TOLERANCE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA1-BUILDFIX1-RESEARCH-PACK-TOLERANCE.md"))) {
     throw "0.35 Alpha 1 Buildfix 1 Research-pack acceptance guide is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.35.0-ALPHA2-WIKI-AUTHORING.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA2-WIKI-AUTHORING.md"))) {
     throw "0.35 Alpha 2 Wiki authoring acceptance guide is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.35.0-ALPHA3-WIKI-DASHBOARD.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA3-WIKI-DASHBOARD.md"))) {
     throw "0.35 Alpha 3 Wiki dashboard acceptance guide is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.35.0-ALPHA4-WIKI-REFINEMENT.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA4-WIKI-REFINEMENT.md"))) {
     throw "0.35 Alpha 4 Wiki refinement acceptance guide is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.35.0-ALPHA5-CANONICAL-TOPICS.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA5-CANONICAL-TOPICS.md"))) {
     throw "0.35 Alpha 5 canonical-topic acceptance guide is missing."
 }
 $wikiViewText = Get-Content $wikiViewPath -Raw
@@ -305,7 +305,7 @@ foreach ($marker in @('ImportErrorText', 'RetryImportCommand', 'RaiseImportFeedb
 foreach ($marker in @('This Knowledge import could not finish', 'No partial changes were kept', 'RetryImportCommand')) {
     if ($researchWorkspaceViewText -notmatch [regex]::Escape($marker)) { throw "RC1 Buildfix 1 Research import UI marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-RC1-BUILDFIX1-RESEARCH-PACK-IMPORT.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-RC1-BUILDFIX1-RESEARCH-PACK-IMPORT.md"))) {
     throw "RC1 Buildfix 1 Research pack acceptance guide is missing."
 }
 $researchLibraryText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\DatabaseService.ResearchLibrary.cs") -Raw
@@ -315,22 +315,22 @@ foreach ($text in @($researchLibraryText, $researchBrowserText)) {
         throw "Knowledge import still writes the reconciliation-only ambiguous value into research_state."
     }
 }
-if (-not (Test-Path (Join-Path $root "V0.35.0-ALPHA9-BUILDFIX1-KNOWLEDGE-IMPORT.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA9-BUILDFIX1-KNOWLEDGE-IMPORT.md"))) {
     throw "0.35 Alpha 9 Buildfix 1 Knowledge import acceptance guide is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.35.0-ALPHA9-BUILDFIX2-ARCHIVE-WIDE-KNOWLEDGE-EXPORT.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA9-BUILDFIX2-ARCHIVE-WIDE-KNOWLEDGE-EXPORT.md"))) {
     throw "0.35 Alpha 9 Buildfix 2 archive-wide Knowledge export acceptance guide is missing."
 }
 foreach ($marker in @('if (!id || isIosWebKit || thisPhoneOwnsSession() || phoneTransferInProgress) return;', 'if (!isIosWebKit && shared?.episodeId && !phoneTransferInProgress)', 'const preparingDormantTarget = !isIosWebKit && inactive && has &&', 'radio-vault-anywhere-shell-v67')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 20 Buildfix 1 repeated-iPhone-handoff marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA20-BUILDFIX1-IPHONE-REPEATED-HANDOFF.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX1-IPHONE-REPEATED-HANDOFF.md"))) {
     throw "Alpha 20 Buildfix 1 acceptance guide is missing."
 }
 foreach ($marker in @('GetOrCreatePositionedWaveSession', 'PositionedWaveSessionIdleLifetime', 'WriteRangeAsync', 'streamSession', 'radio-vault-anywhere-shell-v67')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 20 Buildfix 2 iPhone range-continuity marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA20-BUILDFIX2-IPHONE-RANGE-CONTINUITY.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX2-IPHONE-RANGE-CONTINUITY.md"))) {
     throw "Alpha 20 Buildfix 2 acceptance guide is missing."
 }
 $nativePlaybackEngineText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Playback\NAudioPlaybackEngine.cs") -Raw
@@ -364,7 +364,7 @@ $nativeCompositionText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Ava
 foreach ($marker in @('CreatePlaybackEngine()', 'new MacAvFoundationPlaybackEngine()', 'new ServerMediaProxy')) {
     if ($nativeCompositionText -notmatch [regex]::Escape($marker)) { throw "Mac Client composition marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA20-BUILDFIX3-DEVICE-LOCAL-VOLUME.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX3-DEVICE-LOCAL-VOLUME.md"))) {
     throw "Alpha 20 Buildfix 3 device-local volume acceptance guide is missing."
 }
 $nativeAccessRecoveryText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\NativeConnectedAccessService.cs") -Raw
@@ -377,7 +377,7 @@ foreach ($marker in @('var startListener = _listener!;', 'AcceptLoopAsync(startL
 if ($anywhereWebText.Contains('AcceptLoopAsync(_listener!')) {
     throw "RC1 server accept loop still references a mutable listener generation."
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-RC1-STABILITY.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-RC1-STABILITY.md"))) {
     throw "RC1 stability acceptance guide is missing."
 }
 $serverProgramText = Get-Content (Join-Path $root "TheRadioVault.Server\Program.cs") -Raw
@@ -404,7 +404,7 @@ foreach ($marker in @('DiscoverAsync', 'PairAsync', 'ServerCertificateCustomVali
 foreach ($marker in @('Server connection', 'ConnectedAccess.DiscoverCommand', 'ConnectedAccess.PairCommand', 'ConnectedAccess.TestCommand')) {
     if ($nativeSettingsText -notmatch [regex]::Escape($marker)) { throw "Alpha 10 native connection settings marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA10-BACKGROUND-SERVER-PAIRING.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA10-BACKGROUND-SERVER-PAIRING.md"))) {
     throw "Alpha 10 background-server pairing acceptance guide is missing."
 }
 
@@ -485,7 +485,7 @@ $researchVmText = Get-Content $researchVmPath -Raw
 if ($researchVmText -match "authoritative.server") {
     throw "Local Research UI still exposes authoritative-server wording."
 }
-if (-not (Test-Path (Join-Path $root "ALPHA13-LOCAL-UX-PASS1-ACCEPTANCE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/ALPHA13-LOCAL-UX-PASS1-ACCEPTANCE.md"))) {
     throw "Alpha 13 local UX acceptance guide is missing."
 }
 
@@ -505,7 +505,7 @@ foreach ($marker in @("EditorCatalogueProgramme", "EditorOriginalReleaseDate", "
 $webModelsPath = Join-Path $root "TheRadioVault.Web\Models\WebModels.cs"
 $webModelsText = Get-Content $webModelsPath -Raw
 if ($webModelsText -notmatch "CatalogueFields") { throw "Radio Vault Anywhere catalogue display model is missing." }
-if (-not (Test-Path (Join-Path $root "ALPHA13-CATALOGUE-RESEARCH-ACCEPTANCE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/ALPHA13-CATALOGUE-RESEARCH-ACCEPTANCE.md"))) {
     throw "Catalogue Research acceptance guide is missing."
 }
 
@@ -530,7 +530,7 @@ $nowPlayingViewText = Get-Content $nowPlayingViewPath -Raw
 foreach ($marker in @("Playback.IsPrimaryTransportLoading", "Preparing playback", "Play first queued broadcast")) {
     if ($nowPlayingViewText -notmatch [regex]::Escape($marker)) { throw "Now Playing Pass 2 marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "ALPHA13-PLAYBACK-NOW-PLAYING-PASS2-ACCEPTANCE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/ALPHA13-PLAYBACK-NOW-PLAYING-PASS2-ACCEPTANCE.md"))) {
     throw "Alpha 13 Pass 2 acceptance guide is missing."
 }
 
@@ -564,13 +564,13 @@ $transcriptionDownloadText = Get-Content $transcriptionDownloadPath -Raw
 foreach ($marker in @("releases/latest", "whisper-bin-x64.zip", "digest", "whisper-vad", "ExtractArchiveSafely")) {
     if ($transcriptionDownloadText -notmatch [regex]::Escape($marker)) { throw "Alpha 2 safe transcription download marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA2-LOCAL-TRANSCRIPTION.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA2-LOCAL-TRANSCRIPTION.md"))) {
     throw "Alpha 2 local transcription acceptance guide is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA2-BUILDFIX1-TRANSCRIPTION-MODEL-REPAIR.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA2-BUILDFIX1-TRANSCRIPTION-MODEL-REPAIR.md"))) {
     throw "Alpha 2 Buildfix 1 transcription-model acceptance guide is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA3-MULTI-SPEAKER-DIARIZATION.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA3-MULTI-SPEAKER-DIARIZATION.md"))) {
     throw "Alpha 3 multi-speaker acceptance guide is missing."
 }
 $startupViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\StartupWindow.axaml") -Raw
@@ -581,7 +581,7 @@ $audioPreparerText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avaloni
 foreach ($marker in @(".m4a", "prepared-audio.wav", "WdlResamplingSampleProvider")) {
     if ($audioPreparerText -notmatch [regex]::Escape($marker)) { throw "Alpha 4 audio preparation marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA4-LAUNCH-TRANSCRIPTS-UI.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA4-LAUNCH-TRANSCRIPTS-UI.md"))) {
     throw "Alpha 4 launch and Transcripts UI acceptance guide is missing."
 }
 $packServiceText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\KnowledgePackService.cs") -Raw
@@ -601,7 +601,7 @@ foreach ($marker in @("PauseSelectedJobCommand", "ResumeSelectedJobCommand")) {
 foreach ($marker in @("SuspendThread", "ResumeThread")) {
     if ($processControllerText -notmatch [regex]::Escape($marker)) { throw "Alpha 5 native pause marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA5-TRANSCRIPT-WORKFLOW.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA5-TRANSCRIPT-WORKFLOW.md"))) {
     throw "Alpha 5 transcript workflow acceptance guide is missing."
 }
 $broadcastInfoText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\FullBroadcastInfoView.axaml") -Raw
@@ -616,7 +616,7 @@ foreach ($marker in @("OpenTranscriptCommand", "StartTranscriptionCommand")) {
 foreach ($marker in @("Narrow the results", "ScopeFilters", "StatusFilters", "ShowFilters", "YearFilters", "Suggestions", "HasTranscriptOnly")) {
     if ($searchViewText -notmatch [regex]::Escape($marker)) { throw "Alpha 6 faceted Search marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA6-TRANSCRIPT-ACCESS-FACETED-SEARCH.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA6-TRANSCRIPT-ACCESS-FACETED-SEARCH.md"))) {
     throw "Alpha 6 transcript access and faceted Search acceptance guide is missing."
 }
 $transcriptReviewText = Get-Content (Join-Path $root "TheRadioVault.Presentation\ViewModels\TranscriptsViewModel.cs") -Raw
@@ -631,7 +631,7 @@ foreach ($marker in @("Save wording", "Confirm voice", "Split phrase", "Merge ne
 foreach ($marker in @("SpeakerEmbeddingExtractor", "CreateEmbeddingAsync")) {
     if ($voiceEngineText -notmatch [regex]::Escape($marker)) { throw "Alpha 7 remembered voice marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA7-TRANSCRIPT-REVIEW.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA7-TRANSCRIPT-REVIEW.md"))) {
     throw "Alpha 7 transcript review acceptance guide is missing."
 }
 $batchCoordinatorText = Get-Content (Join-Path $root "TheRadioVault.Transcription\Services\TranscriptionBatchCoordinator.cs") -Raw
@@ -645,7 +645,7 @@ foreach ($marker in @("transcription_batches", "transcription_batch_items", "Mar
 foreach ($marker in @("Start batch", "Pause batch", "Resume batch", "Retry failed", "MoveBatchItemUpCommand")) {
 if ($transcriptReviewViewText -notmatch [regex]::Escape($marker)) { throw "Alpha 8 batch UI marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA8-BATCH-TRANSCRIPTION.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA8-BATCH-TRANSCRIPTION.md"))) {
     throw "Alpha 8 batch transcription acceptance guide is missing."
 }
 
@@ -663,7 +663,7 @@ foreach ($marker in @('LoadCoreAsync', 'export.TranscriptCount')) {
     if ($researchViewModelText -notmatch [regex]::Escape($marker)) { throw "Buildfix 1 Research refresh marker missing: $marker" }
 }
 if ($knowledgePackText -notmatch [regex]::Escape('Archive Knowledge Database')) { throw "Unified knowledge-database instructions marker missing." }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA8-BUILDFIX1-DEEP-RESEARCH-AUDIT.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA8-BUILDFIX1-DEEP-RESEARCH-AUDIT.md"))) {
     throw "Alpha 8 Buildfix 1 acceptance guide is missing."
 }
 
@@ -681,7 +681,7 @@ foreach ($marker in @('CurrentTranscriptionActionText', 'ReplaceExistingTranscri
     if ($transcriptsViewModelText -notmatch [regex]::Escape($marker)) { throw "Buildfix 2 re-transcription marker missing: $marker" }
 }
 if ($transcriptionSettingsText -notmatch [regex]::Escape('storedThreshold <= 0.5 ? 0.9')) { throw "Buildfix 2 diarization migration marker missing." }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA8-BUILDFIX2-TRANSCRIPTION-CONTINUITY.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA8-BUILDFIX2-TRANSCRIPTION-CONTINUITY.md"))) {
     throw "Alpha 8 Buildfix 2 acceptance guide is missing."
 }
 
@@ -692,7 +692,7 @@ foreach ($marker in @('Transcript review', 'Transcription activity', 'Button.tra
 if ($transcriptionWorkspaceText -match [regex]::Escape('compact-action')) {
     throw "Buildfix 3 transcription text actions must not use the fixed-width icon-button style."
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-ALPHA8-BUILDFIX3-TRANSCRIPTION-WORKSPACE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-ALPHA8-BUILDFIX3-TRANSCRIPTION-WORKSPACE.md"))) {
     throw "Alpha 8 Buildfix 3 acceptance guide is missing."
 }
 
@@ -700,7 +700,7 @@ $roadmapText = Get-Content (Join-Path $root "docs\guides\ROADMAP.md") -Raw
 foreach ($marker in @('RadioVault Server', 'Universal clients', 'Dedicated server foundation', 'Full remote native clients', 'Universal handoff hardening')) {
     if ($roadmapText -notmatch [regex]::Escape($marker)) { throw "Stable 0.33 server/client roadmap marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.33.0-STABLE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-STABLE.md"))) {
     throw "Radio Vault 0.33 stable acceptance guide is missing."
 }
 
@@ -729,7 +729,7 @@ if ($serverWindowText -match 'Dashboard|Now Playing|Transcripts') { throw "Norma
 if ($solutionText -notmatch [regex]::Escape('TheRadioVault.Server\TheRadioVault.Server.csproj')) {
     throw "The dedicated server project is missing from the solution."
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA1-DEDICATED-SERVER-FOUNDATION.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA1-DEDICATED-SERVER-FOUNDATION.md"))) {
     throw "Radio Vault 0.34 Alpha 1 server-foundation guide is missing."
 }
 
@@ -769,13 +769,13 @@ foreach ($marker in @('Source = "local"', 'NormalizeTranscriptSource(document.So
 foreach ($marker in @('isIosWebKit', 'const dormantPositionMs = isIosWebKit ? 0 : shared.positionMs')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 19 Buildfix 1 iPhone handoff marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA19-BUILDFIX1-TRANSCRIPTION-IOS-HANDOFF.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX1-TRANSCRIPTION-IOS-HANDOFF.md"))) {
     throw "Alpha 19 Buildfix 1 release guide is missing."
 }
 foreach ($marker in @('ETag: ', 'Last-Modified: ', 'Cache-Control: private, max-age=300', 'waitForIosDecoderClock')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 19 Buildfix 2 iPhone range-playback marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA19-BUILDFIX2-IPHONE-RANGE-PLAYBACK.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX2-IPHONE-RANGE-PLAYBACK.md"))) {
     throw "Alpha 19 Buildfix 2 release guide is missing."
 }
 foreach ($marker in @('rangeValidatorMatches', 'no-transform', 'Reuse', 'audio.duration < 1')) {
@@ -784,7 +784,7 @@ foreach ($marker in @('rangeValidatorMatches', 'no-transform', 'Reuse', 'audio.d
 if ($anywhereWebText -match [regex]::Escape('assignCanonicalPartSource(id, freshPartIndex, null)')) {
     throw "Alpha 19 Buildfix 3 must not replace the healthy dormant iPhone decoder inside the Move gesture."
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA19-BUILDFIX3-IPHONE-DECODER-PROBE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX3-IPHONE-DECODER-PROBE.md"))) {
     throw "Alpha 19 Buildfix 3 release guide is missing."
 }
 $playbackTransferText = Get-Content (Join-Path $root "TheRadioVault.Web\Services\PlaybackTransferCoordinator.cs") -Raw
@@ -793,13 +793,13 @@ foreach ($marker in @('media-start?positionMs=', 'assignCanonicalGestureStartSou
         throw "Alpha 19 Buildfix 4 iPhone audible-start marker missing: $marker"
     }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA19-BUILDFIX4-IPHONE-AUDIBLE-START.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX4-IPHONE-AUDIBLE-START.md"))) {
     throw "Alpha 19 Buildfix 4 release guide is missing."
 }
 if ($playbackTransferText -notmatch [regex]::Escape('source.EpisodeId is null or <= 0')) {
     throw "Alpha 19 Buildfix 5 unowned authority marker is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA19-BUILDFIX5-UNOWNED-AUTHORITY.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX5-UNOWNED-AUTHORITY.md"))) {
     throw "Alpha 19 Buildfix 5 release guide is missing."
 }
 foreach ($marker in @('StreamPositionedWaveAsync', 'currentAudioLogicalBaseMs = gesturePrimedPositionMs', 'currentAudioIsPositioned', 'audio/wav', 'positioned=" + (isIosWebKit ? "1" : "0")', 'commitAlignmentToleranceMs = directAudiblePrime ? 2500 : 750')) {
@@ -807,7 +807,7 @@ foreach ($marker in @('StreamPositionedWaveAsync', 'currentAudioLogicalBaseMs = 
         throw "Alpha 19 Buildfix 6 positioned iPhone playback marker missing: $marker"
     }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA19-BUILDFIX6-POSITIONED-IPHONE-AUDIO.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX6-POSITIONED-IPHONE-AUDIO.md"))) {
     throw "Alpha 19 Buildfix 6 release guide is missing."
 }
 foreach ($marker in @('currentAudioLogicalBaseMs = gesturePrimedPositionMs', 'return Math.max(0, Number(currentAudioLogicalBaseMs || 0) + localMs)', 'currentAudioLogicalBaseMs = Number(part.logicalStartMs || 0)')) {
@@ -815,7 +815,7 @@ foreach ($marker in @('currentAudioLogicalBaseMs = gesturePrimedPositionMs', 're
         throw "Alpha 19 Buildfix 7 synchronous logical-base marker missing: $marker"
     }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA19-BUILDFIX7-SYNCHRONOUS-AUDIO-BASE.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX7-SYNCHRONOUS-AUDIO-BASE.md"))) {
     throw "Alpha 19 Buildfix 7 release guide is missing."
 }
 foreach ($marker in @('currentAudioEpisodeId', 'decoderMatchesGestureTarget', 'mustPrimeTargetSourceInGesture', 'if (directAudiblePrime || mustPrimeTargetSourceInGesture)', 'audio.muted = !directAudiblePrime', 'audioEpisodeId: Number(currentAudioEpisodeId || 0)')) {
@@ -823,7 +823,7 @@ foreach ($marker in @('currentAudioEpisodeId', 'decoderMatchesGestureTarget', 'm
         throw "Alpha 19 Buildfix 8 consecutive iPhone broadcast-switch marker missing: $marker"
     }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA19-BUILDFIX8-CONSECUTIVE-IPHONE-SWITCHES.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX8-CONSECUTIVE-IPHONE-SWITCHES.md"))) {
     throw "Alpha 19 Buildfix 8 release guide is missing."
 }
 $alpha20HostText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Composition\AvaloniaApplicationHost.cs") -Raw
@@ -856,7 +856,7 @@ foreach ($installerScript in @('package-client-installer.ps1', 'package-server-i
         throw "Alpha 20 installer payload is not rebuilt and validated before compilation: $installerScript"
     }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA20-RELEASE-HARDENING.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA20-RELEASE-HARDENING.md"))) {
     throw "Alpha 20 release-hardening guide is missing."
 }
 foreach ($marker in @('MediaManifest', 'MediaPart', '_mediaProxy.Register')) {
@@ -871,7 +871,7 @@ foreach ($marker in @('AesGcm', 'MaximumBytes', 'TryLoad', 'DeleteForServer')) {
 foreach ($marker in @('FederationSettings', 'FederationLibraryScan', 'LoopbackServerArchiveHealthService')) {
     if ($serverAdministrationText -notmatch [regex]::Escape($marker)) { throw "Alpha 11 server administration marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA11-NATIVE-SERVER-CLIENT.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA11-NATIVE-SERVER-CLIENT.md"))) {
     throw "Radio Vault 0.34 Alpha 11 native server-client guide is missing."
 }
 $settingsViewModelText = Get-Content (Join-Path $root "TheRadioVault.Presentation\ViewModels\DesktopToolsViewModel.cs") -Raw
@@ -882,14 +882,14 @@ foreach ($marker in @('ApplyAnywhereSnapshotOnUiAsync', '_dispatcher.InvokeAsync
 foreach ($marker in @('ApplySnapshotOnUiAsync', '_dispatcher!.InvokeAsync')) {
     if ($connectedAccessViewModelText -notmatch [regex]::Escape($marker)) { throw "Alpha 11 Buildfix 1 connection dispatcher marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA11-BUILDFIX1-SETTINGS-THREAD-SAFETY.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA11-BUILDFIX1-SETTINGS-THREAD-SAFETY.md"))) {
     throw "Radio Vault 0.34 Alpha 11 Buildfix 1 Settings guide is missing."
 }
 $settingsViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\DesktopToolsView.axaml") -Raw
 foreach ($marker in @('CURRENT SERVER', 'ActiveConnectionLabel', 'Use this computer', 'It will not list the server already running on this computer', 'hosted by the server', 'Closing the client does not stop it')) {
     if ($settingsViewText -notmatch [regex]::Escape($marker)) { throw "Alpha 11 Buildfix 2 server-ownership marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA11-BUILDFIX2-SERVER-OWNERSHIP.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA11-BUILDFIX2-SERVER-OWNERSHIP.md"))) {
     throw "Radio Vault 0.34 Alpha 11 Buildfix 2 server-ownership guide is missing."
 }
 $alpha12HostText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Composition\AvaloniaApplicationHost.cs") -Raw
@@ -913,7 +913,7 @@ foreach ($marker in @('IsVisible="{Binding IsServerStopped}"', 'IsVisible="{Bind
 }
 if ($alpha12ClientStylesText -notmatch [regex]::Escape('AllowAutoHide')) { throw "Alpha 12 auto-hiding scrollbar marker missing." }
 if ($alpha12TranscriptsViewText -match 'RvTranscriptBrush|RvTranscriptSubtleBrush') { throw "Alpha 12 transcription page still uses the navigation-only teal signature colour." }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA12-SERVER-OWNERSHIP-UX.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA12-SERVER-OWNERSHIP-UX.md"))) {
     throw "Radio Vault 0.34 Alpha 12 guide is missing."
 }
 
@@ -930,7 +930,7 @@ foreach ($marker in @('PrivilegesRequired=lowest', 'Start Radio Vault Server aut
     if ($alpha13InstallerText -notmatch [regex]::Escape($marker)) { throw "Alpha 13 server-installer marker missing: $marker" }
 }
 if (-not (Test-Path (Join-Path $root "package-server-installer.ps1"))) { throw "Alpha 13 installer packaging script is missing." }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA13-REMOTE-CLIENT-INSTALLER.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA13-REMOTE-CLIENT-INSTALLER.md"))) {
     throw "Radio Vault 0.34 Alpha 13 guide is missing."
 }
 
@@ -953,7 +953,7 @@ foreach ($marker in @('Radio Vault Client', 'TheRadioVault.exe', 'PrivilegesRequ
     if ($alpha13Buildfix1ClientInstallerText -notmatch [regex]::Escape($marker)) { throw "Alpha 13 Buildfix 1 client installer marker missing: $marker" }
 }
 if (-not (Test-Path (Join-Path $root "package-client-installer.ps1"))) { throw "Alpha 13 Buildfix 1 client installer packaging script is missing." }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA13-BUILDFIX1-FOLDERS-LISTENING-INSTALLERS.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA13-BUILDFIX1-FOLDERS-LISTENING-INSTALLERS.md"))) {
     throw "Radio Vault 0.34 Alpha 13 Buildfix 1 guide is missing."
 }
 
@@ -977,7 +977,7 @@ foreach ($marker in @('RADIO VAULT WEB', 'CopyWebLinkCommand', 'RegenerateWebLin
 foreach ($marker in @('QRCodeGenerator.GenerateQrCode', 'ECCLevel.M', 'ModuleMatrix')) {
     if ($alpha14QrText -notmatch [regex]::Escape($marker)) { throw "Alpha 14 local QR marker missing: $marker" }
 }
-if (-not (Test-Path (Join-Path $root "V0.34.0-ALPHA14-RADIO-VAULT-WEB-PHONE-CONNECTION.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA14-RADIO-VAULT-WEB-PHONE-CONNECTION.md"))) {
     throw "Radio Vault 0.34 Alpha 14 guide is missing."
 }
 
@@ -998,7 +998,7 @@ if ($knowledgeWebImportText -notmatch [regex]::Escape('ImportFailureMessage')) {
 if ($knowledgeClientText -notmatch [regex]::Escape('Timeout = TimeSpan.FromMinutes(10)')) {
     throw "0.35 Alpha 9 large Knowledge import timeout marker is missing."
 }
-if (-not (Test-Path (Join-Path $root "V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md"))) {
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md"))) {
     throw "0.35 Alpha 9 Knowledge portability acceptance guide is missing."
 }
 
@@ -1036,6 +1036,6 @@ foreach ($relativeProject in @(
 }
 $stableDataProjectText = Get-Content (Join-Path $root 'TheRadioVault.Data\TheRadioVault.Data.csproj') -Raw
 if ($stableDataProjectText -notmatch [regex]::Escape('SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.12"')) { throw 'Stable 0.34 patched native SQLite bundle override is missing.' }
-if (-not (Test-Path (Join-Path $root "V0.34.0-STABLE.md"))) { throw "Radio Vault 0.34 stable release contract is missing." }
+if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-STABLE.md"))) { throw "Radio Vault 0.34 stable release contract is missing." }
 
 Write-Host "Native server client, Research, transcription, playback and Radio Vault Web source validation passed for $version." -ForegroundColor Green

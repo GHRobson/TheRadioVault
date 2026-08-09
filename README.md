@@ -82,7 +82,7 @@ From a source checkout on Windows with the .NET 8 SDK:
 
 The release gate validates the source architecture, builds the solution deterministically with warnings treated as errors, runs the complete smoke suite and verifies the product version.
 
-See [BUILDING.md](BUILDING.md) for build, publish and installer details, [V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md](V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md) for the current acceptance guide, [V0.35.0-ALPHA6-UNIFIED-KNOWLEDGE.md](V0.35.0-ALPHA6-UNIFIED-KNOWLEDGE.md) for the unified format foundation and [V0.34.0-STABLE.md](V0.34.0-STABLE.md) for the previous stable contract.
+See [BUILDING.md](BUILDING.md) for build, publish and installer details. Historical acceptance contracts and alpha release notes are preserved in the [release-notes archive](docs/history/release-notes/README.md), including the [current 0.35 acceptance guide](docs/history/release-notes/V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md), the [unified knowledge format foundation](docs/history/release-notes/V0.35.0-ALPHA6-UNIFIED-KNOWLEDGE.md) and the [previous 0.34 stable contract](docs/history/release-notes/V0.34.0-STABLE.md).
 
 ## Shared development
 

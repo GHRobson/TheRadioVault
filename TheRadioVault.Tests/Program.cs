@@ -867,7 +867,7 @@ static void Alpha13CompletesRemoteClientMonitoringAndServerInstaller()
     True(installer.Contains("RadioVault.Server.exe", StringComparison.Ordinal));
 
     True(File.Exists(Path.Combine(SourceRoot(), "package-server-installer.ps1")));
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-ALPHA13-REMOTE-CLIENT-INSTALLER.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA13-REMOTE-CLIENT-INSTALLER.md")));
 }
 
 static void Alpha13Buildfix1RestoresFoldersListeningActionsAndDualInstallers()
@@ -902,7 +902,7 @@ static void Alpha13Buildfix1RestoresFoldersListeningActionsAndDualInstallers()
     True(clientInstaller.Contains("Radio Vault Client", StringComparison.Ordinal));
     True(clientInstaller.Contains("TheRadioVault.exe", StringComparison.Ordinal));
     True(File.Exists(Path.Combine(SourceRoot(), "package-client-installer.ps1")));
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-ALPHA13-BUILDFIX1-FOLDERS-LISTENING-INSTALLERS.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA13-BUILDFIX1-FOLDERS-LISTENING-INSTALLERS.md")));
 }
 
 static void Alpha14RenamesWebAndRestoresPhoneConnectionControls()
@@ -942,7 +942,7 @@ static void Alpha14RenamesWebAndRestoresPhoneConnectionControls()
     True(serverSettings.Contains("WebQrCode.Rows", StringComparison.Ordinal));
     True(serverSettings.Contains("SecureSetupQrCode.Rows", StringComparison.Ordinal));
 
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-ALPHA14-RADIO-VAULT-WEB-PHONE-CONNECTION.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA14-RADIO-VAULT-WEB-PHONE-CONNECTION.md")));
 }
 
 static void Alpha15RestoresServerFolderAssignmentAndNativeAudioQuality()
@@ -975,7 +975,7 @@ static void Alpha15RestoresServerFolderAssignmentAndNativeAudioQuality()
     True(audio.Contains("? _reader", StringComparison.Ordinal));
     True(!audio.Contains("new WaveOutEvent", StringComparison.Ordinal));
 
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-ALPHA15-SERVER-FOLDER-AUDIO-REPAIR.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA15-SERVER-FOLDER-AUDIO-REPAIR.md")));
 }
 
 static void Alpha16ImprovesRemoteResponsivenessAndPlaybackOwnership()
@@ -1004,7 +1004,7 @@ static void Alpha16ImprovesRemoteResponsivenessAndPlaybackOwnership()
     True(mainWindow.Contains("Move playback to this PC", StringComparison.Ordinal));
     True(mainWindow.Contains("M2,11 L13,11", StringComparison.Ordinal));
 
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-ALPHA16-REMOTE-RESPONSIVENESS-OWNERSHIP.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA16-REMOTE-RESPONSIVENESS-OWNERSHIP.md")));
 }
 
 static void Alpha17BoundsLargeLibraryWebHandoffs()
@@ -1025,7 +1025,7 @@ static void Alpha17BoundsLargeLibraryWebHandoffs()
     True(transfers.Contains("GetEpisodeDirect(ticket.TargetEpisodeId)", StringComparison.Ordinal));
     True(!transfers.Contains("InvalidateEpisodeSnapshot();", StringComparison.Ordinal));
 
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-ALPHA17-LARGE-LIBRARY-HANDOFF.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA17-LARGE-LIBRARY-HANDOFF.md")));
 }
 
 static void DirectEpisodeLookupReturnsOnlyRequestedBroadcast()
@@ -1119,7 +1119,7 @@ static void Alpha18HardensConnectedClientReliability()
         True(installer.Contains("Type: filesandordirs; Name: \"{app}\"", StringComparison.Ordinal));
     }
 
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-ALPHA18-CONNECTED-RELIABILITY.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA18-CONNECTED-RELIABILITY.md")));
 }
 
 static void ConnectedViewsRefreshBoundedStaleData()
@@ -1765,7 +1765,7 @@ static void Alpha20HardensReleaseTruthAndInstallerPayloads()
         True(packageCall >= 0 && payloadCheck > packageCall && compilerLookup > payloadCheck);
     }
 
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-ALPHA20-RELEASE-HARDENING.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA20-RELEASE-HARDENING.md")));
 }
 
 static void Rc1FreezesRecoveryAndUpgradePreservation()
@@ -1791,7 +1791,7 @@ static void Rc1FreezesRecoveryAndUpgradePreservation()
         True(!installer.Contains("AppPaths.DataDirectory", StringComparison.Ordinal));
     }
 
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-RC1-STABILITY.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-RC1-STABILITY.md")));
 }
 
 static void Rc1BuildfixRestoresVisibleResearchPackImport()
@@ -1869,7 +1869,7 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
     True(shell.Contains("Move playback to this PC", StringComparison.Ordinal));
     True(!shell.Contains("Content=\"⇥\"", StringComparison.Ordinal));
 
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-RC1-BUILDFIX4-CLIENT-UI-DOWNLOADS.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-RC1-BUILDFIX4-CLIENT-UI-DOWNLOADS.md")));
 }
 
 static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
@@ -1954,9 +1954,9 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
         SourceRoot(), "TheRadioVault.Data", "TheRadioVault.Data.csproj"));
     True(dataProject.Contains("SQLitePCLRaw.bundle_e_sqlite3\" Version=\"2.1.12\"", StringComparison.Ordinal));
 
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.34.0-STABLE.md")));
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.35.0-ALPHA1-WIKI-FOUNDATION.md")));
-    True(File.Exists(Path.Combine(SourceRoot(), "V0.35.0-ALPHA1-BUILDFIX1-RESEARCH-PACK-TOLERANCE.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-STABLE.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.35.0-ALPHA1-WIKI-FOUNDATION.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.35.0-ALPHA1-BUILDFIX1-RESEARCH-PACK-TOLERANCE.md")));
 }
 
 static void NativeDownloadsPersistAuditAndPrepareLocalMedia()

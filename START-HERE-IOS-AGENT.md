@@ -7,7 +7,7 @@
 **Connected-client capability generation:** `40`  
 **Intended next task:** build a native Swift/SwiftUI iPhone and iPad client for the existing Radio Vault Server.
 
-This is the primary starting document for an AI agent receiving the source package on a Mac. Read this file, `README.md`, `docs/guides/ROADMAP.md`, `docs/guides/ARCHITECTURE.md`, `V0.34.0-STABLE.md`, and `V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md` before changing code.
+This is the primary starting document for an AI agent receiving the source package on a Mac. Read this file, `README.md`, `docs/guides/ROADMAP.md`, `docs/guides/ARCHITECTURE.md`, `docs/history/release-notes/V0.34.0-STABLE.md`, and `docs/history/release-notes/V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md` before changing code.
 
 ## 1. Mission
 
@@ -107,7 +107,7 @@ Listening progress, favourites, Moments, transcripts and queue actions attach to
 | `TheRadioVault.Web/` | Responsive phone reference and proven Safari behaviour. |
 | `TheRadioVault.Tests/Program.cs` | Executable contract index and regression suite. Search test names before changing a protocol. |
 | `docs/guides/ROADMAP.md` | Authoritative server-owned universal-client roadmap. |
-| `V0.34.0-STABLE.md` | Accepted dedicated-server and multi-device baseline. |
+| `docs/history/release-notes/V0.34.0-STABLE.md` | Accepted dedicated-server and multi-device baseline. |
 | `CHANGELOG.md` | Detailed history and rationale, particularly the iPhone playback fixes in 0.34 Alpha 19-20. |
 
 The solution has thirteen .NET projects. For iOS work, the most important are Core, Services, Web, Infrastructure, Desktop.Avalonia and Tests. The Swift project should live in a clearly isolated directory such as `clients/RadioVaultIOS/`; do not mix generated Xcode output into the .NET projects.
@@ -459,13 +459,13 @@ Do not claim the iOS client is complete merely because it compiles. A working bu
 - `CHANGELOG.md`
 - `docs/guides/ROADMAP.md`
 - `docs/guides/ARCHITECTURE.md`
-- `V0.34.0-STABLE.md`
-- `V0.34.0-ALPHA19-BUILDFIX1-TRANSCRIPTION-IOS-HANDOFF.md`
-- `V0.34.0-ALPHA19-BUILDFIX2-IPHONE-RANGE-PLAYBACK.md`
-- `V0.34.0-ALPHA20-BUILDFIX1-IPHONE-REPEATED-HANDOFF.md`
-- `V0.34.0-ALPHA20-BUILDFIX2-IPHONE-RANGE-CONTINUITY.md`
-- `V0.34.0-ALPHA20-BUILDFIX3-DEVICE-LOCAL-VOLUME.md`
-- `V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md`
+- `docs/history/release-notes/V0.34.0-STABLE.md`
+- `docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX1-TRANSCRIPTION-IOS-HANDOFF.md`
+- `docs/history/release-notes/V0.34.0-ALPHA19-BUILDFIX2-IPHONE-RANGE-PLAYBACK.md`
+- `docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX1-IPHONE-REPEATED-HANDOFF.md`
+- `docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX2-IPHONE-RANGE-CONTINUITY.md`
+- `docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX3-DEVICE-LOCAL-VOLUME.md`
+- `docs/history/release-notes/V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md`
 - `MACOS-CLIENT.md`
 - `TheRadioVault.Web/Contracts/WebApiRoutes.cs`
 - `TheRadioVault.Web/Models/WebModels.cs`
