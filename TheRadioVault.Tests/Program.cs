@@ -779,6 +779,10 @@ static void MacClientRemainsUsableBeforeServerPairing()
     True(mainWindow.Contains("Fill=\"#FF5F57\"", StringComparison.Ordinal));
     True(mainWindow.Contains("Fill=\"#FEBC2E\"", StringComparison.Ordinal));
     True(mainWindow.Contains("Fill=\"#28C840\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("M8,1 L4,4 L8,7", StringComparison.Ordinal));
+    True(mainWindow.Contains("M16,1 L20,4 L16,7", StringComparison.Ordinal));
+    True(!mainWindow.Contains("Content=\"−15\"", StringComparison.Ordinal));
+    True(!mainWindow.Contains("Content=\"+30\"", StringComparison.Ordinal));
     var macControls = mainWindow[mainWindow.IndexOf("x:Name=\"MacWindowControls\"", StringComparison.Ordinal)..];
     var closeButton = macControls.IndexOf("Click=\"CloseButton_OnClick\"", StringComparison.Ordinal);
     var minimizeButton = macControls.IndexOf("Click=\"MinimizeButton_OnClick\"", StringComparison.Ordinal);
@@ -1588,11 +1592,11 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(theme.Contains("RadioVaultIcon.InProgress", StringComparison.Ordinal));
     True(theme.Contains("DrawSkip", StringComparison.Ordinal));
     True(theme.Contains("DrawSync", StringComparison.Ordinal));
+    True(theme.Contains("Lines(context, (8, 17), (4, 20), (8, 23))", StringComparison.Ordinal));
     True(theme.Contains("ConfigureWithTransparentBackground", StringComparison.Ordinal));
     True(!theme.Contains("ArrowHead", StringComparison.Ordinal));
     True(theme.Contains("context.AddCurveToPoint(5.3f, 20, 4, 18.7f, 4, 17)", StringComparison.Ordinal));
     True(theme.Contains("Lines(context, (16, 1), (20, 4), (16, 7))", StringComparison.Ordinal));
-    True(theme.Contains("Lines(context, (8.5, 18), (4, 16.5), (5.5, 12))", StringComparison.Ordinal));
     True(!theme.Contains("(14.5, 4.5), (18, 6), (16.5, 9.5)", StringComparison.Ordinal));
     True(!theme.Contains("(16, 7), (20, 8), (18.5, 11.8)", StringComparison.Ordinal));
     True(theme.Contains("(3, 10.5), (13, 10.5)", StringComparison.Ordinal));
@@ -5171,7 +5175,7 @@ static void WebPlayerIsRadioVaultBranded()
 {
     WithWebServer(async (port, token) =>
     {
-        using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
         var html = await client.GetStringAsync($"http://127.0.0.1:{port}/?token={Uri.EscapeDataString(token)}");
         True(html.Contains("rvMiniPlayer", StringComparison.Ordinal));
         True(html.Contains("data-section=\"dashboard\"", StringComparison.Ordinal));
@@ -5187,6 +5191,11 @@ static void WebPlayerIsRadioVaultBranded()
         True(html.Contains("transferPhone", StringComparison.Ordinal));
         True(html.Contains("playerSeek.disabled = !has || inactive || phoneTransferInProgress", StringComparison.Ordinal));
         True(html.Contains("playerSpeed.disabled = !has || inactive || phoneTransferInProgress", StringComparison.Ordinal));
+        True(html.Contains("class=\"rvSkipIcon\"", StringComparison.Ordinal));
+        True(html.Contains("M8 1L4 4L8 7", StringComparison.Ordinal));
+        True(html.Contains("M16 1L20 4L16 7", StringComparison.Ordinal));
+        True(html.Contains("M4 10V7Q4 4 7 4H20M16 1L20 4L16 7M20 14V17Q20 20 17 20H4M8 17L4 20L8 23", StringComparison.Ordinal));
+        True(html.Contains("$(\"playerBack\").addEventListener(\"click\", () => skip(-15))", StringComparison.Ordinal));
         True(!html.Contains("Pause playback on PC", StringComparison.Ordinal));
         True(!html.Contains("sendDesktop(\"seek\"", StringComparison.Ordinal));
         True(!html.Contains("sendDesktop(\"speed\"", StringComparison.Ordinal));

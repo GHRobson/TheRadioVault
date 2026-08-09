@@ -299,7 +299,19 @@
 
         <Grid Grid.Column="1" RowDefinitions="Auto,Auto" RowSpacing="7" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
-            <Button Classes="ghost icon-button" Content="−15" Command="{Binding Playback.SkipBackCommand}" ToolTip.Tip="Skip back 15 seconds" />
+            <Button Classes="ghost icon-button" Command="{Binding Playback.SkipBackCommand}" ToolTip.Tip="Skip back 15 seconds">
+              <Grid Width="24" Height="24">
+                <Path Data="M5,10 L5,17 C5,18.7 6.3,20 8,20 L17,20 C18.7,20 20,18.7 20,17 L20,7 C20,5.3 18.7,4 17,4 L4,4"
+                      Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
+                      StrokeLineCap="Round" StrokeJoin="Round" />
+                <Path Data="M8,1 L4,4 L8,7"
+                      Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
+                      StrokeLineCap="Round" StrokeJoin="Round" />
+                <TextBlock Text="15" Foreground="{DynamicResource RvAccentBrush}"
+                           FontSize="7.6" FontWeight="Bold" TextAlignment="Center"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3,0,0" />
+              </Grid>
+            </Button>
             <Button Classes="primary icon-button" Width="46" MinWidth="46" Height="46"
                     Command="{Binding Playback.PlayPauseCommand}"
                     ToolTip.Tip="{Binding Playback.PrimaryTransportToolTip}">
@@ -322,7 +334,19 @@
                 </Grid>
               </Grid>
             </Button>
-            <Button Classes="ghost icon-button" Content="+30" Command="{Binding Playback.SkipForwardCommand}" ToolTip.Tip="Skip forward 30 seconds" />
+            <Button Classes="ghost icon-button" Command="{Binding Playback.SkipForwardCommand}" ToolTip.Tip="Skip forward 30 seconds">
+              <Grid Width="24" Height="24">
+                <Path Data="M19,10 L19,17 C19,18.7 17.7,20 16,20 L7,20 C5.3,20 4,18.7 4,17 L4,7 C4,5.3 5.3,4 7,4 L20,4"
+                      Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
+                      StrokeLineCap="Round" StrokeJoin="Round" />
+                <Path Data="M16,1 L20,4 L16,7"
+                      Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
+                      StrokeLineCap="Round" StrokeJoin="Round" />
+                <TextBlock Text="30" Foreground="{DynamicResource RvAccentBrush}"
+                           FontSize="7.6" FontWeight="Bold" TextAlignment="Center"
+                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3,0,0" />
+              </Grid>
+            </Button>
           </StackPanel>
           <Grid Grid.Row="1" ColumnDefinitions="48,*,48" ColumnSpacing="10" VerticalAlignment="Center" Margin="0,0,0,2">
             <TextBlock Text="{Binding Playback.PositionText}" FontSize="9" Classes="muted" HorizontalAlignment="Right" />

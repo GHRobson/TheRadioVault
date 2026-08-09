@@ -4558,7 +4558,9 @@ self.addEventListener('fetch',event=>{const request=event.request;if(request.met
       .rvMiniIdentity .rvMiniText { min-width:0; display:flex; flex-direction:column; gap:3px; }
       .rvMiniTransport { min-width:0; display:grid; gap:6px; align-content:center; }
       .rvMiniButtons { display:flex; justify-content:center; align-items:center; gap:8px; }
-      .miniSkip { width:44px; height:44px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); color:var(--muted); font-size:12px; font-weight:750; }
+      .miniSkip { width:44px; height:44px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); color:var(--accent); padding:8px; }
+      .rvSkipIcon { width:100%; height:100%; display:block; overflow:visible; fill:none; stroke:currentColor; stroke-width:1.75; stroke-linecap:round; stroke-linejoin:round; }
+      .rvSkipIcon text { fill:currentColor; stroke:none; font:700 7.6px system-ui,-apple-system,sans-serif; text-anchor:middle; dominant-baseline:middle; }
       .rvMiniTimeline { display:grid; grid-template-columns:46px minmax(80px,1fr) 46px; gap:9px; align-items:center; color:var(--muted); font-size:9px; }
       .rvMiniTimeline span:first-child { text-align:right; }
       .rvMiniTimeline .seek { width:100%; }
@@ -5072,7 +5074,7 @@ self.addEventListener('fetch',event=>{const request=event.request;if(request.met
         <span class="rvMiniText"><span id="miniTitle" class="rvMiniTitle">Choose a broadcast</span><span id="miniShow" class="rvMiniShow">Choose a broadcast from the Library</span></span>
       </button>
       <div class="rvMiniTransport">
-        <div class="rvMiniButtons"><button id="miniBack" class="miniSkip" type="button">-15</button><button id="miniPlay" class="roundButton" aria-label="Play"></button><button id="miniForward" class="miniSkip" type="button">+30</button></div>
+        <div class="rvMiniButtons"><button id="miniBack" class="miniSkip" type="button" aria-label="Skip back 15 seconds"><svg class="rvSkipIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10V17Q5 20 8 20H17Q20 20 20 17V7Q20 4 17 4H4"/><path d="M8 1L4 4L8 7"/><text x="12" y="13.5">15</text></svg></button><button id="miniPlay" class="roundButton" aria-label="Play"></button><button id="miniForward" class="miniSkip" type="button" aria-label="Skip forward 30 seconds"><svg class="rvSkipIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10V17Q19 20 16 20H7Q4 20 4 17V7Q4 4 7 4H20"/><path d="M16 1L20 4L16 7"/><text x="12" y="13.5">30</text></svg></button></div>
         <div class="rvMiniTimeline"><span id="miniElapsed">0:00</span><input id="miniSeek" class="seek" type="range" min="0" max="1" value="0" step="1" aria-label="Playback position"/><span id="miniDuration">0:00</span></div>
       </div>
       <div class="rvMiniUtilities">
@@ -5114,9 +5116,9 @@ self.addEventListener('fetch',event=>{const request=event.request;if(request.met
         </div>
       </div>
       <div class="transport">
-        <button id="playerBack">−30</button
+        <button id="playerBack" aria-label="Skip back 15 seconds"><svg class="rvSkipIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10V17Q5 20 8 20H17Q20 20 20 17V7Q20 4 17 4H4"/><path d="M8 1L4 4L8 7"/><text x="12" y="13.5">15</text></svg></button
         ><button id="playerPlay" class="mainPlay" aria-label="Play"></button
-        ><button id="playerForward">+30</button>
+        ><button id="playerForward" aria-label="Skip forward 30 seconds"><svg class="rvSkipIcon" viewBox="0 0 24 24" aria-hidden="true"><path d="M19 10V17Q19 20 16 20H7Q4 20 4 17V7Q4 4 7 4H20"/><path d="M16 1L20 4L16 7"/><text x="12" y="13.5">30</text></svg></button>
       </div>
       <div class="playerOptions">
         <select id="playerSpeed" aria-label="Playback speed">
@@ -6245,7 +6247,7 @@ self.addEventListener('fetch',event=>{const request=event.request;if(request.met
         const waitingText = blockedSyncCount
           ? `${blockedSyncCount} change${blockedSyncCount===1?"":"s"} could not be applied automatically. Retry or discard them from this sheet.`
           : `${pendingJournalCount} change${pendingJournalCount===1?"":"s"} waiting to sync.`;
-        const config={synced:["Synced",`All changes are stored on ${connectedLabel()}.`,"M5 12.5l4 4L19 7"],syncing:["Syncing",`${pendingJournalCount} change${pendingJournalCount===1?"":"s"} being sent to Radio Vault.`,"M20 7h-5V2M4 17h5v5M19 12a7 7 0 0 0-12-5M5 12a7 7 0 0 0 12 5"],offline:["Offline",`${pendingJournalCount} change${pendingJournalCount===1?"":"s"} waiting. Downloaded broadcasts remain available.`,"M4 4l16 16M8.5 8.5A5 5 0 0 1 17 12M5 12a9 9 0 0 1 .8-3.7M12 17h.01"],attention:["Needs attention",waitingText,"M12 8v5M12 17h.01M10.3 3.6L2.4 18a2 2 0 0 0 1.8 3h15.6a2 2 0 0 0 1.8-3L13.7 3.6a2 2 0 0 0-3.4 0z"]}[mode];
+        const config={synced:["Synced",`All changes are stored on ${connectedLabel()}.`,"M5 12.5l4 4L19 7"],syncing:["Syncing",`${pendingJournalCount} change${pendingJournalCount===1?"":"s"} being sent to Radio Vault.`,"M4 10V7Q4 4 7 4H20M16 1L20 4L16 7M20 14V17Q20 20 17 20H4M8 17L4 20L8 23"],offline:["Offline",`${pendingJournalCount} change${pendingJournalCount===1?"":"s"} waiting. Downloaded broadcasts remain available.`,"M4 4l16 16M8.5 8.5A5 5 0 0 1 17 12M5 12a9 9 0 0 1 .8-3.7M12 17h.01"],attention:["Needs attention",waitingText,"M12 8v5M12 17h.01M10.3 3.6L2.4 18a2 2 0 0 0 1.8 3h15.6a2 2 0 0 0 1.8-3L13.7 3.6a2 2 0 0 0-3.4 0z"]}[mode];
         syncStatus.innerHTML=`<svg viewBox="0 0 24 24"><path d="${config[2]}"/></svg>`;
         syncStatus.setAttribute("aria-label",config[0]); syncStatus.title=config[0]; syncSheetTitle.textContent=config[0]; syncSheetBody.textContent=config[1];
         syncRetryFailed.hidden=blockedSyncCount===0;
@@ -10173,7 +10175,7 @@ self.addEventListener('fetch',event=>{const request=event.request;if(request.met
       });
       $("playerClose").addEventListener("click", hideFullPlayer);
       playerPlay.addEventListener("click", togglePlayback);
-      $("playerBack").addEventListener("click", () => skip(-30));
+      $("playerBack").addEventListener("click", () => skip(-15));
       $("playerForward").addEventListener("click", () => skip(30));
       $("playerInfo").addEventListener("click", () => {
         const s = activeState();

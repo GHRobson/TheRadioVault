@@ -363,14 +363,18 @@ public static class RadioVaultIcons
     private static void DrawSync(CGContext context)
     {
         context.MoveTo(4, 10);
-        context.AddCurveToPoint(5.5f, 4, 15.5f, 2.8f, 20, 7.5f);
+        context.AddLineToPoint(4, 7);
+        context.AddCurveToPoint(4, 5.3f, 5.3f, 4, 7, 4);
+        context.AddLineToPoint(20, 4);
         context.StrokePath();
-        Lines(context, (15.5, 6), (20, 7.5), (18.5, 12));
+        Lines(context, (16, 1), (20, 4), (16, 7));
 
         context.MoveTo(20, 14);
-        context.AddCurveToPoint(18.5f, 20, 8.5f, 21.2f, 4, 16.5f);
+        context.AddLineToPoint(20, 17);
+        context.AddCurveToPoint(20, 18.7f, 18.7f, 20, 17, 20);
+        context.AddLineToPoint(4, 20);
         context.StrokePath();
-        Lines(context, (8.5, 18), (4, 16.5), (5.5, 12));
+        Lines(context, (8, 17), (4, 20), (8, 23));
     }
 
     private static void RoundedRect(CGContext context, CGRect rect, double radius)
