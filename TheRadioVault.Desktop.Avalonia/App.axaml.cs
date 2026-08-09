@@ -1,16 +1,19 @@
 using Avalonia;
+using Avalonia.Controls;
 using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Markup.Xaml;
 using Avalonia.Threading;
 using TheRadioVault.Desktop.Avalonia.Composition;
 using TheRadioVault.Desktop.Avalonia.Platform;
 using TheRadioVault.Desktop.Avalonia.Views;
+using TheRadioVault.Presentation.ViewModels;
 
 namespace TheRadioVault.Desktop.Avalonia;
 
 public partial class App : global::Avalonia.Application
 {
     private AvaloniaApplicationHost? _host;
+    private AboutWindow? _aboutWindow;
     private int _startupStarted;
 
     public override void Initialize()
@@ -133,6 +136,35 @@ public partial class App : global::Avalonia.Application
             // The encrypted saved workspace is already usable. Connection state
             // monitoring will retry, so a refresh failure must not close the UI.
             StartupFailureReporter.Report("Incremental startup cache refresh", exception, showNativeDialog: false);
+        }
+    }
+
+    private void AboutMenuItem_OnClick(object? sender, EventArgs args)
+    {
+        if (_aboutWindow is not null)
+        {
+            _aboutWindow.Activate();
+            return;
+        }
+
+        var aboutWindow = new AboutWindow();
+        _aboutWindow = aboutWindow;
+        aboutWindow.Closed += (_, _) => _aboutWindow = null;
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime { MainWindow: Window owner })
+            _ = aboutWindow.ShowDialog(owner);
+        else
+            aboutWindow.Show();
+    }
+
+    private void SettingsMenuItem_OnClick(object? sender, EventArgs args)
+    {
+        if (ApplicationLifetime is IClassicDesktopStyleApplicationLifetime
+            {
+                MainWindow: MainWindow { DataContext: MainWindowViewModel viewModel } mainWindow
+            })
+        {
+            mainWindow.Activate();
+            _ = viewModel.NavigateToAsync("tools");
         }
     }
 }

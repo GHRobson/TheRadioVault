@@ -4,6 +4,8 @@ using Avalonia.Controls.Primitives;
 using Avalonia.Input;
 using Avalonia.Interactivity;
 using Avalonia.VisualTree;
+using System.Diagnostics;
+using TheRadioVault.Desktop.Avalonia.Platform;
 using TheRadioVault.Presentation.ViewModels;
 
 namespace TheRadioVault.Desktop.Avalonia.Views;
@@ -124,6 +126,94 @@ public partial class MainWindow : Window
             ? WindowState.Normal
             : WindowState.Maximized;
     }
+
+    private void NavigateMenuItem_OnClick(object? sender, EventArgs e)
+    {
+        if (sender is NativeMenuItem { CommandParameter: string route } &&
+            DataContext is MainWindowViewModel viewModel)
+            _ = viewModel.NavigateToAsync(route);
+    }
+
+    private void CloseWindowMenuItem_OnClick(object? sender, EventArgs e) => Close();
+
+    private void EditNativeMenu_OnNeedsUpdate(object? sender, EventArgs e)
+    {
+        if (sender is not NativeMenu menu) return;
+        var textBox = FindFocusedTextBox();
+        SetMenuItemEnabled(menu, "undo", textBox?.CanUndo == true);
+        SetMenuItemEnabled(menu, "redo", textBox?.CanRedo == true);
+        SetMenuItemEnabled(menu, "cut", textBox?.CanCut == true);
+        SetMenuItemEnabled(menu, "copy", textBox?.CanCopy == true);
+        SetMenuItemEnabled(menu, "paste", textBox?.CanPaste == true);
+        SetMenuItemEnabled(menu, "select-all", textBox is not null);
+    }
+
+    private static void SetMenuItemEnabled(NativeMenu menu, string action, bool enabled)
+    {
+        var item = menu.Items.OfType<NativeMenuItem>()
+            .FirstOrDefault(candidate => string.Equals(candidate.CommandParameter as string, action, StringComparison.Ordinal));
+        if (item is not null) item.IsEnabled = enabled;
+    }
+
+    private TextBox? FindFocusedTextBox()
+    {
+        var focused = FocusManager?.GetFocusedElement();
+        return focused as TextBox ??
+               (focused as Visual)?.GetVisualAncestors().OfType<TextBox>().FirstOrDefault();
+    }
+
+    private void UndoMenuItem_OnClick(object? sender, EventArgs e) => FindFocusedTextBox()?.Undo();
+    private void RedoMenuItem_OnClick(object? sender, EventArgs e) => FindFocusedTextBox()?.Redo();
+    private void CutMenuItem_OnClick(object? sender, EventArgs e) => FindFocusedTextBox()?.Cut();
+    private void CopyMenuItem_OnClick(object? sender, EventArgs e) => FindFocusedTextBox()?.Copy();
+    private void PasteMenuItem_OnClick(object? sender, EventArgs e) => FindFocusedTextBox()?.Paste();
+    private void SelectAllMenuItem_OnClick(object? sender, EventArgs e) => FindFocusedTextBox()?.SelectAll();
+
+    private void ViewNativeMenu_OnNeedsUpdate(object? sender, EventArgs e)
+    {
+        if (sender is not NativeMenu menu) return;
+        var route = (DataContext as MainWindowViewModel)?.CurrentRoute ?? "dashboard";
+        foreach (var menuItem in menu.Items.OfType<NativeMenuItem>())
+        {
+            if (menuItem.CommandParameter is string itemRoute && itemRoute != "full-screen")
+                menuItem.IsChecked = route.StartsWith(itemRoute, StringComparison.OrdinalIgnoreCase);
+        }
+
+        var fullScreenItem = menu.Items.OfType<NativeMenuItem>()
+            .FirstOrDefault(item => string.Equals(item.CommandParameter as string, "full-screen", StringComparison.Ordinal));
+        if (fullScreenItem is not null)
+            fullScreenItem.Header = WindowState == WindowState.FullScreen ? "Exit Full Screen" : "Enter Full Screen";
+    }
+
+    private void FullScreenMenuItem_OnClick(object? sender, EventArgs e)
+        => WindowState = WindowState == WindowState.FullScreen ? WindowState.Normal : WindowState.FullScreen;
+
+    private void MinimizeWindowMenuItem_OnClick(object? sender, EventArgs e)
+        => WindowState = WindowState.Minimized;
+
+    private void ZoomWindowMenuItem_OnClick(object? sender, EventArgs e) => ToggleMaximizeRestore();
+
+    private void BringAllToFrontMenuItem_OnClick(object? sender, EventArgs e)
+    {
+        Show();
+        Activate();
+    }
+
+    private static void RadioVaultHelpMenuItem_OnClick(object? sender, EventArgs e)
+        => OpenExternalTarget("https://github.com/GHRobson/TheRadioVault#readme");
+
+    private static void ReportProblemMenuItem_OnClick(object? sender, EventArgs e)
+        => OpenExternalTarget("https://github.com/GHRobson/TheRadioVault/issues");
+
+    private static void OpenDiagnosticsFolderMenuItem_OnClick(object? sender, EventArgs e)
+    {
+        var startInfo = new ProcessStartInfo("open") { UseShellExecute = false };
+        startInfo.ArgumentList.Add(AvaloniaAppPaths.DataDirectory);
+        Process.Start(startInfo);
+    }
+
+    private static void OpenExternalTarget(string target)
+        => Process.Start(new ProcessStartInfo(target) { UseShellExecute = true });
 
     private void PlaybackSeekSlider_OnPointerPressed(object? sender, PointerPressedEventArgs e)
     {

@@ -1,7 +1,7 @@
 {
   "version": "0.35.0-alpha9-buildfix3",
-  "generatedAtUtc": "2026-08-09T11:42:43.1179790Z",
-  "fileCount": 992,
+  "generatedAtUtc": "2026-08-09T11:54:44.6986340Z",
+  "fileCount": 994,
   "files": [
     {
       "path": ".editorconfig",
@@ -775,13 +775,13 @@
     },
     {
       "path": "TheRadioVault.Desktop.Avalonia/App.axaml",
-      "bytes": 47179,
-      "sha256": "4b88bcdb6fb58a5696038eec7dfd5846a19ded91f20ceaeea84e81cb785a0ac9"
+      "bytes": 47475,
+      "sha256": "2d73ef3f2de1775456e491caed6fd1c17dad8bda9fe0a4558a5d02f4d615dab7"
     },
     {
       "path": "TheRadioVault.Desktop.Avalonia/App.axaml.cs",
-      "bytes": 5862,
-      "sha256": "e5f455cc6a49a8d6d34f628bdc9a82c0f9896bc5cfd468e886e999aac7a8b51e"
+      "bytes": 6905,
+      "sha256": "380aa4b99dafee4bf70c69f42494d1272eb494efafcee9f2aa6bed0862bb6b6f"
     },
     {
       "path": "TheRadioVault.Desktop.Avalonia/Assets/RadioVault-Logo.png",
@@ -964,6 +964,16 @@
       "sha256": "2fddb2be895b95f3c03e392e3eb777b81f851440eba05042dbd004c153bbe948"
     },
     {
+      "path": "TheRadioVault.Desktop.Avalonia/Views/AboutWindow.axaml",
+      "bytes": 2329,
+      "sha256": "29c0e12bf458d62ff1400fa5ac82b76fe764bb7b746dc41648a406d751074f28"
+    },
+    {
+      "path": "TheRadioVault.Desktop.Avalonia/Views/AboutWindow.axaml.cs",
+      "bytes": 1184,
+      "sha256": "bce4ff7e8c69cf6db3d59251223bb9a128eb81a86fa65735cba1d44f75aef7a2"
+    },
+    {
       "path": "TheRadioVault.Desktop.Avalonia/Views/DashboardView.axaml",
       "bytes": 21600,
       "sha256": "7a41d49cfd053d8793df7a7ad88f818728f2508161da3307fa694cc0dac56a9d"
@@ -1015,13 +1025,13 @@
     },
     {
       "path": "TheRadioVault.Desktop.Avalonia/Views/MainWindow.axaml",
-      "bytes": 24389,
-      "sha256": "3b9582db17ebc16791fbcdea9fa0b3f12874617c764de610f27ce30cc97ee475"
+      "bytes": 28236,
+      "sha256": "5430061c6ff144ec4b70d7902f5b25022b7e9c9e444d2fa0bbad247b03608887"
     },
     {
       "path": "TheRadioVault.Desktop.Avalonia/Views/MainWindow.axaml.cs",
-      "bytes": 7512,
-      "sha256": "767d13cc0329fe02e2c8010d2216d8ff56040737c62d570e4c3d195db41d1465"
+      "bytes": 11891,
+      "sha256": "b020e5566e3ec2c2e37dbbb8fdb2f01dfab968ec716b282258c8f46a4277ad3a"
     },
     {
       "path": "TheRadioVault.Desktop.Avalonia/Views/MomentsView.axaml",
@@ -2060,8 +2070,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 530173,
-      "sha256": "543a581546f896bbdf650f885423b1194bd5b4d91aeeba07be74d6210fc7fc37"
+      "bytes": 531774,
+      "sha256": "b20e391a70e3a613298ddcfd939e91f5512af20f386430b54602a49ce234c84a"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",
@@ -4890,8 +4900,8 @@
     },
     {
       "path": "installer/macos/Info.plist",
-      "bytes": 1368,
-      "sha256": "a867b76d19faceebeb120d75fecf1eca0a6e276c1f512d341c0b32a0a5baa379"
+      "bytes": 1386,
+      "sha256": "f2bbe0be4a3350add1353ff3828c65643cf2d2052133e7a3b8295540227913e4"
     },
     {
       "path": "installer/macos/RadioVault.entitlements",

@@ -1,0 +1,41 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        x:Class="TheRadioVault.Desktop.Avalonia.Views.AboutWindow"
+        Title="About Radio Vault"
+        Width="480" Height="440" MinWidth="480" MinHeight="440"
+        CanResize="False" WindowStartupLocation="CenterOwner"
+        Background="{DynamicResource RvBackgroundBrush}">
+  <Border Margin="18" Padding="30,28" CornerRadius="18"
+          Background="{DynamicResource RvShellBrush}"
+          BorderBrush="{DynamicResource RvBorderBrush}" BorderThickness="1">
+    <Grid RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" RowSpacing="12">
+      <Image Width="112" Height="112" Source="/Assets/RadioVault-Logo.png"
+             HorizontalAlignment="Center" Stretch="Uniform"
+             RenderOptions.BitmapInterpolationMode="HighQuality" />
+
+      <StackPanel Grid.Row="1" HorizontalAlignment="Center" Spacing="3">
+        <TextBlock Text="RADIO VAULT" FontSize="25" FontWeight="Bold" TextAlignment="Center" />
+        <TextBlock Text="Broadcast archive" FontSize="11" Classes="muted" TextAlignment="Center" />
+      </StackPanel>
+
+      <TextBlock x:Name="VersionText" Grid.Row="2" Text="Version"
+                 HorizontalAlignment="Center" FontSize="11"
+                 Foreground="{DynamicResource RvAccentMutedBrush}" />
+
+      <TextBlock Grid.Row="3"
+                 Text="A private home for discovering, preserving and playing your radio archive across Mac, Windows, iPhone and the web."
+                 MaxWidth="360" TextAlignment="Center" TextWrapping="Wrap"
+                 FontSize="12" LineHeight="18" Classes="muted" />
+
+      <StackPanel Grid.Row="4" VerticalAlignment="Bottom" HorizontalAlignment="Center" Spacing="4">
+        <TextBlock x:Name="PlatformText" Text="macOS client" FontSize="10" Classes="subtle" TextAlignment="Center" />
+        <TextBlock Text="Copyright © 2026 Radio Vault" FontSize="10" Classes="subtle" TextAlignment="Center" />
+      </StackPanel>
+
+      <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Center" Spacing="9">
+        <Button Content="Project website" Classes="secondary" Click="ProjectWebsite_OnClick" />
+        <Button Content="Close" Classes="primary" Click="Close_OnClick" />
+      </StackPanel>
+    </Grid>
+  </Border>
+</Window>

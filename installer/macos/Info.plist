@@ -29,7 +29,7 @@
   <key>NSHighResolutionCapable</key>
   <true/>
   <key>NSHumanReadableCopyright</key>
-  <string>Radio Vault</string>
+  <string>Copyright © 2026 Radio Vault</string>
   <key>NSLocalNetworkUsageDescription</key>
   <string>Radio Vault connects to your private Radio Vault Server to browse and play your broadcast archive.</string>
   <key>NSAppTransportSecurity</key>

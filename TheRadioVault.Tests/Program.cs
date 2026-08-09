@@ -788,6 +788,29 @@ static void MacClientRemainsUsableBeforeServerPairing()
         SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml.cs"));
     True(mainWindowCode.Contains("var useMacWindowControls = OperatingSystem.IsMacOS()", StringComparison.Ordinal));
     True(mainWindowCode.Contains("WindowsWindowControls.IsVisible = !useMacWindowControls", StringComparison.Ordinal));
+
+    var appView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "App.axaml"));
+    True(appView.Contains("Name=\"Radio Vault\"", StringComparison.Ordinal));
+    True(appView.Contains("Header=\"About Radio Vault…\"", StringComparison.Ordinal));
+    True(appView.Contains("Header=\"Settings…\" Gesture=\"Meta+OemComma\"", StringComparison.Ordinal));
+
+    foreach (var menuHeader in new[] { "File", "Edit", "View", "Window", "Help" })
+        True(mainWindow.Contains($"Header=\"{menuHeader}\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("Header=\"Search Radio Vault\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("Header=\"Open Diagnostics Folder\"", StringComparison.Ordinal));
+    True(mainWindowCode.Contains("FindFocusedTextBox", StringComparison.Ordinal));
+    True(mainWindowCode.Contains("ViewNativeMenu_OnNeedsUpdate", StringComparison.Ordinal));
+
+    var aboutView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "AboutWindow.axaml"));
+    True(aboutView.Contains("Title=\"About Radio Vault\"", StringComparison.Ordinal));
+    True(aboutView.Contains("Text=\"RADIO VAULT\"", StringComparison.Ordinal));
+    True(aboutView.Contains("Copyright © 2026 Radio Vault", StringComparison.Ordinal));
+
+    var macPlist = File.ReadAllText(Path.Combine(SourceRoot(), "installer", "macos", "Info.plist"));
+    True(macPlist.Contains("<string>Radio Vault</string>", StringComparison.Ordinal));
+    True(macPlist.Contains("Copyright © 2026 Radio Vault", StringComparison.Ordinal));
 }
 
 static void Alpha12CompletesServerOwnershipAndStatusUx()

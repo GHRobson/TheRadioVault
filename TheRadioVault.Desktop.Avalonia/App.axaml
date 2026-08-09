@@ -3,7 +3,14 @@
              xmlns:interactions="using:TheRadioVault.Desktop.Avalonia.Interactions"
              xmlns:converters="using:TheRadioVault.Desktop.Avalonia.Converters"
              x:Class="TheRadioVault.Desktop.Avalonia.App"
+             Name="Radio Vault"
              RequestedThemeVariant="Default">
+  <NativeMenu.Menu>
+    <NativeMenu>
+      <NativeMenuItem Header="About Radio Vault…" Click="AboutMenuItem_OnClick" />
+      <NativeMenuItem Header="Settings…" Gesture="Meta+OemComma" Click="SettingsMenuItem_OnClick" />
+    </NativeMenu>
+  </NativeMenu.Menu>
   <Application.Resources>
     <ResourceDictionary>
       <ResourceDictionary.ThemeDictionaries>

@@ -25,6 +25,61 @@
     <DataTemplate DataType="{x:Type vm:DesktopToolsViewModel}"><views:DesktopToolsView /></DataTemplate>
   </Window.DataTemplates>
 
+  <NativeMenu.Menu>
+    <NativeMenu>
+      <NativeMenuItem Header="File">
+        <NativeMenu>
+          <NativeMenuItem Header="Open Dashboard" Gesture="Meta+1" CommandParameter="dashboard" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Open Library" Gesture="Meta+2" CommandParameter="library" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Search Radio Vault" Gesture="Meta+F" CommandParameter="search" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Close Window" Gesture="Meta+W" Click="CloseWindowMenuItem_OnClick" />
+        </NativeMenu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="Edit">
+        <NativeMenu NeedsUpdate="EditNativeMenu_OnNeedsUpdate">
+          <NativeMenuItem Header="Undo" Gesture="Meta+Z" CommandParameter="undo" Click="UndoMenuItem_OnClick" />
+          <NativeMenuItem Header="Redo" Gesture="Meta+Shift+Z" CommandParameter="redo" Click="RedoMenuItem_OnClick" />
+          <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Cut" Gesture="Meta+X" CommandParameter="cut" Click="CutMenuItem_OnClick" />
+          <NativeMenuItem Header="Copy" Gesture="Meta+C" CommandParameter="copy" Click="CopyMenuItem_OnClick" />
+          <NativeMenuItem Header="Paste" Gesture="Meta+V" CommandParameter="paste" Click="PasteMenuItem_OnClick" />
+          <NativeMenuItem Header="Select All" Gesture="Meta+A" CommandParameter="select-all" Click="SelectAllMenuItem_OnClick" />
+        </NativeMenu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="View">
+        <NativeMenu NeedsUpdate="ViewNativeMenu_OnNeedsUpdate">
+          <NativeMenuItem Header="Dashboard" ToggleType="Radio" Gesture="Meta+1" CommandParameter="dashboard" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Library" ToggleType="Radio" Gesture="Meta+2" CommandParameter="library" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Search" ToggleType="Radio" CommandParameter="search" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Explore" ToggleType="Radio" CommandParameter="wiki" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Favourites" ToggleType="Radio" CommandParameter="favourites" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Moments" ToggleType="Radio" CommandParameter="moments" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Downloads" ToggleType="Radio" CommandParameter="downloads" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Now Playing" ToggleType="Radio" CommandParameter="now-playing" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Enter Full Screen" Gesture="Meta+Control+F" CommandParameter="full-screen" Click="FullScreenMenuItem_OnClick" />
+        </NativeMenu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="Window">
+        <NativeMenu>
+          <NativeMenuItem Header="Minimize" Gesture="Meta+M" Click="MinimizeWindowMenuItem_OnClick" />
+          <NativeMenuItem Header="Zoom" Click="ZoomWindowMenuItem_OnClick" />
+          <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Bring All to Front" Click="BringAllToFrontMenuItem_OnClick" />
+        </NativeMenu>
+      </NativeMenuItem>
+      <NativeMenuItem Header="Help">
+        <NativeMenu>
+          <NativeMenuItem Header="Radio Vault Help" Click="RadioVaultHelpMenuItem_OnClick" />
+          <NativeMenuItem Header="Open Diagnostics Folder" Click="OpenDiagnosticsFolderMenuItem_OnClick" />
+          <NativeMenuItemSeparator />
+          <NativeMenuItem Header="Report a Problem…" Click="ReportProblemMenuItem_OnClick" />
+        </NativeMenu>
+      </NativeMenuItem>
+    </NativeMenu>
+  </NativeMenu.Menu>
+
   <Grid RowDefinitions="*,110" ColumnDefinitions="224,*">
     <Border Grid.Row="0" Grid.Column="0"
             Background="{DynamicResource RvShellBrush}"
