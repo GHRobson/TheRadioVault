@@ -971,21 +971,9 @@ public sealed class MobileClientSession : IDisposable
         _remotePlaybackBroadcast = null;
         _remotePlaybackOwner = string.Empty;
         PreparingPlaybackEpisodeId = broadcast.EpisodeId;
-        PlaybackStatus = IsBusy ? "Finishing the startup sync…" : "Preparing secure stream…";
-        Notify();
-        var startupDeadline = DateTimeOffset.UtcNow.AddSeconds(12);
-        while (IsBusy && DateTimeOffset.UtcNow < startupDeadline)
-            await Task.Delay(100).ConfigureAwait(false);
-        if (IsBusy)
-        {
-            TracePlayback("Play request timed out waiting for startup synchronization.");
-            PreparingPlaybackEpisodeId = null;
-            PlaybackStatus = "Playback is waiting for the Library startup sync. Try again in a moment.";
-            Notify();
-            return;
-        }
-        IsBusy = true;
-        PlaybackStatus = "Preparing secure stream…";
+        PlaybackStatus = IsBusy
+            ? "Preparing playback while the Library continues syncing…"
+            : "Preparing secure stream…";
         Notify();
         WebPlaybackTransferTicket? transfer = null;
         var transferCommitted = false;
@@ -1121,7 +1109,6 @@ public sealed class MobileClientSession : IDisposable
         {
             TracePlayback($"Play request finished: selected={SelectedBroadcast?.EpisodeId}; status={PlaybackStatus}.");
             PreparingPlaybackEpisodeId = null;
-            IsBusy = false;
             Notify();
             NotifyPlayback();
         }
