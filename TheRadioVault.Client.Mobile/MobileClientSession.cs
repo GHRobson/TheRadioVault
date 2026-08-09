@@ -38,6 +38,8 @@ public sealed class MobileClientSession : IDisposable
     private long _playbackGeneration;
     private long _logicalPositionMs;
     private long _logicalDurationMs;
+    private long? _pendingDecoderLogicalPositionMs;
+    private DateTimeOffset _pendingDecoderPositionUntil;
     private DateTimeOffset _lastDurableSave = DateTimeOffset.MinValue;
     private DateTimeOffset _lastOfflineSave = DateTimeOffset.MinValue;
     private bool _explicitSeekPending;
@@ -149,6 +151,10 @@ public sealed class MobileClientSession : IDisposable
     public double MiniPlayerProgress => _remotePlaybackBroadcast is not null
         ? _remotePlaybackBroadcast.Progress / 100d
         : PlaybackProgress;
+    public string MiniPlayerTime => _remotePlaybackBroadcast is { } remote
+        ? $"{FormatTime(TimeSpan.FromMilliseconds(remote.Source.PositionMs))} / " +
+          FormatTime(TimeSpan.FromMilliseconds(remote.Source.DurationMs))
+        : PlaybackTime;
     public bool MiniPlayerCanAct => MiniPlayerShowsHandoff || CanControlPlayback;
     public MobileBroadcastItem? CurrentBroadcast => _remotePlaybackBroadcast ?? SelectedBroadcast;
 
@@ -781,11 +787,21 @@ public sealed class MobileClientSession : IDisposable
     public async Task PlayDownloadedAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (IsBusy) return;
-        IsBusy = true;
+        if (IsPreparingPlayback) return;
         PreparingPlaybackEpisodeId = broadcast.EpisodeId;
-        PlaybackStatus = "Preparing downloaded broadcast…";
+        PlaybackStatus = IsBusy ? "Finishing the startup sync…" : "Preparing downloaded broadcast…";
         Notify();
+        var startupDeadline = DateTimeOffset.UtcNow.AddSeconds(12);
+        while (IsBusy && DateTimeOffset.UtcNow < startupDeadline)
+            await Task.Delay(100).ConfigureAwait(false);
+        if (IsBusy)
+        {
+            PreparingPlaybackEpisodeId = null;
+            PlaybackStatus = "Playback is waiting for the Library startup sync. Try again in a moment.";
+            Notify();
+            return;
+        }
+        IsBusy = true;
         try
         {
             if (!_offlinePlayback)
@@ -943,9 +959,21 @@ public sealed class MobileClientSession : IDisposable
     public async Task PlayAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (!IsPaired || IsBusy) return;
-        IsBusy = true;
+        if (!IsPaired || IsPreparingPlayback) return;
         PreparingPlaybackEpisodeId = broadcast.EpisodeId;
+        PlaybackStatus = IsBusy ? "Finishing the startup sync…" : "Preparing secure stream…";
+        Notify();
+        var startupDeadline = DateTimeOffset.UtcNow.AddSeconds(12);
+        while (IsBusy && DateTimeOffset.UtcNow < startupDeadline)
+            await Task.Delay(100).ConfigureAwait(false);
+        if (IsBusy)
+        {
+            PreparingPlaybackEpisodeId = null;
+            PlaybackStatus = "Playback is waiting for the Library startup sync. Try again in a moment.";
+            Notify();
+            return;
+        }
+        IsBusy = true;
         PlaybackStatus = "Preparing secure stream…";
         Notify();
         WebPlaybackTransferTicket? transfer = null;
@@ -1182,6 +1210,8 @@ public sealed class MobileClientSession : IDisposable
         _playback.Open(url);
         _playback.SetRate(_speed);
         var localPosition = TimeSpan.FromMilliseconds(Math.Max(0, logicalPositionMs - part.LogicalStartMs));
+        _pendingDecoderLogicalPositionMs = logicalPositionMs;
+        _pendingDecoderPositionUntil = DateTimeOffset.UtcNow.AddSeconds(8);
         if (localPosition > TimeSpan.Zero) _playback.Seek(localPosition);
         if (play) _playback.Play(); else _playback.Pause();
         _logicalPositionMs = logicalPositionMs;
@@ -1487,6 +1517,22 @@ public sealed class MobileClientSession : IDisposable
     {
         if (_partIndex < 0 || _partIndex >= _parts.Count) return Math.Max(0, _logicalPositionMs);
         var observed = _parts[_partIndex].LogicalStartMs + (long)_playback.Current.Position.TotalMilliseconds;
+        if (_pendingDecoderLogicalPositionMs is { } pending)
+        {
+            if (Math.Abs(observed - pending) <= 1_500)
+            {
+                _pendingDecoderLogicalPositionMs = null;
+            }
+            else if (DateTimeOffset.UtcNow <= _pendingDecoderPositionUntil)
+            {
+                _logicalPositionMs = Math.Clamp(pending, 0, Math.Max(0, _logicalDurationMs));
+                return _logicalPositionMs;
+            }
+            else
+            {
+                _pendingDecoderLogicalPositionMs = null;
+            }
+        }
         _logicalPositionMs = Math.Clamp(observed, 0, Math.Max(0, _logicalDurationMs));
         return _logicalPositionMs;
     }

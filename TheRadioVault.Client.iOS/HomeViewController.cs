@@ -13,8 +13,29 @@ public sealed class HomeViewController : SessionTableViewController
         TabBarItem.AccessibilityLabel = "Dashboard";
     }
 
-    private MobileBroadcastItem? FeaturedContinue => Session.ContinueListening.FirstOrDefault();
-    private IReadOnlyList<MobileBroadcastItem> UpNext => Session.ContinueListening.Skip(1).Take(4).ToArray();
+    private MobileBroadcastItem? FeaturedContinue
+    {
+        get
+        {
+            var current = Session.CurrentBroadcast;
+            return current is not null && !current.Source.Completed &&
+                   (Session.MiniPlayerShowsHandoff || Session.CanControlPlayback)
+                ? current
+                : Session.ContinueListening.FirstOrDefault();
+        }
+    }
+
+    private IReadOnlyList<MobileBroadcastItem> UpNext
+    {
+        get
+        {
+            var featuredId = FeaturedContinue?.EpisodeId;
+            return Session.ContinueListening
+                .Where(value => value.EpisodeId != featuredId)
+                .Take(4)
+                .ToArray();
+        }
+    }
     protected override string? PageHeading => "Dashboard";
     protected override string PageDescription => "Continue listening, rediscover the archive, or choose something unexpected.";
 

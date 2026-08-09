@@ -252,8 +252,8 @@ public sealed class NowPlayingViewController : UIViewController
         _statusLabel.Text = _session.MiniPlayerShowsHandoff
             ? $"Tap the large Radio Vault hand-off button to move playback from {_session.MiniPlayerSubtitle.Replace("Playing on ", string.Empty, StringComparison.Ordinal)} to this iPhone."
             : _session.PlaybackStatus;
-        _timeLabel.Text = _session.PlaybackTime;
-        if (!_isScrubbing) _progressSlider.Value = (float)_session.PlaybackProgress;
+        _timeLabel.Text = _session.MiniPlayerTime;
+        if (!_isScrubbing) _progressSlider.Value = (float)_session.MiniPlayerProgress;
         var loading = _session.IsPreparingPlayback;
         if (loading) _playActivity.StartAnimating(); else _playActivity.StopAnimating();
         _playButton.SetImage(loading

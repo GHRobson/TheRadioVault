@@ -1477,6 +1477,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(dashboard.Contains("IsPlayingBroadcast", StringComparison.Ordinal));
     True(dashboard.Contains("PreparingPlaybackEpisodeId", StringComparison.Ordinal));
     True(dashboard.Contains("HandleFeaturedPlayback", StringComparison.Ordinal));
+    True(dashboard.Contains("Session.CurrentBroadcast", StringComparison.Ordinal));
+    True(dashboard.Contains("value.EpisodeId != featuredId", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
@@ -1619,6 +1621,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(nowPlayingView.Contains("_playActivity.StartAnimating", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_artworkPanel.HeightAnchor.ConstraintEqualTo(_artworkPanel.WidthAnchor)", StringComparison.Ordinal));
     True(nowPlayingView.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_session.MiniPlayerProgress", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_session.MiniPlayerTime", StringComparison.Ordinal));
 
     var downloadService = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
@@ -1658,6 +1662,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("ApplyPlaybackProgress", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("LoadArtworkAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("overview.ContinueListening", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("_pendingDecoderLogicalPositionMs", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("Finishing the startup sync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("public string MiniPlayerTime", StringComparison.Ordinal));
 
     var downloads = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
