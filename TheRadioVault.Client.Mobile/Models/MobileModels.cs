@@ -45,6 +45,49 @@ public sealed record MobileQueueMoveMutation(int Direction);
 
 public sealed record MobileEmptyMutation;
 
+public sealed record MobileLibrarySyncEnvelope(MobileLibrarySync Sync);
+
+public sealed record MobileLibrarySync(
+    string ServerInstanceId,
+    string SessionId,
+    long Sequence,
+    string LibraryRevision,
+    bool ResetRequired,
+    bool NoChanges,
+    IReadOnlyList<WebChangeEvent> Changes,
+    DateTimeOffset GeneratedAt);
+
+public sealed record MobileMetadataCacheSnapshot(
+    int Version,
+    string ServerInstanceId,
+    string SyncSessionId,
+    long SyncSequence,
+    string SyncRevision,
+    IReadOnlyList<WebClientLibraryBroadcastSummary> Broadcasts,
+    WebClientLibraryOverview? Overview,
+    IReadOnlyList<WebQueueItem> Queue,
+    MobileWikiOverview? ExploreOverview,
+    IReadOnlyList<MobileWikiPageSummary> ExplorePages,
+    MobileWikiDashboardHighlights? ExploreHighlights,
+    IReadOnlyList<MobileWikiPageDocument> ExploreDocuments,
+    DateTimeOffset UpdatedAt)
+{
+    public static MobileMetadataCacheSnapshot Empty(string serverInstanceId) => new(
+        1,
+        serverInstanceId,
+        string.Empty,
+        0,
+        string.Empty,
+        [],
+        null,
+        [],
+        null,
+        [],
+        null,
+        [],
+        DateTimeOffset.MinValue);
+}
+
 public sealed class MobileBroadcastItem
 {
     public MobileBroadcastItem(WebClientLibraryBroadcastSummary value)

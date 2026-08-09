@@ -70,11 +70,15 @@ public sealed class HomeViewController : SessionTableViewController
         if (indexPath.Section == 0)
         {
             var stats = new DashboardStatsCell();
-            stats.Configure(
-                ("Broadcasts", Session.TotalBroadcasts, RadioVaultIcon.Library),
-                ("In progress", Session.InProgressBroadcasts, RadioVaultIcon.Play),
-                ("Completed", Session.CompletedBroadcasts, RadioVaultIcon.Completed),
-                ("Favourites", Session.FavouriteBroadcasts, RadioVaultIcon.Favourite));
+            stats.ConfigureInteractive(
+                ("Broadcasts", Session.TotalBroadcasts, RadioVaultIcon.Library,
+                    () => OpenLibrarySection("All Broadcasts", "All")),
+                ("In progress", Session.InProgressBroadcasts, RadioVaultIcon.Play,
+                    () => OpenLibrarySection("Continue Listening", "ContinueListening")),
+                ("Completed", Session.CompletedBroadcasts, RadioVaultIcon.Completed,
+                    () => OpenLibrarySection("Completed", "Completed")),
+                ("Favourites", Session.FavouriteBroadcasts, RadioVaultIcon.Favourite,
+                    () => OpenLibrarySection("Favourites", "Favourites")));
             return stats;
         }
 
@@ -161,4 +165,15 @@ public sealed class HomeViewController : SessionTableViewController
         6 => Session.UnheardBroadcasts.Take(5).ToArray(),
         _ => []
     };
+
+    private void OpenLibrarySection(string title, string filter)
+    {
+        if (TabBarController?.ViewControllers is not { Length: > 1 } controllers ||
+            controllers[1] is not UINavigationController libraryNavigation) return;
+        TabBarController.SelectedIndex = 1;
+        libraryNavigation.PopToRootViewController(false);
+        libraryNavigation.PushViewController(
+            new ShowLibraryViewController(Session, null, title, filter),
+            true);
+    }
 }

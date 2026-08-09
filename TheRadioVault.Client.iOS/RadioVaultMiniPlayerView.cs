@@ -18,7 +18,7 @@ public sealed class RadioVaultMiniPlayerView : UIView
         BackgroundColor = RadioVaultTheme.SurfaceRaised;
         Layer.BorderColor = RadioVaultTheme.Border.CGColor;
         Layer.BorderWidth = 1;
-        Layer.CornerRadius = 12;
+        Layer.CornerRadius = 24;
         Layer.MasksToBounds = true;
         AccessibilityTraits = UIAccessibilityTrait.Button;
 

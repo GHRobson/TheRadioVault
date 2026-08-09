@@ -8,6 +8,7 @@ namespace TheRadioVault.Client.iOS;
 
 public abstract class SessionTableViewController : UITableViewController
 {
+    private const nint OfflineIndicatorTag = 8247;
     protected SessionTableViewController(MobileClientSession session)
         : base(UITableViewStyle.InsetGrouped)
     {
@@ -35,6 +36,7 @@ public abstract class SessionTableViewController : UITableViewController
         base.ViewWillAppear(animated);
         NavigationItem.Title = Title;
         NavigationController?.SetNavigationBarHidden(false, animated);
+        UpdateConnectionIndicator();
     }
 
     protected virtual void ReloadSession() => TableView.ReloadData();
@@ -54,27 +56,27 @@ public abstract class SessionTableViewController : UITableViewController
             var downloaded = Session.DownloadedBroadcasts.Any(item => item.EpisodeId == broadcast.EpisodeId);
             var play = UIAction.Create(
                 broadcast.HasProgress ? "Resume" : "Play",
-                UIImage.GetSystemImage("play.fill"),
+                RadioVaultIcons.Image(RadioVaultIcon.Play),
                 "radiovault.play",
                 action => _ = Session.PlayAsync(broadcast));
             var playNext = UIAction.Create(
                 "Play Next",
-                UIImage.GetSystemImage("text.insert"),
+                RadioVaultIcons.Image(RadioVaultIcon.PlayNext),
                 "radiovault.play-next",
                 action => _ = Session.AddToQueueAsync(broadcast, true));
             var addToQueue = UIAction.Create(
                 "Add to Queue",
-                UIImage.GetSystemImage("text.badge.plus"),
+                RadioVaultIcons.Image(RadioVaultIcon.Queue),
                 "radiovault.queue",
                 action => _ = Session.AddToQueueAsync(broadcast));
             var favourite = UIAction.Create(
                 broadcast.Source.Favourite ? "Remove from Favourites" : "Add to Favourites",
-                UIImage.GetSystemImage(broadcast.Source.Favourite ? "heart.slash" : "heart"),
+                RadioVaultIcons.Image(RadioVaultIcon.Favourite),
                 "radiovault.favourite",
                 action => _ = Session.SetFavouriteAsync(broadcast, !broadcast.Source.Favourite));
             var download = UIAction.Create(
                 downloaded ? "Remove Download" : "Download to this iPhone",
-                UIImage.GetSystemImage(downloaded ? "trash" : "arrow.down.circle"),
+                RadioVaultIcons.Image(downloaded ? RadioVaultIcon.Remove : RadioVaultIcon.Download),
                 "radiovault.download",
                 action =>
                 {
@@ -84,7 +86,7 @@ public abstract class SessionTableViewController : UITableViewController
             if (downloaded) download.Attributes = UIMenuElementAttributes.Destructive;
             var information = UIAction.Create(
                 "Broadcast Information",
-                UIImage.GetSystemImage("info.circle"),
+                RadioVaultIcons.Image(RadioVaultIcon.Info),
                 "radiovault.information",
                 action => NavigationController?.PushViewController(
                     new BroadcastDetailsViewController(Session, broadcast), true));
@@ -104,7 +106,41 @@ public abstract class SessionTableViewController : UITableViewController
     }
 
     private void SessionOnStateChanged(object? sender, EventArgs eventArgs)
-        => BeginInvokeOnMainThread(ReloadSession);
+        => BeginInvokeOnMainThread(() =>
+        {
+            UpdateConnectionIndicator();
+            ReloadSession();
+        });
+
+    private void UpdateConnectionIndicator()
+    {
+        var current = (NavigationItem.RightBarButtonItems ?? [])
+            .Where(item => item.Tag != OfflineIndicatorTag)
+            .ToList();
+        if (Session.ShowsOfflineIndicator)
+        {
+            var offline = new UIBarButtonItem(
+                RadioVaultIcons.Image(RadioVaultIcon.Offline, RadioVaultTheme.Settings),
+                UIBarButtonItemStyle.Plain,
+                (_, _) => PresentOfflineExplanation())
+            {
+                Tag = OfflineIndicatorTag,
+                AccessibilityLabel = "Offline · showing saved Radio Vault data"
+            };
+            current.Insert(0, offline);
+        }
+        NavigationItem.RightBarButtonItems = current.Count == 0 ? null : current.ToArray();
+    }
+
+    private void PresentOfflineExplanation()
+    {
+        var alert = UIAlertController.Create(
+            "Offline mode",
+            "This iPhone cannot currently reach the paired Radio Vault Server. Saved Library and Explore data remain available and will update automatically when the connection returns.",
+            UIAlertControllerStyle.Alert);
+        alert.AddAction(UIAlertAction.Create("OK", UIAlertActionStyle.Default, null));
+        PresentViewController(alert, true, null);
+    }
 
     protected override void Dispose(bool disposing)
     {

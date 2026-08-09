@@ -72,6 +72,37 @@ public sealed record MobileWikiDashboardHighlights(
     IReadOnlyList<MobileWikiOnThisDayItem> OnThisDay,
     IReadOnlyList<MobileWikiEraSummary> Eras);
 
+public sealed record MobileWikiImageRecord(
+    Guid ImageId,
+    string OriginalFileName,
+    string MediaType,
+    long ByteCount,
+    string Caption,
+    string AltText,
+    string Creator,
+    string CopyrightHolder,
+    string Licence,
+    DateOnly? CapturedDate,
+    DateOnly? RepresentativeFrom,
+    DateOnly? RepresentativeTo,
+    string DatePrecision,
+    string DateNotes);
+
+public sealed record MobileWikiPageImageLink(
+    Guid PageId,
+    Guid ImageId,
+    string Role,
+    int SortOrder,
+    MobileWikiImageRecord? Image);
+
+public sealed record MobileWikiImageRequest(Guid ImageId);
+
+public sealed record MobileWikiImageContent(
+    Guid ImageId,
+    string MediaType,
+    string FileName,
+    byte[] Content);
+
 public sealed record MobileWikiPageDocument(
     Guid PageId,
     string Slug,
@@ -84,12 +115,23 @@ public sealed record MobileWikiPageDocument(
     DateTimeOffset UpdatedAt,
     string LastEditor,
     IReadOnlyList<string> Aliases,
+    IReadOnlyList<MobileWikiPageImageLink> Images,
     IReadOnlyList<MobileWikiTimelineEvent> Timeline);
 
 public sealed record MobileWikiOverviewEnvelope(MobileWikiOverview Value);
 public sealed record MobileWikiBrowseEnvelope(IReadOnlyList<MobileWikiPageSummary> Value);
 public sealed record MobileWikiHighlightsEnvelope(MobileWikiDashboardHighlights Value);
 public sealed record MobileWikiPageEnvelope(MobileWikiPageDocument? Value);
+public sealed record MobileWikiImageEnvelope(MobileWikiImageContent? Value);
+
+public sealed record MobileExploreImage(
+    Guid ImageId,
+    Guid PageId,
+    string PageTitle,
+    string Caption,
+    string AltText,
+    string MediaType,
+    byte[] Content);
 
 public sealed record MobileExploreDashboard(
     MobileWikiOverview Overview,
@@ -100,4 +142,5 @@ public sealed record MobileExploreDashboard(
     IReadOnlyList<MobileWikiPageSummary> PeoplePages,
     IReadOnlyList<MobileWikiPageSummary> TopicPages,
     IReadOnlyList<MobileWikiPageSummary> TimelinePages,
-    MobileWikiDashboardHighlights Highlights);
+    MobileWikiDashboardHighlights Highlights,
+    IReadOnlyList<MobileExploreImage> Gallery);

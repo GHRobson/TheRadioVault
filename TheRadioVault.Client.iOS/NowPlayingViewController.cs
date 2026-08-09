@@ -17,6 +17,9 @@ public sealed class NowPlayingViewController : UIViewController
     private readonly UIButton _playButton = UIButton.FromType(UIButtonType.System);
     private readonly UIButton _forwardButton = UIButton.FromType(UIButtonType.System);
     private readonly UIButton _speedButton = UIButton.FromType(UIButtonType.System);
+    private readonly UIButton _momentButton = UIButton.FromType(UIButtonType.System);
+    private readonly UIButton _infoButton = UIButton.FromType(UIButtonType.System);
+    private readonly UIButton _favouriteButton = UIButton.FromType(UIButtonType.System);
     private bool _isScrubbing;
 
     public NowPlayingViewController(MobileClientSession session)
@@ -75,9 +78,9 @@ public sealed class NowPlayingViewController : UIViewController
         _progressSlider.TouchUpOutside += ProgressSliderFinished;
         _progressSlider.TouchCancel += ProgressSliderFinished;
 
-        ConfigureButton(_backButton, "gobackward.15", 36, "Back 15 seconds", _session.SkipBack);
+        ConfigureButton(_backButton, RadioVaultIcons.Image(RadioVaultIcon.SkipBack, size: 42), "Back 15 seconds", _session.SkipBack);
         ConfigureButton(_playButton, RadioVaultIcons.Image(RadioVaultIcon.Play, size: 68, strokeWidth: 1.5f), "Play or pause", _session.MiniPlayerAction);
-        ConfigureButton(_forwardButton, "goforward.30", 36, "Forward 30 seconds", _session.SkipForward);
+        ConfigureButton(_forwardButton, RadioVaultIcons.Image(RadioVaultIcon.SkipForward, size: 42), "Forward 30 seconds", _session.SkipForward);
         _backButton.TintColor = RadioVaultTheme.Text;
         _forwardButton.TintColor = RadioVaultTheme.Text;
         _speedButton.TouchUpInside += (_, _) => _session.CycleSpeed();
@@ -86,6 +89,10 @@ public sealed class NowPlayingViewController : UIViewController
         _speedButton.BackgroundColor = RadioVaultTheme.SurfaceRaised;
         _speedButton.Layer.CornerRadius = 19;
         _speedButton.AccessibilityLabel = "Playback speed";
+
+        ConfigureActionButton(_momentButton, "Moment", RadioVaultIcon.Moment, PresentMomentEditor);
+        ConfigureActionButton(_infoButton, "Info", RadioVaultIcon.Info, OpenBroadcastInformation);
+        ConfigureActionButton(_favouriteButton, "Favourite", RadioVaultIcon.Favourite, ToggleFavourite);
 
         var controls = new UIStackView([_backButton, _playButton, _forwardButton])
         {
@@ -108,7 +115,14 @@ public sealed class NowPlayingViewController : UIViewController
             Distribution = UIStackViewDistribution.Fill,
             Spacing = 4
         };
-        var content = new UIStackView([_artworkPanel, metadata, progress, controls, _speedButton, _statusLabel])
+        var actions = new UIStackView([_momentButton, _infoButton, _favouriteButton])
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Alignment = UIStackViewAlignment.Fill,
+            Distribution = UIStackViewDistribution.FillEqually,
+            Spacing = 10
+        };
+        var content = new UIStackView([_artworkPanel, metadata, progress, controls, actions, _speedButton, _statusLabel])
         {
             Axis = UILayoutConstraintAxis.Vertical,
             Alignment = UIStackViewAlignment.Fill,
@@ -134,25 +148,11 @@ public sealed class NowPlayingViewController : UIViewController
             _playButton.HeightAnchor.ConstraintEqualTo(96),
             _forwardButton.WidthAnchor.ConstraintEqualTo(64),
             _forwardButton.HeightAnchor.ConstraintEqualTo(64),
+            actions.HeightAnchor.ConstraintEqualTo(48),
             _speedButton.WidthAnchor.ConstraintEqualTo(76),
             _speedButton.HeightAnchor.ConstraintEqualTo(38)
         ]);
         ReloadSession();
-    }
-
-    private static void ConfigureButton(
-        UIButton button,
-        string symbol,
-        int pointSize,
-        string accessibilityLabel,
-        Action action)
-    {
-        button.SetImage(UIImage.GetSystemImage(symbol), UIControlState.Normal);
-        button.SetPreferredSymbolConfiguration(
-            UIImageSymbolConfiguration.Create(pointSize, UIImageSymbolWeight.Semibold),
-            UIControlState.Normal);
-        button.AccessibilityLabel = accessibilityLabel;
-        button.TouchUpInside += (_, _) => action();
     }
 
     private static void ConfigureButton(
@@ -164,6 +164,53 @@ public sealed class NowPlayingViewController : UIViewController
         button.SetImage(image, UIControlState.Normal);
         button.AccessibilityLabel = accessibilityLabel;
         button.TouchUpInside += (_, _) => action();
+    }
+
+    private static void ConfigureActionButton(
+        UIButton button,
+        string title,
+        RadioVaultIcon icon,
+        Action action)
+    {
+        button.SetTitle($" {title}", UIControlState.Normal);
+        button.SetTitleColor(RadioVaultTheme.MutedText, UIControlState.Normal);
+        button.SetImage(RadioVaultIcons.Image(icon, size: 20), UIControlState.Normal);
+        button.TitleLabel!.Font = UIFont.SystemFontOfSize(12, UIFontWeight.Semibold)!;
+        button.BackgroundColor = RadioVaultTheme.SurfaceRaised;
+        button.Layer.CornerRadius = 14;
+        button.AccessibilityLabel = title;
+        button.TouchUpInside += (_, _) => action();
+    }
+
+    private void PresentMomentEditor()
+    {
+        if (_session.CurrentBroadcast is null) return;
+        var alert = UIAlertController.Create(
+            "Add Moment",
+            "Save this exact point in the broadcast.",
+            UIAlertControllerStyle.Alert);
+        alert.AddTextField(field => field.Placeholder = "Moment title");
+        alert.AddTextField(field => field.Placeholder = "Notes (optional)");
+        alert.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        alert.AddAction(UIAlertAction.Create("Save Moment", UIAlertActionStyle.Default, action =>
+        {
+            var title = alert.TextFields?.ElementAtOrDefault(0)?.Text ?? string.Empty;
+            var notes = alert.TextFields?.ElementAtOrDefault(1)?.Text ?? string.Empty;
+            _ = _session.AddMomentAsync(title, notes);
+        }));
+        PresentViewController(alert, true, null);
+    }
+
+    private void OpenBroadcastInformation()
+    {
+        if (_session.CurrentBroadcast is { } broadcast)
+            NavigationController?.PushViewController(new BroadcastDetailsViewController(_session, broadcast), true);
+    }
+
+    private void ToggleFavourite()
+    {
+        if (_session.CurrentBroadcast is { } broadcast)
+            _ = _session.SetFavouriteAsync(broadcast, !broadcast.Source.Favourite);
     }
 
     private void ProgressSliderFinished(object? sender, EventArgs eventArgs)
@@ -181,7 +228,7 @@ public sealed class NowPlayingViewController : UIViewController
         _titleLabel.Text = _session.MiniPlayerTitle;
         _subtitleLabel.Text = _session.MiniPlayerSubtitle;
         _statusLabel.Text = _session.MiniPlayerShowsHandoff
-            ? $"Tap the large AirPlay button to move playback from {_session.MiniPlayerSubtitle.Replace("Playing on ", string.Empty, StringComparison.Ordinal)} to this iPhone."
+            ? $"Tap the large Radio Vault hand-off button to move playback from {_session.MiniPlayerSubtitle.Replace("Playing on ", string.Empty, StringComparison.Ordinal)} to this iPhone."
             : _session.PlaybackStatus;
         _timeLabel.Text = _session.PlaybackTime;
         if (!_isScrubbing) _progressSlider.Value = (float)_session.PlaybackProgress;
@@ -197,6 +244,13 @@ public sealed class NowPlayingViewController : UIViewController
         _progressSlider.Enabled = _session.CanControlPlayback;
         _speedButton.Enabled = _session.CanControlPlayback;
         _speedButton.SetTitle(_session.SpeedText, UIControlState.Normal);
+        var broadcast = _session.CurrentBroadcast;
+        _momentButton.Enabled = _session.CanControlPlayback && _session.IsLiveConnected;
+        _infoButton.Enabled = broadcast is not null;
+        _favouriteButton.Enabled = broadcast is not null && _session.IsLiveConnected;
+        _favouriteButton.SetTitle(
+            broadcast?.Source.Favourite == true ? " Favourited" : " Favourite",
+            UIControlState.Normal);
     }
 
     protected override void Dispose(bool disposing)

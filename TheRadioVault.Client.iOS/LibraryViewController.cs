@@ -10,6 +10,8 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
     private readonly LibraryControlsHeaderView _header = new(includesPageHeading: true, includesViewModes: false);
     private bool _hideCompleted;
     private bool IsShowingSearchResults => !string.IsNullOrWhiteSpace(_header.SearchBar.Text);
+    private IReadOnlyList<TheRadioVault.Web.Models.WebClientLibraryCollectionSummary> VisibleCollections
+        => Session.LibraryCollectionsFor(_hideCompleted);
 
     public LibraryViewController(MobileClientSession session) : base(session) => Title = "Library";
 
@@ -41,7 +43,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         {
             0 => 6,
             1 => 1,
-            _ => Math.Max(1, Session.LibraryCollections.Count)
+            _ => Math.Max(1, VisibleCollections.Count)
         };
     }
 
@@ -96,9 +98,9 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
             return all;
         }
 
-        if (Session.LibraryCollections.Count == 0)
+        if (VisibleCollections.Count == 0)
             return DetailCell("empty-shows", Session.IsPaired ? "No shows found" : "Pair a server first", Session.StatusText);
-        var show = Session.LibraryCollections[indexPath.Row];
+        var show = VisibleCollections[indexPath.Row];
         var cell = DetailCell("library-show", show.CollectionName, $"{show.BroadcastCount:N0} broadcasts");
         cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
         return cell;
@@ -143,9 +145,9 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
             return;
         }
 
-        if (indexPath.Row < Session.LibraryCollections.Count)
+        if (indexPath.Row < VisibleCollections.Count)
         {
-            var show = Session.LibraryCollections[indexPath.Row];
+            var show = VisibleCollections[indexPath.Row];
             NavigationController?.PushViewController(
                 new ShowLibraryViewController(Session, show.CollectionId, show.CollectionName, hideCompleted: _hideCompleted), true);
         }

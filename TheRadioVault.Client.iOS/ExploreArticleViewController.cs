@@ -9,6 +9,7 @@ public sealed class ExploreArticleViewController : SessionTableViewController
 {
     private readonly MobileWikiPageSummary _summary;
     private MobileWikiPageDocument? _document;
+    private IReadOnlyList<MobileExploreImage> _images = [];
     private bool _loading;
 
     public ExploreArticleViewController(MobileClientSession session, MobileWikiPageSummary summary) : base(session)
@@ -27,22 +28,24 @@ public sealed class ExploreArticleViewController : SessionTableViewController
         _ = LoadAsync();
     }
 
-    public override nint NumberOfSections(UITableView tableView) => _document is null ? 1 : 4;
+    public override nint NumberOfSections(UITableView tableView) => _document is null ? 1 : 5;
 
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
         0 => 1,
-        1 => _document is null ? 0 : 1,
-        2 => _document?.Timeline.Count ?? 0,
-        3 => _document?.Aliases.Count > 0 ? 1 : 0,
+        1 => _images.Count,
+        2 => _document is null ? 0 : 1,
+        3 => _document?.Timeline.Count ?? 0,
+        4 => _document?.Aliases.Count > 0 ? 1 : 0,
         _ => 0
     };
 
     public override string? TitleForHeader(UITableView tableView, nint section) => section switch
     {
-        1 => "Article",
-        2 when _document?.Timeline.Count > 0 => "Timeline",
-        3 when _document?.Aliases.Count > 0 => "Also known as",
+        1 when _images.Count > 0 => "Images",
+        2 => "Article",
+        3 when _document?.Timeline.Count > 0 => "Timeline",
+        4 when _document?.Aliases.Count > 0 => "Also known as",
         _ => null
     };
 
@@ -60,12 +63,14 @@ public sealed class ExploreArticleViewController : SessionTableViewController
                 23);
         }
         if (indexPath.Section == 1)
+            return new ExploreArticleImageCell(_images[indexPath.Row]);
+        if (indexPath.Section == 2)
             return ArticleTextCell(
                 "explore-article-body",
                 string.Empty,
                 FormatMarkdown(_document!.BodyMarkdown),
                 17);
-        if (indexPath.Section == 2)
+        if (indexPath.Section == 3)
         {
             var item = _document!.Timeline[indexPath.Row];
             return ArticleTextCell(
@@ -121,9 +126,13 @@ public sealed class ExploreArticleViewController : SessionTableViewController
         _loading = true;
         TableView.ReloadData();
         var document = await Session.LoadExplorePageAsync(_summary.PageId).ConfigureAwait(false);
+        var images = document is null
+            ? Array.Empty<MobileExploreImage>()
+            : await Session.LoadExploreImagesAsync(document).ConfigureAwait(false);
         BeginInvokeOnMainThread(() =>
         {
             _document = document;
+            _images = images;
             _loading = false;
             if (document is not null)
             {

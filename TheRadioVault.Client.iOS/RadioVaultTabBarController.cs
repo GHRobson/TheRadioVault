@@ -121,8 +121,10 @@ public sealed class RadioVaultTabBarController : UITabBarController
             sheet.PrefersGrabberVisible = true;
         }
         nowPlaying.NavigationItem.RightBarButtonItem = new UIBarButtonItem(
-            UIBarButtonSystemItem.Close,
+            RadioVaultIcons.Image(RadioVaultIcon.Close, RadioVaultTheme.MutedText),
+            UIBarButtonItemStyle.Plain,
             (_, _) => navigation.DismissViewController(true, null));
+        nowPlaying.NavigationItem.RightBarButtonItem.AccessibilityLabel = "Close Now Playing";
         PresentViewController(navigation, true, null);
     }
 

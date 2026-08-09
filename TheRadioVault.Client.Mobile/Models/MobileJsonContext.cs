@@ -19,6 +19,7 @@ public sealed record PlaybackSessionEnvelope(WebPlaybackSession Session);
 public sealed record ClientPlaybackEnvelope(WebClientPlaybackResult Result);
 public sealed record PlaybackTransferEnvelope(WebPlaybackTransferResult Result);
 public sealed record ProgressEnvelope(WebOfflineProgressResult Result);
+public sealed record MomentMutationEnvelope(WebMomentMutationResult Result);
 
 [JsonSourceGenerationOptions(
     PropertyNameCaseInsensitive = true,
@@ -48,6 +49,10 @@ public sealed record ProgressEnvelope(WebOfflineProgressResult Result);
 [JsonSerializable(typeof(ClientPlaybackEnvelope))]
 [JsonSerializable(typeof(PlaybackTransferEnvelope))]
 [JsonSerializable(typeof(ProgressEnvelope))]
+[JsonSerializable(typeof(MomentMutationEnvelope))]
+[JsonSerializable(typeof(WebMomentMutation))]
+[JsonSerializable(typeof(MobileLibrarySyncEnvelope))]
+[JsonSerializable(typeof(MobileMetadataCacheSnapshot))]
 [JsonSerializable(typeof(WebClientPlaybackUpdate))]
 [JsonSerializable(typeof(WebPlaybackTransferBeginRequest))]
 [JsonSerializable(typeof(WebPlaybackTransferReadyRequest))]
@@ -59,7 +64,9 @@ public sealed record ProgressEnvelope(WebOfflineProgressResult Result);
 [JsonSerializable(typeof(MobileWikiBrowseEnvelope))]
 [JsonSerializable(typeof(MobileWikiHighlightsEnvelope))]
 [JsonSerializable(typeof(MobileWikiPageEnvelope))]
+[JsonSerializable(typeof(MobileWikiImageEnvelope))]
 [JsonSerializable(typeof(MobileWikiBrowseRequest))]
 [JsonSerializable(typeof(MobileWikiPageRequest))]
+[JsonSerializable(typeof(MobileWikiImageRequest))]
 [JsonSerializable(typeof(MobileWikiDashboardRequest))]
 public partial class MobileJsonContext : JsonSerializerContext;

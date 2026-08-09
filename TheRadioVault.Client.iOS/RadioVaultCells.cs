@@ -54,6 +54,23 @@ internal sealed class LibraryControlsHeaderView : UIView
         SearchBar.SearchTextField.BackgroundColor = RadioVaultTheme.Surface;
         SearchBar.SearchTextField.Layer.CornerRadius = 10;
         SearchBar.SearchTextField.ClipsToBounds = true;
+        SearchBar.SearchTextField.LeftView = new UIImageView(
+            RadioVaultIcons.Image(RadioVaultIcon.Search, RadioVaultTheme.MutedText, 17));
+        SearchBar.SearchTextField.LeftViewMode = UITextFieldViewMode.Always;
+        SearchBar.SearchTextField.ClearButtonMode = UITextFieldViewMode.Never;
+        var clearSearch = UIButton.FromType(UIButtonType.System);
+        clearSearch.SetImage(
+            RadioVaultIcons.Image(RadioVaultIcon.Close, RadioVaultTheme.MutedText, 15),
+            UIControlState.Normal);
+        clearSearch.Frame = new CGRect(0, 0, 28, 28);
+        clearSearch.AccessibilityLabel = "Clear search";
+        clearSearch.TouchUpInside += (_, _) =>
+        {
+            SearchBar.Text = string.Empty;
+            SearchBar.SearchTextField.SendActionForControlEvents(UIControlEvent.EditingChanged);
+        };
+        SearchBar.SearchTextField.RightView = clearSearch;
+        SearchBar.SearchTextField.RightViewMode = UITextFieldViewMode.WhileEditing;
 
         ConfigureControlButton(CompletedButton, "Completed", RadioVaultIcons.Image(RadioVaultIcon.Completed));
         CompletedButton.AccessibilityHint = "Hides broadcasts you have finished";
@@ -95,8 +112,8 @@ internal sealed class LibraryControlsHeaderView : UIView
 
         if (includesViewModes)
         {
-            ConfigureControlButton(GridButton, "Grid", UIImage.GetSystemImage("square.grid.2x2"));
-            ConfigureControlButton(ListButton, "List", UIImage.GetSystemImage("list.bullet"));
+            ConfigureControlButton(GridButton, "Grid", RadioVaultIcons.Image(RadioVaultIcon.Grid));
+            ConfigureControlButton(ListButton, "List", RadioVaultIcons.Image(RadioVaultIcon.List));
             var modeRow = new UIStackView([GridButton, ListButton])
             {
                 Axis = UILayoutConstraintAxis.Horizontal,
@@ -172,6 +189,8 @@ internal sealed class DashboardStatsCell : UITableViewCell
     private readonly UIImageView[] _icons = new UIImageView[4];
     private readonly UILabel[] _titles = new UILabel[4];
     private readonly UILabel[] _values = new UILabel[4];
+    private readonly UIControl[] _cards = new UIControl[4];
+    private readonly Action?[] _actions = new Action?[4];
 
     public DashboardStatsCell() : base(UITableViewCellStyle.Default, "dashboard-stats")
     {
@@ -208,7 +227,7 @@ internal sealed class DashboardStatsCell : UITableViewCell
                 Spacing = 3,
                 TranslatesAutoresizingMaskIntoConstraints = false
             };
-            var card = new UIView { BackgroundColor = RadioVaultTheme.Surface };
+            var card = new UIControl { BackgroundColor = RadioVaultTheme.Surface };
             card.Layer.CornerRadius = 12;
             card.Layer.BorderColor = RadioVaultTheme.Border.CGColor;
             card.Layer.BorderWidth = 1;
@@ -221,9 +240,12 @@ internal sealed class DashboardStatsCell : UITableViewCell
                 content.CenterYAnchor.ConstraintEqualTo(card.CenterYAnchor)
             ]);
             cards[index] = card;
+            _cards[index] = card;
             _icons[index] = icon;
             _titles[index] = title;
             _values[index] = value;
+            var capturedIndex = index;
+            card.TouchUpInside += (_, _) => _actions[capturedIndex]?.Invoke();
         }
 
         var row = new UIStackView(cards)
@@ -252,6 +274,23 @@ internal sealed class DashboardStatsCell : UITableViewCell
             _titles[index].Text = stat.Title;
             _values[index].Text = stat.Value.ToString("N0");
             _icons[index].Image = RadioVaultIcons.Image(stat.Icon, size: 23);
+            _cards[index].AccessibilityLabel = $"{stat.Title}, {stat.Value:N0}";
+            _cards[index].AccessibilityTraits = UIAccessibilityTrait.None;
+            _actions[index] = null;
+        }
+    }
+
+    public void ConfigureInteractive(params (string Title, int Value, RadioVaultIcon Icon, Action Action)[] stats)
+    {
+        for (var index = 0; index < _titles.Length; index++)
+        {
+            var stat = stats[index];
+            _titles[index].Text = stat.Title;
+            _values[index].Text = stat.Value.ToString("N0");
+            _icons[index].Image = RadioVaultIcons.Image(stat.Icon, size: 23);
+            _actions[index] = stat.Action;
+            _cards[index].AccessibilityLabel = $"{stat.Title}, {stat.Value:N0}, open in Library";
+            _cards[index].AccessibilityTraits = UIAccessibilityTrait.Button;
         }
     }
 }
@@ -703,5 +742,127 @@ internal sealed class BroadcastActionStripCell : UITableViewCell
         button.SetTitle(title, UIControlState.Normal);
         button.SetTitleColor(color, UIControlState.Normal);
         button.SetImage(RadioVaultIcons.Image(icon, color, 18, 1.8), UIControlState.Normal);
+    }
+}
+
+internal sealed class ExploreImageGalleryCell : UITableViewCell
+{
+    private readonly UIStackView _row = new()
+    {
+        Axis = UILayoutConstraintAxis.Horizontal,
+        Alignment = UIStackViewAlignment.Fill,
+        Distribution = UIStackViewDistribution.Fill,
+        Spacing = 12,
+        TranslatesAutoresizingMaskIntoConstraints = false
+    };
+
+    public ExploreImageGalleryCell() : base(UITableViewCellStyle.Default, "explore-image-gallery")
+    {
+        BackgroundColor = RadioVaultTheme.Background;
+        SelectionStyle = UITableViewCellSelectionStyle.None;
+        var scroll = new UIScrollView
+        {
+            ShowsHorizontalScrollIndicator = false,
+            TranslatesAutoresizingMaskIntoConstraints = false
+        };
+        scroll.AddSubview(_row);
+        ContentView.AddSubview(scroll);
+        NSLayoutConstraint.ActivateConstraints([
+            scroll.LeadingAnchor.ConstraintEqualTo(ContentView.LeadingAnchor),
+            scroll.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor),
+            scroll.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor, 4),
+            scroll.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor, -4),
+            scroll.HeightAnchor.ConstraintEqualTo(188),
+            _row.LeadingAnchor.ConstraintEqualTo(scroll.ContentLayoutGuide.LeadingAnchor, 4),
+            _row.TrailingAnchor.ConstraintEqualTo(scroll.ContentLayoutGuide.TrailingAnchor, -4),
+            _row.TopAnchor.ConstraintEqualTo(scroll.ContentLayoutGuide.TopAnchor),
+            _row.BottomAnchor.ConstraintEqualTo(scroll.ContentLayoutGuide.BottomAnchor),
+            _row.HeightAnchor.ConstraintEqualTo(scroll.FrameLayoutGuide.HeightAnchor)
+        ]);
+    }
+
+    public void Configure(IReadOnlyList<MobileExploreImage> images, Action<Guid> selected)
+    {
+        foreach (var view in _row.ArrangedSubviews) view.RemoveFromSuperview();
+        foreach (var image in images)
+        {
+            var card = new UIControl { BackgroundColor = RadioVaultTheme.SurfaceRaised };
+            card.Layer.CornerRadius = 14;
+            card.Layer.MasksToBounds = true;
+            card.WidthAnchor.ConstraintEqualTo(238).Active = true;
+            var picture = new UIImageView
+            {
+                Image = UIImage.LoadFromData(NSData.FromArray(image.Content)),
+                ContentMode = UIViewContentMode.ScaleAspectFill,
+                ClipsToBounds = true
+            };
+            var caption = new UILabel
+            {
+                Text = $"{image.Caption}\n{image.PageTitle}",
+                Font = UIFont.SystemFontOfSize(12, UIFontWeight.Semibold)!,
+                TextColor = RadioVaultTheme.Text,
+                Lines = 2
+            };
+            var stack = new UIStackView([picture, caption])
+            {
+                Axis = UILayoutConstraintAxis.Vertical,
+                Alignment = UIStackViewAlignment.Fill,
+                Spacing = 7,
+                TranslatesAutoresizingMaskIntoConstraints = false
+            };
+            card.AddSubview(stack);
+            NSLayoutConstraint.ActivateConstraints([
+                picture.HeightAnchor.ConstraintEqualTo(138),
+                stack.LeadingAnchor.ConstraintEqualTo(card.LeadingAnchor, 9),
+                stack.TrailingAnchor.ConstraintEqualTo(card.TrailingAnchor, -9),
+                stack.TopAnchor.ConstraintEqualTo(card.TopAnchor, 9),
+                stack.BottomAnchor.ConstraintEqualTo(card.BottomAnchor, -8)
+            ]);
+            var pageId = image.PageId;
+            card.TouchUpInside += (_, _) => selected(pageId);
+            card.AccessibilityLabel = $"{image.AltText}, from {image.PageTitle}";
+            card.AccessibilityTraits = UIAccessibilityTrait.Button | UIAccessibilityTrait.Image;
+            _row.AddArrangedSubview(card);
+        }
+    }
+}
+
+internal sealed class ExploreArticleImageCell : UITableViewCell
+{
+    public ExploreArticleImageCell(MobileExploreImage image)
+        : base(UITableViewCellStyle.Default, "explore-article-image")
+    {
+        BackgroundColor = RadioVaultTheme.Surface;
+        SelectionStyle = UITableViewCellSelectionStyle.None;
+        var picture = new UIImageView
+        {
+            Image = UIImage.LoadFromData(NSData.FromArray(image.Content)),
+            ContentMode = UIViewContentMode.ScaleAspectFit,
+            ClipsToBounds = true
+        };
+        var caption = new UILabel
+        {
+            Text = image.Caption,
+            Font = UIFont.SystemFontOfSize(13)!,
+            TextColor = RadioVaultTheme.MutedText,
+            Lines = 0,
+            TextAlignment = UITextAlignment.Center
+        };
+        var stack = new UIStackView([picture, caption])
+        {
+            Axis = UILayoutConstraintAxis.Vertical,
+            Alignment = UIStackViewAlignment.Fill,
+            Spacing = 8,
+            TranslatesAutoresizingMaskIntoConstraints = false
+        };
+        ContentView.AddSubview(stack);
+        NSLayoutConstraint.ActivateConstraints([
+            picture.HeightAnchor.ConstraintEqualTo(240),
+            stack.LeadingAnchor.ConstraintEqualTo(ContentView.LeadingAnchor, 12),
+            stack.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor, -12),
+            stack.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor, 12),
+            stack.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor, -12)
+        ]);
+        AccessibilityLabel = image.AltText;
     }
 }

@@ -64,12 +64,12 @@ public sealed class UpNextViewController : SessionTableViewController
         {
             var play = UIAction.Create(
                 "Play Now",
-                UIImage.GetSystemImage("play.fill"),
+                RadioVaultIcons.Image(RadioVaultIcon.Play),
                 "radiovault.queue.play",
                 action => _ = Session.PlayQueueItemAsync(queueItem));
             var remove = UIAction.Create(
                 "Remove from Up Next",
-                UIImage.GetSystemImage("trash"),
+                RadioVaultIcons.Image(RadioVaultIcon.Remove),
                 "radiovault.queue.remove",
                 action => _ = Session.RemoveQueueItemAsync(queueItem));
             remove.Attributes = UIMenuElementAttributes.Destructive;

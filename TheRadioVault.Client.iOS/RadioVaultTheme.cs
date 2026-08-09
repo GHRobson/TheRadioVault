@@ -85,7 +85,18 @@ public enum RadioVaultIcon
     Completed,
     UpNext,
     Radio,
-    Handoff
+    Handoff,
+    Grid,
+    List,
+    PlayNext,
+    Queue,
+    Remove,
+    Info,
+    Close,
+    SkipBack,
+    SkipForward,
+    Moment,
+    Offline
 }
 
 public static class RadioVaultIcons
@@ -112,10 +123,11 @@ public static class RadioVaultIcons
 
     public static UIColor ColorFor(RadioVaultIcon icon) => icon switch
     {
-        RadioVaultIcon.Play or RadioVaultIcon.Pause or RadioVaultIcon.UpNext or RadioVaultIcon.Handoff => RadioVaultTheme.Progress,
+        RadioVaultIcon.Play or RadioVaultIcon.Pause or RadioVaultIcon.UpNext or RadioVaultIcon.Handoff or
+            RadioVaultIcon.SkipBack or RadioVaultIcon.SkipForward => RadioVaultTheme.Progress,
         RadioVaultIcon.Favourite => RadioVaultTheme.Favourite,
         RadioVaultIcon.Knowledge => RadioVaultTheme.Wiki,
-        RadioVaultIcon.Download or RadioVaultIcon.Settings => RadioVaultTheme.Settings,
+        RadioVaultIcon.Download or RadioVaultIcon.Settings or RadioVaultIcon.Remove or RadioVaultIcon.Offline => RadioVaultTheme.Settings,
         RadioVaultIcon.Completed => RadioVaultTheme.Completed,
         RadioVaultIcon.Search => Color(0x78, 0xB6, 0xD8),
         _ => RadioVaultTheme.Accent
@@ -225,7 +237,85 @@ public static class RadioVaultIcons
                 Lines(context, (3, 10.5), (13, 10.5));
                 Lines(context, (9, 6.5), (13, 10.5), (9, 14.5));
                 break;
+            case RadioVaultIcon.Grid:
+                RoundedRect(context, new CGRect(4, 4, 6, 6), 1);
+                RoundedRect(context, new CGRect(14, 4, 6, 6), 1);
+                RoundedRect(context, new CGRect(4, 14, 6, 6), 1);
+                RoundedRect(context, new CGRect(14, 14, 6, 6), 1);
+                break;
+            case RadioVaultIcon.List:
+                context.FillEllipseInRect(new CGRect(3.5, 5, 3, 3));
+                context.FillEllipseInRect(new CGRect(3.5, 10.5, 3, 3));
+                context.FillEllipseInRect(new CGRect(3.5, 16, 3, 3));
+                Lines(context, (9, 6.5), (20, 6.5));
+                Lines(context, (9, 12), (20, 12));
+                Lines(context, (9, 17.5), (20, 17.5));
+                break;
+            case RadioVaultIcon.PlayNext:
+                Lines(context, (4, 6), (13, 6));
+                Lines(context, (4, 11), (13, 11));
+                Lines(context, (4, 16), (10, 16));
+                Polygon(context, false, (15, 13), (20, 16.5), (15, 20));
+                break;
+            case RadioVaultIcon.Queue:
+                Lines(context, (4, 7), (15, 7));
+                Lines(context, (4, 12), (15, 12));
+                Lines(context, (4, 17), (12, 17));
+                Lines(context, (19, 13), (19, 21));
+                Lines(context, (15, 17), (23, 17));
+                break;
+            case RadioVaultIcon.Remove:
+                Lines(context, (8, 7), (8.8, 20), (15.2, 20), (16, 7));
+                Lines(context, (6, 7), (18, 7));
+                Lines(context, (10, 4), (14, 4));
+                Lines(context, (11, 10), (11, 17));
+                Lines(context, (14, 10), (14, 17));
+                break;
+            case RadioVaultIcon.Info:
+                context.StrokeEllipseInRect(new CGRect(3, 3, 18, 18));
+                context.FillEllipseInRect(new CGRect(11, 7, 2, 2));
+                Lines(context, (12, 11), (12, 17));
+                break;
+            case RadioVaultIcon.Close:
+                Lines(context, (5, 5), (19, 19));
+                Lines(context, (19, 5), (5, 19));
+                break;
+            case RadioVaultIcon.SkipBack:
+                context.AddArc(12, 12, 8, (nfloat)(Math.PI * 0.2), (nfloat)(Math.PI * 1.75), true);
+                context.StrokePath();
+                Lines(context, (4, 7), (4, 13), (9, 10));
+                Lines(context, (10, 9), (12, 7), (12, 16));
+                Lines(context, (18, 8), (14.5, 8), (14.5, 12), (18, 12), (18, 16), (14.5, 16));
+                break;
+            case RadioVaultIcon.SkipForward:
+                context.AddArc(12, 12, 8, (nfloat)(Math.PI * 0.8), (nfloat)(Math.PI * 1.25), false);
+                context.StrokePath();
+                Lines(context, (20, 7), (20, 13), (15, 10));
+                Lines(context, (7, 8), (10.5, 8), (10.5, 12), (7, 12), (7, 16), (10.5, 16));
+                context.StrokeEllipseInRect(new CGRect(13, 8, 4, 8));
+                break;
+            case RadioVaultIcon.Moment:
+                Lines(context, (6, 3), (18, 3), (18, 21), (12, 17), (6, 21), (6, 3));
+                Lines(context, (12, 7), (12, 14));
+                Lines(context, (8.5, 10.5), (15.5, 10.5));
+                break;
+            case RadioVaultIcon.Offline:
+                context.MoveTo(5, 16);
+                context.AddCurveToPoint(2, 15, 3, 10, 7, 10);
+                context.AddCurveToPoint(8, 5, 15, 4, 17, 9);
+                context.AddCurveToPoint(22, 9, 23, 16, 18, 17);
+                context.AddLineToPoint(7, 17);
+                context.StrokePath();
+                Lines(context, (4, 4), (20, 20));
+                break;
         }
+    }
+
+    private static void RoundedRect(CGContext context, CGRect rect, double radius)
+    {
+        using var path = UIBezierPath.FromRoundedRect(rect, (nfloat)radius);
+        context.AddPath(path.CGPath!);
+        context.StrokePath();
     }
 
     private static void Lines(CGContext context, params (double X, double Y)[] points)

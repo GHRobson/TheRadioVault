@@ -1452,6 +1452,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(dashboard.Contains("On this day", StringComparison.Ordinal));
     True(dashboard.Contains("Recently added", StringComparison.Ordinal));
     True(dashboard.Contains("Unheard broadcasts", StringComparison.Ordinal));
+    True(dashboard.Contains("ConfigureInteractive", StringComparison.Ordinal));
+    True(dashboard.Contains("OpenLibrarySection", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
@@ -1465,6 +1467,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(library.Contains("UpNextViewController", StringComparison.Ordinal));
     True(library.Contains("ToggleHideCompleted", StringComparison.Ordinal));
     True(library.Contains("SetHideCompleted", StringComparison.Ordinal));
+    True(library.Contains("LibraryCollectionsFor", StringComparison.Ordinal));
 
     var showLibrary = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ShowLibraryViewController.cs"));
@@ -1489,11 +1492,15 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosCells.Contains("DashboardContinueCell", StringComparison.Ordinal));
     True(iosCells.Contains("BroadcastProgressCell", StringComparison.Ordinal));
     True(iosCells.Contains("BroadcastHeroCell", StringComparison.Ordinal));
+    True(iosCells.Contains("ExploreImageGalleryCell", StringComparison.Ordinal));
+    True(iosCells.Contains("ExploreArticleImageCell", StringComparison.Ordinal));
 
     var iosTableBase = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SessionTableViewController.cs"));
     True(iosTableBase.Contains("GetContextMenuConfiguration", StringComparison.Ordinal));
     True(iosTableBase.Contains("Download to this iPhone", StringComparison.Ordinal));
+    True(iosTableBase.Contains("ShowsOfflineIndicator", StringComparison.Ordinal));
+    True(!iosTableBase.Contains("UIImage.GetSystemImage", StringComparison.Ordinal));
 
     var upNext = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "UpNextViewController.cs"));
@@ -1518,12 +1525,15 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(explore.Contains("LoadExploreDashboardAsync", StringComparison.Ordinal));
     True(explore.Contains("PageHeading => \"Explore\"", StringComparison.Ordinal));
     True(explore.Contains("DashboardStatsCell", StringComparison.Ordinal));
+    True(explore.Contains("Images from the archive", StringComparison.Ordinal));
+    True(explore.Contains("ExploreImageGalleryCell", StringComparison.Ordinal));
 
     var exploreArticle = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreArticleViewController.cs"));
     True(exploreArticle.Contains("LoadExplorePageAsync", StringComparison.Ordinal));
     True(exploreArticle.Contains("FormatMarkdown", StringComparison.Ordinal));
     True(exploreArticle.Contains("Timeline", StringComparison.Ordinal));
+    True(exploreArticle.Contains("LoadExploreImagesAsync", StringComparison.Ordinal));
 
     var theme = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultTheme.cs"));
@@ -1532,6 +1542,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(theme.Contains("UIGraphicsImageRenderer", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Knowledge", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Handoff", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.SkipBack", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.Moment", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.Offline", StringComparison.Ordinal));
     True(theme.Contains("(3, 10.5), (13, 10.5)", StringComparison.Ordinal));
 
     var miniPlayer = File.ReadAllText(Path.Combine(
@@ -1539,13 +1552,33 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(miniPlayer.Contains("MiniPlayerShowsHandoff", StringComparison.Ordinal));
     True(miniPlayer.Contains("RadioVaultIcon.Handoff", StringComparison.Ordinal));
     True(miniPlayer.Contains("Move playback to this iPhone", StringComparison.Ordinal));
+    True(miniPlayer.Contains("Layer.CornerRadius = 24", StringComparison.Ordinal));
 
     var nowPlayingView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingViewController.cs"));
     True(nowPlayingView.Contains("content.CenterYAnchor.ConstraintEqualTo", StringComparison.Ordinal));
-    True(nowPlayingView.Contains("SetPreferredSymbolConfiguration", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultIcon.SkipBack", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultIcon.SkipForward", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("PresentMomentEditor", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("OpenBroadcastInformation", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("ToggleFavourite", StringComparison.Ordinal));
+    True(!nowPlayingView.Contains("UIImage.GetSystemImage", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_playButton.WidthAnchor.ConstraintEqualTo(96)", StringComparison.Ordinal));
     True(nowPlayingView.Contains("SeekToProgress", StringComparison.Ordinal));
+
+    var metadataCache = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileMetadataCache.cs"));
+    True(metadataCache.Contains("MobileMetadataCacheSnapshot", StringComparison.Ordinal));
+    True(metadataCache.Contains("ApplyLibrarySync", StringComparison.Ordinal));
+    True(metadataCache.Contains("SaveImageAsync", StringComparison.Ordinal));
+
+    var mobileCacheSessionSource = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    True(mobileCacheSessionSource.Contains("SynchronizeMetadataCacheAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("BuildCachedArchivePeriods", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("RefreshExploreCacheAsync", StringComparison.Ordinal));
 
     var downloads = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
