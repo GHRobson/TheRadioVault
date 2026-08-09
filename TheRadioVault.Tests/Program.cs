@@ -165,6 +165,7 @@ var tests = new (string Name, Action Run)[]
     ("Repeated iPhone handoffs bypass dormant decoder gating", RepeatedIphoneHandoffsBypassDormantDecoderGating),
     ("Native handoff preserves the Windows volume session", NativeHandoffPreservesWindowsVolumeSession),
     ("Mac Client uses native AVFoundation and existing server contracts", MacClientUsesNativeAvFoundationAndExistingServerContracts),
+    ("macOS and Linux packages preserve the shared client-server boundary", MacAndLinuxPackagesPreserveSharedClientServerBoundary),
     ("iOS Client preserves native platform and server boundaries", IosClientPreservesNativePlatformAndServerBoundaries),
     ("Canonical audio ranges are cache-combinable", CanonicalAudioRangesAreCacheCombinable),
     ("Positioned web audio is stable across Safari ranges", PositionedWebAudioIsStableAcrossSafariRanges),
@@ -1336,6 +1337,72 @@ static void MacClientUsesNativeAvFoundationAndExistingServerContracts()
     True(package.Contains("Radio Vault.app", StringComparison.Ordinal));
 }
 
+static void MacAndLinuxPackagesPreserveSharedClientServerBoundary()
+{
+    var composition = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Composition", "AvaloniaApplicationHost.cs"));
+    True(composition.Contains("OperatingSystem.IsLinux()", StringComparison.Ordinal));
+    True(composition.Contains("new LinuxMpvPlaybackEngine()", StringComparison.Ordinal));
+
+    var linuxEngine = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Playback", "LinuxMpvPlaybackEngine.cs"));
+    foreach (var marker in new[]
+             {
+                 "OperatingSystem.IsLinux()",
+                 "UnixDomainSocketEndPoint",
+                 "--input-ipc-server=",
+                 "RADIOVAULT_MPV_PATH",
+                 "Server credentials are never passed to mpv",
+                 "PlaybackStatus.Ended"
+             })
+        True(linuxEngine.Contains(marker, StringComparison.Ordinal));
+
+    var startup = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Server", "Services", "ServerStartupRegistrationService.cs"));
+    foreach (var marker in new[]
+             {
+                 "WindowsStartupRegistrationService",
+                 "Library\", \"LaunchAgents",
+                 "\".config\", \"autostart\"",
+                 "com.theradiovault.server",
+                 "Start with macOS",
+                 "Start with Linux"
+             })
+        True(startup.Contains(marker, StringComparison.Ordinal));
+
+    var serverProject = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Server", "TheRadioVault.Server.csproj"));
+    True(serverProject.Contains("<TargetFramework>net8.0</TargetFramework>", StringComparison.Ordinal));
+    True(!serverProject.Contains("net8.0-windows", StringComparison.Ordinal));
+
+    var macPackage = File.ReadAllText(Path.Combine(SourceRoot(), "package-macos-server.ps1"));
+    True(macPackage.Contains("TheRadioVault.Server\\TheRadioVault.Server.csproj", StringComparison.Ordinal));
+    True(macPackage.Contains("Radio Vault Server.app", StringComparison.Ordinal));
+    True(macPackage.Contains("--self-contained true", StringComparison.Ordinal));
+    True(File.Exists(Path.Combine(SourceRoot(), "installer", "macos", "ServerInfo.plist")));
+    True(File.Exists(Path.Combine(SourceRoot(), "installer", "macos", "finalize-macos-server.sh")));
+
+    var linuxPackage = File.ReadAllText(Path.Combine(SourceRoot(), "package-linux.sh"));
+    True(linuxPackage.Contains("linux-x64", StringComparison.Ordinal));
+    True(linuxPackage.Contains("--self-contained true", StringComparison.Ordinal));
+    True(linuxPackage.Contains("RadioVault.Client-$VERSION-$RID.tar.gz", StringComparison.Ordinal));
+    True(linuxPackage.Contains("RadioVault.Server-$VERSION-$RID.tar.gz", StringComparison.Ordinal));
+
+    var workflow = File.ReadAllText(Path.Combine(SourceRoot(), ".github", "workflows", "ci.yml"));
+    True(workflow.Contains("name: macOS client and server", StringComparison.Ordinal));
+    True(workflow.Contains("name: Linux client and server", StringComparison.Ordinal));
+    True(workflow.Contains("macos-client-and-server-osx-arm64-unsigned", StringComparison.Ordinal));
+    True(workflow.Contains("linux-client-and-server-x64", StringComparison.Ordinal));
+
+    var linuxGuide = File.ReadAllText(Path.Combine(SourceRoot(), "LINUX.md"));
+    True(linuxGuide.Contains("mpv", StringComparison.Ordinal));
+    True(linuxGuide.Contains("run-radiovault-server.sh", StringComparison.Ordinal));
+
+    var sourcePackage = File.ReadAllText(Path.Combine(SourceRoot(), "tools", "Package-Source.ps1"));
+    True(sourcePackage.Contains("Get-ChildItem $root -Recurse -File -Force", StringComparison.Ordinal));
+    True(sourcePackage.Contains("StringComparer]::Ordinal", StringComparison.Ordinal));
+}
+
 static void IosClientPreservesNativePlatformAndServerBoundaries()
 {
     var iosProject = File.ReadAllText(Path.Combine(
@@ -1899,7 +1966,8 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
     True(readme.Contains("## Download the latest test builds", StringComparison.Ordinal));
     True(readme.Contains("actions/workflows/ci.yml?query=branch%3Amain", StringComparison.Ordinal));
     True(readme.Contains("windows-client-and-server", StringComparison.Ordinal));
-    True(readme.Contains("macos-client-osx-arm64-unsigned", StringComparison.Ordinal));
+    True(readme.Contains("macos-client-and-server-osx-arm64-unsigned", StringComparison.Ordinal));
+    True(readme.Contains("linux-client-and-server-x64", StringComparison.Ordinal));
     True(readme.Contains("ios-client-simulator-arm64-unsigned", StringComparison.Ordinal));
     True(readme.Contains("## AI disclosure", StringComparison.Ordinal));
     True(readme.Contains("does not contain a generative-AI assistant", StringComparison.Ordinal));

@@ -6,13 +6,14 @@
 - PowerShell on Windows
 - Windows x64 for Windows Client, Server and installer builds
 - macOS 13 or later on Apple Silicon for native Mac validation
+- A modern x64 Linux distribution for native Linux validation
 - Xcode 26.6 and the .NET iOS workload for iPhone/iPad Simulator builds
 - Inno Setup 6 only when producing the standard Windows installers
 
 The applications target .NET 8, while Avalonia 12's source generators require
 the newer compiler pinned in `global.json`. GitHub Actions installs both .NET
-versions and independently builds the Windows Client, Windows Server and Apple
-Silicon Mac and iOS Clients for every proposed change.
+versions and independently builds the Windows, Mac and Linux Clients and
+Servers and the iOS Client for every proposed change.
 
 ## Build and run from source
 
@@ -106,11 +107,20 @@ Windows with:
 
 ```powershell
 .\package-macos-client.ps1
+.\package-macos-server.ps1
 ```
 
-This builds only the Client and its shared dependencies. Final permission,
-signing and notarization checks run on macOS using
-`installer/macos/finalize-macos-client.sh`. See [MACOS-CLIENT.md](MACOS-CLIENT.md).
+These create separate Client and Server bundles. Final permission, signing and
+notarization checks run on macOS using the matching finalizers under
+`installer/macos/`. See [MACOS-CLIENT.md](MACOS-CLIENT.md).
+
+Create the portable self-contained Linux Client and Server archives on Linux with:
+
+```bash
+./package-linux.sh
+```
+
+The Linux Client requires mpv for audio playback. See [LINUX.md](LINUX.md).
 
 Create the self-contained Server package and installer:
 

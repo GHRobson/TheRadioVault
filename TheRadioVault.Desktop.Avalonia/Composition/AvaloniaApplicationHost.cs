@@ -306,7 +306,9 @@ public sealed class AvaloniaApplicationHost : IDisposable
     private static IPlaybackEngine CreatePlaybackEngine()
         => OperatingSystem.IsMacOS()
             ? new MacAvFoundationPlaybackEngine()
-            : new NAudioPlaybackEngine();
+            : OperatingSystem.IsLinux()
+                ? new LinuxMpvPlaybackEngine()
+                : new NAudioPlaybackEngine();
 
     public async Task InitializeStartupAsync(CancellationToken cancellationToken = default)
     {

@@ -32,5 +32,7 @@ Server, macOS Client, iOS Client and their shared libraries.
   side by side. The applications target `net8.0`, but Avalonia 12's generators
   require the pinned newer SDK compiler.
 - Run `release-gate.ps1` on Windows before a release.
-- Run the macOS client build and focused macOS smoke tests described in
-  `DEVELOPMENT.md` before distributing a Mac build.
+- Run the macOS Client and Server builds and focused macOS smoke tests described
+  in `DEVELOPMENT.md` before distributing a Mac build.
+- Require the Linux Client and Server CI build and platform smoke test before
+  distributing a Linux build.

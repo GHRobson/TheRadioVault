@@ -33,12 +33,15 @@ their platform boundaries:
 dotnet restore TheRadioVault.sln
 dotnet build TheRadioVault.Desktop.Avalonia/TheRadioVault.Desktop.Avalonia.csproj \
   -c Release --no-restore -warnaserror
+dotnet build TheRadioVault.Server/TheRadioVault.Server.csproj \
+  -c Release --no-restore -warnaserror
 dotnet build TheRadioVault.Tests/TheRadioVault.Tests.csproj \
   -c Release --no-restore -warnaserror
 dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj \
   -c Release --no-build -- \
   "Mac client remains usable before server pairing" \
-  "Mac Client uses native AVFoundation and existing server contracts"
+  "Mac Client uses native AVFoundation and existing server contracts" \
+  "macOS and Linux packages preserve the shared client-server boundary"
 dotnet workload install ios
 dotnet build TheRadioVault.Client.iOS/TheRadioVault.Client.iOS.csproj \
   -c Release -r iossimulator-arm64 -warnaserror
@@ -47,7 +50,23 @@ dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj \
   "iOS Client preserves native platform and server boundaries"
 ```
 
-Local validation is helpful, but GitHub's Windows, macOS and iOS checks are the
+On x64 Linux, build and package both desktop applications:
+
+```bash
+dotnet restore TheRadioVault.sln
+dotnet build TheRadioVault.Desktop.Avalonia/TheRadioVault.Desktop.Avalonia.csproj \
+  -c Release --no-restore -warnaserror
+dotnet build TheRadioVault.Server/TheRadioVault.Server.csproj \
+  -c Release --no-restore -warnaserror
+dotnet build TheRadioVault.Tests/TheRadioVault.Tests.csproj \
+  -c Release --no-restore -warnaserror
+dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj \
+  -c Release --no-build -- \
+  "macOS and Linux packages preserve the shared client-server boundary"
+./package-linux.sh
+```
+
+Local validation is helpful, but GitHub's Windows, macOS, Linux and iOS checks are the
 merge authority.
 
 ## Publish the change
@@ -62,7 +81,8 @@ git push -u origin fix/short-description
 Open a pull request into `main`. Merge only after all required checks pass:
 
 - `Windows client and server`
-- `macOS client`
+- `macOS client and server`
+- `Linux client and server`
 - `iOS client`
 
 After merging, delete the topic branch and update each computer with
@@ -71,7 +91,7 @@ After merging, delete the topic branch and update each computer with
 ## Releases
 
 Create releases from a version tag on a tested `main` commit, for example
-`v0.35.0-alpha9-buildfix3`. The Windows Client, Windows Server, Mac Client and iOS Client
+`v0.35.0-alpha9-buildfix3`. The Windows, Mac and Linux Clients and Servers and the iOS Client
 for a release must all identify the same commit and `VERSION.txt` value.
 
 Unsigned CI artifacts are for testing. Public Mac distribution still requires

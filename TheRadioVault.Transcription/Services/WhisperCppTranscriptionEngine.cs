@@ -49,7 +49,7 @@ public sealed class WhisperCppTranscriptionEngine : ITranscriptionEngine, IPausa
         get
         {
             var settings = GetSettings();
-            if (string.IsNullOrWhiteSpace(settings.ExecutablePath)) return "Choose whisper-cli.exe in Settings → Transcription.";
+            if (string.IsNullOrWhiteSpace(settings.ExecutablePath)) return "Choose a whisper.cpp worker in Settings → Transcription.";
             if (!File.Exists(settings.ExecutablePath)) return "The configured whisper.cpp executable cannot be found.";
             if (string.IsNullOrWhiteSpace(settings.ModelPath)) return "Choose or download a Whisper model in Settings → Transcription.";
             if (!File.Exists(settings.ModelPath)) return "The configured Whisper model cannot be found.";

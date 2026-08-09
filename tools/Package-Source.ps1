@@ -14,7 +14,7 @@ $excludedExtensions = @(
     '.db', '.sqlite', '.sqlite3', '.sqlite-wal', '.sqlite-shm',
     '.pfx', '.p12', '.key', '.pem', '.mobileprovision'
 )
-$files = @(Get-ChildItem $root -Recurse -File | Where-Object {
+$files = @(Get-ChildItem $root -Recurse -File -Force | Where-Object {
     $_.FullName -notmatch $excludedDirectories -and
     $_.Name -ne 'SOURCE_MANIFEST.sha256.json' -and
     $_.Name -notin $excludedNames -and
@@ -22,13 +22,18 @@ $files = @(Get-ChildItem $root -Recurse -File | Where-Object {
     -not ($_.Name -eq '.env' -or ($_.Name -like '.env.*' -and $_.Name -ne '.env.example')) -and
     -not ($_.DirectoryName -eq $root -and $_.Name -match $rootInstaller)
 })
-$manifestEntries = @($files | ForEach-Object {
+$manifestEntries = [object[]]@($files | ForEach-Object {
     [ordered]@{
         path = $_.FullName.Substring($root.Length + 1).Replace('\', '/')
         bytes = $_.Length
         sha256 = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
     }
-} | Sort-Object path)
+})
+$manifestComparison = [System.Comparison[object]]{
+    param($left, $right)
+    [StringComparer]::Ordinal.Compare([string]$left.path, [string]$right.path)
+}
+[Array]::Sort[object]($manifestEntries, $manifestComparison)
 $manifest = [ordered]@{
     version = $version
     generatedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")

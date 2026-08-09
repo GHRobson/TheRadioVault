@@ -12,7 +12,7 @@
     <FileVersion>0.35.0.9</FileVersion>
     <InformationalVersion>0.35.0-alpha9-buildfix3</InformationalVersion>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
-    <ApplicationIcon Condition="!$([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('osx-'))">Assets\RadioVault.ico</ApplicationIcon>
+    <ApplicationIcon Condition="'$(OS)' == 'Windows_NT' Or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">Assets\RadioVault.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Avalonia" Version="12.1.0" />

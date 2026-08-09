@@ -18,7 +18,11 @@ public partial class AboutWindow : Window
         var metadataSeparator = version.IndexOf('+');
         if (metadataSeparator >= 0) version = version[..metadataSeparator];
         VersionText.Text = $"Version {version}";
-        PlatformText.Text = $"macOS client • {RuntimeInformation.ProcessArchitecture}";
+        var platform = OperatingSystem.IsMacOS() ? "macOS"
+            : OperatingSystem.IsLinux() ? "Linux"
+            : OperatingSystem.IsWindows() ? "Windows"
+            : RuntimeInformation.OSDescription;
+        PlatformText.Text = $"{platform} client • {RuntimeInformation.ProcessArchitecture}";
     }
 
     private static void ProjectWebsite_OnClick(object? sender, RoutedEventArgs e)

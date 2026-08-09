@@ -18,7 +18,7 @@ namespace TheRadioVault.Server.ViewModels;
 public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly RadioVaultServerRuntime? _runtime;
-    private readonly WindowsStartupRegistrationService? _startup;
+    private readonly ServerStartupRegistrationService? _startup;
     private readonly ServerFolderSelectionService? _folderSelection;
     private readonly ServerShowSelectionService? _showSelection;
     private readonly ServerKnowledgeFileService? _knowledgeFiles;
@@ -88,7 +88,7 @@ public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposabl
         _knowledgeFiles = knowledgeFiles ?? throw new ArgumentNullException(nameof(knowledgeFiles));
         _clipboard = clipboard ?? throw new ArgumentNullException(nameof(clipboard));
         DatabasePath = runtime.DatabasePath;
-        _startup = new WindowsStartupRegistrationService(DatabasePath);
+        _startup = new ServerStartupRegistrationService(DatabasePath);
         SaveCommand = new ServerCommand(Save, () => _runtime is not null);
         StartCommand = new ServerCommand(Start, () => _runtime is not null && !IsServerRunning);
         StopCommand = new ServerCommand(Stop, () => _runtime is not null && IsServerRunning);
@@ -158,6 +158,12 @@ public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposabl
     public string HttpsPortText { get => _httpsPortText; set => Set(ref _httpsPortText, value); }
     public bool Enabled { get => _enabled; set => Set(ref _enabled, value); }
     public bool StartAutomatically { get => _startAutomatically; set => Set(ref _startAutomatically, value); }
+    public string StartAutomaticallyLabel => _startup?.SettingLabel ?? "Start automatically";
+    public bool IsAutomaticTranscriptionSetupSupported => OperatingSystem.IsWindows();
+    public bool ShowAutomaticTranscriptionSetup => IsAutomaticTranscriptionSetupSupported && IsTranscriptionSetupRequired;
+    public string TranscriptionPlatformGuidance => OperatingSystem.IsWindows()
+        ? string.Empty
+        : "Automatic Whisper installation is not yet available on this platform. You can still configure a locally installed whisper.cpp worker.";
     public bool SecureAccessEnabled { get => _secureAccessEnabled; set => Set(ref _secureAccessEnabled, value); }
     public bool LanFederationEnabled { get => _lanFederationEnabled; set => Set(ref _lanFederationEnabled, value); }
     public string LanDiscoveryPortText { get => _lanDiscoveryPortText; set => Set(ref _lanDiscoveryPortText, value); }
@@ -267,6 +273,7 @@ public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposabl
         {
             if (!Set(ref _isTranscriptionReady, value)) return;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsTranscriptionSetupRequired)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowAutomaticTranscriptionSetup)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TranscriptionStateLabel)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TranscriptionStateBrush)));
             _installTranscriptionCommand?.RaiseCanExecuteChanged();
@@ -282,6 +289,7 @@ public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposabl
         {
             if (!Set(ref _isTranscriptionBusy, value)) return;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsTranscriptionSetupRequired)));
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowAutomaticTranscriptionSetup)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TranscriptionStateLabel)));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(TranscriptionStateBrush)));
             _installTranscriptionCommand?.RaiseCanExecuteChanged();
@@ -656,9 +664,7 @@ public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposabl
         SecureAccessEnabled = preferences.SecureAccessEnabled;
         LanFederationEnabled = preferences.LanFederationEnabled;
         LanDiscoveryPortText = preferences.LanDiscoveryPort.ToString();
-        StartupStatusText = _startup?.IsRegistered == true
-            ? "Registered to start in the background when you sign in to Windows."
-            : "Not currently registered in Windows sign-in startup.";
+        StartupStatusText = _startup?.StatusText ?? "Automatic startup is unavailable.";
     }
 
     private void Save()

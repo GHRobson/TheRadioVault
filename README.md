@@ -60,10 +60,11 @@ These features are optional. Radio Vault remains useful as a straightforward org
 
 ## Listen around your home
 
-One Windows computer runs **Radio Vault Server** and looks after the main collection. You can then use Radio Vault from:
+One Windows, Mac or Linux computer runs **Radio Vault Server** and looks after the main collection. You can then use Radio Vault from:
 
 - the full Windows desktop client;
 - the Apple Silicon Mac client;
+- the Linux desktop client;
 - the native iPhone and iPad app;
 - Radio Vault Web in a browser on your local network.
 
@@ -79,9 +80,10 @@ Radio Vault does not require you to upload your collection to a streaming servic
 
 Radio Vault is under active development and is currently an **alpha** release.
 
-- Radio Vault Server runs on Windows.
+- Radio Vault Server runs on Windows, Apple Silicon Mac and x64 Linux.
 - The Windows client provides the complete desktop experience.
 - The Apple Silicon Mac client connects to the same server and library.
+- The Linux client provides the shared desktop experience and uses the widely available mpv player for audio.
 - The native iPhone and iPad client supports browsing, playback, downloads, Up Next and handoff.
 - Radio Vault Web provides convenient access from other browsers on the same network.
 
@@ -92,25 +94,26 @@ The project is already suitable for hands-on testing with a real collection, but
 New test builds are created automatically whenever Radio Vault is updated. Use the links below, open the newest run with a green tick, then scroll to **Artifacts** and choose the download for your device.
 
 - [Windows client and server](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `windows-client-and-server`.
-- [Mac client for Apple Silicon](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `macos-client-osx-arm64-unsigned`.
+- [Mac client and server for Apple Silicon](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `macos-client-and-server-osx-arm64-unsigned`.
+- [Linux client and server for x64 computers](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `linux-client-and-server-x64`.
 - [iPhone and iPad simulator build](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `ios-client-simulator-arm64-unsigned`.
 
 These are alpha test builds rather than finished public installers. Because the repository is currently private, GitHub will ask you to sign in before downloading them. The iPhone and iPad download is for Apple's simulator; installing Radio Vault on a physical device still requires signing through Xcode.
 
 ## Getting started
 
-1. Install Radio Vault Server on the Windows computer that holds your collection.
+1. Install Radio Vault Server on the Windows, Mac or Linux computer that holds your collection.
 2. Add the folders containing your radio recordings.
 3. Install Radio Vault on the computers and phones where you want to listen.
 4. Pair each device with the server and start exploring your library.
 
-See [Building and installation](BUILDING.md) for the current installation options and [Using the Mac client](MACOS-CLIENT.md) for Mac-specific guidance.
+See [Building and installation](BUILDING.md) for the current installation options, [Using Radio Vault on Mac](MACOS-CLIENT.md) for Mac-specific guidance and [Using Radio Vault on Linux](LINUX.md) for Linux setup.
 
 ## About the project
 
 Radio Vault grew from a simple idea: old radio recordings should feel like a living collection, not forgotten files in a folder.
 
-The Windows Server, Windows client, Mac client, iPhone and iPad app, and browser experience are maintained together in this repository so that the library and listening experience can stay consistent across every device.
+The Windows, Mac and Linux servers and clients, iPhone and iPad app, and browser experience are maintained together in this repository so that the library and listening experience can stay consistent across every device.
 
 For contributors, [DEVELOPMENT.md](DEVELOPMENT.md) explains the shared development workflow. Earlier release and acceptance notes are preserved in the [historical release archive](docs/history/release-notes/README.md).
 
@@ -118,4 +121,4 @@ For contributors, [DEVELOPMENT.md](DEVELOPMENT.md) explains the shared developme
 
 Radio Vault has been designed and developed with extensive assistance from generative AI tools. AI has helped turn the creator's ideas into interface designs, code, tests and documentation. The direction of the product and hands-on testing remain human-led.
 
-The Radio Vault application does not contain a generative-AI assistant and does not send your recordings, library or listening history to an AI service. Its everyday organising and playback features work without AI. If you choose to use the optional transcription and speaker tools, they use speech-recognition models installed and run locally on your own Windows Server computer.
+The Radio Vault application does not contain a generative-AI assistant and does not send your recordings, library or listening history to an AI service. Its everyday organising and playback features work without AI. If you choose to use the optional transcription and speaker tools, they use speech-recognition models installed and run locally on your own server computer.

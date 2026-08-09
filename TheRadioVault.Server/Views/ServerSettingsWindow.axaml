@@ -118,7 +118,7 @@
             <TextBlock Text="Closing this window hides it. Use the Radio Vault tray icon to reopen settings or exit the server."
                        Classes="muted" FontSize="11" TextWrapping="Wrap" />
           </StackPanel>
-          <CheckBox Grid.Column="1" Content="Start with Windows"
+          <CheckBox Grid.Column="1" Content="{Binding StartAutomaticallyLabel}"
                     IsChecked="{Binding StartAutomatically, Mode=TwoWay}" VerticalAlignment="Center" />
         </Grid>
       </Border>
@@ -228,11 +228,13 @@
                      Classes="muted" FontSize="11" TextWrapping="Wrap" />
           <WrapPanel Grid.Row="2" ItemSpacing="8" LineSpacing="8">
             <Button Content="Install recommended transcription setup" Classes="primary" Command="{Binding InstallTranscriptionCommand}"
-                    IsVisible="{Binding IsTranscriptionSetupRequired}" />
+                    IsVisible="{Binding ShowAutomaticTranscriptionSetup}" />
             <Button Content="Cancel setup" Classes="secondary" Command="{Binding CancelTranscriptionCommand}"
                     IsVisible="{Binding IsTranscriptionBusy}" />
             <TextBlock Text="No setup action is needed." Classes="muted" FontSize="11" VerticalAlignment="Center"
                        IsVisible="{Binding IsTranscriptionReady}" />
+            <TextBlock Text="{Binding TranscriptionPlatformGuidance}" Classes="muted" FontSize="11"
+                       MaxWidth="540" TextWrapping="Wrap" IsVisible="{Binding !IsAutomaticTranscriptionSetupSupported}" />
           </WrapPanel>
         </Grid>
       </Border>

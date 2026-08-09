@@ -27,7 +27,9 @@ public sealed class ServerTranscriptionRuntime : IDisposable
         TranscriptRepository = new SqliteTranscriptRepository(database);
         SpeakerRepository = new SqliteSpeakerIdentityRepository(database);
         BatchRepository = new SqliteTranscriptionBatchRepository(database);
-        Engine = new WhisperCppTranscriptionEngine(SettingsStore.Load(), new WindowsTranscriptionProcessController());
+        Engine = new WhisperCppTranscriptionEngine(
+            SettingsStore.Load(),
+            OperatingSystem.IsWindows() ? new WindowsTranscriptionProcessController() : null);
         DiarizationEngine = new SherpaOnnxMultiSpeakerDiarizationEngine(Engine);
         VoiceEmbeddingEngine = new SherpaOnnxVoiceEmbeddingEngine(Engine);
         AudioPreparer = new NAudioTranscriptionAudioPreparer();

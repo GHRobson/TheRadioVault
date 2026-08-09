@@ -364,6 +364,28 @@ $nativeCompositionText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Ava
 foreach ($marker in @('CreatePlaybackEngine()', 'new MacAvFoundationPlaybackEngine()', 'new ServerMediaProxy')) {
     if ($nativeCompositionText -notmatch [regex]::Escape($marker)) { throw "Mac Client composition marker missing: $marker" }
 }
+$linuxPlaybackPath = Join-Path $root "TheRadioVault.Desktop.Avalonia\Playback\LinuxMpvPlaybackEngine.cs"
+if (-not (Test-Path $linuxPlaybackPath)) { throw "The native Linux playback engine is missing." }
+$linuxPlaybackText = Get-Content $linuxPlaybackPath -Raw
+foreach ($marker in @('OperatingSystem.IsLinux()', 'UnixDomainSocketEndPoint', '--input-ipc-server=', 'RADIOVAULT_MPV_PATH', 'PlaybackStatus.Ended')) {
+    if ($linuxPlaybackText -notmatch [regex]::Escape($marker)) { throw "Linux Client playback marker missing: $marker" }
+}
+foreach ($marker in @('OperatingSystem.IsLinux()', 'new LinuxMpvPlaybackEngine()')) {
+    if ($nativeCompositionText -notmatch [regex]::Escape($marker)) { throw "Linux Client composition marker missing: $marker" }
+}
+$macServerPackagingPath = Join-Path $root "package-macos-server.ps1"
+$linuxPackagingPath = Join-Path $root "package-linux.sh"
+foreach ($path in @($macServerPackagingPath, $linuxPackagingPath, (Join-Path $root "installer\macos\ServerInfo.plist"), (Join-Path $root "installer\macos\finalize-macos-server.sh"), (Join-Path $root "LINUX.md"))) {
+    if (-not (Test-Path $path)) { throw "Mac/Linux Client-Server packaging file is missing: $path" }
+}
+$macServerPackagingText = Get-Content $macServerPackagingPath -Raw
+foreach ($marker in @('TheRadioVault.Server\TheRadioVault.Server.csproj', 'Radio Vault Server.app', '--self-contained true', 'com.theradiovault.server')) {
+    if ($macServerPackagingText -notmatch [regex]::Escape($marker)) { throw "Mac Server packaging marker missing: $marker" }
+}
+$linuxPackagingText = Get-Content $linuxPackagingPath -Raw
+foreach ($marker in @('linux-x64', '--self-contained true', 'RadioVault.Client-$VERSION-$RID.tar.gz', 'RadioVault.Server-$VERSION-$RID.tar.gz')) {
+    if ($linuxPackagingText -notmatch [regex]::Escape($marker)) { throw "Linux Client-Server packaging marker missing: $marker" }
+}
 if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX3-DEVICE-LOCAL-VOLUME.md"))) {
     throw "Alpha 20 Buildfix 3 device-local volume acceptance guide is missing."
 }
@@ -384,6 +406,7 @@ $serverProgramText = Get-Content (Join-Path $root "TheRadioVault.Server\Program.
 $serverAppText = Get-Content (Join-Path $root "TheRadioVault.Server\App.axaml.cs") -Raw
 $serverSettingsText = Get-Content (Join-Path $root "TheRadioVault.Server\ViewModels\ServerSettingsViewModel.cs") -Raw
 $startupRegistrationText = Get-Content (Join-Path $root "TheRadioVault.Server\Services\WindowsStartupRegistrationService.cs") -Raw
+$platformStartupRegistrationText = Get-Content (Join-Path $root "TheRadioVault.Server\Services\ServerStartupRegistrationService.cs") -Raw
 $nativeConnectionText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\NativeConnectedAccessService.cs") -Raw
 $nativeSettingsText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\DesktopToolsView.axaml") -Raw
 foreach ($marker in @('ServerInstanceCoordinator.Acquire', 'SignalPrimaryAsync')) {
@@ -397,6 +420,9 @@ foreach ($marker in @('GeneratePairingCodeCommand', 'RevokeAllClientsCommand', '
 }
 foreach ($marker in @('CurrentVersion\Run', '--background', 'Registry.CurrentUser')) {
     if ($startupRegistrationText -notmatch [regex]::Escape($marker)) { throw "Alpha 10 Windows startup marker missing: $marker" }
+}
+foreach ($marker in @('WindowsStartupRegistrationService', 'LaunchAgents', '.config', 'autostart', 'com.theradiovault.server', 'Start with macOS', 'Start with Linux')) {
+    if ($platformStartupRegistrationText -notmatch [regex]::Escape($marker)) { throw "Cross-platform Server startup marker missing: $marker" }
 }
 foreach ($marker in @('DiscoverAsync', 'PairAsync', 'ServerCertificateCustomValidationCallback', 'FederationBootstrap')) {
     if ($nativeConnectionText -notmatch [regex]::Escape($marker)) { throw "Alpha 10 native pairing marker missing: $marker" }
@@ -908,7 +934,7 @@ foreach ($marker in @('ServerOwnedTranscriptionEngine', 'ServerOwnedVoiceEmbeddi
 foreach ($marker in @('IsServerRunning', 'ServerStateBrush', 'IsTranscriptionSetupRequired', 'TranscriptionStateBrush')) {
     if ($alpha12ServerViewModelText -notmatch [regex]::Escape($marker)) { throw "Alpha 12 server status marker missing: $marker" }
 }
-foreach ($marker in @('IsVisible="{Binding IsServerStopped}"', 'IsVisible="{Binding IsServerRunning}"', 'IsVisible="{Binding IsTranscriptionSetupRequired}"')) {
+foreach ($marker in @('IsVisible="{Binding IsServerStopped}"', 'IsVisible="{Binding IsServerRunning}"', 'IsVisible="{Binding ShowAutomaticTranscriptionSetup}"')) {
     if ($alpha12ServerViewText -notmatch [regex]::Escape($marker)) { throw "Alpha 12 server action-state marker missing: $marker" }
 }
 if ($alpha12ClientStylesText -notmatch [regex]::Escape('AllowAutoHide')) { throw "Alpha 12 auto-hiding scrollbar marker missing." }
@@ -1005,7 +1031,7 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA9-
 $stableReadmeText = Get-Content (Join-Path $root "README.md") -Raw
 $stableBuildingText = Get-Content (Join-Path $root "BUILDING.md") -Raw
 $stableFoundationText = Get-Content (Join-Path $root "tools\Test-AvaloniaFoundation.ps1") -Raw
-foreach ($marker in @('<h1 align="center">Radio Vault</h1>', 'Bring your old radio collection back to life.', 'browse your collection by show, year, month and broadcast', 'Radio Vault Server', 'Radio Vault Web', 'Your collection stays on your own hardware', 'should not be exposed directly to the public internet', '## Download the latest test builds', 'actions/workflows/ci.yml?query=branch%3Amain', 'windows-client-and-server', 'macos-client-osx-arm64-unsigned', 'ios-client-simulator-arm64-unsigned', '## AI disclosure', 'does not contain a generative-AI assistant', 'speech-recognition models installed and run locally')) {
+foreach ($marker in @('<h1 align="center">Radio Vault</h1>', 'Bring your old radio collection back to life.', 'browse your collection by show, year, month and broadcast', 'Radio Vault Server', 'Radio Vault Web', 'Your collection stays on your own hardware', 'should not be exposed directly to the public internet', '## Download the latest test builds', 'actions/workflows/ci.yml?query=branch%3Amain', 'windows-client-and-server', 'macos-client-and-server-osx-arm64-unsigned', 'linux-client-and-server-x64', 'ios-client-simulator-arm64-unsigned', '## AI disclosure', 'does not contain a generative-AI assistant', 'speech-recognition models installed and run locally')) {
     if ($stableReadmeText -notmatch [regex]::Escape($marker)) { throw "Radio Vault marketing README marker missing: $marker" }
 }
 foreach ($marker in @('# Building Radio Vault 0.35.0 Alpha 9', 'package-server-installer.ps1', 'package-client-installer.ps1', 'SOURCE_MANIFEST.sha256.json')) {
