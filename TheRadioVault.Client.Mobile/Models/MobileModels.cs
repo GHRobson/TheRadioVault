@@ -63,6 +63,7 @@ public sealed class MobileBroadcastItem
     public string Subtitle { get; }
     public string Description => Source.Description ?? string.Empty;
     public double Progress { get; }
+    public double DisplayProgress => Source.Completed ? 100d : Progress;
     public bool HasProgress => Progress > 0.5d;
     public string Status => Source.Completed ? "Played" : Source.InProgress ? $"{Progress:0}% listened" : "Unplayed";
 }

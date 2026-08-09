@@ -110,7 +110,7 @@ public static class RadioVaultIcons
         return image.ImageWithRenderingMode(UIImageRenderingMode.AlwaysOriginal);
     }
 
-    private static UIColor ColorFor(RadioVaultIcon icon) => icon switch
+    public static UIColor ColorFor(RadioVaultIcon icon) => icon switch
     {
         RadioVaultIcon.Play or RadioVaultIcon.Pause or RadioVaultIcon.UpNext or RadioVaultIcon.Handoff => RadioVaultTheme.Progress,
         RadioVaultIcon.Favourite => RadioVaultTheme.Favourite,

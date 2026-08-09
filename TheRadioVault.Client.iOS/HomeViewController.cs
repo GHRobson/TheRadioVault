@@ -19,8 +19,9 @@ public sealed class HomeViewController : SessionTableViewController
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
-        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
-        NavigationController?.NavigationBar.PrefersLargeTitles = true;
+        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
+        TableView.RowHeight = UITableView.AutomaticDimension;
+        TableView.EstimatedRowHeight = 88;
         RefreshControl = new UIRefreshControl();
         RefreshControl.ValueChanged += async (_, _) =>
         {
@@ -29,55 +30,65 @@ public sealed class HomeViewController : SessionTableViewController
         };
     }
 
-    public override nint NumberOfSections(UITableView tableView) => 7;
+    public override nint NumberOfSections(UITableView tableView) => 8;
 
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
         0 => 1,
         1 => 1,
-        2 => 4,
-        3 => Math.Max(1, UpNext.Count),
-        4 => Math.Max(1, Session.OnThisDay.Count),
-        5 => Math.Max(1, Session.RecentBroadcasts.Take(5).Count()),
-        6 => Math.Max(1, Session.UnheardBroadcasts.Take(5).Count()),
+        2 => 1,
+        3 => 1,
+        4 => Math.Max(1, UpNext.Count),
+        5 => Math.Max(1, Session.OnThisDay.Count),
+        6 => Math.Max(1, Session.RecentBroadcasts.Take(5).Count()),
+        7 => Math.Max(1, Session.UnheardBroadcasts.Take(5).Count()),
         _ => 0
     };
 
     public override string? TitleForHeader(UITableView tableView, nint section) => section switch
     {
-        0 => "Continue listening",
-        1 => "Not sure what to play?",
-        2 => "Your Library",
-        3 => "Up next",
-        4 => "On this day",
-        5 => "Recently added",
-        6 => "Unheard broadcasts",
+        1 => "Your Library",
+        2 => "Continue listening",
+        3 => "Not sure what to play?",
+        4 => "Up next",
+        5 => "On this day",
+        6 => "Recently added",
+        7 => "Unheard broadcasts",
         _ => null
     };
 
     public override string? TitleForFooter(UITableView tableView, nint section) => section switch
     {
-        0 when FeaturedContinue is null => "Choose something from the Library or let Radio Vault pick for you.",
-        1 => "Choose a random unheard broadcast.",
+        2 when FeaturedContinue is null => "Choose something from the Library or let Radio Vault pick for you.",
+        3 => "Choose a random unheard broadcast.",
         _ => null
     };
 
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
-        if (indexPath.Section == 0)
+        if (indexPath.Section == 0) return new DashboardHeaderCell();
+
+        if (indexPath.Section == 1)
         {
-            var featured = FeaturedContinue;
-            if (featured is null)
+            var stats = new DashboardStatsCell();
+            stats.Configure(
+                ("Broadcasts", Session.TotalBroadcasts, RadioVaultIcon.Library),
+                ("In progress", Session.InProgressBroadcasts, RadioVaultIcon.Play),
+                ("Completed", Session.CompletedBroadcasts, RadioVaultIcon.Completed),
+                ("Favourites", Session.FavouriteBroadcasts, RadioVaultIcon.Favourite));
+            return stats;
+        }
+
+        if (indexPath.Section == 2)
+        {
+            if (FeaturedContinue is not { } featured)
                 return DetailCell("dashboard-featured-empty", "Nothing waiting to resume", Session.StatusText);
-            var cell = DashboardBroadcastCell(
-                "dashboard-featured",
-                featured,
-                $"Resume · {featured.Progress:0}% listened");
-            cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+            var cell = new DashboardContinueCell();
+            cell.Configure(featured, () => _ = Session.PlayAsync(featured));
             return cell;
         }
 
-        if (indexPath.Section == 1)
+        if (indexPath.Section == 3)
         {
             var cell = new UITableViewCell(UITableViewCellStyle.Default, "dashboard-surprise");
             var content = cell.DefaultContentConfiguration;
@@ -92,85 +103,63 @@ public sealed class HomeViewController : SessionTableViewController
             return cell;
         }
 
-        if (indexPath.Section == 2)
-        {
-            var stats = new[]
-            {
-                ("Broadcasts", Session.TotalBroadcasts, RadioVaultIcon.Library),
-                ("In progress", Session.InProgressBroadcasts, RadioVaultIcon.Play),
-                ("Completed", Session.CompletedBroadcasts, RadioVaultIcon.Completed),
-                ("Favourites", Session.FavouriteBroadcasts, RadioVaultIcon.Favourite)
-            };
-            var stat = stats[indexPath.Row];
-            var cell = new UITableViewCell(UITableViewCellStyle.Default, "dashboard-stat");
-            var content = cell.DefaultContentConfiguration;
-            content.Text = stat.Item1;
-            content.SecondaryText = stat.Item2.ToString("N0");
-            content.Image = RadioVaultIcons.Image(stat.Item3);
-            RadioVaultTheme.StyleCell(cell, content);
-            cell.SelectionStyle = UITableViewCellSelectionStyle.None;
-            return cell;
-        }
-
         var values = ValuesForSection(indexPath.Section);
         if (values.Count == 0)
         {
             var empty = indexPath.Section switch
             {
-                3 => "Nothing else waiting to resume",
-                4 => "No broadcasts aired on this date",
-                5 => "No recently added broadcasts",
+                4 => "Nothing else waiting to resume",
+                5 => "No broadcasts aired on this date",
+                6 => "No recently added broadcasts",
                 _ => "You have heard everything in the Library"
             };
             return DetailCell("dashboard-empty", empty, "Pull down to refresh the Dashboard.");
         }
 
-        return DashboardBroadcastCell(
-            "dashboard-broadcast",
-            values[indexPath.Row],
-            indexPath.Section == 3 ? $"{values[indexPath.Row].Progress:0}% listened" : null);
+        var item = values[indexPath.Row];
+        var broadcastCell = new BroadcastProgressCell("dashboard-broadcast");
+        broadcastCell.Configure(item, indexPath.Section == 4
+            ? $"{item.Source.CollectionName} · ready to resume"
+            : $"{item.Subtitle} · {item.Status}");
+        broadcastCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+        return broadcastCell;
     }
 
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (indexPath.Section == 0 && FeaturedContinue is { } featured)
+        if (indexPath.Section == 2 && FeaturedContinue is { } featured)
         {
             _ = Session.PlayAsync(featured);
             return;
         }
-        if (indexPath.Section == 1)
+        if (indexPath.Section == 3)
         {
             var pool = Session.UnheardBroadcasts;
             if (pool.Count > 0) _ = Session.PlayAsync(pool[Random.Shared.Next(pool.Count)]);
             return;
         }
-        if (indexPath.Section < 3) return;
+        if (indexPath.Section < 4) return;
         var values = ValuesForSection(indexPath.Section);
         if (indexPath.Row < values.Count)
             NavigationController?.PushViewController(
                 new BroadcastDetailsViewController(Session, values[indexPath.Row]), true);
     }
 
+    protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
+    {
+        if (indexPath.Section == 2) return FeaturedContinue;
+        if (indexPath.Section < 4) return null;
+        var values = ValuesForSection(indexPath.Section);
+        return indexPath.Row < values.Count ? values[indexPath.Row] : null;
+    }
+
     private IReadOnlyList<MobileBroadcastItem> ValuesForSection(nint section) => section switch
     {
-        3 => UpNext,
-        4 => Session.OnThisDay,
-        5 => Session.RecentBroadcasts.Take(5).ToArray(),
-        6 => Session.UnheardBroadcasts.Take(5).ToArray(),
+        4 => UpNext,
+        5 => Session.OnThisDay,
+        6 => Session.RecentBroadcasts.Take(5).ToArray(),
+        7 => Session.UnheardBroadcasts.Take(5).ToArray(),
         _ => []
     };
-
-    private static UITableViewCell DashboardBroadcastCell(
-        string identifier,
-        MobileBroadcastItem item,
-        string? action = null)
-    {
-        var detail = action is null
-            ? $"{item.Subtitle} · {item.Status}"
-            : $"{item.Subtitle} · {action}";
-        var cell = DetailCell(identifier, item.Title, detail);
-        cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
-        return cell;
-    }
 }

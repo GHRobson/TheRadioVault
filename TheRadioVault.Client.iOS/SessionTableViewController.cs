@@ -1,4 +1,7 @@
+using CoreGraphics;
+using Foundation;
 using TheRadioVault.Client.Mobile;
+using TheRadioVault.Client.Mobile.Models;
 using UIKit;
 
 namespace TheRadioVault.Client.iOS;
@@ -31,6 +34,59 @@ public abstract class SessionTableViewController : UITableViewController
     }
 
     protected virtual void ReloadSession() => TableView.ReloadData();
+
+    protected virtual MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath) => null;
+
+    public override UIContextMenuConfiguration? GetContextMenuConfiguration(
+        UITableView tableView,
+        NSIndexPath indexPath,
+        CGPoint point)
+    {
+        var broadcast = ContextBroadcastForRow(indexPath);
+        if (broadcast is null) return null;
+
+        return UIContextMenuConfiguration.Create(null, null, suggestedActions =>
+        {
+            var downloaded = Session.DownloadedBroadcasts.Any(item => item.EpisodeId == broadcast.EpisodeId);
+            var play = UIAction.Create(
+                broadcast.HasProgress ? "Resume" : "Play",
+                UIImage.GetSystemImage("play.fill"),
+                "radiovault.play",
+                action => _ = Session.PlayAsync(broadcast));
+            var playNext = UIAction.Create(
+                "Play Next",
+                UIImage.GetSystemImage("text.insert"),
+                "radiovault.play-next",
+                action => _ = Session.AddToQueueAsync(broadcast, true));
+            var addToQueue = UIAction.Create(
+                "Add to Queue",
+                UIImage.GetSystemImage("text.badge.plus"),
+                "radiovault.queue",
+                action => _ = Session.AddToQueueAsync(broadcast));
+            var favourite = UIAction.Create(
+                broadcast.Source.Favourite ? "Remove from Favourites" : "Add to Favourites",
+                UIImage.GetSystemImage(broadcast.Source.Favourite ? "heart.slash" : "heart"),
+                "radiovault.favourite",
+                action => _ = Session.SetFavouriteAsync(broadcast, !broadcast.Source.Favourite));
+            var download = UIAction.Create(
+                downloaded ? "Remove Download" : "Download to this iPhone",
+                UIImage.GetSystemImage(downloaded ? "trash" : "arrow.down.circle"),
+                "radiovault.download",
+                action =>
+                {
+                    if (downloaded) _ = Session.RemoveDownloadAsync(broadcast);
+                    else _ = Session.DownloadAsync(broadcast);
+                });
+            if (downloaded) download.Attributes = UIMenuElementAttributes.Destructive;
+            var information = UIAction.Create(
+                "Broadcast Information",
+                UIImage.GetSystemImage("info.circle"),
+                "radiovault.information",
+                action => NavigationController?.PushViewController(
+                    new BroadcastDetailsViewController(Session, broadcast), true));
+            return UIMenu.Create("", [play, playNext, addToQueue, favourite, download, information]);
+        });
+    }
 
     protected static UITableViewCell DetailCell(string reuseIdentifier, string title, string detail)
     {

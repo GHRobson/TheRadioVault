@@ -1,5 +1,6 @@
 using Foundation;
 using TheRadioVault.Client.Mobile;
+using TheRadioVault.Client.Mobile.Models;
 using UIKit;
 
 namespace TheRadioVault.Client.iOS;
@@ -16,6 +17,8 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
     {
         base.ViewDidLoad();
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
+        TableView.RowHeight = UITableView.AutomaticDimension;
+        TableView.EstimatedRowHeight = 74;
         _searchController = new UISearchController((UIViewController?)null)
         {
             ObscuresBackgroundDuringPresentation = false,
@@ -67,7 +70,8 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
             if (Session.LibraryBroadcasts.Count == 0)
                 return DetailCell("empty-library", Session.IsPaired ? "No broadcasts found" : "Pair a server first", Session.StatusText);
             var item = Session.LibraryBroadcasts[indexPath.Row];
-            var resultCell = DetailCell("library-broadcast", item.Title, $"{item.Subtitle} · {item.Status}");
+            var resultCell = new BroadcastProgressCell("library-broadcast");
+            resultCell.Configure(item);
             resultCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
             return resultCell;
         }
@@ -168,6 +172,11 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
 
     [Export("searchBarCancelButtonClicked:")]
     public void CancelButtonClicked(UISearchBar searchBar) => _ = Session.SearchAsync(string.Empty, _hideCompleted);
+
+    protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
+        => IsShowingSearchResults && indexPath.Row < Session.LibraryBroadcasts.Count
+            ? Session.LibraryBroadcasts[indexPath.Row]
+            : null;
 
     private void ToggleHideCompleted()
     {

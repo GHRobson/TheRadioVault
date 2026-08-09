@@ -1,5 +1,6 @@
 using Foundation;
 using TheRadioVault.Client.Mobile;
+using TheRadioVault.Client.Mobile.Models;
 using UIKit;
 
 namespace TheRadioVault.Client.iOS;
@@ -12,6 +13,8 @@ public sealed class DownloadsViewController : SessionTableViewController
     {
         base.ViewDidLoad();
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
+        TableView.RowHeight = UITableView.AutomaticDimension;
+        TableView.EstimatedRowHeight = 74;
         NavigationItem.RightBarButtonItem = EditButtonItem;
     }
 
@@ -59,7 +62,8 @@ public sealed class DownloadsViewController : SessionTableViewController
         if (Session.DownloadedBroadcasts.Count == 0)
             return DetailCell("empty-downloads", "No downloads yet", "Open a broadcast in Library and choose Download to this iPhone.");
         var item = Session.DownloadedBroadcasts[indexPath.Row];
-        var cell = DetailCell("download", item.Title, $"{item.Subtitle} · {item.Status}");
+        var cell = new BroadcastProgressCell("download");
+        cell.Configure(item, $"{item.Subtitle} · downloaded");
         cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
         return cell;
     }
@@ -93,4 +97,9 @@ public sealed class DownloadsViewController : SessionTableViewController
         if (indexPath.Section == 1 && indexPath.Row < Session.DownloadedBroadcasts.Count)
             _ = Session.PlayDownloadedAsync(Session.DownloadedBroadcasts[indexPath.Row]);
     }
+
+    protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
+        => indexPath.Section == 1 && indexPath.Row < Session.DownloadedBroadcasts.Count
+            ? Session.DownloadedBroadcasts[indexPath.Row]
+            : null;
 }

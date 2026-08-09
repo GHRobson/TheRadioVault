@@ -1436,6 +1436,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(!tabs.Contains("Wrap(new NowPlayingViewController", StringComparison.Ordinal));
     True(tabs.Contains("ServerViewController", StringComparison.Ordinal));
     True(tabs.Contains("RadioVaultIcons.Image", StringComparison.Ordinal));
+    True(tabs.Contains("SetTitleTextAttributes", StringComparison.Ordinal));
+    True(tabs.Contains("UIModalPresentationStyle.PageSheet", StringComparison.Ordinal));
+    True(tabs.Contains("PrefersGrabberVisible = true", StringComparison.Ordinal));
     True(tabs.Contains("\"Dashboard\"", StringComparison.Ordinal));
     True(tabs.Contains("\"Settings\"", StringComparison.Ordinal));
 
@@ -1462,11 +1465,26 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
 
     var showLibrary = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ShowLibraryViewController.cs"));
-    True(showLibrary.Contains("UISegmentedControl", StringComparison.Ordinal));
-    True(showLibrary.Contains("ArchiveViewMode.Years", StringComparison.Ordinal));
-    True(showLibrary.Contains("ArchiveViewMode.Months", StringComparison.Ordinal));
-    True(showLibrary.Contains("ArchiveViewMode.Broadcasts", StringComparison.Ordinal));
+    True(!showLibrary.Contains("UISegmentedControl", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveLevel.Years", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveLevel.Months", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveLevel.Broadcasts", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveGridRowCell", StringComparison.Ordinal));
+    True(showLibrary.Contains("ToggleHideCompleted", StringComparison.Ordinal));
     True(showLibrary.Contains("LoadArchivePeriodsAsync", StringComparison.Ordinal));
+
+    var iosCells = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultCells.cs"));
+    True(iosCells.Contains("DashboardHeaderCell", StringComparison.Ordinal));
+    True(iosCells.Contains("DashboardStatsCell", StringComparison.Ordinal));
+    True(iosCells.Contains("DashboardContinueCell", StringComparison.Ordinal));
+    True(iosCells.Contains("BroadcastProgressCell", StringComparison.Ordinal));
+    True(iosCells.Contains("BroadcastHeroCell", StringComparison.Ordinal));
+
+    var iosTableBase = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "SessionTableViewController.cs"));
+    True(iosTableBase.Contains("GetContextMenuConfiguration", StringComparison.Ordinal));
+    True(iosTableBase.Contains("Download to this iPhone", StringComparison.Ordinal));
 
     var upNext = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "UpNextViewController.cs"));

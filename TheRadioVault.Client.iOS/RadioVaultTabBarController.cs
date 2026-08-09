@@ -52,9 +52,17 @@ public sealed class RadioVaultTabBarController : UITabBarController
     {
         controller.Title = title;
         controller.NavigationItem.Title = title;
+        var tabColor = RadioVaultIcons.ColorFor(icon);
+        var tabItem = new UITabBarItem(title, RadioVaultIcons.Image(icon), tag);
+        tabItem.SetTitleTextAttributes(
+            new UIStringAttributes { ForegroundColor = tabColor },
+            UIControlState.Normal);
+        tabItem.SetTitleTextAttributes(
+            new UIStringAttributes { ForegroundColor = tabColor },
+            UIControlState.Selected);
         var navigation = new UINavigationController(controller)
         {
-            TabBarItem = new UITabBarItem(title, RadioVaultIcons.Image(icon), tag)
+            TabBarItem = tabItem
         };
         navigation.NavigationBar.PrefersLargeTitles = true;
         navigation.NavigationBar.Hidden = false;
@@ -81,8 +89,13 @@ public sealed class RadioVaultTabBarController : UITabBarController
         var nowPlaying = new NowPlayingViewController(_session);
         var navigation = new UINavigationController(nowPlaying)
         {
-            ModalPresentationStyle = UIModalPresentationStyle.FullScreen
+            ModalPresentationStyle = UIModalPresentationStyle.PageSheet
         };
+        if (navigation.SheetPresentationController is { } sheet)
+        {
+            sheet.Detents = [UISheetPresentationControllerDetent.CreateLargeDetent()];
+            sheet.PrefersGrabberVisible = true;
+        }
         nowPlaying.NavigationItem.RightBarButtonItem = new UIBarButtonItem(
             UIBarButtonSystemItem.Close,
             (_, _) => navigation.DismissViewController(true, null));
