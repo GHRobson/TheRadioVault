@@ -32,7 +32,7 @@
               BorderThickness="0,0,1,0"
               Padding="16,18,16,14">
         <Grid RowDefinitions="Auto,*,Auto" RowSpacing="18">
-          <Grid PointerPressed="TitleBar_OnPointerPressed" ColumnDefinitions="Auto,*" ColumnSpacing="9">
+          <Grid x:Name="ShellBrandHeader" PointerPressed="TitleBar_OnPointerPressed" ColumnDefinitions="Auto,*" ColumnSpacing="9">
             <Image Width="36" Height="36" Source="/Assets/RadioVault-Logo.png"
                    Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" />
             <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="1">
@@ -170,7 +170,7 @@
               Background="{DynamicResource RvBackgroundBrush}" BorderBrush="{DynamicResource RvBorderBrush}"
               BorderThickness="0,0,0,1" IsHitTestVisible="False" IsVisible="False" />
 
-      <Grid HorizontalAlignment="Right" VerticalAlignment="Top" Height="38"
+      <Grid x:Name="WindowsWindowControls" HorizontalAlignment="Right" VerticalAlignment="Top" Height="38"
             ColumnDefinitions="46,46,46">
         <Button Grid.Column="0" Classes="window-control" Click="MinimizeButton_OnClick" ToolTip.Tip="Minimize">
           <Path Width="24" Height="24" Stretch="None" Stroke="{DynamicResource RvMutedTextBrush}"
@@ -185,6 +185,33 @@
                 StrokeThickness="1.9" StrokeLineCap="Round" StrokeJoin="Round" Data="M6,6 L18,18 M18,6 L6,18" />
         </Button>
       </Grid>
+    </Grid>
+
+    <Grid x:Name="MacWindowControls" Grid.Row="0" Grid.Column="0" ZIndex="10"
+          IsVisible="False" HorizontalAlignment="Left" VerticalAlignment="Top"
+          Height="38" Margin="14,0,0,0" ColumnDefinitions="20,20,20">
+      <Button Grid.Column="0" Classes="mac-window-control" Click="CloseButton_OnClick" ToolTip.Tip="Close">
+        <Grid Width="13" Height="13">
+          <Ellipse Fill="#FF5F57" Stroke="#CC453E" StrokeThickness="0.8" />
+          <Path Width="8" Height="8" Stretch="Uniform" Stroke="#5C1713" StrokeThickness="1.15"
+                StrokeLineCap="Round" Data="M2,2 L6,6 M6,2 L2,6" />
+        </Grid>
+      </Button>
+      <Button Grid.Column="1" Classes="mac-window-control" Click="MinimizeButton_OnClick" ToolTip.Tip="Minimize">
+        <Grid Width="13" Height="13">
+          <Ellipse Fill="#FEBC2E" Stroke="#D99E24" StrokeThickness="0.8" />
+          <Path Width="8" Height="8" Stretch="Uniform" Stroke="#674C0B" StrokeThickness="1.15"
+                StrokeLineCap="Round" Data="M1.5,4 L6.5,4" />
+        </Grid>
+      </Button>
+      <Button Grid.Column="2" Classes="mac-window-control" Click="MaximizeButton_OnClick" ToolTip.Tip="Zoom or restore">
+        <Grid Width="13" Height="13">
+          <Ellipse Fill="#28C840" Stroke="#1FA734" StrokeThickness="0.8" />
+          <Path Width="8" Height="8" Stretch="Uniform" Stroke="#0B5A18" StrokeThickness="0.9"
+                StrokeLineCap="Round" StrokeJoin="Round"
+                Data="M1.5,6.5 L3.8,4.2 M1.5,4.2 L3.8,4.2 L3.8,6.5 M6.5,1.5 L4.2,3.8 M6.5,3.8 L4.2,3.8 L4.2,1.5" />
+        </Grid>
+      </Button>
     </Grid>
 
     <Border Grid.Row="1" Grid.ColumnSpan="2" Background="{DynamicResource RvShellBrush}"

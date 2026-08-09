@@ -19,6 +19,12 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        var useMacWindowControls = OperatingSystem.IsMacOS();
+        MacWindowControls.IsVisible = useMacWindowControls;
+        WindowsWindowControls.IsVisible = !useMacWindowControls;
+        if (useMacWindowControls)
+            ShellBrandHeader.Margin = new Thickness(0, 22, 0, 0);
+
         // Slider thumbs mark pointer events handled. Subscribe on the tunnel route
         // with handledEventsToo so a drag always begins and commits a real seek.
         PlaybackSeekSlider.AddHandler(

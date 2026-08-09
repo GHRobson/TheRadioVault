@@ -770,6 +770,24 @@ static void MacClientRemainsUsableBeforeServerPairing()
     True(shell.Contains("NavigateToCoreAsync", StringComparison.Ordinal));
     True(shell.Contains("This view needs a Radio Vault Server", StringComparison.Ordinal));
     True(shell.Contains("HasNavigationError", StringComparison.Ordinal));
+
+    var mainWindow = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml"));
+    True(mainWindow.Contains("x:Name=\"MacWindowControls\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("x:Name=\"WindowsWindowControls\" HorizontalAlignment=\"Right\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("Fill=\"#FF5F57\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("Fill=\"#FEBC2E\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("Fill=\"#28C840\"", StringComparison.Ordinal));
+    var macControls = mainWindow[mainWindow.IndexOf("x:Name=\"MacWindowControls\"", StringComparison.Ordinal)..];
+    var closeButton = macControls.IndexOf("Click=\"CloseButton_OnClick\"", StringComparison.Ordinal);
+    var minimizeButton = macControls.IndexOf("Click=\"MinimizeButton_OnClick\"", StringComparison.Ordinal);
+    var zoomButton = macControls.IndexOf("Click=\"MaximizeButton_OnClick\"", StringComparison.Ordinal);
+    True(closeButton >= 0 && minimizeButton > closeButton && zoomButton > minimizeButton);
+
+    var mainWindowCode = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml.cs"));
+    True(mainWindowCode.Contains("var useMacWindowControls = OperatingSystem.IsMacOS()", StringComparison.Ordinal));
+    True(mainWindowCode.Contains("WindowsWindowControls.IsVisible = !useMacWindowControls", StringComparison.Ordinal));
 }
 
 static void Alpha12CompletesServerOwnershipAndStatusUx()
