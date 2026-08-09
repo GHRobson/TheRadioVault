@@ -16,7 +16,26 @@ public sealed class ServerViewController : SessionTableViewController
         Font = UIFont.MonospacedDigitSystemFontOfSize(22, UIFontWeight.Semibold),
         TranslatesAutoresizingMaskIntoConstraints = false
     };
+    private readonly UITextField _addressField = new()
+    {
+        Placeholder = "Server address, e.g. 192.168.1.20",
+        KeyboardType = UIKeyboardType.NumbersAndPunctuation,
+        AutocapitalizationType = UITextAutocapitalizationType.None,
+        AutocorrectionType = UITextAutocorrectionType.No,
+        ClearButtonMode = UITextFieldViewMode.WhileEditing,
+        TranslatesAutoresizingMaskIntoConstraints = false
+    };
+    private readonly UITextField _portField = new()
+    {
+        Placeholder = "HTTPS port",
+        Text = "8766",
+        KeyboardType = UIKeyboardType.NumberPad,
+        TextAlignment = UITextAlignment.Right,
+        TranslatesAutoresizingMaskIntoConstraints = false
+    };
     private UITableViewCell? _codeCell;
+    private UITableViewCell? _addressCell;
+    private UITableViewCell? _portCell;
     private DiscoveredRadioVaultServer? _selectedServer;
 
     public ServerViewController(MobileClientSession session) : base(session) => Title = "Settings";
@@ -27,6 +46,10 @@ public sealed class ServerViewController : SessionTableViewController
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
         _codeField.TextColor = RadioVaultTheme.Text;
         _codeField.TintColor = RadioVaultTheme.Accent;
+        _addressField.TextColor = RadioVaultTheme.Text;
+        _addressField.TintColor = RadioVaultTheme.Accent;
+        _portField.TextColor = RadioVaultTheme.Text;
+        _portField.TintColor = RadioVaultTheme.Accent;
         _wifiOnlySwitch.On = Session.WifiOnlyDownloads;
         _wifiOnlySwitch.ValueChanged += DownloadPolicyChanged;
     }
@@ -46,7 +69,7 @@ public sealed class ServerViewController : SessionTableViewController
     {
         0 => 1,
         1 => 2,
-        2 => 1,
+        2 => Session.IsPaired ? 1 : 3,
         3 => Math.Max(1, Session.Servers.Count),
         4 => Session.IsPaired ? 1 : 2,
         _ => 0
@@ -56,7 +79,7 @@ public sealed class ServerViewController : SessionTableViewController
     {
         0 => "Paired server",
         1 => "Download Settings",
-        2 => "Discovery",
+        2 => Session.IsPaired ? "Discovery" : "Find or enter your server",
         3 => "Servers on this network",
         4 => Session.IsPaired ? "Connection" : "Pair this iPhone",
         _ => null
@@ -93,6 +116,8 @@ public sealed class ServerViewController : SessionTableViewController
 
         if (indexPath.Section == 2)
         {
+            if (indexPath.Row == 1) return TextFieldCell(ref _addressCell, "manual-address", _addressField);
+            if (indexPath.Row == 2) return TextFieldCell(ref _portCell, "manual-port", _portField, "HTTPS port");
             var cell = new UITableViewCell(UITableViewCellStyle.Default, "discover");
             var content = cell.DefaultContentConfiguration;
             content.Text = Session.IsBusy ? "Searching…" : "Find Radio Vault Servers";
@@ -144,7 +169,9 @@ public sealed class ServerViewController : SessionTableViewController
 
         var pairCell = new UITableViewCell(UITableViewCellStyle.Default, "pair");
         var pairContent = pairCell.DefaultContentConfiguration;
-        pairContent.Text = Session.IsBusy ? "Pairing…" : "Pair selected server";
+        pairContent.Text = Session.IsBusy ? "Pairing…" : _selectedServer is null
+            ? "Pair using entered address"
+            : "Pair selected server";
         pairContent.TextProperties.Color = RadioVaultTheme.Accent;
         pairContent.TextProperties.Alignment = UIListContentTextAlignment.Center;
         pairCell.ContentConfiguration = pairContent;
@@ -158,8 +185,11 @@ public sealed class ServerViewController : SessionTableViewController
         if (Session.IsBusy) return;
         if (indexPath.Section == 2)
         {
-            _codeField.ResignFirstResponder();
-            _ = Session.DiscoverAsync();
+            if (indexPath.Row == 0)
+            {
+                EndEditing();
+                _ = Session.DiscoverAsync();
+            }
             return;
         }
         if (indexPath.Section == 3 && indexPath.Row < Session.Servers.Count)
@@ -174,11 +204,52 @@ public sealed class ServerViewController : SessionTableViewController
             ConfirmForget();
             return;
         }
-        if (indexPath.Row == 1 && _selectedServer is { } server)
+        if (indexPath.Row == 1)
         {
-            _codeField.ResignFirstResponder();
-            _ = Session.PairAsync(server, _codeField.Text ?? string.Empty);
+            EndEditing();
+            if (_selectedServer is { } server)
+            {
+                _ = Session.PairAsync(server, _codeField.Text ?? string.Empty);
+                return;
+            }
+            if (!int.TryParse(_portField.Text, out var port)) port = 8766;
+            _ = Session.PairManuallyAsync(_addressField.Text ?? string.Empty, port, _codeField.Text ?? string.Empty);
         }
+    }
+
+    private void EndEditing()
+    {
+        _codeField.ResignFirstResponder();
+        _addressField.ResignFirstResponder();
+        _portField.ResignFirstResponder();
+    }
+
+    private static UITableViewCell TextFieldCell(
+        ref UITableViewCell? cached,
+        string identifier,
+        UITextField field,
+        string? label = null)
+    {
+        if (cached is not null) return cached;
+        cached = new UITableViewCell(UITableViewCellStyle.Default, identifier)
+        {
+            BackgroundColor = RadioVaultTheme.Surface,
+            SelectionStyle = UITableViewCellSelectionStyle.None
+        };
+        if (label is not null)
+        {
+            var content = cached.DefaultContentConfiguration;
+            content.Text = label;
+            RadioVaultTheme.StyleCell(cached, content);
+        }
+        cached.ContentView.AddSubview(field);
+        NSLayoutConstraint.ActivateConstraints([
+            field.LeadingAnchor.ConstraintEqualTo(cached.ContentView.LayoutMarginsGuide.LeadingAnchor, label is null ? 0 : 120),
+            field.TrailingAnchor.ConstraintEqualTo(cached.ContentView.LayoutMarginsGuide.TrailingAnchor),
+            field.TopAnchor.ConstraintEqualTo(cached.ContentView.TopAnchor, 12),
+            field.BottomAnchor.ConstraintEqualTo(cached.ContentView.BottomAnchor, -12)
+        ]);
+        return cached;
     }
 
     private void ConfirmForget()

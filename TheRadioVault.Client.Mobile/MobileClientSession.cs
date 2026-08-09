@@ -739,6 +739,29 @@ public sealed class MobileClientSession : IDisposable
         await RefreshAsync().ConfigureAwait(false);
     }
 
+    public async Task PairManuallyAsync(string serverAddress, int securePort, string pairingCode)
+    {
+        if (IsBusy) return;
+        SetBusy(true, $"Pairing with {serverAddress.Trim()}…");
+        try
+        {
+            await _server.PairManuallyAsync(serverAddress, securePort, pairingCode).ConfigureAwait(false);
+            IsPaired = true;
+            StatusText = $"Paired with {ServerName}. Loading your library…";
+            Notify();
+            TabRequested?.Invoke(0);
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Manual pairing failed: " + exception.Message;
+            SetBusy(false);
+            return;
+        }
+
+        SetBusy(false);
+        await RefreshAsync().ConfigureAwait(false);
+    }
+
     public void Forget()
     {
         CancelDownload();

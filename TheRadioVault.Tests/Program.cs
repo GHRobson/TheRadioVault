@@ -1303,6 +1303,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(!iosProject.Contains("Avalonia", StringComparison.Ordinal));
     True(iosProject.Contains("TheRadioVault.Client.Mobile", StringComparison.Ordinal));
     True(iosProject.Contains("<AppIcon>AppIcon</AppIcon>", StringComparison.Ordinal));
+    True(iosProject.Contains("'$(Configuration)' != 'DeviceTest'", StringComparison.Ordinal));
+    True(iosProject.Contains("com.ghrobson.theradiovault.devicetest", StringComparison.Ordinal));
+    True(iosProject.Contains("<CodesignProvision>Automatic</CodesignProvision>", StringComparison.Ordinal));
     True(!iosProject.Contains("TheRadioVault.Infrastructure", StringComparison.Ordinal));
     True(!iosProject.Contains("TheRadioVault.Server", StringComparison.Ordinal));
 
@@ -1432,6 +1435,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(settingsView.Contains("Download Settings", StringComparison.Ordinal));
     True(settingsView.Contains("WifiOnlyDownloads", StringComparison.Ordinal));
     True(settingsView.Contains("DownloadStorageText", StringComparison.Ordinal));
+    True(settingsView.Contains("Pair using entered address", StringComparison.Ordinal));
+    True(settingsView.Contains("PairManuallyAsync", StringComparison.Ordinal));
 
     var downloadPolicy = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosDownloadPolicy.cs"));
@@ -1478,6 +1483,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("IsDownloadPaused", StringComparison.Ordinal));
     True(mobileSession.Contains("LoadExploreDashboardAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("LoadExplorePageAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("PairManuallyAsync", StringComparison.Ordinal));
 
     var keychain = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosKeychainConnectionStore.cs"));
@@ -1503,6 +1509,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(client.Contains("ClientWikiOperation(\"browse\")", StringComparison.Ordinal));
     True(client.Contains("ClientWikiOperation(\"dashboard-highlights\")", StringComparison.Ordinal));
     True(client.Contains("ClientWikiOperation(\"page\")", StringComparison.Ordinal));
+    True(client.Contains("PairManuallyAsync", StringComparison.Ordinal));
+    True(client.Contains("observedThumbprint", StringComparison.Ordinal));
 
     var plist = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "Info.plist"));

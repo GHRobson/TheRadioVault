@@ -137,6 +137,90 @@ public sealed class MobileServerClient : IDisposable
         ReplaceClient(CreatePinnedClient(saved, includeToken: true));
     }
 
+    public async Task PairManuallyAsync(
+        string serverAddress,
+        int securePort,
+        string pairingCode,
+        CancellationToken cancellationToken = default)
+    {
+        var code = pairingCode?.Trim() ?? string.Empty;
+        if (code.Length != 6 || code.Any(ch => !char.IsDigit(ch)))
+            throw new InvalidOperationException("Enter the six-digit code shown in Radio Vault Server settings.");
+        if (securePort is < 1024 or > 65535)
+            throw new InvalidOperationException("Enter a valid Radio Vault HTTPS port.");
+
+        var input = serverAddress?.Trim() ?? string.Empty;
+        if (input.Length == 0) throw new InvalidOperationException("Enter the Radio Vault Server address.");
+        if (!input.Contains("://", StringComparison.Ordinal)) input = "https://" + input;
+        if (!Uri.TryCreate(input, UriKind.Absolute, out var entered) ||
+            !entered.Scheme.Equals(Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase) ||
+            string.IsNullOrWhiteSpace(entered.Host))
+            throw new InvalidOperationException("Enter a valid server address, such as 192.168.1.20.");
+
+        var port = entered.IsDefaultPort ? securePort : entered.Port;
+        var baseAddress = new UriBuilder(Uri.UriSchemeHttps, entered.Host, port).Uri;
+        string observedThumbprint = string.Empty;
+        using var handler = new HttpClientHandler
+        {
+            // The six-digit code authorizes this one initial request. We record the actual TLS
+            // certificate and require the server's signed response to name the same certificate
+            // before persisting trust for all subsequent connections.
+            ServerCertificateCustomValidationCallback = (_, certificate, _, _) =>
+            {
+                if (certificate is null) return false;
+                observedThumbprint = NormalizeThumbprint(certificate.GetCertHashString());
+                return observedThumbprint.Length >= 32;
+            }
+        };
+        using var client = new HttpClient(handler, disposeHandler: true)
+        {
+            BaseAddress = baseAddress,
+            Timeout = TimeSpan.FromSeconds(30)
+        };
+
+        var previous = _connection;
+        var clientId = Guid.TryParse(previous?.ClientId, out _)
+            ? previous!.ClientId
+            : Guid.NewGuid().ToString("D");
+        var displayName = string.IsNullOrWhiteSpace(previous?.ClientDisplayName)
+            ? $"Radio Vault on {Environment.MachineName}"
+            : previous!.ClientDisplayName;
+        var request = new WebDesktopPairingRequest(code, clientId, displayName);
+        using var response = await client.PostAsJsonAsync(
+            WebApiRoutes.FederationPair,
+            request,
+            MobileJsonContext.Default.WebDesktopPairingRequest,
+            cancellationToken).ConfigureAwait(false);
+        var envelope = await response.Content.ReadFromJsonAsync(
+            MobileJsonContext.Default.PairingEnvelope,
+            cancellationToken).ConfigureAwait(false);
+        var result = envelope?.Result;
+        if (!response.IsSuccessStatusCode || result?.Paired != true)
+            throw new InvalidOperationException(result?.Message ?? $"The server rejected pairing ({(int)response.StatusCode}).");
+
+        var reportedThumbprint = NormalizeThumbprint(result.CertificateThumbprint);
+        if (!Guid.TryParse(result.InstanceId, out _) ||
+            observedThumbprint.Length < 32 ||
+            !string.Equals(observedThumbprint, reportedThumbprint, StringComparison.Ordinal))
+            throw new InvalidOperationException("The server identity did not match its secure connection. No credentials were saved.");
+
+        var saved = new RadioVaultMobileConnection(
+            clientId,
+            displayName,
+            result.InstanceId,
+            string.IsNullOrWhiteSpace(result.DisplayName) ? entered.Host : result.DisplayName.Trim(),
+            entered.Host,
+            result.SecurePort is >= 1024 and <= 65535 ? result.SecurePort : port,
+            reportedThumbprint,
+            result.AccessToken,
+            result.CapabilityGeneration,
+            result.PairedAt ?? DateTimeOffset.UtcNow);
+        if (!saved.IsConfigured) throw new InvalidOperationException("The server returned an incomplete pairing relationship.");
+        _store.Save(saved);
+        _connection = saved;
+        ReplaceClient(CreatePinnedClient(saved, includeToken: true));
+    }
+
     public async Task<WebFederationBootstrap> TestConnectionAsync(CancellationToken cancellationToken = default)
     {
         var envelope = await GetJsonAsync(

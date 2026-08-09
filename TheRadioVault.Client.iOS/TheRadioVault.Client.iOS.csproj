@@ -12,7 +12,15 @@
     <ApplicationDisplayVersion>0.35.0</ApplicationDisplayVersion>
     <ApplicationVersion>35</ApplicationVersion>
     <AppIcon>AppIcon</AppIcon>
-    <CodesignEntitlements Condition="'$(RuntimeIdentifier)' == 'ios-arm64'">Entitlements.device.plist</CodesignEntitlements>
+    <CodesignEntitlements Condition="'$(RuntimeIdentifier)' == 'ios-arm64' and '$(Configuration)' != 'DeviceTest'">Entitlements.device.plist</CodesignEntitlements>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)' == 'DeviceTest'">
+    <!-- Free Personal Team provisioning cannot use Apple's managed multicast entitlement.
+         This temporary configuration relies on manual server-address pairing instead. -->
+    <ApplicationId>com.ghrobson.theradiovault.devicetest</ApplicationId>
+    <ApplicationTitle>Radio Vault Test</ApplicationTitle>
+    <CodesignProvision>Automatic</CodesignProvision>
+    <CodesignKey>Apple Development</CodesignKey>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TheRadioVault.Client.Mobile\TheRadioVault.Client.Mobile.csproj" />
