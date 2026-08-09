@@ -78,6 +78,10 @@ For acceptance, verify that playback progress appears on another connected
 client after five seconds, pause and seek boundaries persist immediately,
 moving a playing broadcast between iOS and a desktop stops the previous output,
 and the iOS lock screen can play, pause, skip and seek the current broadcast.
+Also verify that Library groups broadcasts by show, a completed multipart
+download still plays after the Server is unavailable, the mini player opens
+Now Playing without occupying a tab, and its play/pause control changes to a
+handoff control while another device owns playback.
 
 ## Release validation
 

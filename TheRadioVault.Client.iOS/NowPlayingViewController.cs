@@ -46,7 +46,7 @@ public sealed class NowPlayingViewController : UIViewController
         _timeLabel.TextAlignment = UITextAlignment.Center;
 
         ConfigureButton(_backButton, "gobackward.15", "Back 15 seconds", _session.SkipBack);
-        ConfigureButton(_playButton, "play.circle.fill", "Play or pause", _session.TogglePlayPause);
+        ConfigureButton(_playButton, "play.circle.fill", "Play or pause", _session.MiniPlayerAction);
         ConfigureButton(_forwardButton, "goforward.30", "Forward 30 seconds", _session.SkipForward);
         _playButton.ImageView!.ContentMode = UIViewContentMode.ScaleAspectFit;
         _speedButton.TouchUpInside += (_, _) => _session.CycleSpeed();
@@ -90,14 +90,18 @@ public sealed class NowPlayingViewController : UIViewController
 
     private void ReloadSession()
     {
-        _titleLabel.Text = _session.NowPlayingTitle;
-        _subtitleLabel.Text = _session.NowPlayingSubtitle;
-        _statusLabel.Text = _session.PlaybackStatus;
+        _titleLabel.Text = _session.MiniPlayerTitle;
+        _subtitleLabel.Text = _session.MiniPlayerSubtitle;
+        _statusLabel.Text = _session.MiniPlayerShowsHandoff
+            ? $"Move playback from {_session.MiniPlayerSubtitle.Replace("Playing on ", string.Empty, StringComparison.Ordinal)}"
+            : _session.PlaybackStatus;
         _timeLabel.Text = _session.PlaybackTime;
         _progress.Progress = (float)_session.PlaybackProgress;
-        _playButton.SetImage(UIImage.GetSystemImage(_session.IsPlaying ? "pause.circle.fill" : "play.circle.fill"), UIControlState.Normal);
+        _playButton.SetImage(UIImage.GetSystemImage(
+            _session.MiniPlayerShowsHandoff ? "airplayaudio.circle.fill" :
+            _session.IsPlaying ? "pause.circle.fill" : "play.circle.fill"), UIControlState.Normal);
         _backButton.Enabled = _session.CanControlPlayback;
-        _playButton.Enabled = _session.CanControlPlayback;
+        _playButton.Enabled = _session.MiniPlayerCanAct;
         _forwardButton.Enabled = _session.CanControlPlayback;
         _speedButton.Enabled = _session.CanControlPlayback;
         _speedButton.SetTitle(_session.SpeedText, UIControlState.Normal);

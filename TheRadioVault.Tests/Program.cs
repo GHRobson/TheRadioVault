@@ -1317,13 +1317,31 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(tabs.Contains("UINavigationController", StringComparison.Ordinal));
     True(tabs.Contains("HomeViewController", StringComparison.Ordinal));
     True(tabs.Contains("LibraryViewController", StringComparison.Ordinal));
-    True(tabs.Contains("NowPlayingViewController", StringComparison.Ordinal));
+    True(tabs.Contains("DownloadsViewController", StringComparison.Ordinal));
+    True(tabs.Contains("RadioVaultMiniPlayerView", StringComparison.Ordinal));
+    True(!tabs.Contains("Wrap(new NowPlayingViewController", StringComparison.Ordinal));
     True(tabs.Contains("ServerViewController", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
     True(library.Contains("UISearchController", StringComparison.Ordinal));
     True(library.Contains("UITableView", StringComparison.Ordinal));
+    True(library.Contains("LibraryCollections", StringComparison.Ordinal));
+    True(library.Contains("ShowLibraryViewController", StringComparison.Ordinal));
+
+    var miniPlayer = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultMiniPlayerView.cs"));
+    True(miniPlayer.Contains("MiniPlayerShowsHandoff", StringComparison.Ordinal));
+    True(miniPlayer.Contains("airplayaudio", StringComparison.Ordinal));
+    True(miniPlayer.Contains("Move playback to this iPhone", StringComparison.Ordinal));
+
+    var downloads = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
+    True(downloads.Contains("ValidateManifest", StringComparison.Ordinal));
+    True(downloads.Contains("partBytes != expectedBytes", StringComparison.Ordinal));
+    True(downloads.Contains("FileOptions.WriteThrough", StringComparison.Ordinal));
+    True(downloads.Contains("Directory.Move(stagingPath, finalPath)", StringComparison.Ordinal));
+    True(downloads.Contains("ResolvePartPath", StringComparison.Ordinal));
 
     var scene = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SceneDelegate.cs"));
@@ -1356,6 +1374,10 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("WebPlaybackTransferSourceStoppedRequest", StringComparison.Ordinal));
     True(mobileSession.Contains("WebOfflineProgressUpdate", StringComparison.Ordinal));
     True(mobileSession.Contains("DurableProgressInterval", StringComparison.Ordinal));
+    True(mobileSession.Contains("DownloadedBroadcasts", StringComparison.Ordinal));
+    True(mobileSession.Contains("PlayDownloadedAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("ObserveSharedPlaybackAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("MiniPlayerShowsHandoff", StringComparison.Ordinal));
 
     var keychain = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosKeychainConnectionStore.cs"));
@@ -1370,6 +1392,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(client.Contains("PlayerWebProgress", StringComparison.Ordinal));
     True(client.Contains("PlayerTransferBegin", StringComparison.Ordinal));
     True(client.Contains("OfflineProgress", StringComparison.Ordinal));
+    True(client.Contains("ClientBroadcast(episodeId)", StringComparison.Ordinal));
+    True(client.Contains("QueueAdd", StringComparison.Ordinal));
+    True(client.Contains("Favourite(episodeId)", StringComparison.Ordinal));
 
     var plist = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "Info.plist"));

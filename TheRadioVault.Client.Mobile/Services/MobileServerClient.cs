@@ -157,9 +157,11 @@ public sealed class MobileServerClient : IDisposable
     public async Task<WebClientLibraryBrowseResult> BrowseAsync(
         string? searchText,
         int limit = 100,
+        int? collectionId = null,
         CancellationToken cancellationToken = default)
     {
         var query = "?q=" + Uri.EscapeDataString(searchText?.Trim() ?? string.Empty) +
+                    (collectionId is > 0 ? "&collectionId=" + collectionId.Value : string.Empty) +
                     "&filter=All&limit=" + Math.Clamp(limit, 1, 250) +
                     "&offset=0&newestFirst=true&scope=All&hasTranscript=false";
         return (await GetJsonAsync(
@@ -167,6 +169,43 @@ public sealed class MobileServerClient : IDisposable
             MobileJsonContext.Default.BrowseEnvelope,
             cancellationToken).ConfigureAwait(false)).Result;
     }
+
+    public async Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.ClientLibraryBroadcast(episodeId),
+            MobileJsonContext.Default.BroadcastSummaryEnvelope,
+            cancellationToken).ConfigureAwait(false)).Broadcast;
+
+    public async Task<WebClientBroadcastDetails> GetBroadcastDetailsAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.ClientBroadcast(episodeId),
+            MobileJsonContext.Default.BroadcastDetailsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Broadcast;
+
+    public async Task<WebMutationResult> SetFavouriteAsync(
+        long episodeId,
+        bool favourite,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.Favourite(episodeId),
+            new MobileFavouriteMutation(favourite),
+            MobileJsonContext.Default.MobileFavouriteMutation,
+            MobileJsonContext.Default.MutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebQueueMutationResult> AddToQueueAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.QueueAdd,
+            new MobileQueueAddMutation(episodeId),
+            MobileJsonContext.Default.MobileQueueAddMutation,
+            MobileJsonContext.Default.QueueMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
 
     public Task<WebCanonicalMediaManifest> GetMediaManifestAsync(
         long episodeId,

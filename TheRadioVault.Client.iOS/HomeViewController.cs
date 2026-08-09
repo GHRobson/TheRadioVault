@@ -75,7 +75,9 @@ public sealed class HomeViewController : SessionTableViewController
         tableView.DeselectRow(indexPath, true);
         if (indexPath.Section is not (2 or 3)) return;
         var items = indexPath.Section == 2 ? Session.ContinueListening : Session.RecentBroadcasts;
-        if (indexPath.Row < items.Count) _ = Session.PlayAsync(items[indexPath.Row]);
+        if (indexPath.Row < items.Count)
+            NavigationController?.PushViewController(
+                new BroadcastDetailsViewController(Session, items[indexPath.Row]), true);
     }
 
     private static UITableViewCell BroadcastCell(MobileBroadcastItem item)

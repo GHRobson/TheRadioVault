@@ -37,6 +37,10 @@ public sealed record DiscoveredRadioVaultServer(
     public string PairingText => PairingAvailable ? "Pairing code ready" : "Create a pairing code on the server";
 }
 
+public sealed record MobileFavouriteMutation(bool Favourite);
+
+public sealed record MobileQueueAddMutation(long EpisodeId, bool PlayNext = false);
+
 public sealed class MobileBroadcastItem
 {
     public MobileBroadcastItem(WebClientLibraryBroadcastSummary value)

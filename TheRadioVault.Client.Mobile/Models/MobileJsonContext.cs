@@ -7,6 +7,10 @@ public sealed record PairingEnvelope(WebDesktopPairingResult Result);
 public sealed record BootstrapEnvelope(WebFederationBootstrap FederationBootstrap);
 public sealed record OverviewEnvelope(WebClientLibraryOverview Overview);
 public sealed record BrowseEnvelope(WebClientLibraryBrowseResult Result);
+public sealed record BroadcastSummaryEnvelope(WebClientLibraryBroadcastSummary Broadcast);
+public sealed record BroadcastDetailsEnvelope(WebClientBroadcastDetails Broadcast);
+public sealed record MutationEnvelope(WebMutationResult Result);
+public sealed record QueueMutationEnvelope(WebQueueMutationResult Result);
 public sealed record PlaybackSessionEnvelope(WebPlaybackSession Session);
 public sealed record ClientPlaybackEnvelope(WebClientPlaybackResult Result);
 public sealed record PlaybackTransferEnvelope(WebPlaybackTransferResult Result);
@@ -22,6 +26,13 @@ public sealed record ProgressEnvelope(WebOfflineProgressResult Result);
 [JsonSerializable(typeof(BootstrapEnvelope))]
 [JsonSerializable(typeof(OverviewEnvelope))]
 [JsonSerializable(typeof(BrowseEnvelope))]
+[JsonSerializable(typeof(BroadcastSummaryEnvelope))]
+[JsonSerializable(typeof(BroadcastDetailsEnvelope))]
+[JsonSerializable(typeof(MutationEnvelope))]
+[JsonSerializable(typeof(QueueMutationEnvelope))]
+[JsonSerializable(typeof(MobileFavouriteMutation))]
+[JsonSerializable(typeof(MobileQueueAddMutation))]
+[JsonSerializable(typeof(MobileDownloadIndex))]
 [JsonSerializable(typeof(WebCanonicalMediaManifest))]
 [JsonSerializable(typeof(PlaybackSessionEnvelope))]
 [JsonSerializable(typeof(ClientPlaybackEnvelope))]

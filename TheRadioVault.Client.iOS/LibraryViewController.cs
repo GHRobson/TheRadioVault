@@ -7,6 +7,7 @@ namespace TheRadioVault.Client.iOS;
 public sealed class LibraryViewController : SessionTableViewController, IUISearchResultsUpdating, IUISearchBarDelegate
 {
     private UISearchController? _searchController;
+    private bool IsShowingSearchResults => !string.IsNullOrWhiteSpace(_searchController?.SearchBar.Text);
 
     public LibraryViewController(MobileClientSession session) : base(session) => Title = "Library";
 
@@ -32,15 +33,40 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         };
     }
 
-    public override nint NumberOfSections(UITableView tableView) => 1;
-    public override nint RowsInSection(UITableView tableView, nint section) => Math.Max(1, Session.LibraryBroadcasts.Count);
+    public override nint NumberOfSections(UITableView tableView) => IsShowingSearchResults ? 1 : 2;
+
+    public override nint RowsInSection(UITableView tableView, nint section)
+    {
+        if (IsShowingSearchResults) return Math.Max(1, Session.LibraryBroadcasts.Count);
+        return section == 0 ? 1 : Math.Max(1, Session.LibraryCollections.Count);
+    }
+
+    public override string? TitleForHeader(UITableView tableView, nint section)
+        => IsShowingSearchResults ? "Search results" : section == 0 ? "Library" : "Shows";
 
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
-        if (Session.LibraryBroadcasts.Count == 0)
-            return DetailCell("empty-library", Session.IsPaired ? "No broadcasts found" : "Pair a server first", Session.StatusText);
-        var item = Session.LibraryBroadcasts[indexPath.Row];
-        var cell = DetailCell("library-broadcast", item.Title, $"{item.Subtitle} · {item.Status}");
+        if (IsShowingSearchResults)
+        {
+            if (Session.LibraryBroadcasts.Count == 0)
+                return DetailCell("empty-library", Session.IsPaired ? "No broadcasts found" : "Pair a server first", Session.StatusText);
+            var item = Session.LibraryBroadcasts[indexPath.Row];
+            var resultCell = DetailCell("library-broadcast", item.Title, $"{item.Subtitle} · {item.Status}");
+            resultCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+            return resultCell;
+        }
+
+        if (indexPath.Section == 0)
+        {
+            var all = DetailCell("all-broadcasts", "All Broadcasts", $"{Session.TotalBroadcasts:N0} broadcasts");
+            all.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+            return all;
+        }
+
+        if (Session.LibraryCollections.Count == 0)
+            return DetailCell("empty-shows", Session.IsPaired ? "No shows found" : "Pair a server first", Session.StatusText);
+        var show = Session.LibraryCollections[indexPath.Row];
+        var cell = DetailCell("library-show", show.CollectionName, $"{show.BroadcastCount:N0} broadcasts");
         cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
         return cell;
     }
@@ -48,8 +74,27 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (indexPath.Row < Session.LibraryBroadcasts.Count)
-            _ = Session.PlayAsync(Session.LibraryBroadcasts[indexPath.Row]);
+        if (IsShowingSearchResults)
+        {
+            if (indexPath.Row < Session.LibraryBroadcasts.Count)
+                NavigationController?.PushViewController(
+                    new BroadcastDetailsViewController(Session, Session.LibraryBroadcasts[indexPath.Row]), true);
+            return;
+        }
+
+        if (indexPath.Section == 0)
+        {
+            NavigationController?.PushViewController(
+                new ShowLibraryViewController(Session, null, "All Broadcasts"), true);
+            return;
+        }
+
+        if (indexPath.Row < Session.LibraryCollections.Count)
+        {
+            var show = Session.LibraryCollections[indexPath.Row];
+            NavigationController?.PushViewController(
+                new ShowLibraryViewController(Session, show.CollectionId, show.CollectionName), true);
+        }
     }
 
     public void UpdateSearchResultsForSearchController(UISearchController searchController) { }
