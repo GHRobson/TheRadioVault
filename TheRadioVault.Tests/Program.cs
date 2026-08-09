@@ -1100,6 +1100,8 @@ static void Alpha18HardensConnectedClientReliability()
         SourceRoot(), "TheRadioVault.Infrastructure", "Services", "WebArchiveProvider.cs"));
     True(provider.Contains("anotherOutputIsActive", StringComparison.Ordinal));
     True(provider.Contains("Move playback transactionally", StringComparison.Ordinal));
+    True(provider.Contains("RetainsPlaybackOwnershipWhileOffline", StringComparison.Ordinal));
+    True(provider.Contains("\"iOSClient\"", StringComparison.Ordinal));
 
     var playback = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "PlaybackViewModel.cs"));
@@ -1551,6 +1553,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(theme.Contains("RadioVaultIcon.Offline", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Sync", StringComparison.Ordinal));
     True(theme.Contains("DrawSkip", StringComparison.Ordinal));
+    True(theme.Contains("(14.5, 4.5), (18, 6), (16.5, 9.5)", StringComparison.Ordinal));
+    True(theme.Contains("(16, 7), (20, 8), (18.5, 11.8)", StringComparison.Ordinal));
     True(theme.Contains("(3, 10.5), (13, 10.5)", StringComparison.Ordinal));
 
     var miniPlayer = File.ReadAllText(Path.Combine(
@@ -1591,6 +1595,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("IsMetadataSyncing", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ApplyOnlineOverview", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("_metadataSyncGate.WaitAsync()", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("ConfirmForeignOwner", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("ObserveSharedPlaybackSafelyAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("if (!session.Player.IsPlaying)", StringComparison.Ordinal));
 
     var downloads = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));

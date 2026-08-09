@@ -622,7 +622,8 @@ internal sealed partial class WebArchiveProvider : IWebArchiveProvider, IDisposa
                 !string.IsNullOrWhiteSpace(_playbackOwnerClientId))
             {
                 var ownerIsFresh = _remotePlaybackDevices.TryGetValue(_playbackOwnerClientId, out var owner) &&
-                    now - owner.LastSeenAt <= RemoteOwnerStaleAfter;
+                    (RetainsPlaybackOwnershipWhileOffline(owner.Kind) ||
+                     now - owner.LastSeenAt <= RemoteOwnerStaleAfter);
                 if (!ownerIsFresh)
                 {
                     _playbackOwnerDevice = "None";
@@ -1234,6 +1235,10 @@ internal sealed partial class WebArchiveProvider : IWebArchiveProvider, IDisposa
         if (kind.Length == 0) return "Phone";
         return kind.Length > 32 ? kind[..32] : kind;
     }
+
+    private static bool RetainsPlaybackOwnershipWhileOffline(string? kind)
+        => string.Equals(kind, "iOSClient", StringComparison.OrdinalIgnoreCase) ||
+           string.Equals(kind, "DesktopClient", StringComparison.OrdinalIgnoreCase);
 
     private static string NormalizeDeviceName(string? name, string? kind)
     {

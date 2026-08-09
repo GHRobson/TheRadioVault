@@ -304,12 +304,14 @@ public static class RadioVaultIcons
                 Lines(context, (4, 4), (20, 20));
                 break;
             case RadioVaultIcon.Sync:
-                context.AddArc(12, 12, 8, (nfloat)(Math.PI * 1.08), (nfloat)(Math.PI * 1.92), false);
+                context.MoveTo(4, 10);
+                context.AddCurveToPoint(5, 4, 15, 2, 20, 8);
                 context.StrokePath();
-                Lines(context, (17.5, 4.8), (20.2, 5), (19.8, 7.7));
-                context.AddArc(12, 12, 8, (nfloat)(Math.PI * 0.08), (nfloat)(Math.PI * 0.92), false);
+                Lines(context, (16, 7), (20, 8), (18.5, 11.8));
+                context.MoveTo(20, 14);
+                context.AddCurveToPoint(19, 20, 9, 22, 4, 16);
                 context.StrokePath();
-                Lines(context, (6.5, 19.2), (3.8, 19), (4.2, 16.3));
+                Lines(context, (8, 17), (4, 16), (5.5, 12.2));
                 break;
         }
     }
@@ -318,15 +320,21 @@ public static class RadioVaultIcons
     {
         if (forward)
         {
-            context.AddArc(12, 12, 8.5f, (nfloat)(Math.PI * 0.72), (nfloat)(Math.PI * 2.08), false);
+            context.MoveTo(6, 6);
+            context.AddCurveToPoint(2, 10, 3.5f, 17, 9, 19.5f);
+            context.AddCurveToPoint(14.5f, 22, 21, 18, 20, 11);
+            context.AddCurveToPoint(19.6f, 8.6f, 18.7f, 7, 18, 6);
             context.StrokePath();
-            Lines(context, (19.2, 4.2), (20.5, 8), (16.5, 7.2));
+            Lines(context, (14.5, 4.5), (18, 6), (16.5, 9.5));
         }
         else
         {
-            context.AddArc(12, 12, 8.5f, (nfloat)(Math.PI * 0.92), (nfloat)(Math.PI * 2.28), false);
+            context.MoveTo(18, 6);
+            context.AddCurveToPoint(22, 10, 20.5f, 17, 15, 19.5f);
+            context.AddCurveToPoint(9.5f, 22, 3, 18, 4, 11);
+            context.AddCurveToPoint(4.4f, 8.6f, 5.3f, 7, 6, 6);
             context.StrokePath();
-            Lines(context, (4.8, 4.2), (3.5, 8), (7.5, 7.2));
+            Lines(context, (9.5, 4.5), (6, 6), (7.5, 9.5));
         }
 
         using var label = new NSString(seconds);
