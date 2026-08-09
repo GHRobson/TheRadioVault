@@ -1,5 +1,6 @@
 using CoreGraphics;
 using Foundation;
+using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Web.Models;
 using UIKit;
