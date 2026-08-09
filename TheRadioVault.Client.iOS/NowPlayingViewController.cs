@@ -97,9 +97,9 @@ public sealed class NowPlayingViewController : UIViewController
         _progressSlider.TouchUpOutside += ProgressSliderFinished;
         _progressSlider.TouchCancel += ProgressSliderFinished;
 
-        ConfigureButton(_backButton, RadioVaultIcons.Image(RadioVaultIcon.SkipBack, RadioVaultTheme.Accent, 42), "Back 15 seconds", _session.SkipBack);
+        ConfigureButton(_backButton, RadioVaultIcons.Image(RadioVaultIcon.SkipBack, RadioVaultTheme.Accent, 42, 1.75), "Back 15 seconds", _session.SkipBack);
         ConfigureButton(_playButton, RadioVaultIcons.Image(RadioVaultIcon.Play, RadioVaultTheme.Accent, 68, 1.5f), "Play or pause", _session.MiniPlayerAction);
-        ConfigureButton(_forwardButton, RadioVaultIcons.Image(RadioVaultIcon.SkipForward, RadioVaultTheme.Accent, 42), "Forward 30 seconds", _session.SkipForward);
+        ConfigureButton(_forwardButton, RadioVaultIcons.Image(RadioVaultIcon.SkipForward, RadioVaultTheme.Accent, 42, 1.75), "Forward 30 seconds", _session.SkipForward);
         _playActivity.Color = RadioVaultTheme.Accent;
         _playActivity.HidesWhenStopped = true;
         _playActivity.TranslatesAutoresizingMaskIntoConstraints = false;

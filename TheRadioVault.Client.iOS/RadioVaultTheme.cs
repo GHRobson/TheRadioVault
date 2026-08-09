@@ -323,32 +323,40 @@ public static class RadioVaultIcons
     {
         if (forward)
         {
-            context.MoveTo(10, 3.5f);
-            context.AddCurveToPoint(5, 4.5f, 2.8f, 9.5f, 4.5f, 14.5f);
-            context.AddCurveToPoint(6, 19, 11, 21, 15.2f, 19);
-            context.AddCurveToPoint(18.7f, 17.3f, 20.5f, 12, 19, 8);
+            context.MoveTo(19, 10);
+            context.AddLineToPoint(19, 17);
+            context.AddCurveToPoint(19, 18.7f, 17.7f, 20, 16, 20);
+            context.AddLineToPoint(7, 20);
+            context.AddCurveToPoint(5.3f, 20, 4, 18.7f, 4, 17);
+            context.AddLineToPoint(4, 7);
+            context.AddCurveToPoint(4, 5.3f, 5.3f, 4, 7, 4);
+            context.AddLineToPoint(20, 4);
             context.StrokePath();
-            Lines(context, (14, 7.4), (19, 8), (17.7, 3.2));
+            Lines(context, (16, 1), (20, 4), (16, 7));
         }
         else
         {
-            context.MoveTo(14, 3.5f);
-            context.AddCurveToPoint(19, 4.5f, 21.2f, 9.5f, 19.5f, 14.5f);
-            context.AddCurveToPoint(18, 19, 13, 21, 8.8f, 19);
-            context.AddCurveToPoint(5.3f, 17.3f, 3.5f, 12, 5, 8);
+            context.MoveTo(5, 10);
+            context.AddLineToPoint(5, 17);
+            context.AddCurveToPoint(5, 18.7f, 6.3f, 20, 8, 20);
+            context.AddLineToPoint(17, 20);
+            context.AddCurveToPoint(18.7f, 20, 20, 18.7f, 20, 17);
+            context.AddLineToPoint(20, 7);
+            context.AddCurveToPoint(20, 5.3f, 18.7f, 4, 17, 4);
+            context.AddLineToPoint(4, 4);
             context.StrokePath();
-            Lines(context, (10, 7.4), (5, 8), (6.3, 3.2));
+            Lines(context, (8, 1), (4, 4), (8, 7));
         }
 
         using var label = new NSString(seconds);
         var attributes = new UIStringAttributes
         {
             ForegroundColor = color,
-            Font = UIFont.BoldSystemFontOfSize(8.2f)
+            Font = UIFont.BoldSystemFontOfSize(7.6f)
         };
         var measured = label.GetSizeUsingAttributes(attributes);
         label.DrawString(
-            new CGPoint(12 - measured.Width / 2, 7.4),
+            new CGPoint(12 - measured.Width / 2, 7.1),
             attributes);
     }
 

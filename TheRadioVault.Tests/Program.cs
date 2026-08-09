@@ -1590,8 +1590,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(theme.Contains("DrawSync", StringComparison.Ordinal));
     True(theme.Contains("ConfigureWithTransparentBackground", StringComparison.Ordinal));
     True(!theme.Contains("ArrowHead", StringComparison.Ordinal));
-    True(theme.Contains("context.AddCurveToPoint(5, 4.5f, 2.8f, 9.5f, 4.5f, 14.5f)", StringComparison.Ordinal));
-    True(theme.Contains("Lines(context, (14, 7.4), (19, 8), (17.7, 3.2))", StringComparison.Ordinal));
+    True(theme.Contains("context.AddCurveToPoint(5.3f, 20, 4, 18.7f, 4, 17)", StringComparison.Ordinal));
+    True(theme.Contains("Lines(context, (16, 1), (20, 4), (16, 7))", StringComparison.Ordinal));
     True(theme.Contains("Lines(context, (8.5, 18), (4, 16.5), (5.5, 12))", StringComparison.Ordinal));
     True(!theme.Contains("(14.5, 4.5), (18, 6), (16.5, 9.5)", StringComparison.Ordinal));
     True(!theme.Contains("(16, 7), (20, 8), (18.5, 11.8)", StringComparison.Ordinal));
