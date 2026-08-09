@@ -546,6 +546,12 @@ public sealed class MobileClientSession : IDisposable
     public void SkipBack() => SeekRelative(TimeSpan.FromSeconds(-15));
     public void SkipForward() => SeekRelative(TimeSpan.FromSeconds(30));
 
+    public void SeekToProgress(double progress)
+    {
+        if (!CanControlPlayback || _logicalDurationMs <= 0) return;
+        SeekLogical((long)Math.Round(Math.Clamp(progress, 0d, 1d) * _logicalDurationMs));
+    }
+
     public void CycleSpeed()
     {
         if (!CanControlPlayback) return;

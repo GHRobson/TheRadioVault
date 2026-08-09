@@ -7,6 +7,7 @@ public sealed class RadioVaultTabBarController : UITabBarController
 {
     private readonly MobileClientSession _session;
     private readonly RadioVaultMiniPlayerView _miniPlayer;
+    private bool _miniPlayerInstalled;
 
     public RadioVaultTabBarController(MobileClientSession session)
     {
@@ -23,12 +24,18 @@ public sealed class RadioVaultTabBarController : UITabBarController
         _session.StateChanged += SessionOnStateChanged;
         _session.PlaybackStateChanged += SessionOnStateChanged;
         _miniPlayer.Tapped += MiniPlayerOnTapped;
+        InstallMiniPlayer();
     }
 
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
-        if (View is not { } view) return;
+        InstallMiniPlayer();
+    }
+
+    private void InstallMiniPlayer()
+    {
+        if (_miniPlayerInstalled || _miniPlayer is null || View is not { } view) return;
         view.AddSubview(_miniPlayer);
         NSLayoutConstraint.ActivateConstraints([
             _miniPlayer.LeadingAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.LeadingAnchor, 8),
@@ -36,6 +43,7 @@ public sealed class RadioVaultTabBarController : UITabBarController
             _miniPlayer.BottomAnchor.ConstraintEqualTo(TabBar.TopAnchor, -4),
             _miniPlayer.HeightAnchor.ConstraintEqualTo(64)
         ]);
+        _miniPlayerInstalled = true;
         UpdateMiniPlayerInsets();
     }
 
@@ -67,7 +75,7 @@ public sealed class RadioVaultTabBarController : UITabBarController
         var nowPlaying = new NowPlayingViewController(_session);
         var navigation = new UINavigationController(nowPlaying)
         {
-            ModalPresentationStyle = UIModalPresentationStyle.PageSheet
+            ModalPresentationStyle = UIModalPresentationStyle.FullScreen
         };
         nowPlaying.NavigationItem.RightBarButtonItem = new UIBarButtonItem(
             UIBarButtonSystemItem.Close,

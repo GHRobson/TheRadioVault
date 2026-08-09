@@ -1335,6 +1335,13 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(miniPlayer.Contains("airplayaudio", StringComparison.Ordinal));
     True(miniPlayer.Contains("Move playback to this iPhone", StringComparison.Ordinal));
 
+    var nowPlayingView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingViewController.cs"));
+    True(nowPlayingView.Contains("content.CenterYAnchor.ConstraintEqualTo", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("SetPreferredSymbolConfiguration", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_playButton.WidthAnchor.ConstraintEqualTo(96)", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("SeekToProgress", StringComparison.Ordinal));
+
     var downloads = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
     True(downloads.Contains("ValidateManifest", StringComparison.Ordinal));
