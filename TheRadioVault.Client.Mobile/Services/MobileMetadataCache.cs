@@ -43,7 +43,13 @@ internal sealed class MobileMetadataCache
                 MobileJsonContext.Default.MobileMetadataCacheSnapshot).ConfigureAwait(false);
             if (value is null || value.Version != 1 ||
                 !string.Equals(value.ServerInstanceId, serverInstanceId, StringComparison.Ordinal)) return;
-            lock (_gate) _snapshot = value;
+            lock (_gate)
+            {
+                _snapshot = value with
+                {
+                    Broadcasts = NormalizeBroadcasts(value.Broadcasts)
+                };
+            }
         }
         catch (Exception exception)
         {
@@ -61,10 +67,9 @@ internal sealed class MobileMetadataCache
     {
         lock (_gate)
         {
-            var byId = (completeLibrary is not null
-                    ? completeLibrary
-                    : _snapshot.Broadcasts)
-                .ToDictionary(value => value.RepresentativeEpisodeId);
+            var byId = BuildBroadcastMap(completeLibrary is not null
+                ? completeLibrary
+                : _snapshot.Broadcasts);
             foreach (var episodeId in deletedEpisodeIds) byId.Remove(episodeId);
             foreach (var broadcast in changedBroadcasts)
                 byId[broadcast.RepresentativeEpisodeId] = broadcast;
@@ -95,10 +100,7 @@ internal sealed class MobileMetadataCache
             _snapshot = _snapshot with
             {
                 ServerInstanceId = serverInstanceId,
-                Broadcasts = broadcasts
-                    .OrderByDescending(value => value.AirDate)
-                    .ThenByDescending(value => value.DateAdded)
-                    .ToArray(),
+                Broadcasts = NormalizeBroadcasts(broadcasts),
                 Overview = overview,
                 UpdatedAt = DateTimeOffset.UtcNow
             };
@@ -142,7 +144,7 @@ internal sealed class MobileMetadataCache
     {
         lock (_gate)
         {
-            var byId = _snapshot.Broadcasts.ToDictionary(value => value.RepresentativeEpisodeId);
+            var byId = BuildBroadcastMap(_snapshot.Broadcasts);
             byId[broadcast.RepresentativeEpisodeId] = broadcast;
             _snapshot = _snapshot with
             {
@@ -268,4 +270,20 @@ internal sealed class MobileMetadataCache
     private string ImagePath(Guid imageId) => Path.Combine(_imageDirectory, imageId.ToString("N") + ".bin");
 
     private string ArtworkPath(long episodeId) => Path.Combine(_artworkDirectory, episodeId + ".bin");
+
+    private static Dictionary<long, WebClientLibraryBroadcastSummary> BuildBroadcastMap(
+        IEnumerable<WebClientLibraryBroadcastSummary> broadcasts)
+    {
+        var byId = new Dictionary<long, WebClientLibraryBroadcastSummary>();
+        foreach (var broadcast in broadcasts)
+            byId[broadcast.RepresentativeEpisodeId] = broadcast;
+        return byId;
+    }
+
+    private static IReadOnlyList<WebClientLibraryBroadcastSummary> NormalizeBroadcasts(
+        IEnumerable<WebClientLibraryBroadcastSummary> broadcasts)
+        => BuildBroadcastMap(broadcasts).Values
+            .OrderByDescending(value => value.AirDate)
+            .ThenByDescending(value => value.DateAdded)
+            .ToArray();
 }

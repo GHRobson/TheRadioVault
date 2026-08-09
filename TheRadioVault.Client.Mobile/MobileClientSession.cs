@@ -1784,7 +1784,8 @@ public sealed class MobileClientSession : IDisposable
     {
         if (!IsLiveConnected) return;
         var serverByEpisode = _metadataCache.Snapshot.Broadcasts
-            .ToDictionary(value => value.RepresentativeEpisodeId);
+            .GroupBy(value => value.RepresentativeEpisodeId)
+            .ToDictionary(group => group.Key, group => group.Last());
         var localDownloads = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
         foreach (var local in localDownloads)
         {
@@ -1876,7 +1877,12 @@ public sealed class MobileClientSession : IDisposable
             LastPlayedAt = playedAt
         };
         var item = new MobileBroadcastItem(updated);
-        _metadataCache.UpsertBroadcast(updated);
+        try { _metadataCache.UpsertBroadcast(updated); }
+        catch (Exception exception)
+        {
+            TracePlayback("Metadata progress cache repair failed without stopping playback: " + exception);
+            System.Diagnostics.Trace.WriteLine($"[iOS playback metadata cache] {exception}");
+        }
         if (SelectedBroadcast?.EpisodeId == item.EpisodeId) SelectedBroadcast = item;
         if (_remotePlaybackBroadcast?.EpisodeId == item.EpisodeId) _remotePlaybackBroadcast = item;
         LibraryBroadcasts = ReplaceBroadcast(LibraryBroadcasts, item);
