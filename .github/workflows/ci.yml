@@ -60,13 +60,22 @@ jobs:
           -p:Deterministic=true
           -o ./artifacts/ci/windows-server
 
-      - name: Upload Windows test builds
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Create Windows setup executables
+        shell: pwsh
+        run: ./package-windows-ci-installers.ps1
+
+      - name: Upload Windows installers and portable builds
         uses: actions/upload-artifact@v6
         with:
           name: windows-client-and-server
           path: |
             artifacts/ci/windows-client/
             artifacts/ci/windows-server/
+            artifacts/ci/windows-installers/*.exe
           if-no-files-found: error
           retention-days: 14
 
@@ -129,13 +138,17 @@ jobs:
         shell: pwsh
         run: ./package-macos-server.ps1 -RuntimeIdentifier osx-arm64
 
-      - name: Upload macOS test builds
+      - name: Create macOS disk image installers
+        run: ./package-macos-installers.sh
+
+      - name: Upload macOS installers and portable builds
         uses: actions/upload-artifact@v6
         with:
           name: macos-client-and-server-osx-arm64-unsigned
           path: |
             artifacts/macos/osx-arm64/RadioVault.Client-*-unsigned.zip
             artifacts/macos-server/osx-arm64/RadioVault.Server-*-unsigned.zip
+            artifacts/installers/macos/osx-arm64/*.dmg
           if-no-files-found: error
           retention-days: 14
 
@@ -188,14 +201,16 @@ jobs:
             "macOS and Linux packages preserve the shared client-server boundary" \
             "Core hardening platform requests remain neutral"
 
-      - name: Package portable Linux builds
+      - name: Package Linux installers and portable builds
         run: ./package-linux.sh
 
-      - name: Upload Linux test builds
+      - name: Upload Linux installers and portable builds
         uses: actions/upload-artifact@v6
         with:
           name: linux-client-and-server-x64
-          path: artifacts/linux/linux-x64/*.tar.gz
+          path: |
+            artifacts/linux/linux-x64/*.tar.gz
+            artifacts/linux/linux-x64/*.deb
           if-no-files-found: error
           retention-days: 14
 

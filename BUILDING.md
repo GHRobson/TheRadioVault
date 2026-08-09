@@ -102,19 +102,27 @@ The gate performs source and XML validation, verifies the Avalonia-only architec
 
 ## Packages and installers
 
-Create the Apple Silicon Mac Client bundle and unsigned transfer archive on
-Windows with:
+Create the Apple Silicon Mac Client and Server bundles and unsigned transfer
+archives with:
 
 ```powershell
 .\package-macos-client.ps1
 .\package-macos-server.ps1
 ```
 
-These create separate Client and Server bundles. Final permission, signing and
-notarization checks run on macOS using the matching finalizers under
+On macOS, turn those app bundles into separate drag-to-Applications disk images
+with:
+
+```bash
+./package-macos-installers.sh
+```
+
+The disk images are ad-hoc signed for testing but are not notarized. Production
+signing and notarization checks use the matching finalizers under
 `installer/macos/`. See [MACOS-CLIENT.md](MACOS-CLIENT.md).
 
-Create the portable self-contained Linux Client and Server archives on Linux with:
+Create self-contained Linux Client and Server Debian installers and portable
+archives on Linux with:
 
 ```bash
 ./package-linux.sh
@@ -135,6 +143,13 @@ Create the self-contained Client package and installer:
 ```
 
 Outputs are written below `artifacts\`. The Client and Server use stable Inno Setup application IDs so an update replaces binaries in place. Authoritative data and user configuration live outside the installation directories and are not included in uninstall cleanup.
+
+GitHub Actions runs these packagers for every platform build. Its Windows
+artifact contains both setup executables, its macOS artifact contains both disk
+images, and its Linux artifact contains both Debian packages. Portable copies
+remain available alongside each installer. The iOS artifact is a Simulator app;
+a physical-device or App Store package must be signed by Apple for the intended
+device or distribution account.
 
 Create a source archive and regenerate `SOURCE_MANIFEST.sha256.json` with:
 

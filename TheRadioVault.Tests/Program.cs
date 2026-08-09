@@ -1389,12 +1389,29 @@ static void MacAndLinuxPackagesPreserveSharedClientServerBoundary()
     True(linuxPackage.Contains("--self-contained true", StringComparison.Ordinal));
     True(linuxPackage.Contains("RadioVault.Client-$VERSION-$RID.tar.gz", StringComparison.Ordinal));
     True(linuxPackage.Contains("RadioVault.Server-$VERSION-$RID.tar.gz", StringComparison.Ordinal));
+    True(linuxPackage.Contains("dpkg-deb --build --root-owner-group", StringComparison.Ordinal));
+    True(linuxPackage.Contains("RadioVault.Client-$VERSION-$DEB_ARCH.deb", StringComparison.Ordinal));
+    True(linuxPackage.Contains("radiovault.desktop", StringComparison.Ordinal));
+
+    var macInstallerPackage = File.ReadAllText(Path.Combine(SourceRoot(), "package-macos-installers.sh"));
+    True(macInstallerPackage.Contains("hdiutil create", StringComparison.Ordinal));
+    True(macInstallerPackage.Contains("codesign --force --deep --sign -", StringComparison.Ordinal));
+    True(macInstallerPackage.Contains("ln -s /Applications", StringComparison.Ordinal));
+
+    var windowsInstallerPackage = File.ReadAllText(Path.Combine(SourceRoot(), "package-windows-ci-installers.ps1"));
+    True(windowsInstallerPackage.Contains("RadioVault.Client.iss", StringComparison.Ordinal));
+    True(windowsInstallerPackage.Contains("RadioVault.Server.iss", StringComparison.Ordinal));
+    True(windowsInstallerPackage.Contains("windows-installers", StringComparison.Ordinal));
 
     var workflow = File.ReadAllText(Path.Combine(SourceRoot(), ".github", "workflows", "ci.yml"));
     True(workflow.Contains("name: macOS client and server", StringComparison.Ordinal));
     True(workflow.Contains("name: Linux client and server", StringComparison.Ordinal));
     True(workflow.Contains("macos-client-and-server-osx-arm64-unsigned", StringComparison.Ordinal));
     True(workflow.Contains("linux-client-and-server-x64", StringComparison.Ordinal));
+    True(workflow.Contains("package-windows-ci-installers.ps1", StringComparison.Ordinal));
+    True(workflow.Contains("package-macos-installers.sh", StringComparison.Ordinal));
+    True(workflow.Contains("*.dmg", StringComparison.Ordinal));
+    True(workflow.Contains("*.deb", StringComparison.Ordinal));
 
     var linuxGuide = File.ReadAllText(Path.Combine(SourceRoot(), "LINUX.md"));
     True(linuxGuide.Contains("mpv", StringComparison.Ordinal));
