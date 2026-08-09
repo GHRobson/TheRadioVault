@@ -63,7 +63,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
             _streamAsset.ResourceLoader.SetDelegate(_streamLoader, _streamQueue);
             using var item = AVPlayerItem.FromAsset(_streamAsset);
             _player = AVPlayer.FromPlayerItem(item);
-            Console.Error.WriteLine($"[RadioVault iOS playback] Opened native source {source.Identifier}");
+            IosPlaybackDiagnostics.Write($"[RadioVault iOS playback] Opened native source {source.Identifier}");
             ConfigurePlayerLocked();
         }
     }
@@ -93,7 +93,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
             // previously made Radio Vault report the temporary wait as a pause.
             _player.Play();
             if (Math.Abs(_rate - 1d) > 0.001d) _player.Rate = (float)_rate;
-            Console.Error.WriteLine($"[RadioVault iOS playback] Play requested at {_rate:0.##}x");
+            IosPlaybackDiagnostics.Write($"[RadioVault iOS playback] Play requested at {_rate:0.##}x");
             UpdateLocked();
         }
     }
@@ -176,7 +176,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
         if (!string.Equals(diagnosticState, _lastDiagnosticState, StringComparison.Ordinal))
         {
             _lastDiagnosticState = diagnosticState;
-            Console.Error.WriteLine("[RadioVault iOS playback] " + diagnosticState);
+            IosPlaybackDiagnostics.Write("[RadioVault iOS playback] " + diagnosticState);
         }
         var position = double.IsFinite(seconds) && seconds >= 0 ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero;
         _current = new MobilePlaybackSnapshot(

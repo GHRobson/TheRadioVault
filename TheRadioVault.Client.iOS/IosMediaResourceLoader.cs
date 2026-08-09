@@ -58,9 +58,9 @@ internal sealed class IosMediaResourceLoader : AVAssetResourceLoaderDelegate
                     ? $"bytes={offset}-"
                     : $"bytes={offset}-{offset + Math.Max(1, dataRequest.RequestedLength) - 1}";
 
-            Console.Error.WriteLine($"[RadioVault iOS stream] Request {range}; information={loadingRequest.ContentInformationRequest is not null}");
+            IosPlaybackDiagnostics.Write($"[RadioVault iOS stream] Request {range}; information={loadingRequest.ContentInformationRequest is not null}");
             using var response = await _source.OpenResponseAsync(range, cancellation.Token).ConfigureAwait(false);
-            Console.Error.WriteLine(
+            IosPlaybackDiagnostics.Write(
                 $"[RadioVault iOS stream] Response {(int)response.StatusCode}; " +
                 $"type={response.Content.Headers.ContentType}; length={response.Content.Headers.ContentLength}; " +
                 $"range={response.Content.Headers.ContentRange}");
@@ -84,19 +84,19 @@ internal sealed class IosMediaResourceLoader : AVAssetResourceLoaderDelegate
                     delivered += read;
                     if (remaining != long.MaxValue) remaining -= read;
                 }
-                Console.Error.WriteLine($"[RadioVault iOS stream] Delivered {delivered} bytes for {range}");
+                IosPlaybackDiagnostics.Write($"[RadioVault iOS stream] Delivered {delivered} bytes for {range}");
             }
 
             if (!cancellation.IsCancellationRequested && !loadingRequest.IsCancelled)
             {
                 loadingRequest.FinishLoading();
-                Console.Error.WriteLine($"[RadioVault iOS stream] Finished {range}");
+                IosPlaybackDiagnostics.Write($"[RadioVault iOS stream] Finished {range}");
             }
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested || loadingRequest.IsCancelled) { }
         catch (Exception exception)
         {
-            Console.Error.WriteLine($"[RadioVault iOS stream] Failed: {exception}");
+            IosPlaybackDiagnostics.Write($"[RadioVault iOS stream] Failed: {exception}");
             if (!loadingRequest.IsCancelled)
             {
                 using var description = new NSString(exception.Message);
