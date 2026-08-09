@@ -48,7 +48,7 @@ public sealed class UpNextViewController : SessionTableViewController
             return DetailCell("empty-queue", "Nothing Up Next", "Add a broadcast from Library or Broadcast Details.");
         var item = Session.QueueItems[indexPath.Row];
         var cell = new BroadcastProgressCell("queue-item");
-        cell.Configure(item.Episode, $"{item.Position + 1}. {item.Episode.Show} · {item.Episode.Status}");
+        cell.Configure(Session, item.Episode, $"{item.Position + 1}. {item.Episode.Show} · {item.Episode.Status}");
         cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
         return cell;
     }

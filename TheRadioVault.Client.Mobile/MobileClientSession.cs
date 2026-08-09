@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Web.Contracts;
@@ -20,6 +21,7 @@ public sealed class MobileClientSession : IDisposable
     private readonly Timer _syncTimer;
     private readonly Timer _metadataSyncTimer;
     private readonly MobileMetadataCache _metadataCache;
+    private readonly ConcurrentDictionary<long, Task<byte[]?>> _artworkRequests = new();
     private MobileMediaProxy? _mediaProxy;
     private MobileDownloadRecord? _activeDownload;
     private CancellationTokenSource? _downloadCancellation;
@@ -148,13 +150,34 @@ public sealed class MobileClientSession : IDisposable
         ? _remotePlaybackBroadcast.Progress / 100d
         : PlaybackProgress;
     public bool MiniPlayerCanAct => MiniPlayerShowsHandoff || CanControlPlayback;
-    public MobileBroadcastItem? CurrentBroadcast => SelectedBroadcast ?? _remotePlaybackBroadcast;
+    public MobileBroadcastItem? CurrentBroadcast => _remotePlaybackBroadcast ?? SelectedBroadcast;
 
     public bool CanToggleBroadcast(long episodeId)
         => CanControlPlayback && SelectedBroadcast?.EpisodeId == episodeId;
 
     public bool IsPlayingBroadcast(long episodeId)
         => CanToggleBroadcast(episodeId) && IsPlaying;
+
+    public async Task<byte[]?> LoadArtworkAsync(MobileBroadcastItem broadcast)
+    {
+        ArgumentNullException.ThrowIfNull(broadcast);
+        if (string.IsNullOrWhiteSpace(broadcast.Source.ArtworkPath)) return null;
+        var task = _artworkRequests.GetOrAdd(
+            broadcast.EpisodeId,
+            episodeId => LoadArtworkCoreAsync(episodeId));
+        var content = await task.ConfigureAwait(false);
+        if (content is null) _artworkRequests.TryRemove(broadcast.EpisodeId, out _);
+        return content;
+    }
+
+    public async Task<byte[]?> LoadArtworkAsync(long episodeId)
+    {
+        if (episodeId <= 0) return null;
+        var task = _artworkRequests.GetOrAdd(episodeId, LoadArtworkCoreAsync);
+        var content = await task.ConfigureAwait(false);
+        if (content is null) _artworkRequests.TryRemove(episodeId, out _);
+        return content;
+    }
 
     public async Task InitializeAsync()
     {
@@ -656,6 +679,7 @@ public sealed class MobileClientSession : IDisposable
             });
             var record = await _downloads.DownloadAsync(
                 broadcast, progress, cancellation.Token).ConfigureAwait(false);
+            _ = await LoadArtworkAsync(broadcast).ConfigureAwait(false);
             DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
             _pendingDownload = null;
             DownloadProgressPercent = 100;
@@ -894,6 +918,7 @@ public sealed class MobileClientSession : IDisposable
         _nowPlaying.Clear();
         _server.Forget();
         _metadataCache.Clear();
+        _artworkRequests.Clear();
         _mediaProxy?.Dispose();
         _mediaProxy = null;
         IsPaired = false;
@@ -928,6 +953,15 @@ public sealed class MobileClientSession : IDisposable
         try
         {
             await FlushPlaybackAsync().ConfigureAwait(false);
+            try
+            {
+                broadcast = new MobileBroadcastItem(
+                    await _server.GetBroadcastSummaryAsync(broadcast.EpisodeId).ConfigureAwait(false));
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Trace.WriteLine($"[iOS playback summary refresh] {exception}");
+            }
             _offlinePlayback = false;
             _activeDownload = null;
             _ownsPlayback = false;
@@ -970,7 +1004,14 @@ public sealed class MobileClientSession : IDisposable
                 desiredPlaying = transfer.DesiredPlaying;
             }
 
-            SelectedBroadcast = broadcast;
+            SelectedBroadcast = ApplyPlaybackProgress(
+                broadcast.Source,
+                logicalPosition,
+                _logicalDurationMs,
+                completed: false,
+                anotherDeviceOwnsPlayback && shared.Player.UpdatedAt is { } sharedUpdatedAt
+                    ? sharedUpdatedAt
+                    : DateTimeOffset.UtcNow);
             NowPlayingTitle = broadcast.Title;
             NowPlayingSubtitle = broadcast.Subtitle;
             _incrementPlayCountPending = true;
@@ -1235,6 +1276,19 @@ public sealed class MobileClientSession : IDisposable
                 return;
             }
             _ownsPlayback = true;
+            if (SelectedBroadcast is { } selected)
+            {
+                var position = CaptureLogicalPosition();
+                var completed = _logicalDurationMs > 0 &&
+                                position >= Math.Max(0, _logicalDurationMs - 5_000);
+                ApplyPlaybackProgress(
+                    selected.Source,
+                    position,
+                    _logicalDurationMs,
+                    completed,
+                    DateTimeOffset.UtcNow);
+                Notify();
+            }
 
             var now = DateTimeOffset.UtcNow;
             if (forceDurable || now - _lastDurableSave >= DurableProgressInterval)
@@ -1278,18 +1332,16 @@ public sealed class MobileClientSession : IDisposable
         {
             var projectedPosition = ProjectPosition(session.Player);
             var projectedDuration = Math.Max(remote.Source.DurationMs, session.Player.DurationMs);
-            if (remote.Source.PositionMs != projectedPosition || remote.Source.DurationMs != projectedDuration)
-            {
-                var completed = string.Equals(session.Player.Status, "Completed", StringComparison.OrdinalIgnoreCase);
-                _remotePlaybackBroadcast = new MobileBroadcastItem(remote.Source with
-                {
-                    PositionMs = projectedPosition,
-                    DurationMs = projectedDuration,
-                    InProgress = projectedPosition > 0 && !completed,
-                    Completed = completed
-                });
-                changed = true;
-            }
+            var completed = string.Equals(session.Player.Status, "Completed", StringComparison.OrdinalIgnoreCase);
+            changed |= remote.Source.PositionMs != projectedPosition ||
+                       remote.Source.DurationMs != projectedDuration ||
+                       remote.Source.Completed != completed;
+            _remotePlaybackBroadcast = ApplyPlaybackProgress(
+                remote.Source,
+                projectedPosition,
+                projectedDuration,
+                completed,
+                session.Player.UpdatedAt ?? DateTimeOffset.UtcNow);
         }
         _remotePlaybackOwner = owner;
         if (changed) Notify();
@@ -1390,12 +1442,14 @@ public sealed class MobileClientSession : IDisposable
         if (broadcast is null) return;
         var explicitSeek = _explicitSeekPending;
         var incrementPlayCount = _incrementPlayCountPending;
+        var position = CaptureLogicalPosition();
+        var completed = _logicalDurationMs > 0 && position >= Math.Max(0, _logicalDurationMs - 5_000);
         var result = await _server.SaveProgressAsync(new WebOfflineProgressUpdate(
             _server.ClientId,
             broadcast.EpisodeId,
-            CaptureLogicalPosition(),
+            position,
             _logicalDurationMs,
-            Completed: IsCompleted(),
+            Completed: completed,
             Speed: _speed,
             CapturedAt: DateTimeOffset.UtcNow,
             AllowRewind: true,
@@ -1406,6 +1460,27 @@ public sealed class MobileClientSession : IDisposable
         _explicitSeekPending = false;
         _incrementPlayCountPending = incrementPlayCount && !result.Changed;
         _lastDurableSave = DateTimeOffset.UtcNow;
+        if (!result.Changed && result.Episode is { PositionMs: > 0 } canonicalEpisode &&
+            canonicalEpisode.PositionMs > position)
+        {
+            var canonical = await _server.GetBroadcastSummaryAsync(broadcast.EpisodeId).ConfigureAwait(false);
+            ApplyPlaybackProgress(
+                canonical,
+                canonical.PositionMs,
+                canonical.DurationMs,
+                canonical.Completed,
+                canonical.LastPlayedAt ?? _lastDurableSave);
+        }
+        else
+        {
+            ApplyPlaybackProgress(
+                broadcast.Source,
+                position,
+                _logicalDurationMs,
+                completed,
+                _lastDurableSave);
+        }
+        await _metadataCache.SaveAsync().ConfigureAwait(false);
     }
 
     private long CaptureLogicalPosition()
@@ -1675,6 +1750,68 @@ public sealed class MobileClientSession : IDisposable
         return values;
     }
 
+    private async Task<byte[]?> LoadArtworkCoreAsync(long episodeId)
+    {
+        var cached = _metadataCache.ReadArtwork(episodeId);
+        if (cached is { Length: > 0 }) return cached;
+        if (!IsPaired || !IsLiveConnected) return null;
+        try
+        {
+            var content = await _server.GetArtworkAsync(episodeId).ConfigureAwait(false);
+            if (content.Length == 0) return null;
+            await _metadataCache.SaveArtworkAsync(episodeId, content).ConfigureAwait(false);
+            return content;
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.WriteLine($"[iOS artwork load] {exception}");
+            return null;
+        }
+    }
+
+    private MobileBroadcastItem ApplyPlaybackProgress(
+        WebClientLibraryBroadcastSummary source,
+        long positionMs,
+        long durationMs,
+        bool completed,
+        DateTimeOffset playedAt)
+    {
+        var duration = Math.Max(source.DurationMs, Math.Max(0, durationMs));
+        var position = duration > 0
+            ? Math.Clamp(positionMs, 0, duration)
+            : Math.Max(0, positionMs);
+        var updated = source with
+        {
+            PositionMs = position,
+            DurationMs = duration,
+            Completed = completed,
+            InProgress = position > 0 && !completed,
+            LastPlayedAt = playedAt
+        };
+        var item = new MobileBroadcastItem(updated);
+        _metadataCache.UpsertBroadcast(updated);
+        if (SelectedBroadcast?.EpisodeId == item.EpisodeId) SelectedBroadcast = item;
+        if (_remotePlaybackBroadcast?.EpisodeId == item.EpisodeId) _remotePlaybackBroadcast = item;
+        LibraryBroadcasts = ReplaceBroadcast(LibraryBroadcasts, item);
+        RecentBroadcasts = ReplaceBroadcast(RecentBroadcasts, item);
+        OnThisDay = ReplaceBroadcast(OnThisDay, item);
+        UnheardBroadcasts = position > 0 || completed
+            ? UnheardBroadcasts.Where(value => value.EpisodeId != item.EpisodeId).ToArray()
+            : ReplaceBroadcast(UnheardBroadcasts, item);
+        ContinueListening = completed || position <= 0
+            ? ContinueListening.Where(value => value.EpisodeId != item.EpisodeId).ToArray()
+            : new[] { item }
+                .Concat(ContinueListening.Where(value => value.EpisodeId != item.EpisodeId))
+                .Take(50)
+                .ToArray();
+        return item;
+    }
+
+    private static IReadOnlyList<MobileBroadcastItem> ReplaceBroadcast(
+        IReadOnlyList<MobileBroadcastItem> values,
+        MobileBroadcastItem replacement)
+        => values.Select(value => value.EpisodeId == replacement.EpisodeId ? replacement : value).ToArray();
+
     private void ApplyMetadataSnapshot()
     {
         var snapshot = _metadataCache.Snapshot;
@@ -1739,6 +1876,12 @@ public sealed class MobileClientSession : IDisposable
 
     private void ApplyOnlineOverview(WebClientLibraryOverview overview)
     {
+        foreach (var broadcast in overview.ContinueListening
+                     .Concat(overview.RecentBroadcasts)
+                     .Concat(overview.OnThisDay)
+                     .GroupBy(value => value.RepresentativeEpisodeId)
+                     .Select(group => group.OrderByDescending(value => value.LastPlayedAt).First()))
+            _metadataCache.UpsertBroadcast(broadcast);
         TotalBroadcasts = overview.TotalBroadcasts;
         CompletedBroadcasts = overview.CompletedBroadcasts;
         InProgressBroadcasts = overview.InProgressBroadcasts;

@@ -8,6 +8,7 @@ internal sealed class MobileMetadataCache
 {
     private readonly string _cachePath;
     private readonly string _imageDirectory;
+    private readonly string _artworkDirectory;
     private readonly SemaphoreSlim _writeGate = new(1, 1);
     private readonly object _gate = new();
     private MobileMetadataCacheSnapshot _snapshot;
@@ -17,7 +18,9 @@ internal sealed class MobileMetadataCache
         Directory.CreateDirectory(rootPath);
         _cachePath = Path.Combine(rootPath, "metadata.json");
         _imageDirectory = Path.Combine(rootPath, "ExploreImages");
+        _artworkDirectory = Path.Combine(rootPath, "BroadcastArtwork");
         Directory.CreateDirectory(_imageDirectory);
+        Directory.CreateDirectory(_artworkDirectory);
         _snapshot = MobileMetadataCacheSnapshot.Empty(serverInstanceId);
     }
 
@@ -196,6 +199,30 @@ internal sealed class MobileMetadataCache
 
     public bool HasImage(Guid imageId) => File.Exists(ImagePath(imageId));
 
+    public async Task SaveArtworkAsync(long episodeId, byte[] content)
+    {
+        if (episodeId <= 0 || content.Length == 0) return;
+        Directory.CreateDirectory(_artworkDirectory);
+        var path = ArtworkPath(episodeId);
+        var temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+        await File.WriteAllBytesAsync(temporary, content).ConfigureAwait(false);
+        File.Move(temporary, path, overwrite: true);
+    }
+
+    public byte[]? ReadArtwork(long episodeId)
+    {
+        try
+        {
+            var path = ArtworkPath(episodeId);
+            return File.Exists(path) ? File.ReadAllBytes(path) : null;
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.WriteLine($"[iOS artwork cache read] {exception}");
+            return null;
+        }
+    }
+
     public async Task SaveAsync()
     {
         await _writeGate.WaitAsync().ConfigureAwait(false);
@@ -228,7 +255,9 @@ internal sealed class MobileMetadataCache
         {
             if (File.Exists(_cachePath)) File.Delete(_cachePath);
             if (Directory.Exists(_imageDirectory)) Directory.Delete(_imageDirectory, recursive: true);
+            if (Directory.Exists(_artworkDirectory)) Directory.Delete(_artworkDirectory, recursive: true);
             Directory.CreateDirectory(_imageDirectory);
+            Directory.CreateDirectory(_artworkDirectory);
         }
         catch (Exception exception)
         {
@@ -237,4 +266,6 @@ internal sealed class MobileMetadataCache
     }
 
     private string ImagePath(Guid imageId) => Path.Combine(_imageDirectory, imageId.ToString("N") + ".bin");
+
+    private string ArtworkPath(long episodeId) => Path.Combine(_artworkDirectory, episodeId + ".bin");
 }

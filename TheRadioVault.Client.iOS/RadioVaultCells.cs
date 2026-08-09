@@ -297,6 +297,7 @@ internal sealed class DashboardStatsCell : UITableViewCell
 
 internal sealed class DashboardContinueCell : UITableViewCell
 {
+    private readonly UIImageView _artwork = new();
     private readonly UILabel _collection = new();
     private readonly UILabel _date = new();
     private readonly UILabel _title = new();
@@ -315,15 +316,14 @@ internal sealed class DashboardContinueCell : UITableViewCell
         artwork.Layer.CornerRadius = 14;
         artwork.Layer.BorderColor = RadioVaultTheme.Border.CGColor;
         artwork.Layer.BorderWidth = 1;
-        var artworkIcon = new UIImageView(RadioVaultIcons.Image(RadioVaultIcon.Radio, size: 48))
-        {
-            ContentMode = UIViewContentMode.Center,
-            TranslatesAutoresizingMaskIntoConstraints = false
-        };
-        artwork.AddSubview(artworkIcon);
+        _artwork.TranslatesAutoresizingMaskIntoConstraints = false;
+        artwork.Layer.MasksToBounds = true;
+        artwork.AddSubview(_artwork);
         NSLayoutConstraint.ActivateConstraints([
-            artworkIcon.CenterXAnchor.ConstraintEqualTo(artwork.CenterXAnchor),
-            artworkIcon.CenterYAnchor.ConstraintEqualTo(artwork.CenterYAnchor)
+            _artwork.LeadingAnchor.ConstraintEqualTo(artwork.LeadingAnchor),
+            _artwork.TrailingAnchor.ConstraintEqualTo(artwork.TrailingAnchor),
+            _artwork.TopAnchor.ConstraintEqualTo(artwork.TopAnchor),
+            _artwork.BottomAnchor.ConstraintEqualTo(artwork.BottomAnchor)
         ]);
 
         _collection.Font = UIFont.SystemFontOfSize(21, UIFontWeight.Bold)!;
@@ -393,8 +393,14 @@ internal sealed class DashboardContinueCell : UITableViewCell
         ]);
     }
 
-    public void Configure(MobileBroadcastItem item, bool isLoading, bool isPlaying, Action resume)
+    public void Configure(
+        MobileClientSession session,
+        MobileBroadcastItem item,
+        bool isLoading,
+        bool isPlaying,
+        Action resume)
     {
+        RadioVaultArtwork.Load(_artwork, session, item, RadioVaultIcons.Image(RadioVaultIcon.Radio, size: 48));
         _collection.Text = item.Source.CollectionName;
         _date.Text = item.Source.AirDate?.ToString("dddd, d MMMM yyyy") ?? "Date unknown";
         _title.Text = item.Title;
@@ -411,6 +417,7 @@ internal sealed class DashboardContinueCell : UITableViewCell
 
 internal sealed class BroadcastProgressCell : UITableViewCell
 {
+    private readonly UIImageView _artwork = new();
     private readonly UILabel _title = new();
     private readonly UILabel _subtitle = new();
     private readonly UILabel _percentage = new();
@@ -432,6 +439,10 @@ internal sealed class BroadcastProgressCell : UITableViewCell
         _percentage.TextAlignment = UITextAlignment.Right;
         _progress.ProgressTintColor = RadioVaultTheme.Progress;
         _progress.TrackTintColor = RadioVaultTheme.Border;
+        _artwork.BackgroundColor = RadioVaultTheme.AccentSubtle;
+        _artwork.Layer.CornerRadius = 9;
+        _artwork.Layer.MasksToBounds = true;
+        _artwork.TranslatesAutoresizingMaskIntoConstraints = false;
 
         var labels = new UIStackView([_title, _subtitle])
         {
@@ -446,11 +457,18 @@ internal sealed class BroadcastProgressCell : UITableViewCell
             Distribution = UIStackViewDistribution.Fill,
             Spacing = 10
         };
-        var content = new UIStackView([labels, progressRow])
+        var details = new UIStackView([labels, progressRow])
         {
             Axis = UILayoutConstraintAxis.Vertical,
             Alignment = UIStackViewAlignment.Fill,
             Spacing = 8,
+        };
+        var content = new UIStackView([_artwork, details])
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Alignment = UIStackViewAlignment.Center,
+            Distribution = UIStackViewDistribution.Fill,
+            Spacing = 12,
             TranslatesAutoresizingMaskIntoConstraints = false
         };
         ContentView.AddSubview(content);
@@ -459,12 +477,15 @@ internal sealed class BroadcastProgressCell : UITableViewCell
             content.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor, -16),
             content.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor, 11),
             content.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor, -11),
+            _artwork.WidthAnchor.ConstraintEqualTo(56),
+            _artwork.HeightAnchor.ConstraintEqualTo(56),
             _percentage.WidthAnchor.ConstraintEqualTo(42)
         ]);
     }
 
-    public void Configure(MobileBroadcastItem item, string? detail = null)
+    public void Configure(MobileClientSession session, MobileBroadcastItem item, string? detail = null)
     {
+        RadioVaultArtwork.Load(_artwork, session, item);
         Configure(
             item.Title,
             detail ?? $"{item.Subtitle} · {item.Status}",
@@ -472,8 +493,9 @@ internal sealed class BroadcastProgressCell : UITableViewCell
             item.Source.Completed);
     }
 
-    public void Configure(WebEpisode item, string detail)
+    public void Configure(MobileClientSession session, WebEpisode item, string detail)
     {
+        RadioVaultArtwork.Load(_artwork, session, item.Id);
         var completed = item.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase);
         Configure(item.Title, detail, completed ? 100d : item.ProgressPercent, completed);
     }
@@ -612,6 +634,7 @@ internal sealed class ArchiveTileControl : UIControl
 
 internal sealed class BroadcastHeroCell : UITableViewCell
 {
+    private readonly UIImageView _artwork = new();
     private readonly UILabel _collection = new();
     private readonly UILabel _title = new();
     private readonly UILabel _date = new();
@@ -624,15 +647,14 @@ internal sealed class BroadcastHeroCell : UITableViewCell
         SelectionStyle = UITableViewCellSelectionStyle.None;
         var artwork = new UIView { BackgroundColor = RadioVaultTheme.AccentSubtle };
         artwork.Layer.CornerRadius = 16;
-        var icon = new UIImageView(RadioVaultIcons.Image(RadioVaultIcon.Radio, size: 52))
-        {
-            ContentMode = UIViewContentMode.Center,
-            TranslatesAutoresizingMaskIntoConstraints = false
-        };
-        artwork.AddSubview(icon);
+        _artwork.TranslatesAutoresizingMaskIntoConstraints = false;
+        artwork.Layer.MasksToBounds = true;
+        artwork.AddSubview(_artwork);
         NSLayoutConstraint.ActivateConstraints([
-            icon.CenterXAnchor.ConstraintEqualTo(artwork.CenterXAnchor),
-            icon.CenterYAnchor.ConstraintEqualTo(artwork.CenterYAnchor)
+            _artwork.LeadingAnchor.ConstraintEqualTo(artwork.LeadingAnchor),
+            _artwork.TrailingAnchor.ConstraintEqualTo(artwork.TrailingAnchor),
+            _artwork.TopAnchor.ConstraintEqualTo(artwork.TopAnchor),
+            _artwork.BottomAnchor.ConstraintEqualTo(artwork.BottomAnchor)
         ]);
 
         _collection.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
@@ -678,8 +700,9 @@ internal sealed class BroadcastHeroCell : UITableViewCell
         ]);
     }
 
-    public void Configure(MobileBroadcastItem item)
+    public void Configure(MobileClientSession session, MobileBroadcastItem item)
     {
+        RadioVaultArtwork.Load(_artwork, session, item, RadioVaultIcons.Image(RadioVaultIcon.Radio, size: 52));
         _collection.Text = item.Source.CollectionName.ToUpperInvariant();
         _title.Text = item.Title;
         _date.Text = item.Source.AirDate?.ToString("dddd, d MMMM yyyy") ?? "Date unknown";

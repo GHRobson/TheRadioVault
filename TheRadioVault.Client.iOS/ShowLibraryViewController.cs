@@ -108,7 +108,7 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
             return DetailCell("empty-show", _loading ? "Loading broadcasts…" : "No broadcasts found", Session.StatusText);
         var item = _broadcasts[indexPath.Row];
         var broadcastCell = new BroadcastProgressCell("show-broadcast");
-        broadcastCell.Configure(item);
+        broadcastCell.Configure(Session, item);
         broadcastCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
         return broadcastCell;
     }

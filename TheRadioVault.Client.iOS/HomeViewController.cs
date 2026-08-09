@@ -88,6 +88,7 @@ public sealed class HomeViewController : SessionTableViewController
                 return DetailCell("dashboard-featured-empty", "Nothing waiting to resume", Session.StatusText);
             var cell = new DashboardContinueCell();
             cell.Configure(
+                Session,
                 featured,
                 Session.PreparingPlaybackEpisodeId == featured.EpisodeId,
                 Session.IsPlayingBroadcast(featured.EpisodeId),
@@ -125,7 +126,7 @@ public sealed class HomeViewController : SessionTableViewController
 
         var item = values[indexPath.Row];
         var broadcastCell = new BroadcastProgressCell("dashboard-broadcast");
-        broadcastCell.Configure(item, indexPath.Section == 3
+        broadcastCell.Configure(Session, item, indexPath.Section == 3
             ? $"{item.Source.CollectionName} · ready to resume"
             : $"{item.Subtitle} · {item.Status}");
         broadcastCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;

@@ -547,6 +547,20 @@ public sealed class MobileServerClient : IDisposable
             MobileJsonContext.Default.ProgressEnvelope,
             cancellationToken).ConfigureAwait(false)).Result;
 
+    public async Task<byte[]> GetArtworkAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await OpenResponseAsync(
+            WebApiRoutes.Artwork(episodeId),
+            range: null,
+            cancellationToken).ConfigureAwait(false);
+        var content = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        if (content.Length > 20 * 1024 * 1024)
+            throw new InvalidDataException("Broadcast artwork exceeds the 20 MB mobile limit.");
+        return content;
+    }
+
     public async Task<HttpResponseMessage> OpenResponseAsync(
         string path,
         string? range,

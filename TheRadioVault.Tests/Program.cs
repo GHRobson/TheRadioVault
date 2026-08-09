@@ -1520,6 +1520,12 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosCells.Contains("UIActivityIndicatorView", StringComparison.Ordinal));
     True(iosCells.Contains("isPlaying ? \"Pause\" : \"Resume\"", StringComparison.Ordinal));
     True(iosCells.Contains("Loading…", StringComparison.Ordinal));
+    True(iosCells.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
+
+    var iosArtwork = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultArtwork.cs"));
+    True(iosArtwork.Contains("session.LoadArtworkAsync", StringComparison.Ordinal));
+    True(iosArtwork.Contains("UIViewContentMode.ScaleAspectFill", StringComparison.Ordinal));
 
     var iosTableBase = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SessionTableViewController.cs"));
@@ -1581,6 +1587,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(theme.Contains("ArrowHead", StringComparison.Ordinal));
     True(theme.Contains("ConfigureWithTransparentBackground", StringComparison.Ordinal));
     True(theme.Contains("Polygon(context, true, tip", StringComparison.Ordinal));
+    True(theme.Contains("Lines(context, (4, 6), (20, 6))", StringComparison.Ordinal));
+    True(theme.Contains("ArrowHead(context, (20, 6), (14, 1.5), (14, 10.5))", StringComparison.Ordinal));
     True(!theme.Contains("(14.5, 4.5), (18, 6), (16.5, 9.5)", StringComparison.Ordinal));
     True(!theme.Contains("(16, 7), (20, 8), (18.5, 11.8)", StringComparison.Ordinal));
     True(theme.Contains("(3, 10.5), (13, 10.5)", StringComparison.Ordinal));
@@ -1593,6 +1601,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(miniPlayer.Contains("Layer.CornerRadius = 24", StringComparison.Ordinal));
     True(miniPlayer.Contains("IsPreparingPlayback", StringComparison.Ordinal));
     True(miniPlayer.Contains("UIActivityIndicatorView", StringComparison.Ordinal));
+    True(miniPlayer.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
 
     var nowPlayingView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingViewController.cs"));
@@ -1608,6 +1617,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(nowPlayingView.Contains("RadioVaultIcon.SkipBack, RadioVaultTheme.Accent", StringComparison.Ordinal));
     True(nowPlayingView.Contains("IsPreparingPlayback", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_playActivity.StartAnimating", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_artworkPanel.HeightAnchor.ConstraintEqualTo(_artworkPanel.WidthAnchor)", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
 
     var downloadService = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
@@ -1622,6 +1633,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(metadataCache.Contains("ApplyLibrarySync", StringComparison.Ordinal));
     True(metadataCache.Contains("ReplaceCompleteLibrary", StringComparison.Ordinal));
     True(metadataCache.Contains("SaveImageAsync", StringComparison.Ordinal));
+    True(metadataCache.Contains("SaveArtworkAsync", StringComparison.Ordinal));
+    True(metadataCache.Contains("BroadcastArtwork", StringComparison.Ordinal));
 
     var mobileCacheSessionSource = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
@@ -1642,6 +1655,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("AllowRewind: false", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ExpectedGeneration: 0", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("_downloads.ReconcileSummariesAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("ApplyPlaybackProgress", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("LoadArtworkAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("overview.ContinueListening", StringComparison.Ordinal));
 
     var downloads = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));

@@ -64,7 +64,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
                 return DetailCell("empty-library", Session.IsPaired ? "No broadcasts found" : "Pair a server first", Session.StatusText);
             var item = Session.LibraryBroadcasts[indexPath.Row];
             var resultCell = new BroadcastProgressCell("library-broadcast");
-            resultCell.Configure(item);
+            resultCell.Configure(Session, item);
             resultCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
             return resultCell;
         }

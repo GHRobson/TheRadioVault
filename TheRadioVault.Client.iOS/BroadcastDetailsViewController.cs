@@ -56,7 +56,7 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         if (indexPath.Section == 0)
         {
             var hero = new BroadcastHeroCell();
-            hero.Configure(_broadcast);
+            hero.Configure(Session, _broadcast);
             return hero;
         }
 

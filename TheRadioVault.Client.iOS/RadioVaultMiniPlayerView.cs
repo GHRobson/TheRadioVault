@@ -6,11 +6,14 @@ namespace TheRadioVault.Client.iOS;
 public sealed class RadioVaultMiniPlayerView : UIView
 {
     private readonly MobileClientSession _session;
+    private readonly UIImageView _artwork = new();
     private readonly UILabel _titleLabel = new();
     private readonly UILabel _subtitleLabel = new();
     private readonly UIButton _actionButton = UIButton.FromType(UIButtonType.System);
     private readonly UIActivityIndicatorView _activity = new(UIActivityIndicatorViewStyle.Medium);
     private readonly UIProgressView _progress = new(UIProgressViewStyle.Default);
+    private long _artworkEpisodeId;
+    private bool _artworkWasRequestedOnline;
 
     public RadioVaultMiniPlayerView(MobileClientSession session)
     {
@@ -36,6 +39,9 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _activity.HidesWhenStopped = true;
         _activity.TranslatesAutoresizingMaskIntoConstraints = false;
         _actionButton.AddSubview(_activity);
+        _artwork.BackgroundColor = RadioVaultTheme.AccentSubtle;
+        _artwork.Layer.CornerRadius = 10;
+        _artwork.Layer.MasksToBounds = true;
 
         var labels = new UIStackView([_titleLabel, _subtitleLabel])
         {
@@ -45,7 +51,7 @@ public sealed class RadioVaultMiniPlayerView : UIView
             Spacing = 1
         };
         labels.UserInteractionEnabled = true;
-        var row = new UIStackView([labels, _actionButton])
+        var row = new UIStackView([_artwork, labels, _actionButton])
         {
             Axis = UILayoutConstraintAxis.Horizontal,
             Alignment = UIStackViewAlignment.Center,
@@ -57,12 +63,14 @@ public sealed class RadioVaultMiniPlayerView : UIView
         AddSubview(row);
         AddSubview(_progress);
         NSLayoutConstraint.ActivateConstraints([
-            row.LeadingAnchor.ConstraintEqualTo(LeadingAnchor, 14),
+            row.LeadingAnchor.ConstraintEqualTo(LeadingAnchor, 8),
             row.TrailingAnchor.ConstraintEqualTo(TrailingAnchor, -10),
             row.TopAnchor.ConstraintEqualTo(TopAnchor, 7),
             row.BottomAnchor.ConstraintEqualTo(_progress.TopAnchor, -6),
             _actionButton.WidthAnchor.ConstraintEqualTo(44),
             _actionButton.HeightAnchor.ConstraintEqualTo(44),
+            _artwork.WidthAnchor.ConstraintEqualTo(42),
+            _artwork.HeightAnchor.ConstraintEqualTo(42),
             _activity.CenterXAnchor.ConstraintEqualTo(_actionButton.CenterXAnchor),
             _activity.CenterYAnchor.ConstraintEqualTo(_actionButton.CenterYAnchor),
             _progress.LeadingAnchor.ConstraintEqualTo(LeadingAnchor),
@@ -87,6 +95,14 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _titleLabel.Text = _session.MiniPlayerTitle;
         _subtitleLabel.Text = _session.MiniPlayerSubtitle;
         _progress.Progress = (float)_session.MiniPlayerProgress;
+        if (_session.CurrentBroadcast is { } broadcast &&
+            (_artworkEpisodeId != broadcast.EpisodeId ||
+             (!_artworkWasRequestedOnline && _session.IsLiveConnected)))
+        {
+            _artworkEpisodeId = broadcast.EpisodeId;
+            _artworkWasRequestedOnline = _session.IsLiveConnected;
+            RadioVaultArtwork.Load(_artwork, _session, broadcast);
+        }
         var loading = _session.IsPreparingPlayback;
         if (loading) _activity.StartAnimating(); else _activity.StopAnimating();
         _actionButton.SetImage(loading

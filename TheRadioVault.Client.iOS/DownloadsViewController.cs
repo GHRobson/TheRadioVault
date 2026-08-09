@@ -65,7 +65,7 @@ public sealed class DownloadsViewController : SessionTableViewController
             return DetailCell("empty-downloads", "No downloads yet", "Open a broadcast in Library and choose Download to this iPhone.");
         var item = Session.DownloadedBroadcasts[indexPath.Row];
         var cell = new BroadcastProgressCell("download");
-        cell.Configure(item, $"{item.Subtitle} · downloaded");
+        cell.Configure(Session, item, $"{item.Subtitle} · downloaded");
         cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
         return cell;
     }

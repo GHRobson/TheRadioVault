@@ -22,6 +22,8 @@ public sealed class NowPlayingViewController : UIViewController
     private readonly UIButton _favouriteButton = UIButton.FromType(UIButtonType.System);
     private readonly UIActivityIndicatorView _playActivity = new(UIActivityIndicatorViewStyle.Large);
     private bool _isScrubbing;
+    private long _artworkEpisodeId;
+    private bool _artworkWasRequestedOnline;
 
     public NowPlayingViewController(MobileClientSession session)
     {
@@ -53,8 +55,20 @@ public sealed class NowPlayingViewController : UIViewController
         _artworkIcon.TranslatesAutoresizingMaskIntoConstraints = false;
         _artworkPanel.AddSubview(_artworkIcon);
         NSLayoutConstraint.ActivateConstraints([
-            _artworkIcon.CenterXAnchor.ConstraintEqualTo(_artworkPanel.CenterXAnchor),
-            _artworkIcon.CenterYAnchor.ConstraintEqualTo(_artworkPanel.CenterYAnchor)
+            _artworkIcon.LeadingAnchor.ConstraintEqualTo(_artworkPanel.LeadingAnchor),
+            _artworkIcon.TrailingAnchor.ConstraintEqualTo(_artworkPanel.TrailingAnchor),
+            _artworkIcon.TopAnchor.ConstraintEqualTo(_artworkPanel.TopAnchor),
+            _artworkIcon.BottomAnchor.ConstraintEqualTo(_artworkPanel.BottomAnchor)
+        ]);
+        var artworkStage = new UIView();
+        _artworkPanel.TranslatesAutoresizingMaskIntoConstraints = false;
+        artworkStage.AddSubview(_artworkPanel);
+        NSLayoutConstraint.ActivateConstraints([
+            _artworkPanel.CenterXAnchor.ConstraintEqualTo(artworkStage.CenterXAnchor),
+            _artworkPanel.CenterYAnchor.ConstraintEqualTo(artworkStage.CenterYAnchor),
+            _artworkPanel.WidthAnchor.ConstraintEqualTo(240),
+            _artworkPanel.HeightAnchor.ConstraintEqualTo(_artworkPanel.WidthAnchor),
+            artworkStage.HeightAnchor.ConstraintEqualTo(240)
         ]);
 
         _titleLabel.Font = (UIFont.PreferredTitle2 ?? UIFont.SystemFontOfSize(24, UIFontWeight.Bold))!;
@@ -129,7 +143,7 @@ public sealed class NowPlayingViewController : UIViewController
             Distribution = UIStackViewDistribution.FillEqually,
             Spacing = 10
         };
-        var content = new UIStackView([_artworkPanel, metadata, progress, controls, actions, _speedButton, _statusLabel])
+        var content = new UIStackView([artworkStage, metadata, progress, controls, actions, _speedButton, _statusLabel])
         {
             Axis = UILayoutConstraintAxis.Vertical,
             Alignment = UIStackViewAlignment.Fill,
@@ -137,7 +151,7 @@ public sealed class NowPlayingViewController : UIViewController
             Spacing = 20,
             TranslatesAutoresizingMaskIntoConstraints = false
         };
-        content.SetCustomSpacing(28, _artworkPanel);
+        content.SetCustomSpacing(28, artworkStage);
         content.SetCustomSpacing(26, progress);
         content.SetCustomSpacing(16, controls);
 
@@ -148,7 +162,6 @@ public sealed class NowPlayingViewController : UIViewController
             content.TopAnchor.ConstraintGreaterThanOrEqualTo(view.SafeAreaLayoutGuide.TopAnchor, 12),
             content.BottomAnchor.ConstraintLessThanOrEqualTo(view.SafeAreaLayoutGuide.BottomAnchor, -20),
             content.CenterYAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.CenterYAnchor),
-            _artworkPanel.HeightAnchor.ConstraintEqualTo(210),
             _backButton.WidthAnchor.ConstraintEqualTo(64),
             _backButton.HeightAnchor.ConstraintEqualTo(64),
             _playButton.WidthAnchor.ConstraintEqualTo(96),
@@ -260,6 +273,18 @@ public sealed class NowPlayingViewController : UIViewController
         _speedButton.Enabled = _session.CanControlPlayback;
         _speedButton.SetTitle(_session.SpeedText, UIControlState.Normal);
         var broadcast = _session.CurrentBroadcast;
+        if (broadcast is not null &&
+            (_artworkEpisodeId != broadcast.EpisodeId ||
+             (!_artworkWasRequestedOnline && _session.IsLiveConnected)))
+        {
+            _artworkEpisodeId = broadcast.EpisodeId;
+            _artworkWasRequestedOnline = _session.IsLiveConnected;
+            RadioVaultArtwork.Load(
+                _artworkIcon,
+                _session,
+                broadcast,
+                RadioVaultIcons.Image(RadioVaultIcon.Radio, size: 96, strokeWidth: 1.6f));
+        }
         _momentButton.Enabled = _session.CanControlPlayback && _session.IsLiveConnected;
         _infoButton.Enabled = broadcast is not null;
         _favouriteButton.Enabled = broadcast is not null && _session.IsLiveConnected;
