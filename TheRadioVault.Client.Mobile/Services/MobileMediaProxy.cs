@@ -48,6 +48,7 @@ public sealed class MobileMediaProxy : IDisposable
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { break; }
             catch (ObjectDisposedException) when (cancellationToken.IsCancellationRequested) { break; }
             catch (SocketException) when (cancellationToken.IsCancellationRequested) { break; }
+            catch { }
         }
     }
 
@@ -60,10 +61,16 @@ public sealed class MobileMediaProxy : IDisposable
             {
                 await using var stream = socket.GetStream();
                 var request = await ReadRequestAsync(stream, cancellationToken).ConfigureAwait(false);
-                var key = request?.Path.StartsWith("/media/", StringComparison.Ordinal) == true
+                if (request is null)
+                {
+                    await WriteErrorAsync(stream, 400, "Bad Request", cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                var key = request.Path.StartsWith("/media/", StringComparison.Ordinal)
                     ? request.Path[7..].Split('?', 2)[0]
                     : string.Empty;
-                if (request is null || !_routes.TryGetValue(key, out var serverPath))
+                if (!_routes.TryGetValue(key, out var serverPath))
                 {
                     await WriteErrorAsync(stream, 404, "Not Found", cancellationToken).ConfigureAwait(false);
                     return;
@@ -75,6 +82,11 @@ public sealed class MobileMediaProxy : IDisposable
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { }
             catch (IOException) { }
+            catch
+            {
+                try { await WriteErrorAsync(socket.GetStream(), 502, "Bad Gateway", CancellationToken.None).ConfigureAwait(false); }
+                catch { }
+            }
         }
     }
 
@@ -87,8 +99,7 @@ public sealed class MobileMediaProxy : IDisposable
             var read = await stream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
             if (read <= 0) return null;
             bytes.AddRange(buffer.AsSpan(0, read).ToArray());
-            var count = bytes.Count;
-            if (count >= 4 && bytes[count - 4] == '\r' && bytes[count - 3] == '\n' && bytes[count - 2] == '\r' && bytes[count - 1] == '\n')
+            if (ContainsHeaderTerminator(bytes))
                 break;
         }
         if (bytes.Count >= MaximumHeaderBytes) return null;
@@ -98,6 +109,16 @@ public sealed class MobileMediaProxy : IDisposable
         var range = lines.Skip(1).Select(line => line.Split(':', 2))
             .FirstOrDefault(parts => parts.Length == 2 && parts[0].Equals("Range", StringComparison.OrdinalIgnoreCase));
         return new ProxyRequest(first[1], first[0] == "HEAD", range is null ? null : range[1].Trim());
+    }
+
+    private static bool ContainsHeaderTerminator(IReadOnlyList<byte> bytes)
+    {
+        for (var index = 3; index < bytes.Count; index++)
+        {
+            if (bytes[index - 3] == '\r' && bytes[index - 2] == '\n' &&
+                bytes[index - 1] == '\r' && bytes[index] == '\n') return true;
+        }
+        return false;
     }
 
     private static async Task WriteResponseAsync(
@@ -112,6 +133,8 @@ public sealed class MobileMediaProxy : IDisposable
             .Append("Connection: close\r\nCache-Control: private, no-store\r\n");
         CopyHeader(response, headers, "Accept-Ranges");
         CopyHeader(response, headers, "Content-Range");
+        CopyHeader(response, headers, "ETag");
+        CopyHeader(response, headers, "Last-Modified");
         if (response.Content.Headers.ContentType is not null)
             headers.Append("Content-Type: ").Append(response.Content.Headers.ContentType).Append("\r\n");
         if (response.Content.Headers.ContentLength is long length)

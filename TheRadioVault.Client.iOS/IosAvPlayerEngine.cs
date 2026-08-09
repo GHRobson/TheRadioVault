@@ -13,6 +13,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
     private NSObject? _endObserver;
     private double _rate = 1d;
     private bool _muted;
+    private bool _playRequested;
     private MobilePlaybackSnapshot _current = new(false, false, TimeSpan.Zero, null);
     private bool _disposed;
 
@@ -54,7 +55,13 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
         {
             ThrowIfDisposed();
             if (_player is null) return;
-            _player.PlayImmediatelyAtRate((float)_rate);
+            ActivateAudioSessionLocked();
+            _playRequested = true;
+            // Play() preserves the request while a remote item is still loading.
+            // PlayImmediatelyAtRate() can leave Rate at zero for a live stream and
+            // previously made Radio Vault report the temporary wait as a pause.
+            _player.Play();
+            if (Math.Abs(_rate - 1d) > 0.001d) _player.Rate = (float)_rate;
             UpdateLocked();
         }
     }
@@ -64,6 +71,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
         lock (_gate)
         {
             ThrowIfDisposed();
+            _playRequested = false;
             _player?.Pause();
             UpdateLocked();
         }
@@ -89,7 +97,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
         {
             ThrowIfDisposed();
             _rate = Math.Clamp(rate, 0.5d, 3d);
-            if (_player?.Rate > 0.001f) _player.PlayImmediatelyAtRate((float)_rate);
+            if (_player is not null && _playRequested) _player.Rate = (float)_rate;
         }
     }
 
@@ -122,11 +130,18 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
         }
 
         var error = _player.Error?.LocalizedDescription ?? _player.CurrentItem?.Error?.LocalizedDescription ?? string.Empty;
+        if (_playRequested && string.IsNullOrWhiteSpace(error) &&
+            _player.CurrentItem?.Status == AVPlayerItemStatus.ReadyToPlay &&
+            _player.Rate <= 0.001f)
+        {
+            ActivateAudioSessionLocked();
+            _player.PlayImmediatelyAtRate((float)_rate);
+        }
         var seconds = _player.CurrentTime.Seconds;
         var position = double.IsFinite(seconds) && seconds >= 0 ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero;
         _current = new MobilePlaybackSnapshot(
             true,
-            _player.Rate > 0.001f,
+            _playRequested && string.IsNullOrWhiteSpace(error),
             position,
             ReadDurationLocked(),
             error);
@@ -144,6 +159,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
         lock (_gate)
         {
             if (_disposed) return;
+            _playRequested = false;
             UpdateLocked();
         }
         MediaEnded?.Invoke(this, EventArgs.Empty);
@@ -153,11 +169,19 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
 
     private void DisposePlayerLocked()
     {
+        _playRequested = false;
         _endObserver?.Dispose();
         _endObserver = null;
         _player?.Pause();
         _player?.Dispose();
         _player = null;
+    }
+
+    private static void ActivateAudioSessionLocked()
+    {
+        var audio = AVAudioSession.SharedInstance();
+        audio.SetCategory(AVAudioSessionCategory.Playback);
+        audio.SetActive(true);
     }
 
     private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
