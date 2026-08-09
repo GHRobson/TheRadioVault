@@ -66,7 +66,8 @@ public sealed class RadioVaultTabBarController : UITabBarController
         {
             TabBarItem = tabItem
         };
-        navigation.NavigationBar.PrefersLargeTitles = true;
+        navigation.NavigationBar.PrefersLargeTitles = false;
+        navigation.NavigationBar.Translucent = true;
         navigation.NavigationBar.Hidden = false;
         if (navigation.View is { } view) view.BackgroundColor = RadioVaultTheme.Background;
         return navigation;

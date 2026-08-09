@@ -208,7 +208,7 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
                 new DateTime(_year.Value, _month.Value, 1).ToString("MMMM yyyy"),
             _ => _rootTitle
         };
-        NavigationItem.Title = Title;
+        NavigationItem.Title = string.Empty;
         _header.SetMode(_isGridView);
         NavigationItem.LeftBarButtonItem = _level switch
         {

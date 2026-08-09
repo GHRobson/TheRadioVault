@@ -87,7 +87,11 @@ public sealed class HomeViewController : SessionTableViewController
             if (FeaturedContinue is not { } featured)
                 return DetailCell("dashboard-featured-empty", "Nothing waiting to resume", Session.StatusText);
             var cell = new DashboardContinueCell();
-            cell.Configure(featured, () => _ = Session.PlayAsync(featured));
+            cell.Configure(
+                featured,
+                Session.PreparingPlaybackEpisodeId == featured.EpisodeId,
+                Session.IsPlayingBroadcast(featured.EpisodeId),
+                () => HandleFeaturedPlayback(featured));
             return cell;
         }
 
@@ -133,7 +137,7 @@ public sealed class HomeViewController : SessionTableViewController
         tableView.DeselectRow(indexPath, true);
         if (indexPath.Section == 1 && FeaturedContinue is { } featured)
         {
-            _ = Session.PlayAsync(featured);
+            HandleFeaturedPlayback(featured);
             return;
         }
         if (indexPath.Section == 2)
@@ -175,5 +179,12 @@ public sealed class HomeViewController : SessionTableViewController
         libraryNavigation.PushViewController(
             new ShowLibraryViewController(Session, null, title, filter),
             true);
+    }
+
+    private void HandleFeaturedPlayback(MobileBroadcastItem featured)
+    {
+        if (Session.PreparingPlaybackEpisodeId == featured.EpisodeId) return;
+        if (Session.CanToggleBroadcast(featured.EpisodeId)) Session.TogglePlayPause();
+        else _ = Session.PlayAsync(featured);
     }
 }

@@ -115,6 +115,9 @@ public sealed class MobileClientSession : IDisposable
     public string PlaybackStatus { get; private set; } = "Ready";
     public bool IsPlaying => _playback.Current.IsPlaying;
     public bool CanControlPlayback => _playback.Current.IsOpen && _ownsPlayback;
+    public long? LocalPlaybackEpisodeId => SelectedBroadcast?.EpisodeId;
+    public long? PreparingPlaybackEpisodeId { get; private set; }
+    public bool IsPreparingPlayback => PreparingPlaybackEpisodeId is > 0;
     public double PlaybackProgress { get; private set; }
     public string PlaybackTime { get; private set; } = "0:00 / 0:00";
     public string SpeedText => $"{_speed:0.##}×";
@@ -147,6 +150,12 @@ public sealed class MobileClientSession : IDisposable
     public bool MiniPlayerCanAct => MiniPlayerShowsHandoff || CanControlPlayback;
     public MobileBroadcastItem? CurrentBroadcast => SelectedBroadcast ?? _remotePlaybackBroadcast;
 
+    public bool CanToggleBroadcast(long episodeId)
+        => CanControlPlayback && SelectedBroadcast?.EpisodeId == episodeId;
+
+    public bool IsPlayingBroadcast(long episodeId)
+        => CanToggleBroadcast(episodeId) && IsPlaying;
+
     public async Task InitializeAsync()
     {
         DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
@@ -155,6 +164,8 @@ public sealed class MobileClientSession : IDisposable
         if (IsPaired)
         {
             await _metadataCache.LoadAsync(_server.Connection?.ServerInstanceId ?? string.Empty).ConfigureAwait(false);
+            await _downloads.ReconcileSummariesAsync(_metadataCache.Snapshot.Broadcasts).ConfigureAwait(false);
+            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
             ApplyMetadataSnapshot();
         }
         Notify();
@@ -748,6 +759,8 @@ public sealed class MobileClientSession : IDisposable
         ArgumentNullException.ThrowIfNull(broadcast);
         if (IsBusy) return;
         IsBusy = true;
+        PreparingPlaybackEpisodeId = broadcast.EpisodeId;
+        PlaybackStatus = "Preparing downloaded broadcast…";
         Notify();
         try
         {
@@ -780,6 +793,7 @@ public sealed class MobileClientSession : IDisposable
             SelectedBroadcast = new MobileBroadcastItem(record.Summary);
             NowPlayingTitle = SelectedBroadcast.Title;
             NowPlayingSubtitle = SelectedBroadcast.Subtitle + " · Downloaded";
+            _incrementPlayCountPending = true;
             var position = Math.Clamp(record.Summary.PositionMs, 0, _logicalDurationMs);
             OpenLogicalPosition(position, play: true, muted: false);
             PlaybackStatus = "Playing download on this iPhone";
@@ -793,6 +807,7 @@ public sealed class MobileClientSession : IDisposable
         }
         finally
         {
+            PreparingPlaybackEpisodeId = null;
             IsBusy = false;
             Notify();
             NotifyPlayback();
@@ -905,6 +920,7 @@ public sealed class MobileClientSession : IDisposable
         ArgumentNullException.ThrowIfNull(broadcast);
         if (!IsPaired || IsBusy) return;
         IsBusy = true;
+        PreparingPlaybackEpisodeId = broadcast.EpisodeId;
         PlaybackStatus = "Preparing secure stream…";
         Notify();
         WebPlaybackTransferTicket? transfer = null;
@@ -1015,6 +1031,7 @@ public sealed class MobileClientSession : IDisposable
         }
         finally
         {
+            PreparingPlaybackEpisodeId = null;
             IsBusy = false;
             Notify();
             NotifyPlayback();
@@ -1167,12 +1184,19 @@ public sealed class MobileClientSession : IDisposable
                 if (SelectedBroadcast is not null && _playback.Current.IsOpen &&
                     (forceDurable || DateTimeOffset.UtcNow - _lastOfflineSave >= DurableProgressInterval))
                 {
+                    var position = CaptureLogicalPosition();
+                    var completed = IsCompleted();
                     await _downloads.UpdateProgressAsync(
                         SelectedBroadcast.EpisodeId,
-                        CaptureLogicalPosition(),
-                        IsCompleted()).ConfigureAwait(false);
+                        position,
+                        completed).ConfigureAwait(false);
                     DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
                     _lastOfflineSave = DateTimeOffset.UtcNow;
+                    if (IsPaired && IsLiveConnected)
+                        await SynchronizeDownloadedProgressWithServerAsync(
+                            SelectedBroadcast.EpisodeId,
+                            position,
+                            completed).ConfigureAwait(false);
                     Notify();
                 }
                 return;
@@ -1526,6 +1550,9 @@ public sealed class MobileClientSession : IDisposable
                 ? await _server.GetOverviewAsync().ConfigureAwait(false)
                 : null;
             _metadataCache.ApplyLibrarySync(sync, completeLibrary, changed, deleted, overview);
+            await SynchronizeStoredDownloadedProgressWithServerAsync().ConfigureAwait(false);
+            await _downloads.ReconcileSummariesAsync(_metadataCache.Snapshot.Broadcasts).ConfigureAwait(false);
+            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
             ApplyMetadataSnapshot();
 
             var exploreChanged = forceExploreRefresh || snapshot.ExploreOverview is null ||
@@ -1554,6 +1581,80 @@ public sealed class MobileClientSession : IDisposable
             _metadataSyncGate.Release();
         }
         if (warmExplore) _ = RefreshExploreCacheAsync(warmEntireCache: true);
+    }
+
+    private async Task SynchronizeDownloadedProgressWithServerAsync(
+        long episodeId,
+        long positionMs,
+        bool completed)
+    {
+        try
+        {
+            var incrementPlayCount = _incrementPlayCountPending;
+            var result = await _server.SaveProgressAsync(new WebOfflineProgressUpdate(
+                _server.ClientId,
+                episodeId,
+                positionMs,
+                _logicalDurationMs,
+                Completed: completed,
+                Speed: _speed,
+                CapturedAt: DateTimeOffset.UtcNow,
+                AllowRewind: false,
+                ExpectedGeneration: 0,
+                ExplicitSeek: false,
+                IncrementPlayCount: incrementPlayCount)).ConfigureAwait(false);
+            if (result.Conflict) return;
+            _incrementPlayCountPending = incrementPlayCount && !result.Changed;
+            var canonical = await _server.GetBroadcastSummaryAsync(episodeId).ConfigureAwait(false);
+            _metadataCache.UpsertBroadcast(canonical);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            await _downloads.ReconcileSummariesAsync([canonical]).ConfigureAwait(false);
+            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+            ApplyMetadataSnapshot();
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.WriteLine($"[iOS downloaded progress sync] {exception}");
+        }
+    }
+
+    private async Task SynchronizeStoredDownloadedProgressWithServerAsync()
+    {
+        if (!IsLiveConnected) return;
+        var serverByEpisode = _metadataCache.Snapshot.Broadcasts
+            .ToDictionary(value => value.RepresentativeEpisodeId);
+        var localDownloads = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+        foreach (var local in localDownloads)
+        {
+            if (!serverByEpisode.TryGetValue(local.EpisodeId, out var server)) continue;
+            var localPlayedAt = local.Source.LastPlayedAt ?? DateTimeOffset.MinValue;
+            var serverPlayedAt = server.LastPlayedAt ?? DateTimeOffset.MinValue;
+            var hasNewerOfflineProgress = localPlayedAt > serverPlayedAt ||
+                                          (serverPlayedAt == DateTimeOffset.MinValue &&
+                                           (local.Source.PositionMs > server.PositionMs ||
+                                            (local.Source.Completed && !server.Completed)));
+            if (!hasNewerOfflineProgress) continue;
+            try
+            {
+                var result = await _server.SaveProgressAsync(new WebOfflineProgressUpdate(
+                    _server.ClientId,
+                    local.EpisodeId,
+                    local.Source.PositionMs,
+                    Math.Max(local.Source.DurationMs, server.DurationMs),
+                    Completed: local.Source.Completed,
+                    Speed: _speed,
+                    CapturedAt: local.Source.LastPlayedAt,
+                    AllowRewind: false,
+                    ExpectedGeneration: 0)).ConfigureAwait(false);
+                if (result.Conflict) continue;
+                var canonical = await _server.GetBroadcastSummaryAsync(local.EpisodeId).ConfigureAwait(false);
+                _metadataCache.UpsertBroadcast(canonical);
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Trace.WriteLine($"[iOS stored downloaded progress sync] {exception}");
+            }
+        }
     }
 
     private async Task<IReadOnlyList<WebClientLibraryBroadcastSummary>> FetchCompleteLibraryAsync()

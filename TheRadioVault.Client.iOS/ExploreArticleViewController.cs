@@ -16,7 +16,6 @@ public sealed class ExploreArticleViewController : SessionTableViewController
     {
         _summary = summary ?? throw new ArgumentNullException(nameof(summary));
         Title = summary.Title;
-        NavigationItem.Title = summary.Title;
     }
 
     public override void ViewDidLoad()
@@ -137,7 +136,6 @@ public sealed class ExploreArticleViewController : SessionTableViewController
             if (document is not null)
             {
                 Title = document.Title;
-                NavigationItem.Title = document.Title;
             }
             TableView.ReloadData();
         });

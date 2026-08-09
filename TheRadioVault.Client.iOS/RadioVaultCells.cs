@@ -303,6 +303,7 @@ internal sealed class DashboardContinueCell : UITableViewCell
     private readonly UILabel _progressText = new();
     private readonly UIProgressView _progress = new(UIProgressViewStyle.Default);
     private readonly UIButton _resume = UIButton.FromType(UIButtonType.System);
+    private readonly UIActivityIndicatorView _resumeActivity = new(UIActivityIndicatorViewStyle.Medium);
     private Action? _resumeAction;
 
     public DashboardContinueCell() : base(UITableViewCellStyle.Default, "dashboard-continue")
@@ -345,6 +346,10 @@ internal sealed class DashboardContinueCell : UITableViewCell
         _resume.BackgroundColor = RadioVaultTheme.Accent;
         _resume.Layer.CornerRadius = 10;
         _resume.TouchUpInside += (_, _) => _resumeAction?.Invoke();
+        _resumeActivity.Color = RadioVaultTheme.Background;
+        _resumeActivity.HidesWhenStopped = true;
+        _resumeActivity.TranslatesAutoresizingMaskIntoConstraints = false;
+        _resume.AddSubview(_resumeActivity);
 
         var metadata = new UIStackView([_collection, _date, _title])
         {
@@ -382,11 +387,13 @@ internal sealed class DashboardContinueCell : UITableViewCell
             artwork.WidthAnchor.ConstraintEqualTo(90),
             artwork.HeightAnchor.ConstraintEqualTo(90),
             _progressText.WidthAnchor.ConstraintEqualTo(76),
-            _resume.HeightAnchor.ConstraintEqualTo(42)
+            _resume.HeightAnchor.ConstraintEqualTo(42),
+            _resumeActivity.CenterYAnchor.ConstraintEqualTo(_resume.CenterYAnchor),
+            _resumeActivity.CenterXAnchor.ConstraintEqualTo(_resume.CenterXAnchor, -46)
         ]);
     }
 
-    public void Configure(MobileBroadcastItem item, Action resume)
+    public void Configure(MobileBroadcastItem item, bool isLoading, bool isPlaying, Action resume)
     {
         _collection.Text = item.Source.CollectionName;
         _date.Text = item.Source.AirDate?.ToString("dddd, d MMMM yyyy") ?? "Date unknown";
@@ -394,6 +401,10 @@ internal sealed class DashboardContinueCell : UITableViewCell
         _progress.Progress = (float)(item.DisplayProgress / 100d);
         _progressText.Text = $"{item.DisplayProgress:0}% listened";
         _resumeAction = resume;
+        _resume.Enabled = !isLoading;
+        _resume.SetTitle(isLoading ? "   Loading…" : isPlaying ? "Pause" : "Resume", UIControlState.Normal);
+        if (isLoading) _resumeActivity.StartAnimating(); else _resumeActivity.StopAnimating();
+        _resume.AccessibilityLabel = isLoading ? $"Loading {item.Title}" : isPlaying ? $"Pause {item.Title}" : $"Resume {item.Title}";
         AccessibilityLabel = $"Continue listening, {item.Title}, {item.DisplayProgress:0} percent listened";
     }
 }

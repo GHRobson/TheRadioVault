@@ -28,6 +28,8 @@ public abstract class SessionTableViewController : UITableViewController
         TableView.BackgroundColor = RadioVaultTheme.Background;
         TableView.SeparatorColor = RadioVaultTheme.Border;
         TableView.SectionHeaderTopPadding = 12;
+        NavigationItem.Title = string.Empty;
+        NavigationItem.BackButtonDisplayMode = UINavigationItemBackButtonDisplayMode.Minimal;
         if (!string.IsNullOrWhiteSpace(PageHeading))
             TableView.TableHeaderView = new PageHeaderView(PageHeading, PageDescription);
     }
@@ -35,7 +37,7 @@ public abstract class SessionTableViewController : UITableViewController
     public override void ViewWillAppear(bool animated)
     {
         base.ViewWillAppear(animated);
-        NavigationItem.Title = UsesInlinePageHeading ? string.Empty : Title;
+        NavigationItem.Title = string.Empty;
         NavigationController?.SetNavigationBarHidden(false, animated);
         UpdateConnectionIndicator();
     }

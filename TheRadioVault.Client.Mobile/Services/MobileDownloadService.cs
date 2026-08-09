@@ -304,6 +304,34 @@ public sealed class MobileDownloadService
         finally { _gate.Release(); }
     }
 
+    public async Task ReconcileSummariesAsync(
+        IEnumerable<WebClientLibraryBroadcastSummary> summaries,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(summaries);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var changed = false;
+            foreach (var summary in summaries)
+            {
+                if (!_records.TryGetValue(summary.RepresentativeEpisodeId, out var record)) continue;
+                var local = record.Summary;
+                var serverPlayedAt = summary.LastPlayedAt ?? DateTimeOffset.MinValue;
+                var localPlayedAt = local.LastPlayedAt ?? DateTimeOffset.MinValue;
+                var serverIsNewer = serverPlayedAt >= localPlayedAt ||
+                                    summary.PositionMs > local.PositionMs ||
+                                    (summary.Completed && !local.Completed);
+                if (!serverIsNewer || summary == local) continue;
+                _records[record.EpisodeId] = record with { Summary = summary };
+                changed = true;
+            }
+            if (changed) await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+        }
+        finally { _gate.Release(); }
+    }
+
     private async Task EnsureLoadedUnsafeAsync(CancellationToken cancellationToken)
     {
         if (_loaded) return;

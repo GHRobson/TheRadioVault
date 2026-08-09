@@ -1474,6 +1474,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(dashboard.Contains("Unheard broadcasts", StringComparison.Ordinal));
     True(dashboard.Contains("ConfigureInteractive", StringComparison.Ordinal));
     True(dashboard.Contains("OpenLibrarySection", StringComparison.Ordinal));
+    True(dashboard.Contains("IsPlayingBroadcast", StringComparison.Ordinal));
+    True(dashboard.Contains("PreparingPlaybackEpisodeId", StringComparison.Ordinal));
+    True(dashboard.Contains("HandleFeaturedPlayback", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
@@ -1514,6 +1517,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosCells.Contains("BroadcastHeroCell", StringComparison.Ordinal));
     True(iosCells.Contains("ExploreImageGalleryCell", StringComparison.Ordinal));
     True(iosCells.Contains("ExploreArticleImageCell", StringComparison.Ordinal));
+    True(iosCells.Contains("UIActivityIndicatorView", StringComparison.Ordinal));
+    True(iosCells.Contains("isPlaying ? \"Pause\" : \"Resume\"", StringComparison.Ordinal));
+    True(iosCells.Contains("Loading…", StringComparison.Ordinal));
 
     var iosTableBase = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SessionTableViewController.cs"));
@@ -1523,6 +1529,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosTableBase.Contains("ShowsSyncIndicator", StringComparison.Ordinal));
     True(iosTableBase.Contains("UsesInlinePageHeading", StringComparison.Ordinal));
     True(iosTableBase.Contains("RadioVaultIcon.Sync", StringComparison.Ordinal));
+    True(iosTableBase.Contains("NavigationItem.Title = string.Empty", StringComparison.Ordinal));
+    True(iosTableBase.Contains("UINavigationItemBackButtonDisplayMode.Minimal", StringComparison.Ordinal));
     True(!iosTableBase.Contains("UIImage.GetSystemImage", StringComparison.Ordinal));
 
     var upNext = File.ReadAllText(Path.Combine(
@@ -1570,8 +1578,11 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(theme.Contains("RadioVaultIcon.Offline", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Sync", StringComparison.Ordinal));
     True(theme.Contains("DrawSkip", StringComparison.Ordinal));
-    True(theme.Contains("(14.5, 4.5), (18, 6), (16.5, 9.5)", StringComparison.Ordinal));
-    True(theme.Contains("(16, 7), (20, 8), (18.5, 11.8)", StringComparison.Ordinal));
+    True(theme.Contains("ArrowHead", StringComparison.Ordinal));
+    True(theme.Contains("ConfigureWithTransparentBackground", StringComparison.Ordinal));
+    True(theme.Contains("Polygon(context, true, tip", StringComparison.Ordinal));
+    True(!theme.Contains("(14.5, 4.5), (18, 6), (16.5, 9.5)", StringComparison.Ordinal));
+    True(!theme.Contains("(16, 7), (20, 8), (18.5, 11.8)", StringComparison.Ordinal));
     True(theme.Contains("(3, 10.5), (13, 10.5)", StringComparison.Ordinal));
 
     var miniPlayer = File.ReadAllText(Path.Combine(
@@ -1580,6 +1591,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(miniPlayer.Contains("RadioVaultIcon.Handoff", StringComparison.Ordinal));
     True(miniPlayer.Contains("Move playback to this iPhone", StringComparison.Ordinal));
     True(miniPlayer.Contains("Layer.CornerRadius = 24", StringComparison.Ordinal));
+    True(miniPlayer.Contains("IsPreparingPlayback", StringComparison.Ordinal));
+    True(miniPlayer.Contains("UIActivityIndicatorView", StringComparison.Ordinal));
 
     var nowPlayingView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingViewController.cs"));
@@ -1593,6 +1606,14 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(nowPlayingView.Contains("_playButton.WidthAnchor.ConstraintEqualTo(96)", StringComparison.Ordinal));
     True(nowPlayingView.Contains("SeekToProgress", StringComparison.Ordinal));
     True(nowPlayingView.Contains("RadioVaultIcon.SkipBack, RadioVaultTheme.Accent", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("IsPreparingPlayback", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_playActivity.StartAnimating", StringComparison.Ordinal));
+
+    var downloadService = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
+    True(downloadService.Contains("ReconcileSummariesAsync", StringComparison.Ordinal));
+    True(downloadService.Contains("serverPlayedAt >= localPlayedAt", StringComparison.Ordinal));
+    True(downloadService.Contains("record with { Summary = summary }", StringComparison.Ordinal));
     True(nowPlayingView.Contains("RadioVaultIcon.Handoff, RadioVaultTheme.Accent", StringComparison.Ordinal));
 
     var metadataCache = File.ReadAllText(Path.Combine(
@@ -1615,6 +1636,12 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("ConfirmForeignOwner", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ObserveSharedPlaybackSafelyAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("if (!session.Player.IsPlaying)", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("SynchronizeDownloadedProgressWithServerAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("SynchronizeStoredDownloadedProgressWithServerAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("hasNewerOfflineProgress", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("AllowRewind: false", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("ExpectedGeneration: 0", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("_downloads.ReconcileSummariesAsync", StringComparison.Ordinal));
 
     var downloads = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));

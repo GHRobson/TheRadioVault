@@ -9,6 +9,7 @@ public sealed class RadioVaultMiniPlayerView : UIView
     private readonly UILabel _titleLabel = new();
     private readonly UILabel _subtitleLabel = new();
     private readonly UIButton _actionButton = UIButton.FromType(UIButtonType.System);
+    private readonly UIActivityIndicatorView _activity = new(UIActivityIndicatorViewStyle.Medium);
     private readonly UIProgressView _progress = new(UIProgressViewStyle.Default);
 
     public RadioVaultMiniPlayerView(MobileClientSession session)
@@ -31,6 +32,10 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _subtitleLabel.Lines = 1;
         _subtitleLabel.LineBreakMode = UILineBreakMode.TailTruncation;
         _actionButton.TouchUpInside += (_, _) => _session.MiniPlayerAction();
+        _activity.Color = RadioVaultTheme.Accent;
+        _activity.HidesWhenStopped = true;
+        _activity.TranslatesAutoresizingMaskIntoConstraints = false;
+        _actionButton.AddSubview(_activity);
 
         var labels = new UIStackView([_titleLabel, _subtitleLabel])
         {
@@ -58,6 +63,8 @@ public sealed class RadioVaultMiniPlayerView : UIView
             row.BottomAnchor.ConstraintEqualTo(_progress.TopAnchor, -6),
             _actionButton.WidthAnchor.ConstraintEqualTo(44),
             _actionButton.HeightAnchor.ConstraintEqualTo(44),
+            _activity.CenterXAnchor.ConstraintEqualTo(_actionButton.CenterXAnchor),
+            _activity.CenterYAnchor.ConstraintEqualTo(_actionButton.CenterYAnchor),
             _progress.LeadingAnchor.ConstraintEqualTo(LeadingAnchor),
             _progress.TrailingAnchor.ConstraintEqualTo(TrailingAnchor),
             _progress.BottomAnchor.ConstraintEqualTo(BottomAnchor)
@@ -80,14 +87,18 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _titleLabel.Text = _session.MiniPlayerTitle;
         _subtitleLabel.Text = _session.MiniPlayerSubtitle;
         _progress.Progress = (float)_session.MiniPlayerProgress;
-        _actionButton.SetImage(
-            _session.MiniPlayerShowsHandoff
+        var loading = _session.IsPreparingPlayback;
+        if (loading) _activity.StartAnimating(); else _activity.StopAnimating();
+        _actionButton.SetImage(loading
+            ? null
+            : _session.MiniPlayerShowsHandoff
                 ? RadioVaultIcons.Image(RadioVaultIcon.Handoff)
-                : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play),
-            UIControlState.Normal);
+                : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play), UIControlState.Normal);
         _actionButton.TintColor = RadioVaultTheme.Progress;
-        _actionButton.Enabled = _session.MiniPlayerCanAct;
-        _actionButton.AccessibilityLabel = _session.MiniPlayerShowsHandoff
+        _actionButton.Enabled = !loading && _session.MiniPlayerCanAct;
+        _actionButton.AccessibilityLabel = loading
+            ? "Loading broadcast"
+            : _session.MiniPlayerShowsHandoff
             ? "Move playback to this iPhone"
             : _session.IsPlaying ? "Pause" : "Play";
         AccessibilityLabel = $"Now Playing, {_session.MiniPlayerTitle}, {_session.MiniPlayerSubtitle}";

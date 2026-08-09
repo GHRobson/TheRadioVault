@@ -20,6 +20,7 @@ public sealed class NowPlayingViewController : UIViewController
     private readonly UIButton _momentButton = UIButton.FromType(UIButtonType.System);
     private readonly UIButton _infoButton = UIButton.FromType(UIButtonType.System);
     private readonly UIButton _favouriteButton = UIButton.FromType(UIButtonType.System);
+    private readonly UIActivityIndicatorView _playActivity = new(UIActivityIndicatorViewStyle.Large);
     private bool _isScrubbing;
 
     public NowPlayingViewController(MobileClientSession session)
@@ -41,6 +42,8 @@ public sealed class NowPlayingViewController : UIViewController
             UIBarButtonItemStyle.Plain,
             (_, _) => NavigationController?.PushViewController(new UpNextViewController(_session), true));
         NavigationItem.LeftBarButtonItem.AccessibilityLabel = "Up Next";
+        NavigationItem.Title = string.Empty;
+        NavigationItem.BackButtonDisplayMode = UINavigationItemBackButtonDisplayMode.Minimal;
 
         _artworkPanel.BackgroundColor = RadioVaultTheme.Surface;
         _artworkPanel.Layer.CornerRadius = 24;
@@ -81,6 +84,10 @@ public sealed class NowPlayingViewController : UIViewController
         ConfigureButton(_backButton, RadioVaultIcons.Image(RadioVaultIcon.SkipBack, RadioVaultTheme.Accent, 42), "Back 15 seconds", _session.SkipBack);
         ConfigureButton(_playButton, RadioVaultIcons.Image(RadioVaultIcon.Play, RadioVaultTheme.Accent, 68, 1.5f), "Play or pause", _session.MiniPlayerAction);
         ConfigureButton(_forwardButton, RadioVaultIcons.Image(RadioVaultIcon.SkipForward, RadioVaultTheme.Accent, 42), "Forward 30 seconds", _session.SkipForward);
+        _playActivity.Color = RadioVaultTheme.Accent;
+        _playActivity.HidesWhenStopped = true;
+        _playActivity.TranslatesAutoresizingMaskIntoConstraints = false;
+        _playButton.AddSubview(_playActivity);
         _backButton.TintColor = RadioVaultTheme.Accent;
         _forwardButton.TintColor = RadioVaultTheme.Accent;
         _speedButton.TouchUpInside += (_, _) => _session.CycleSpeed();
@@ -146,6 +153,8 @@ public sealed class NowPlayingViewController : UIViewController
             _backButton.HeightAnchor.ConstraintEqualTo(64),
             _playButton.WidthAnchor.ConstraintEqualTo(96),
             _playButton.HeightAnchor.ConstraintEqualTo(96),
+            _playActivity.CenterXAnchor.ConstraintEqualTo(_playButton.CenterXAnchor),
+            _playActivity.CenterYAnchor.ConstraintEqualTo(_playButton.CenterYAnchor),
             _forwardButton.WidthAnchor.ConstraintEqualTo(64),
             _forwardButton.HeightAnchor.ConstraintEqualTo(64),
             actions.HeightAnchor.ConstraintEqualTo(48),
@@ -232,14 +241,20 @@ public sealed class NowPlayingViewController : UIViewController
             : _session.PlaybackStatus;
         _timeLabel.Text = _session.PlaybackTime;
         if (!_isScrubbing) _progressSlider.Value = (float)_session.PlaybackProgress;
-        _playButton.SetImage(
-            _session.MiniPlayerShowsHandoff
+        var loading = _session.IsPreparingPlayback;
+        if (loading) _playActivity.StartAnimating(); else _playActivity.StopAnimating();
+        _playButton.SetImage(loading
+            ? null
+            : _session.MiniPlayerShowsHandoff
                 ? RadioVaultIcons.Image(RadioVaultIcon.Handoff, RadioVaultTheme.Accent, 68, 1.5)
                 : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play, RadioVaultTheme.Accent, 68, 1.5f),
             UIControlState.Normal);
         _playButton.TintColor = RadioVaultTheme.Accent;
         _backButton.Enabled = _session.CanControlPlayback;
-        _playButton.Enabled = _session.MiniPlayerCanAct;
+        _playButton.Enabled = !loading && _session.MiniPlayerCanAct;
+        _playButton.AccessibilityLabel = loading ? "Loading broadcast" : _session.MiniPlayerShowsHandoff
+            ? "Move playback to this iPhone"
+            : _session.IsPlaying ? "Pause" : "Play";
         _forwardButton.Enabled = _session.CanControlPlayback;
         _progressSlider.Enabled = _session.CanControlPlayback;
         _speedButton.Enabled = _session.CanControlPlayback;

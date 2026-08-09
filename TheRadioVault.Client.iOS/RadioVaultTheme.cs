@@ -27,9 +27,9 @@ public static class RadioVaultTheme
     public static void ApplyGlobalAppearance()
     {
         var navigation = new UINavigationBarAppearance();
-        navigation.ConfigureWithOpaqueBackground();
-        navigation.BackgroundColor = Shell;
-        navigation.ShadowColor = Border;
+        navigation.ConfigureWithTransparentBackground();
+        navigation.BackgroundColor = UIColor.Clear;
+        navigation.ShadowColor = UIColor.Clear;
         navigation.TitleTextAttributes = new UIStringAttributes { ForegroundColor = Text };
         navigation.LargeTitleTextAttributes = new UIStringAttributes { ForegroundColor = Text };
         UINavigationBar.Appearance.StandardAppearance = navigation;
@@ -307,11 +307,11 @@ public static class RadioVaultIcons
                 context.MoveTo(4, 10);
                 context.AddCurveToPoint(5, 4, 15, 2, 20, 8);
                 context.StrokePath();
-                Lines(context, (16, 7), (20, 8), (18.5, 11.8));
+                ArrowHead(context, (20, 8), (15.7, 4.4), (16.8, 11.5));
                 context.MoveTo(20, 14);
                 context.AddCurveToPoint(19, 20, 9, 22, 4, 16);
                 context.StrokePath();
-                Lines(context, (8, 17), (4, 16), (5.5, 12.2));
+                ArrowHead(context, (4, 16), (8.3, 19.6), (7.2, 12.5));
                 break;
         }
     }
@@ -323,18 +323,18 @@ public static class RadioVaultIcons
             context.MoveTo(6, 6);
             context.AddCurveToPoint(2, 10, 3.5f, 17, 9, 19.5f);
             context.AddCurveToPoint(14.5f, 22, 21, 18, 20, 11);
-            context.AddCurveToPoint(19.6f, 8.6f, 18.7f, 7, 18, 6);
+            context.AddCurveToPoint(19.6f, 8.6f, 19, 7.4f, 20, 6);
             context.StrokePath();
-            Lines(context, (14.5, 4.5), (18, 6), (16.5, 9.5));
+            ArrowHead(context, (20, 6), (15.2, 3.8), (16.6, 10.1));
         }
         else
         {
             context.MoveTo(18, 6);
             context.AddCurveToPoint(22, 10, 20.5f, 17, 15, 19.5f);
             context.AddCurveToPoint(9.5f, 22, 3, 18, 4, 11);
-            context.AddCurveToPoint(4.4f, 8.6f, 5.3f, 7, 6, 6);
+            context.AddCurveToPoint(4.4f, 8.6f, 5, 7.4f, 4, 6);
             context.StrokePath();
-            Lines(context, (9.5, 4.5), (6, 6), (7.5, 9.5));
+            ArrowHead(context, (4, 6), (8.8, 3.8), (7.4, 10.1));
         }
 
         using var label = new NSString(seconds);
@@ -348,6 +348,13 @@ public static class RadioVaultIcons
             new CGPoint(12 - measured.Width / 2, 12 - measured.Height / 2),
             attributes);
     }
+
+    private static void ArrowHead(
+        CGContext context,
+        (double X, double Y) tip,
+        (double X, double Y) firstBase,
+        (double X, double Y) secondBase)
+        => Polygon(context, true, tip, firstBase, secondBase);
 
     private static void RoundedRect(CGContext context, CGRect rect, double radius)
     {
