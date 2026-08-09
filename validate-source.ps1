@@ -1005,8 +1005,8 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA9-
 $stableReadmeText = Get-Content (Join-Path $root "README.md") -Raw
 $stableBuildingText = Get-Content (Join-Path $root "BUILDING.md") -Raw
 $stableFoundationText = Get-Content (Join-Path $root "tools\Test-AvaloniaFoundation.ps1") -Raw
-foreach ($marker in @('# Radio Vault 0.35.0 Alpha 9', 'Radio Vault Server', 'Radio Vault Client', 'Radio Vault Web', 'not designed to be exposed directly to the public internet', '.trvknowledge')) {
-    if ($stableReadmeText -notmatch [regex]::Escape($marker)) { throw "0.35 Alpha 1 README marker missing: $marker" }
+foreach ($marker in @('<h1 align="center">Radio Vault</h1>', 'Bring your old radio collection back to life.', 'browse your collection by show, year, month and broadcast', 'Radio Vault Server', 'Radio Vault Web', 'Your collection stays on your own hardware', 'should not be exposed directly to the public internet')) {
+    if ($stableReadmeText -notmatch [regex]::Escape($marker)) { throw "Radio Vault marketing README marker missing: $marker" }
 }
 foreach ($marker in @('# Building Radio Vault 0.35.0 Alpha 9', 'package-server-installer.ps1', 'package-client-installer.ps1', 'SOURCE_MANIFEST.sha256.json')) {
     if ($stableBuildingText -notmatch [regex]::Escape($marker)) { throw "0.35 Alpha 1 build-guide marker missing: $marker" }

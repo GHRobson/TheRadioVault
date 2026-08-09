@@ -1,95 +1,105 @@
-# Radio Vault 0.35.0 Alpha 9 Buildfix 3
+<p align="center">
+  <img src="TheRadioVault.Desktop.Avalonia/Assets/RadioVault-Logo.png" width="160" alt="Radio Vault logo">
+</p>
 
-Radio Vault is a private broadcast archive with a dedicated Windows Server, native Windows, macOS and iOS Clients, and a browser-based Radio Vault Web client.
+<h1 align="center">Radio Vault</h1>
 
-## Architecture
+<p align="center"><strong>Bring your old radio collection back to life.</strong></p>
 
-Radio Vault Server runs on the computer that owns the archive. It is authoritative for:
+Radio Vault turns folders full of old radio recordings into a collection you can actually enjoy again.
 
-- the Library database and archive folders;
-- media streaming and shared playback state;
-- favourites, listening progress, queue and Moments;
-- Research records and Deep Research Packs;
-- transcription models, jobs, transcripts and remembered speakers;
-- device pairing, Radio Vault Web and playback handoff.
+If your archive has grown across hard drives, copied folders and years of inconsistently named files, Radio Vault gives it a home. It brings your recordings together in one searchable library, organises them around shows and broadcasts, and lets you listen from your computer, phone or tablet.
 
-The Server has a settings-only interface and can start automatically with Windows. Radio Vault Client supplies the complete native desktop interface and connects to the Server even when both are installed on the same computer. Radio Vault Web is served by the Server for phones, tablets and browsers on the private local network.
+Your collection stays on your own hardware and remains under your control.
 
-## Major features
+## Rediscover the radio you saved
 
-- Native-style Dashboard, Search, Library, Favourites, Moments, Explore, Knowledge, Downloads, Settings and Now Playing workspaces, with Transcription Studio inside Knowledge.
-- First-class support for Ron & Fez, Bennington, Opie & Anthony, The Ron & Ron Show, Ron Bennington Interviews and Unmasked.
-- Canonical multipart playback with shared progress, favourites, queue, Moments and listened/unlistened actions.
-- Transactional handoff between native and Web devices: playback remains at the source until the target decoder is ready and aligned.
-- Persistent encrypted Client caching, cache-first startup and automatic recovery after Server restarts or temporary network loss.
-- Phone and native downloads with integrity checking and offline playback.
-- Local whisper.cpp transcription, VAD and multi-speaker diarisation managed by the Server.
-- Full, sample and batch transcription with pause, resume, cancellation, retry, transcript review, speaker confirmation and subtitle exports.
-- One archive-wide portable Knowledge Database for every show and year, containing research records, Explore pages, citations, images, timelines and transcripts.
-- Advanced search across broadcasts, people, Research records and transcript speech.
-- Human-editable Explore pages with an article-first encyclopaedia reader, compact infoboxes, contents navigation, separate Home and Browse destinations, browser-style Back/Forward navigation and reading as the default.
-- Rendered Explore articles with automatic inline links, contents, infoboxes, backlinks, related pages, missing-page indicators, dated/captioned images, Broadcast Info links and revision history.
-- Engaging Wiki and Research dashboards spanning knowledge coverage, archive range, featured pages, shows, people, topics, eras, recent changes and On this date.
-- Combined citation, broken-link, duplicate-page and orphan-page auditing.
-- Canonical topic identities with automatic safe deduplication, aliases, merge history and ranked review suggestions across Research, tags and Wiki pages.
-- Clickable people and topic chips throughout the native client and Radio Vault Web, with related Wiki pages surfaced from the Library, Broadcast Info, Now Playing, Search and Research.
-- A read-focused Radio Vault Web Wiki for exploring the same pages, images, sources and timelines on phones and browsers.
-- Archive-aware starter pages for shows, recurring people and topics, generated without overwriting existing human work.
-- Portable `.trvknowledge` databases for AI-assisted enrichment, with an embedded AI handbook and schema guide, integrity-checked atomic export, retained pre-import backups, page-identity reconciliation, import preview and protected human edits.
+Old radio collections are often difficult to explore. A single broadcast may be split across several files. Dates may be incomplete. The same recording may appear more than once, and finding a particular guest or conversation can mean searching through hundreds of filenames.
 
-## Installation
+Radio Vault is designed for exactly this kind of archive. It helps you:
 
-Install **Radio Vault Server** on the computer containing the main archive. Add the Library folders in Server Settings and leave the Server running in the background.
+- browse your collection by show, year, month and broadcast;
+- bring multi-part recordings together as one listening experience;
+- search for shows, guests, topics and words spoken in transcripts;
+- separate broadcasts from duplicate files and alternative recordings;
+- keep undated or uncertain recordings visible instead of losing them;
+- see what you have listened to and what is still waiting to be heard.
 
-Install **Radio Vault Client** on every Windows computer where you want the native interface. A Client on the Server computer uses the local loopback connection automatically; another computer can pair using the code created in Server Settings.
+Radio Vault has especially deep recognition for collections containing shows such as **Ron & Fez**, **Bennington**, **Opie & Anthony**, **The Ron & Ron Show**, **Ron Bennington Interviews** and **Unmasked**, while its library is designed to hold other radio collections too.
 
-The macOS Client is currently an Apple Silicon alpha. It connects to the same
-Windows Server and uses the same pairing, cache, download, playback and handoff
-contracts. See [MACOS-CLIENT.md](MACOS-CLIENT.md) for build and on-Mac acceptance instructions.
+## Made for listening
 
-The iOS Client is an early iPhone and iPad alpha built with native UIKit
-controls and navigation. It provides local-network discovery and pairing, a
-mobile Dashboard and searchable Library, canonical multipart playback, native
-Now Playing controls, lock-screen and Control Centre transport commands,
-an Apple Music-style mini player, show-based Library navigation, persistent
-verified downloads with offline multipart playback, broadcast information,
-smart Library collections, Favourites and a fully manageable shared Up Next
-queue. Downloads expose storage usage, Wi-Fi-only policy, pause, byte-range
-resume and cancellation. The client also provides generation-safe playback handoff,
-five-second progress synchronisation and secure Keychain storage. When another
-device owns playback, the mini-player transport becomes an explicit handoff
-action. It uses
-the existing Server v1 API with certificate pinning; no iOS-specific Server is
-required. See [BUILDING.md](BUILDING.md#ios-client) for the Simulator build.
+Radio Vault is not just a catalogue. It is a full player for long-form radio.
 
-Use the Radio Vault Web QR code in Client or Server Settings to connect a phone on the same private network.
+- Start a broadcast on one device and continue from the same place on another.
+- Pause today and return days later without losing your position.
+- Play multi-part recordings on one continuous timeline.
+- Build an Up Next queue for long listening sessions.
+- Mark broadcasts as favourites, played or still to be heard.
+- Save memorable points as Moments so you can return to them later.
+- Download broadcasts to your phone or computer for offline listening.
+- Control playback from the iPhone lock screen and Control Centre.
 
-The installers preserve the authoritative database, archive-folder configuration, models, transcripts, certificates, paired-device trust, preferences and encrypted caches during upgrades.
+When another device is already playing, Radio Vault can hand playback over deliberately, keeping the same broadcast and listening position.
 
-## Network scope
+## A library that feels like a collection
 
-Radio Vault 0.35 Alpha 6 supports the Server computer, paired local-network Clients and Radio Vault Web on the private LAN. It is not designed to be exposed directly to the public internet. Internet remote access remains reserved for a later release with a dedicated security boundary.
+The Dashboard gives you a quick way back into your archive, including recently played broadcasts, listening progress and suggestions from your own collection.
 
-Research and Wiki exchange now use one inspectable `.trvknowledge` Archive Knowledge Database.
+The Library lets you move naturally from shows to years, months and individual broadcasts. Search helps you find a date, guest or topic without remembering the original filename. Filters make it easy to hide completed shows or concentrate on recordings you have not heard yet.
 
-## Build and validation
+Artwork, broadcast details, favourites, listening history and saved Moments stay connected to the broadcast wherever you listen.
 
-From a source checkout on Windows with the .NET 8 SDK:
+## Explore the stories inside your archive
 
-```powershell
-.\release-gate.ps1
-```
+For collections that deserve more than a list of files, Radio Vault includes an Explore area inspired by an encyclopaedia.
 
-The release gate validates the source architecture, builds the solution deterministically with warnings treated as errors, runs the complete smoke suite and verifies the product version.
+You can build pages about shows, people, topics and eras; connect them to broadcasts; add images, sources and timelines; and move between related pages as you would on a wiki. Transcripts make spoken content searchable and help turn a large audio archive into something you can research as well as hear.
 
-See [BUILDING.md](BUILDING.md) for build, publish and installer details. Historical acceptance contracts and alpha release notes are preserved in the [release-notes archive](docs/history/release-notes/README.md), including the [current 0.35 acceptance guide](docs/history/release-notes/V0.35.0-ALPHA9-KNOWLEDGE-PORTABILITY.md), the [unified knowledge format foundation](docs/history/release-notes/V0.35.0-ALPHA6-UNIFIED-KNOWLEDGE.md) and the [previous 0.34 stable contract](docs/history/release-notes/V0.34.0-STABLE.md).
+These features are optional. Radio Vault remains useful as a straightforward organiser and player even if you never create a transcript or an Explore page.
 
-## Shared development
+## Listen around your home
 
-The Windows Client, Windows Server, macOS Client and iOS Client are maintained from this
-one repository. Do not keep separate platform copies of the source. Every
-change should use a short-lived branch and pass Windows, macOS and iOS GitHub
-Actions checks before it is merged into `main`.
+One Windows computer runs **Radio Vault Server** and looks after the main collection. You can then use Radio Vault from:
 
-See [DEVELOPMENT.md](DEVELOPMENT.md) for the Git and Codex workflow used on each
-development computer.
+- the full Windows desktop client;
+- the Apple Silicon Mac client;
+- the native iPhone and iPad app;
+- Radio Vault Web in a browser on your local network.
+
+Pairing a device is designed to be simple: create a pairing code in Settings, enter it on the new device, and the same library becomes available there.
+
+## Private by design
+
+Radio Vault is made for personal archives. Your recordings, listening history, transcripts and research stay on the computers and devices you control. The current version is intended for use on a private home network and should not be exposed directly to the public internet.
+
+Radio Vault does not require you to upload your collection to a streaming service or hand it over to a third-party media library.
+
+## Current availability
+
+Radio Vault is under active development and is currently an **alpha** release.
+
+- Radio Vault Server runs on Windows.
+- The Windows client provides the complete desktop experience.
+- The Apple Silicon Mac client connects to the same server and library.
+- The native iPhone and iPad client supports browsing, playback, downloads, Up Next and handoff.
+- Radio Vault Web provides convenient access from other browsers on the same network.
+
+The project is already suitable for hands-on testing with a real collection, but installers and features are still being refined before a wider public release.
+
+## Getting started
+
+1. Install Radio Vault Server on the Windows computer that holds your collection.
+2. Add the folders containing your radio recordings.
+3. Install Radio Vault on the computers and phones where you want to listen.
+4. Pair each device with the server and start exploring your library.
+
+See [Building and installation](BUILDING.md) for the current installation options and [Using the Mac client](MACOS-CLIENT.md) for Mac-specific guidance.
+
+## About the project
+
+Radio Vault grew from a simple idea: old radio recordings should feel like a living collection, not forgotten files in a folder.
+
+The Windows Server, Windows client, Mac client, iPhone and iPad app, and browser experience are maintained together in this repository so that the library and listening experience can stay consistent across every device.
+
+For contributors, [DEVELOPMENT.md](DEVELOPMENT.md) explains the shared development workflow. Earlier release and acceptance notes are preserved in the [historical release archive](docs/history/release-notes/README.md).

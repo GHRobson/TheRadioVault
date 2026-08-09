@@ -1888,12 +1888,14 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
     }
 
     var readme = File.ReadAllText(Path.Combine(SourceRoot(), "README.md"));
-    True(readme.StartsWith("# Radio Vault 0.35.0 Alpha 9 Buildfix 3", StringComparison.Ordinal));
+    True(readme.Contains("<h1 align=\"center\">Radio Vault</h1>", StringComparison.Ordinal));
+    True(readme.Contains("Bring your old radio collection back to life.", StringComparison.Ordinal));
+    True(readme.Contains("browse your collection by show, year, month and broadcast", StringComparison.Ordinal));
     True(readme.Contains("Radio Vault Server", StringComparison.Ordinal));
-    True(readme.Contains("Radio Vault Client", StringComparison.Ordinal));
     True(readme.Contains("Radio Vault Web", StringComparison.Ordinal));
-    True(readme.Contains("not designed to be exposed directly to the public internet", StringComparison.Ordinal));
-    True(readme.Contains(".trvknowledge", StringComparison.Ordinal));
+    True(readme.Contains("Your collection stays on your own hardware", StringComparison.Ordinal));
+    True(readme.Contains("should not be exposed directly to the public internet", StringComparison.Ordinal));
+    True(readme.Contains("currently an **alpha** release", StringComparison.Ordinal));
 
     var building = File.ReadAllText(Path.Combine(SourceRoot(), "BUILDING.md"));
     True(building.StartsWith("# Building Radio Vault 0.35.0 Alpha 9 Buildfix 3", StringComparison.Ordinal));
