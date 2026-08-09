@@ -33,7 +33,7 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
         0 => 3,
-        1 => 4,
+        1 => 5,
         2 => 1,
         3 => DetailFields().Count,
         _ => 0
@@ -73,13 +73,16 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
                 0 => (_broadcast.HasProgress ? "Resume" : "Play", UIImage.GetSystemImage("play.fill")),
                 1 => (_broadcast.Source.Favourite ? "Remove from Favourites" : "Add to Favourites",
                     UIImage.GetSystemImage(_broadcast.Source.Favourite ? "heart.fill" : "heart")),
-                2 => ("Add to shared queue", UIImage.GetSystemImage("text.badge.plus")),
+                2 => ("Play Next", UIImage.GetSystemImage("text.line.first.and.arrowtriangle.forward")),
+                3 => ("Play Last", UIImage.GetSystemImage("text.badge.plus")),
                 _ when Session.IsDownloading && Session.ActiveDownloadEpisodeId == _broadcast.EpisodeId
                     => ("Downloading…", UIImage.GetSystemImage("arrow.down.circle")),
+                _ when Session.IsDownloadPaused && Session.ActiveDownloadEpisodeId == _broadcast.EpisodeId
+                    => ("Resume Download", UIImage.GetSystemImage("arrow.clockwise.circle")),
                 _ when _isDownloaded => ("Remove Download", UIImage.GetSystemImage("trash")),
                 _ => ("Download to this iPhone", UIImage.GetSystemImage("arrow.down.circle"))
             };
-            content.TextProperties.Color = indexPath.Row == 3 && _isDownloaded
+            content.TextProperties.Color = indexPath.Row == 4 && _isDownloaded
                 ? UIColor.SystemRed
                 : UIColor.SystemBlue;
             cell.ContentConfiguration = content;
@@ -116,12 +119,18 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
                 _ = ToggleFavouriteAsync();
                 break;
             case 2:
-                _ = AddToQueueAsync();
-                break;
-            case 3 when _isDownloaded:
-                ConfirmRemoveDownload();
+                _ = AddToQueueAsync(playNext: true);
                 break;
             case 3:
+                _ = AddToQueueAsync(playNext: false);
+                break;
+            case 4 when _isDownloaded:
+                ConfirmRemoveDownload();
+                break;
+            case 4 when Session.IsDownloadPaused && Session.ActiveDownloadEpisodeId == _broadcast.EpisodeId:
+                _ = Session.ResumeDownloadAsync();
+                break;
+            case 4:
                 _ = DownloadAsync();
                 break;
         }
@@ -153,9 +162,9 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         });
     }
 
-    private async Task AddToQueueAsync()
+    private async Task AddToQueueAsync(bool playNext)
     {
-        await Session.AddToQueueAsync(_broadcast).ConfigureAwait(false);
+        await Session.AddToQueueAsync(_broadcast, playNext).ConfigureAwait(false);
         if (!_disposed) BeginInvokeOnMainThread(() => TableView.ReloadData());
     }
 

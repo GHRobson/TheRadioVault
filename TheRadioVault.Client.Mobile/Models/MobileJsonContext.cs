@@ -11,6 +11,7 @@ public sealed record BroadcastSummaryEnvelope(WebClientLibraryBroadcastSummary B
 public sealed record BroadcastDetailsEnvelope(WebClientBroadcastDetails Broadcast);
 public sealed record MutationEnvelope(WebMutationResult Result);
 public sealed record QueueMutationEnvelope(WebQueueMutationResult Result);
+public sealed record QueueEnvelope(IReadOnlyList<WebQueueItem> Queue, int Count);
 public sealed record PlaybackSessionEnvelope(WebPlaybackSession Session);
 public sealed record ClientPlaybackEnvelope(WebClientPlaybackResult Result);
 public sealed record PlaybackTransferEnvelope(WebPlaybackTransferResult Result);
@@ -30,8 +31,11 @@ public sealed record ProgressEnvelope(WebOfflineProgressResult Result);
 [JsonSerializable(typeof(BroadcastDetailsEnvelope))]
 [JsonSerializable(typeof(MutationEnvelope))]
 [JsonSerializable(typeof(QueueMutationEnvelope))]
+[JsonSerializable(typeof(QueueEnvelope))]
 [JsonSerializable(typeof(MobileFavouriteMutation))]
 [JsonSerializable(typeof(MobileQueueAddMutation))]
+[JsonSerializable(typeof(MobileQueueMoveMutation))]
+[JsonSerializable(typeof(MobileEmptyMutation))]
 [JsonSerializable(typeof(MobileDownloadIndex))]
 [JsonSerializable(typeof(WebCanonicalMediaManifest))]
 [JsonSerializable(typeof(PlaybackSessionEnvelope))]

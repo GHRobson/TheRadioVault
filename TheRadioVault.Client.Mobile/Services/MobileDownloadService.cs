@@ -86,12 +86,12 @@ public sealed class MobileDownloadService
             var generation = DateTimeOffset.UtcNow.ToString("yyyyMMddHHmmssfff", CultureInfo.InvariantCulture) +
                              "-" + Guid.NewGuid().ToString("N");
             var relativeDirectory = Path.Combine("media", manifest.EpisodeId.ToString(CultureInfo.InvariantCulture), generation);
-            var stagingPath = Path.Combine(_stagingDirectory, generation);
+            var stagingPath = Path.Combine(_stagingDirectory, manifest.EpisodeId.ToString(CultureInfo.InvariantCulture));
             var finalPath = Path.Combine(_rootDirectory, relativeDirectory);
             Directory.CreateDirectory(stagingPath);
             var downloadedParts = new List<MobileDownloadPart>(parts.Length);
             var totalBytes = parts.Sum(part => Math.Max(0, part.SizeBytes));
-            var receivedBytes = 0L;
+            var receivedBytes = parts.Sum(part => ExistingPartBytes(stagingPath, part.PartNumber, part.MediaFileId, part.SizeBytes));
             var promoted = false;
             var committed = false;
             var existing = _records.GetValueOrDefault(manifest.EpisodeId);
@@ -102,31 +102,84 @@ public sealed class MobileDownloadService
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var part = parts[index];
+                    var prefix = $"part-{part.PartNumber:D3}-{part.MediaFileId}";
+                    var completedPath = Directory.EnumerateFiles(stagingPath, prefix + ".*")
+                        .FirstOrDefault(path => !path.EndsWith(".partial", StringComparison.OrdinalIgnoreCase));
+                    if (completedPath is not null)
+                    {
+                        var completedBytes = new FileInfo(completedPath).Length;
+                        if ((part.SizeBytes <= 0 && completedBytes > 0) || completedBytes == part.SizeBytes)
+                        {
+                            downloadedParts.Add(CreateDownloadedPart(part, completedPath, completedBytes));
+                            continue;
+                        }
+                        File.Delete(completedPath);
+                        receivedBytes = Math.Max(0, receivedBytes - completedBytes);
+                    }
+
+                    var partialPath = Directory.EnumerateFiles(stagingPath, prefix + ".*.partial").FirstOrDefault();
+                    var partialBytes = partialPath is null ? 0 : new FileInfo(partialPath).Length;
+                    if (partialPath is not null && part.SizeBytes > 0 && partialBytes == part.SizeBytes)
+                    {
+                        var completedFromPartial = partialPath[..^".partial".Length];
+                        File.Move(partialPath, completedFromPartial, overwrite: true);
+                        downloadedParts.Add(CreateDownloadedPart(part, completedFromPartial, partialBytes));
+                        continue;
+                    }
+                    if (partialPath is not null && part.SizeBytes > 0 && partialBytes > part.SizeBytes)
+                    {
+                        File.Delete(partialPath);
+                        receivedBytes = Math.Max(0, receivedBytes - partialBytes);
+                        partialPath = null;
+                        partialBytes = 0;
+                    }
                     var route = WebApiRoutes.MediaPart(manifest.EpisodeId, part.MediaFileId) +
                                 "?recording=" + Uri.EscapeDataString(manifest.RecordingKey);
-                    using var response = await _server.OpenResponseAsync(route, null, cancellationToken).ConfigureAwait(false);
+                    using var response = await _server.OpenResponseAsync(
+                        route,
+                        partialBytes > 0 ? $"bytes={partialBytes}-" : null,
+                        cancellationToken).ConfigureAwait(false);
                     var mediaType = response.Content.Headers.ContentType?.MediaType?.Trim().ToLowerInvariant()
                                     ?? "application/octet-stream";
                     var fileName = $"part-{part.PartNumber:D3}-{part.MediaFileId}{ExtensionFor(mediaType)}";
                     var path = Path.Combine(stagingPath, fileName);
+                    var expectedPartialPath = path + ".partial";
+                    if (partialPath is not null && !string.Equals(partialPath, expectedPartialPath, StringComparison.Ordinal))
+                    {
+                        File.Move(partialPath, expectedPartialPath, overwrite: true);
+                        partialPath = expectedPartialPath;
+                    }
+                    partialPath ??= expectedPartialPath;
+                    var canAppend = partialBytes > 0 &&
+                                    response.StatusCode == System.Net.HttpStatusCode.PartialContent &&
+                                    response.Content.Headers.ContentRange?.From == partialBytes;
+                    if (!canAppend && partialBytes > 0)
+                    {
+                        File.Delete(partialPath);
+                        receivedBytes = Math.Max(0, receivedBytes - partialBytes);
+                        partialBytes = 0;
+                    }
                     var expectedBytes = part.SizeBytes > 0
                         ? part.SizeBytes
-                        : Math.Max(0, response.Content.Headers.ContentLength ?? 0);
+                        : Math.Max(0, response.Content.Headers.ContentRange?.Length ?? response.Content.Headers.ContentLength ?? 0);
                     var partBytes = await CopyResponseAsync(
                         response,
-                        path,
+                        partialPath,
+                        canAppend,
+                        partialBytes,
                         bytes => progress?.Report(new MobileDownloadProgress(
                             manifest.EpisodeId,
                             broadcast.Title,
                             part.PartNumber,
                             parts.Length,
-                            receivedBytes + bytes,
+                            receivedBytes - partialBytes + bytes,
                             totalBytes)),
                         cancellationToken).ConfigureAwait(false);
                     if (expectedBytes > 0 && partBytes != expectedBytes)
                         throw new IOException(
                             $"Part {part.PartNumber} contained {partBytes:N0} bytes; the server declared {expectedBytes:N0} bytes.");
-                    receivedBytes += partBytes;
+                    receivedBytes += partBytes - partialBytes;
+                    File.Move(partialPath, path, overwrite: true);
                     downloadedParts.Add(new MobileDownloadPart(
                         part.PartNumber,
                         part.PartTotal,
@@ -138,6 +191,9 @@ public sealed class MobileDownloadService
                         mediaType));
                 }
 
+                var expectedFiles = downloadedParts.Select(part => part.FileName).ToHashSet(StringComparer.Ordinal);
+                foreach (var path in Directory.EnumerateFiles(stagingPath))
+                    if (!expectedFiles.Contains(Path.GetFileName(path))) File.Delete(path);
                 Directory.CreateDirectory(Path.GetDirectoryName(finalPath)!);
                 Directory.Move(stagingPath, finalPath);
                 promoted = true;
@@ -173,7 +229,7 @@ public sealed class MobileDownloadService
             }
             catch
             {
-                if (!committed) DeleteDirectoryBestEffort(promoted ? finalPath : stagingPath);
+                if (!committed && promoted) DeleteDirectoryBestEffort(finalPath);
                 throw;
             }
         }
@@ -189,6 +245,30 @@ public sealed class MobileDownloadService
             if (!_records.Remove(episodeId, out var record)) return;
             await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
             DeleteRecordMediaBestEffort(record);
+            DeleteDirectoryBestEffort(PendingPath(episodeId));
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task DiscardPendingAsync(long episodeId, CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try { DeleteDirectoryBestEffort(PendingPath(episodeId)); }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<MobileDownloadStorage> GetStorageAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var completed = _records.Values.Sum(record => Math.Max(0, record.SizeBytes));
+            var pending = Directory.Exists(_stagingDirectory)
+                ? Directory.EnumerateFiles(_stagingDirectory, "*", SearchOption.AllDirectories)
+                    .Sum(path => Math.Max(0, new FileInfo(path).Length))
+                : 0;
+            return new MobileDownloadStorage(_records.Count, completed, pending);
         }
         finally { _gate.Release(); }
     }
@@ -323,15 +403,18 @@ public sealed class MobileDownloadService
     private static async Task<long> CopyResponseAsync(
         HttpResponseMessage response,
         string targetPath,
+        bool append,
+        long initialBytes,
         Action<long> progress,
         CancellationToken cancellationToken)
     {
         await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         await using var target = new FileStream(
-            targetPath, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024,
+            targetPath, append ? FileMode.Append : FileMode.Create, FileAccess.Write, FileShare.None, 128 * 1024,
             FileOptions.Asynchronous | FileOptions.SequentialScan | FileOptions.WriteThrough);
         var buffer = new byte[128 * 1024];
-        var total = 0L;
+        var total = Math.Max(0, initialBytes);
+        progress(total);
         while (true)
         {
             var read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
@@ -354,6 +437,47 @@ public sealed class MobileDownloadService
         "audio/flac" or "audio/x-flac" => ".flac",
         _ => ".audio"
     };
+
+    private static string MediaTypeFor(string path) => Path.GetExtension(path).ToLowerInvariant() switch
+    {
+        ".mp3" => "audio/mpeg",
+        ".m4a" => "audio/mp4",
+        ".aac" => "audio/aac",
+        ".wav" => "audio/wav",
+        ".flac" => "audio/flac",
+        _ => "application/octet-stream"
+    };
+
+    private static MobileDownloadPart CreateDownloadedPart(
+        WebCanonicalMediaPart part,
+        string path,
+        long sizeBytes)
+        => new(
+            part.PartNumber,
+            part.PartTotal,
+            Math.Max(0, part.LogicalStartMs),
+            Math.Max(part.LogicalStartMs, part.LogicalEndMs),
+            part.MediaFileId,
+            sizeBytes,
+            Path.GetFileName(path),
+            MediaTypeFor(path));
+
+    private static long ExistingPartBytes(
+        string stagingPath,
+        int partNumber,
+        long mediaFileId,
+        long expectedBytes)
+    {
+        var prefix = $"part-{partNumber:D3}-{mediaFileId}.*";
+        return Directory.EnumerateFiles(stagingPath, prefix)
+            .Select(path => Math.Max(0, new FileInfo(path).Length))
+            .Where(length => expectedBytes <= 0 || length <= expectedBytes)
+            .DefaultIfEmpty(0)
+            .Max();
+    }
+
+    private string PendingPath(long episodeId)
+        => Path.Combine(_stagingDirectory, episodeId.ToString(CultureInfo.InvariantCulture));
 
     private void EnsureDirectories()
     {

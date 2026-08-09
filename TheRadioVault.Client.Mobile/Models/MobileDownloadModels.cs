@@ -42,3 +42,11 @@ public sealed record MobileDownloadProgress(
         ? Math.Clamp((int)Math.Round(BytesReceived * 100d / TotalBytes), 0, 100)
         : 0;
 }
+
+public sealed record MobileDownloadStorage(
+    int DownloadCount,
+    long CompletedBytes,
+    long PendingBytes)
+{
+    public long TotalBytes => Math.Max(0, CompletedBytes) + Math.Max(0, PendingBytes);
+}

@@ -33,16 +33,26 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         };
     }
 
-    public override nint NumberOfSections(UITableView tableView) => IsShowingSearchResults ? 1 : 2;
+    public override nint NumberOfSections(UITableView tableView) => IsShowingSearchResults ? 1 : 3;
 
     public override nint RowsInSection(UITableView tableView, nint section)
     {
         if (IsShowingSearchResults) return Math.Max(1, Session.LibraryBroadcasts.Count);
-        return section == 0 ? 1 : Math.Max(1, Session.LibraryCollections.Count);
+        return section switch
+        {
+            0 => 6,
+            1 => 1,
+            _ => Math.Max(1, Session.LibraryCollections.Count)
+        };
     }
 
     public override string? TitleForHeader(UITableView tableView, nint section)
-        => IsShowingSearchResults ? "Search results" : section == 0 ? "Library" : "Shows";
+        => IsShowingSearchResults ? "Search results" : section switch
+        {
+            0 => "Your Library",
+            1 => "Browse",
+            _ => "Shows"
+        };
 
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
@@ -57,6 +67,29 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         }
 
         if (indexPath.Section == 0)
+        {
+            var unplayed = Math.Max(0, Session.TotalBroadcasts - Session.CompletedBroadcasts - Session.InProgressBroadcasts);
+            var values = new[]
+            {
+                ("Up Next", $"{Session.QueueItems.Count:N0} queued", "text.line.first.and.arrowtriangle.forward"),
+                ("Favourites", $"{Session.FavouriteBroadcasts:N0} broadcasts", "heart.fill"),
+                ("Continue Listening", $"{Session.InProgressBroadcasts:N0} broadcasts", "play.circle"),
+                ("Recently Added", "Newest broadcasts", "clock"),
+                ("Unplayed", $"{unplayed:N0} broadcasts", "circle"),
+                ("Completed", $"{Session.CompletedBroadcasts:N0} broadcasts", "checkmark.circle")
+            };
+            var value = values[indexPath.Row];
+            var smart = new UITableViewCell(UITableViewCellStyle.Default, "smart-library");
+            var content = smart.DefaultContentConfiguration;
+            content.Text = value.Item1;
+            content.SecondaryText = value.Item2;
+            content.Image = UIImage.GetSystemImage(value.Item3);
+            smart.ContentConfiguration = content;
+            smart.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+            return smart;
+        }
+
+        if (indexPath.Section == 1)
         {
             var all = DetailCell("all-broadcasts", "All Broadcasts", $"{Session.TotalBroadcasts:N0} broadcasts");
             all.Accessory = UITableViewCellAccessory.DisclosureIndicator;
@@ -83,6 +116,27 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         }
 
         if (indexPath.Section == 0)
+        {
+            if (indexPath.Row == 0)
+            {
+                NavigationController?.PushViewController(new UpNextViewController(Session), true);
+                return;
+            }
+            var filters = new[]
+            {
+                ("Favourites", "Favourites"),
+                ("ContinueListening", "Continue Listening"),
+                ("RecentlyAdded", "Recently Added"),
+                ("Unplayed", "Unplayed"),
+                ("Completed", "Completed")
+            };
+            var filter = filters[indexPath.Row - 1];
+            NavigationController?.PushViewController(
+                new ShowLibraryViewController(Session, null, filter.Item2, filter.Item1), true);
+            return;
+        }
+
+        if (indexPath.Section == 1)
         {
             NavigationController?.PushViewController(
                 new ShowLibraryViewController(Session, null, "All Broadcasts"), true);

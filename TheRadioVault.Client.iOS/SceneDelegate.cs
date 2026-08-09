@@ -24,7 +24,8 @@ public sealed class SceneDelegate : UIResponder, IUIWindowSceneDelegate
         _session = new MobileClientSession(
             new MobileServerClient(services.ConnectionStore),
             services.PlaybackEngine,
-            services.NowPlayingService);
+            services.NowPlayingService,
+            services.DownloadPolicy);
         var tabs = new RadioVaultTabBarController(_session);
         Window = new UIWindow(windowScene) { RootViewController = tabs };
         Window.MakeKeyAndVisible();

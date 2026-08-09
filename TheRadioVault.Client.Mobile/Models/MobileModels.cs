@@ -41,6 +41,10 @@ public sealed record MobileFavouriteMutation(bool Favourite);
 
 public sealed record MobileQueueAddMutation(long EpisodeId, bool PlayNext = false);
 
+public sealed record MobileQueueMoveMutation(int Direction);
+
+public sealed record MobileEmptyMutation;
+
 public sealed class MobileBroadcastItem
 {
     public MobileBroadcastItem(WebClientLibraryBroadcastSummary value)

@@ -81,7 +81,13 @@ and the iOS lock screen can play, pause, skip and seek the current broadcast.
 Also verify that Library groups broadcasts by show, a completed multipart
 download still plays after the Server is unavailable, the mini player opens
 Now Playing without occupying a tab, and its play/pause control changes to a
-handoff control while another device owns playback.
+handoff control while another device owns playback. Confirm that Favourites,
+Continue Listening, Recently Added, Unplayed and Completed filters use the
+server-owned Library; Play Next and Play Last appear in the shared Up Next
+queue on another client; queue rows can be reordered, removed and cleared;
+and a multipart download can be paused, resumed from its retained byte count
+and cancelled without leaving staged media. Toggle Wi-Fi Only and verify a
+download is rejected when the active iOS path is not Wi-Fi.
 
 ## Release validation
 

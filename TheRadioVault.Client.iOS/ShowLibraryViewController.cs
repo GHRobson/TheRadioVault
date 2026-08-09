@@ -8,6 +8,7 @@ namespace TheRadioVault.Client.iOS;
 public sealed class ShowLibraryViewController : SessionTableViewController, IUISearchBarDelegate
 {
     private readonly int? _collectionId;
+    private readonly string _filter;
     private readonly UISearchController _searchController = new((UIViewController?)null)
     {
         ObscuresBackgroundDuringPresentation = false
@@ -15,10 +16,15 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
     private IReadOnlyList<MobileBroadcastItem> _broadcasts = [];
     private bool _loading;
 
-    public ShowLibraryViewController(MobileClientSession session, int? collectionId, string title)
+    public ShowLibraryViewController(
+        MobileClientSession session,
+        int? collectionId,
+        string title,
+        string filter = "All")
         : base(session)
     {
         _collectionId = collectionId;
+        _filter = filter;
         Title = title;
     }
 
@@ -72,7 +78,8 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
         if (_loading) return;
         _loading = true;
         BeginInvokeOnMainThread(() => TableView.ReloadData());
-        var values = await Session.BrowseCollectionAsync(_collectionId, searchText).ConfigureAwait(false);
+        var values = await Session.BrowseCollectionAsync(
+            _collectionId, searchText, _filter).ConfigureAwait(false);
         BeginInvokeOnMainThread(() =>
         {
             _broadcasts = values;

@@ -13,10 +13,13 @@ public sealed class MobileClientSession : IDisposable
     private readonly MobileDownloadService _downloads;
     private readonly IMobilePlaybackEngine _playback;
     private readonly IMobileNowPlayingService _nowPlaying;
+    private readonly IMobileDownloadPolicy _downloadPolicy;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private readonly Timer _syncTimer;
     private MobileMediaProxy? _mediaProxy;
     private MobileDownloadRecord? _activeDownload;
+    private CancellationTokenSource? _downloadCancellation;
+    private MobileBroadcastItem? _pendingDownload;
     private MobileBroadcastItem? _remotePlaybackBroadcast;
     private string _remotePlaybackOwner = string.Empty;
     private IReadOnlyList<WebCanonicalMediaPart> _parts = Array.Empty<WebCanonicalMediaPart>();
@@ -31,12 +34,15 @@ public sealed class MobileClientSession : IDisposable
     private bool _incrementPlayCountPending;
     private bool _ownsPlayback;
     private bool _offlinePlayback;
+    private bool _downloadPauseRequested;
+    private bool _downloadCancelRequested;
     private bool _disposed;
 
     public MobileClientSession(
         MobileServerClient server,
         IMobilePlaybackEngine playback,
-        IMobileNowPlayingService nowPlaying)
+        IMobileNowPlayingService nowPlaying,
+        IMobileDownloadPolicy downloadPolicy)
     {
         _server = server ?? throw new ArgumentNullException(nameof(server));
         _downloads = new MobileDownloadService(
@@ -47,6 +53,7 @@ public sealed class MobileClientSession : IDisposable
                 "Downloads"));
         _playback = playback ?? throw new ArgumentNullException(nameof(playback));
         _nowPlaying = nowPlaying ?? throw new ArgumentNullException(nameof(nowPlaying));
+        _downloadPolicy = downloadPolicy ?? throw new ArgumentNullException(nameof(downloadPolicy));
         _playback.StateChanged += PlaybackOnStateChanged;
         _playback.MediaEnded += PlaybackOnMediaEnded;
         _nowPlaying.CommandReceived += NowPlayingOnCommandReceived;
@@ -68,11 +75,13 @@ public sealed class MobileClientSession : IDisposable
     public int TotalBroadcasts { get; private set; }
     public int CompletedBroadcasts { get; private set; }
     public int InProgressBroadcasts { get; private set; }
+    public int FavouriteBroadcasts { get; private set; }
     public IReadOnlyList<WebClientLibraryCollectionSummary> LibraryCollections { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> ContinueListening { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> RecentBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> LibraryBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> DownloadedBroadcasts { get; private set; } = [];
+    public IReadOnlyList<WebQueueItem> QueueItems { get; private set; } = [];
     public IReadOnlyList<DiscoveredRadioVaultServer> Servers { get; private set; } = [];
     public MobileBroadcastItem? SelectedBroadcast { get; private set; }
     public string NowPlayingTitle { get; private set; } = "Nothing playing";
@@ -84,8 +93,22 @@ public sealed class MobileClientSession : IDisposable
     public string PlaybackTime { get; private set; } = "0:00 / 0:00";
     public string SpeedText => $"{_speed:0.##}×";
     public bool IsDownloading { get; private set; }
+    public bool IsDownloadPaused { get; private set; }
     public long? ActiveDownloadEpisodeId { get; private set; }
     public string DownloadStatus { get; private set; } = "Downloads are stored on this iPhone.";
+    public int DownloadProgressPercent { get; private set; }
+    public long DownloadStorageBytes { get; private set; }
+    public long PendingDownloadBytes { get; private set; }
+    public string DownloadStorageText => $"{DownloadedBroadcasts.Count:N0} download{(DownloadedBroadcasts.Count == 1 ? string.Empty : "s")} · {FormatBytes(DownloadStorageBytes)} stored";
+    public bool WifiOnlyDownloads
+    {
+        get => _downloadPolicy.WifiOnly;
+        set
+        {
+            _downloadPolicy.WifiOnly = value;
+            Notify();
+        }
+    }
     public bool HasMiniPlayer => SelectedBroadcast is not null || _remotePlaybackBroadcast is not null;
     public bool MiniPlayerShowsHandoff => _remotePlaybackBroadcast is not null && !_ownsPlayback;
     public string MiniPlayerTitle => _remotePlaybackBroadcast?.Title ?? NowPlayingTitle;
@@ -100,6 +123,7 @@ public sealed class MobileClientSession : IDisposable
     public async Task InitializeAsync()
     {
         DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+        await RefreshDownloadStorageAsync().ConfigureAwait(false);
         IsPaired = _server.IsPaired;
         Notify();
         if (!IsPaired)
@@ -123,12 +147,15 @@ public sealed class MobileClientSession : IDisposable
             TotalBroadcasts = overview.TotalBroadcasts;
             CompletedBroadcasts = overview.CompletedBroadcasts;
             InProgressBroadcasts = overview.InProgressBroadcasts;
+            FavouriteBroadcasts = overview.FavouriteBroadcasts;
             LibraryCollections = overview.Collections;
             ContinueListening = Convert(overview.ContinueListening);
             RecentBroadcasts = Convert(overview.RecentBroadcasts);
             if (LibraryBroadcasts.Count == 0)
                 LibraryBroadcasts = Convert((await _server.BrowseAsync(string.Empty).ConfigureAwait(false)).Broadcasts);
             DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+            await RefreshDownloadStorageAsync().ConfigureAwait(false);
+            QueueItems = await _server.GetQueueAsync().ConfigureAwait(false);
             await ObserveSharedPlaybackAsync(await _server.GetPlaybackSessionAsync().ConfigureAwait(false)).ConfigureAwait(false);
             StatusText = $"Connected to {bootstrap.Server.DisplayName} · {overview.TotalBroadcasts:N0} broadcasts";
         }
@@ -156,14 +183,16 @@ public sealed class MobileClientSession : IDisposable
 
     public async Task<IReadOnlyList<MobileBroadcastItem>> BrowseCollectionAsync(
         int? collectionId,
-        string? searchText = null)
+        string? searchText = null,
+        string filter = "All")
     {
         if (!IsPaired || IsBusy) return [];
         var search = searchText?.Trim() ?? string.Empty;
         SetBusy(true, search.Length == 0 ? "Loading broadcasts…" : $"Searching for “{search}”…");
         try
         {
-            var result = await _server.BrowseAsync(search, collectionId: collectionId).ConfigureAwait(false);
+            var result = await _server.BrowseAsync(
+                search, collectionId: collectionId, filter: filter).ConfigureAwait(false);
             var broadcasts = Convert(result.Broadcasts);
             StatusText = $"{broadcasts.Count:N0} broadcast{(broadcasts.Count == 1 ? string.Empty : "s")} shown";
             return broadcasts;
@@ -207,6 +236,7 @@ public sealed class MobileClientSession : IDisposable
             var replacement = new MobileBroadcastItem(
                 await _server.GetBroadcastSummaryAsync(broadcast.EpisodeId).ConfigureAwait(false));
             ReplaceBroadcast(broadcast.EpisodeId, replacement);
+            FavouriteBroadcasts = Math.Max(0, FavouriteBroadcasts + (favourite ? 1 : -1));
             StatusText = favourite ? "Added to Favourites." : "Removed from Favourites.";
             return replacement;
         }
@@ -218,16 +248,19 @@ public sealed class MobileClientSession : IDisposable
         finally { SetBusy(false); }
     }
 
-    public async Task<bool> AddToQueueAsync(MobileBroadcastItem broadcast)
+    public async Task<bool> AddToQueueAsync(MobileBroadcastItem broadcast, bool playNext = false)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
         if (!IsPaired || IsBusy) return false;
-        SetBusy(true, "Adding to the shared queue…");
+        SetBusy(true, playNext ? "Adding to Up Next…" : "Adding to the shared queue…");
         try
         {
-            var result = await _server.AddToQueueAsync(broadcast.EpisodeId).ConfigureAwait(false);
+            var result = await _server.AddToQueueAsync(broadcast.EpisodeId, playNext).ConfigureAwait(false);
             if (!result.Changed) throw new InvalidOperationException(result.Message);
-            StatusText = string.IsNullOrWhiteSpace(result.Message) ? "Added to the shared queue." : result.Message;
+            QueueItems = result.Queue;
+            StatusText = string.IsNullOrWhiteSpace(result.Message)
+                ? playNext ? "Added to Up Next." : "Added to the end of the shared queue."
+                : result.Message;
             return true;
         }
         catch (Exception exception)
@@ -238,6 +271,94 @@ public sealed class MobileClientSession : IDisposable
         finally { SetBusy(false); }
     }
 
+    public async Task RefreshQueueAsync()
+    {
+        if (!IsPaired || IsBusy) return;
+        SetBusy(true, "Refreshing Up Next…");
+        try
+        {
+            QueueItems = await _server.GetQueueAsync().ConfigureAwait(false);
+            StatusText = QueueItems.Count == 0 ? "Up Next is empty." : $"{QueueItems.Count:N0} broadcast{(QueueItems.Count == 1 ? string.Empty : "s")} in Up Next.";
+        }
+        catch (Exception exception) { StatusText = "Queue refresh failed: " + exception.Message; }
+        finally { SetBusy(false); }
+    }
+
+    public async Task RemoveQueueItemAsync(WebQueueItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (!IsPaired || IsBusy) return;
+        SetBusy(true, "Removing from Up Next…");
+        try
+        {
+            var result = await _server.RemoveQueueItemAsync(item.QueueId).ConfigureAwait(false);
+            QueueItems = result.Queue;
+            StatusText = result.Message;
+        }
+        catch (Exception exception) { StatusText = "Queue update failed: " + exception.Message; }
+        finally { SetBusy(false); }
+    }
+
+    public async Task ClearQueueAsync()
+    {
+        if (!IsPaired || IsBusy) return;
+        SetBusy(true, "Clearing Up Next…");
+        try
+        {
+            var result = await _server.ClearQueueAsync().ConfigureAwait(false);
+            QueueItems = result.Queue;
+            StatusText = result.Message;
+        }
+        catch (Exception exception) { StatusText = "Queue clear failed: " + exception.Message; }
+        finally { SetBusy(false); }
+    }
+
+    public async Task MoveQueueItemAsync(WebQueueItem item, int targetIndex)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (!IsPaired || IsBusy || QueueItems.Count < 2) return;
+        var currentIndex = QueueItems.ToList().FindIndex(value => value.QueueId == item.QueueId);
+        targetIndex = Math.Clamp(targetIndex, 0, QueueItems.Count - 1);
+        if (currentIndex < 0 || currentIndex == targetIndex) return;
+        SetBusy(true, "Reordering Up Next…");
+        try
+        {
+            var queue = QueueItems;
+            while (currentIndex != targetIndex)
+            {
+                var direction = Math.Sign(targetIndex - currentIndex);
+                var result = await _server.MoveQueueItemAsync(item.QueueId, direction).ConfigureAwait(false);
+                if (!result.Changed) throw new InvalidOperationException(result.Message);
+                queue = result.Queue;
+                currentIndex = queue.ToList().FindIndex(value => value.QueueId == item.QueueId);
+                if (currentIndex < 0) break;
+            }
+            QueueItems = queue;
+            StatusText = "Up Next reordered.";
+        }
+        catch (Exception exception) { StatusText = "Queue reorder failed: " + exception.Message; }
+        finally { SetBusy(false); }
+    }
+
+    public async Task PlayQueueItemAsync(WebQueueItem item)
+    {
+        ArgumentNullException.ThrowIfNull(item);
+        if (!IsPaired || IsBusy) return;
+        MobileBroadcastItem broadcast;
+        try
+        {
+            broadcast = new MobileBroadcastItem(
+                await _server.GetBroadcastSummaryAsync(item.Episode.Id).ConfigureAwait(false));
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Queued broadcast failed to load: " + exception.Message;
+            Notify();
+            return;
+        }
+        await PlayAsync(broadcast).ConfigureAwait(false);
+    }
+
     public async Task<bool> IsDownloadedAsync(long episodeId)
         => await _downloads.IsDownloadedAsync(episodeId).ConfigureAwait(false);
 
@@ -245,30 +366,115 @@ public sealed class MobileClientSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(broadcast);
         if (!IsPaired || IsDownloading) return;
+        if (_downloadPolicy.WifiOnly && !_downloadPolicy.IsUsingWifi)
+        {
+            DownloadStatus = "Connect to Wi-Fi or turn off Wi-Fi Only before downloading.";
+            Notify();
+            return;
+        }
+        _pendingDownload = broadcast;
+        _downloadPauseRequested = false;
+        _downloadCancelRequested = false;
+        IsDownloadPaused = false;
         IsDownloading = true;
         ActiveDownloadEpisodeId = broadcast.EpisodeId;
+        DownloadProgressPercent = 0;
         DownloadStatus = $"Preparing {broadcast.Title}…";
+        var cancellation = new CancellationTokenSource();
+        _downloadCancellation?.Dispose();
+        _downloadCancellation = cancellation;
         Notify();
         try
         {
             var progress = new Progress<MobileDownloadProgress>(value =>
             {
+                DownloadProgressPercent = value.Percent;
                 DownloadStatus = value.TotalBytes > 0
                     ? $"Downloading {value.Title} · part {value.PartNumber} of {value.PartCount} · {value.Percent}%"
                     : $"Downloading {value.Title} · part {value.PartNumber} of {value.PartCount}";
                 Notify();
             });
-            var record = await _downloads.DownloadAsync(broadcast, progress).ConfigureAwait(false);
+            var record = await _downloads.DownloadAsync(
+                broadcast, progress, cancellation.Token).ConfigureAwait(false);
             DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+            _pendingDownload = null;
+            DownloadProgressPercent = 100;
             DownloadStatus = $"Downloaded {broadcast.Title} · {FormatBytes(record.SizeBytes)}";
         }
-        catch (Exception exception) { DownloadStatus = "Download failed: " + exception.Message; }
+        catch (OperationCanceledException) when (_downloadPauseRequested)
+        {
+            IsDownloadPaused = true;
+            DownloadStatus = $"Paused {broadcast.Title} at {DownloadProgressPercent}%";
+        }
+        catch (OperationCanceledException) when (_downloadCancelRequested)
+        {
+            await _downloads.DiscardPendingAsync(broadcast.EpisodeId).ConfigureAwait(false);
+            _pendingDownload = null;
+            DownloadProgressPercent = 0;
+            DownloadStatus = $"Cancelled {broadcast.Title}.";
+        }
+        catch (Exception exception)
+        {
+            IsDownloadPaused = true;
+            DownloadStatus = "Download interrupted. Tap Resume to continue: " + exception.Message;
+        }
         finally
         {
             IsDownloading = false;
-            ActiveDownloadEpisodeId = null;
+            if (!IsDownloadPaused) ActiveDownloadEpisodeId = null;
+            if (ReferenceEquals(_downloadCancellation, cancellation))
+            {
+                _downloadCancellation = null;
+                cancellation.Dispose();
+            }
+            await RefreshDownloadStorageAsync().ConfigureAwait(false);
             Notify();
         }
+    }
+
+    public void PauseDownload()
+    {
+        if (!IsDownloading || _downloadCancellation is null) return;
+        _downloadPauseRequested = true;
+        DownloadStatus = "Pausing after the current data write…";
+        _downloadCancellation.Cancel();
+        Notify();
+    }
+
+    public async Task ResumeDownloadAsync()
+    {
+        if (!IsDownloadPaused || _pendingDownload is null || IsDownloading) return;
+        await DownloadAsync(_pendingDownload).ConfigureAwait(false);
+    }
+
+    public void CancelDownload()
+    {
+        if (_pendingDownload is null) return;
+        _downloadPauseRequested = false;
+        _downloadCancelRequested = true;
+        IsDownloadPaused = false;
+        DownloadStatus = "Cancelling download…";
+        if (_downloadCancellation is not null) _downloadCancellation.Cancel();
+        else _ = CancelPausedDownloadAsync(_pendingDownload);
+        Notify();
+    }
+
+    private async Task CancelPausedDownloadAsync(MobileBroadcastItem broadcast)
+    {
+        await _downloads.DiscardPendingAsync(broadcast.EpisodeId).ConfigureAwait(false);
+        _pendingDownload = null;
+        ActiveDownloadEpisodeId = null;
+        DownloadProgressPercent = 0;
+        DownloadStatus = $"Cancelled {broadcast.Title}.";
+        await RefreshDownloadStorageAsync().ConfigureAwait(false);
+        Notify();
+    }
+
+    private async Task RefreshDownloadStorageAsync()
+    {
+        var storage = await _downloads.GetStorageAsync().ConfigureAwait(false);
+        DownloadStorageBytes = storage.TotalBytes;
+        PendingDownloadBytes = storage.PendingBytes;
     }
 
     public async Task RemoveDownloadAsync(MobileBroadcastItem broadcast)
@@ -283,6 +489,7 @@ public sealed class MobileClientSession : IDisposable
         }
         await _downloads.RemoveAsync(broadcast.EpisodeId).ConfigureAwait(false);
         DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+        await RefreshDownloadStorageAsync().ConfigureAwait(false);
         DownloadStatus = $"Removed {broadcast.Title} from this iPhone.";
         Notify();
     }
@@ -394,6 +601,7 @@ public sealed class MobileClientSession : IDisposable
 
     public void Forget()
     {
+        CancelDownload();
         _playback.Pause();
         _ownsPlayback = false;
         _nowPlaying.Clear();
@@ -406,9 +614,11 @@ public sealed class MobileClientSession : IDisposable
         RecentBroadcasts = [];
         LibraryBroadcasts = [];
         LibraryCollections = [];
+        QueueItems = [];
         TotalBroadcasts = 0;
         CompletedBroadcasts = 0;
         InProgressBroadcasts = 0;
+        FavouriteBroadcasts = 0;
         StatusText = "Pairing removed from this iPhone.";
         Notify();
         TabRequested?.Invoke(3);
@@ -985,6 +1195,8 @@ public sealed class MobileClientSession : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _downloadCancelRequested = true;
+        _downloadCancellation?.Cancel();
         _syncTimer.Dispose();
         _playback.StateChanged -= PlaybackOnStateChanged;
         _playback.MediaEnded -= PlaybackOnMediaEnded;

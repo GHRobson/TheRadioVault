@@ -1328,6 +1328,17 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(library.Contains("UITableView", StringComparison.Ordinal));
     True(library.Contains("LibraryCollections", StringComparison.Ordinal));
     True(library.Contains("ShowLibraryViewController", StringComparison.Ordinal));
+    True(library.Contains("Favourites", StringComparison.Ordinal));
+    True(library.Contains("ContinueListening", StringComparison.Ordinal));
+    True(library.Contains("UpNextViewController", StringComparison.Ordinal));
+
+    var upNext = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "UpNextViewController.cs"));
+    True(upNext.Contains("CanMoveRow", StringComparison.Ordinal));
+    True(upNext.Contains("MoveQueueItemAsync", StringComparison.Ordinal));
+    True(upNext.Contains("RemoveQueueItemAsync", StringComparison.Ordinal));
+    True(upNext.Contains("ClearQueueAsync", StringComparison.Ordinal));
+    True(upNext.Contains("PlayQueueItemAsync", StringComparison.Ordinal));
 
     var miniPlayer = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultMiniPlayerView.cs"));
@@ -1349,6 +1360,23 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(downloads.Contains("FileOptions.WriteThrough", StringComparison.Ordinal));
     True(downloads.Contains("Directory.Move(stagingPath, finalPath)", StringComparison.Ordinal));
     True(downloads.Contains("ResolvePartPath", StringComparison.Ordinal));
+    True(downloads.Contains("PartialContent", StringComparison.Ordinal));
+    True(downloads.Contains("FileMode.Append", StringComparison.Ordinal));
+    True(downloads.Contains("DiscardPendingAsync", StringComparison.Ordinal));
+    True(downloads.Contains("GetStorageAsync", StringComparison.Ordinal));
+
+    var downloadsView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "DownloadsViewController.cs"));
+    True(downloadsView.Contains("PauseDownload", StringComparison.Ordinal));
+    True(downloadsView.Contains("ResumeDownloadAsync", StringComparison.Ordinal));
+    True(downloadsView.Contains("CancelDownload", StringComparison.Ordinal));
+    True(downloadsView.Contains("WifiOnlyDownloads", StringComparison.Ordinal));
+
+    var downloadPolicy = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "IosDownloadPolicy.cs"));
+    True(downloadPolicy.Contains("NWPathMonitor", StringComparison.Ordinal));
+    True(downloadPolicy.Contains("NWInterfaceType.Wifi", StringComparison.Ordinal));
+    True(downloadPolicy.Contains("NSUserDefaults", StringComparison.Ordinal));
 
     var scene = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SceneDelegate.cs"));
@@ -1385,6 +1413,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("PlayDownloadedAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("ObserveSharedPlaybackAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("MiniPlayerShowsHandoff", StringComparison.Ordinal));
+    True(mobileSession.Contains("QueueItems", StringComparison.Ordinal));
+    True(mobileSession.Contains("IsDownloadPaused", StringComparison.Ordinal));
 
     var keychain = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosKeychainConnectionStore.cs"));
@@ -1401,6 +1431,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(client.Contains("OfflineProgress", StringComparison.Ordinal));
     True(client.Contains("ClientBroadcast(episodeId)", StringComparison.Ordinal));
     True(client.Contains("QueueAdd", StringComparison.Ordinal));
+    True(client.Contains("QueueRemove", StringComparison.Ordinal));
+    True(client.Contains("QueueMove", StringComparison.Ordinal));
+    True(client.Contains("QueueClear", StringComparison.Ordinal));
     True(client.Contains("Favourite(episodeId)", StringComparison.Ordinal));
 
     var plist = File.ReadAllText(Path.Combine(

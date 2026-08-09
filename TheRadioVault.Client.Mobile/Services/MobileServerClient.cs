@@ -158,11 +158,12 @@ public sealed class MobileServerClient : IDisposable
         string? searchText,
         int limit = 100,
         int? collectionId = null,
+        string filter = "All",
         CancellationToken cancellationToken = default)
     {
         var query = "?q=" + Uri.EscapeDataString(searchText?.Trim() ?? string.Empty) +
                     (collectionId is > 0 ? "&collectionId=" + collectionId.Value : string.Empty) +
-                    "&filter=All&limit=" + Math.Clamp(limit, 1, 250) +
+                    "&filter=" + Uri.EscapeDataString(filter) + "&limit=" + Math.Clamp(limit, 1, 250) +
                     "&offset=0&newestFirst=true&scope=All&hasTranscript=false";
         return (await GetJsonAsync(
             WebApiRoutes.ClientLibraryBrowse + query,
@@ -199,11 +200,47 @@ public sealed class MobileServerClient : IDisposable
 
     public async Task<WebQueueMutationResult> AddToQueueAsync(
         long episodeId,
+        bool playNext = false,
         CancellationToken cancellationToken = default)
         => (await PostJsonAsync(
             WebApiRoutes.QueueAdd,
-            new MobileQueueAddMutation(episodeId),
+            new MobileQueueAddMutation(episodeId, playNext),
             MobileJsonContext.Default.MobileQueueAddMutation,
+            MobileJsonContext.Default.QueueMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<IReadOnlyList<WebQueueItem>> GetQueueAsync(CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.Queue,
+            MobileJsonContext.Default.QueueEnvelope,
+            cancellationToken).ConfigureAwait(false)).Queue;
+
+    public async Task<WebQueueMutationResult> RemoveQueueItemAsync(
+        long queueId,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.QueueRemove(queueId),
+            new MobileEmptyMutation(),
+            MobileJsonContext.Default.MobileEmptyMutation,
+            MobileJsonContext.Default.QueueMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebQueueMutationResult> ClearQueueAsync(CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.QueueClear,
+            new MobileEmptyMutation(),
+            MobileJsonContext.Default.MobileEmptyMutation,
+            MobileJsonContext.Default.QueueMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebQueueMutationResult> MoveQueueItemAsync(
+        long queueId,
+        int direction,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.QueueMove(queueId),
+            new MobileQueueMoveMutation(Math.Sign(direction)),
+            MobileJsonContext.Default.MobileQueueMoveMutation,
             MobileJsonContext.Default.QueueMutationEnvelope,
             cancellationToken).ConfigureAwait(false)).Result;
 

@@ -53,7 +53,9 @@ mobile Dashboard and searchable Library, canonical multipart playback, native
 Now Playing controls, lock-screen and Control Centre transport commands,
 an Apple Music-style mini player, show-based Library navigation, persistent
 verified downloads with offline multipart playback, broadcast information,
-Favourites and shared queue actions, generation-safe playback handoff,
+smart Library collections, Favourites and a fully manageable shared Up Next
+queue. Downloads expose storage usage, Wi-Fi-only policy, pause, byte-range
+resume and cancellation. The client also provides generation-safe playback handoff,
 five-second progress synchronisation and secure Keychain storage. When another
 device owns playback, the mini-player transport becomes an explicit handoff
 action. It uses

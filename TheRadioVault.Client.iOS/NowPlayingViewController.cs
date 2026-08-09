@@ -33,6 +33,11 @@ public sealed class NowPlayingViewController : UIViewController
         if (View is not { } view) return;
         view.BackgroundColor = UIColor.SystemBackground;
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
+        NavigationItem.LeftBarButtonItem = new UIBarButtonItem(
+            UIImage.GetSystemImage("list.bullet")!,
+            UIBarButtonItemStyle.Plain,
+            (_, _) => NavigationController?.PushViewController(new UpNextViewController(_session), true));
+        NavigationItem.LeftBarButtonItem.AccessibilityLabel = "Up Next";
 
         _artworkPanel.BackgroundColor = UIColor.SecondarySystemBackground;
         _artworkPanel.Layer.CornerRadius = 24;

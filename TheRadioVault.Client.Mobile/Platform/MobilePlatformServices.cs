@@ -3,7 +3,8 @@ namespace TheRadioVault.Client.Mobile.Platform;
 public sealed record MobilePlatformServiceSet(
     IMobileConnectionStore ConnectionStore,
     IMobilePlaybackEngine PlaybackEngine,
-    IMobileNowPlayingService NowPlayingService);
+    IMobileNowPlayingService NowPlayingService,
+    IMobileDownloadPolicy DownloadPolicy);
 
 public static class MobilePlatformServices
 {

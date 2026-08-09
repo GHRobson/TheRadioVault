@@ -10,7 +10,8 @@ public static class Application
         MobilePlatformServices.Configure(new MobilePlatformServiceSet(
             new IosKeychainConnectionStore(),
             new IosAvPlayerEngine(),
-            new IosNowPlayingService()));
+            new IosNowPlayingService(),
+            new IosDownloadPolicy()));
         UIApplication.Main(args, null, typeof(AppDelegate));
     }
 }
