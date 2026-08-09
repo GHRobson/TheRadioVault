@@ -1,7 +1,7 @@
 {
   "version": "0.35.0-alpha9-buildfix3",
-  "generatedAtUtc": "2026-08-09T07:02:10.7575220Z",
-  "fileCount": 975,
+  "generatedAtUtc": "2026-08-09T07:31:26.2352660Z",
+  "fileCount": 977,
   "files": [
     {
       "path": ".editorconfig",
@@ -100,8 +100,8 @@
     },
     {
       "path": "BUILDING.md",
-      "bytes": 4398,
-      "sha256": "72dd6b37a49f767e4861288cb8e9b2d932604808b739062920ff5274306ad314"
+      "bytes": 4706,
+      "sha256": "b37affed6a1b049fe8cafa46bd670f787bfb430761471844dfbd4542558cc642"
     },
     {
       "path": "CATALOGUE-STYLE-IMPORT-ACCEPTANCE.md",
@@ -150,8 +150,8 @@
     },
     {
       "path": "README.md",
-      "bytes": 6614,
-      "sha256": "cb364d4a76b844f7ce66f3ea654ebb32cb22826e0cfe1b5ae4cabc9656accc11"
+      "bytes": 6737,
+      "sha256": "57bf5a538f47c3f66ef7244f7ebcdbbbe222821e9748c56182ed9a2f5394fb76"
     },
     {
       "path": "RUN-RADIO-VAULT-SERVER.cmd",
@@ -400,13 +400,13 @@
     },
     {
       "path": "TheRadioVault.Client.Mobile/MobileClientSession.cs",
-      "bytes": 12032,
-      "sha256": "05bc4df8972eea79551b0394601626ee73551151ea79db7f77d12feb3bb76e73"
+      "bytes": 29295,
+      "sha256": "79a6d37adc7361267af2b3f1b768bb3fb8d791981e8d6aa21f8b9cfe96fbd2c1"
     },
     {
       "path": "TheRadioVault.Client.Mobile/Models/MobileJsonContext.cs",
-      "bytes": 1012,
-      "sha256": "f74a899715010553108ce12422adb25fcc3c82281bf25fd86ebb176270df7953"
+      "bytes": 1932,
+      "sha256": "0b5e05d69dc45788ac2c9fe2141feb1996151cc492cb29c3d63c139ad87b6b96"
     },
     {
       "path": "TheRadioVault.Client.Mobile/Models/MobileModels.cs",
@@ -419,14 +419,19 @@
       "sha256": "788590c1f4e149a01d792dbd907b63e64c76d2fa66064b1fb05be1f82c6ffe3c"
     },
     {
+      "path": "TheRadioVault.Client.Mobile/Platform/IMobileNowPlayingService.cs",
+      "bytes": 657,
+      "sha256": "4f97598220d3dde3971d76feceb4929223855a38e5629ff49b6771f8fb0d096e"
+    },
+    {
       "path": "TheRadioVault.Client.Mobile/Platform/IMobilePlaybackEngine.cs",
-      "bytes": 529,
-      "sha256": "0c69e1a8187d7315fcedb1f74736fd2ea5eec89d5ca913e35630359fb8ca877b"
+      "bytes": 560,
+      "sha256": "3f28c04d441e2b6f46992f8486695545d36001eaaf777b0e29a16dcc44e38b32"
     },
     {
       "path": "TheRadioVault.Client.Mobile/Platform/MobilePlatformServices.cs",
-      "bytes": 628,
-      "sha256": "6254f7f3c4f0d5eeb8c11850942261d1bef5716c4d78d7216aac85ebbecec4e8"
+      "bytes": 676,
+      "sha256": "250ec4883bdca1899afb29c26015f8f5297df4629ca3800b784c00167bfe11bb"
     },
     {
       "path": "TheRadioVault.Client.Mobile/Services/MobileMediaProxy.cs",
@@ -435,8 +440,8 @@
     },
     {
       "path": "TheRadioVault.Client.Mobile/Services/MobileServerClient.cs",
-      "bytes": 11205,
-      "sha256": "841117000843373eea4e7d63617feaff08664f95af6e136800b986780182d34f"
+      "bytes": 15944,
+      "sha256": "e5ac021dbec435b2ce17fd6c5681b67e4b4cbcc88120dc4fda1ccc3d2de77784"
     },
     {
       "path": "TheRadioVault.Client.Mobile/TheRadioVault.Client.Mobile.csproj",
@@ -465,13 +470,18 @@
     },
     {
       "path": "TheRadioVault.Client.iOS/IosAvPlayerEngine.cs",
-      "bytes": 4853,
-      "sha256": "d2d5c13eb68d161e5bb7f75e9090748bb7d71d72c259994a020565e76514dc68"
+      "bytes": 5124,
+      "sha256": "c86d8ef0443a5603de7d14d98179834c4c39c384dc5924f85cb2b50ec83b00e4"
     },
     {
       "path": "TheRadioVault.Client.iOS/IosKeychainConnectionStore.cs",
       "bytes": 2030,
       "sha256": "786ae192d6520750e1ac563796c4f2ba406d326e0d38c369b1f97327f4a4d8c7"
+    },
+    {
+      "path": "TheRadioVault.Client.iOS/IosNowPlayingService.cs",
+      "bytes": 3542,
+      "sha256": "860e0329d26c4b0ed970b25dfe82dacb84020c9d718f240dbb720df4d8ccd109"
     },
     {
       "path": "TheRadioVault.Client.iOS/LibraryViewController.cs",
@@ -480,8 +490,8 @@
     },
     {
       "path": "TheRadioVault.Client.iOS/Main.cs",
-      "bytes": 403,
-      "sha256": "017e7e4759b708eef92a8705a69492f2a4965ea13f81f62d0178dddfa133cbb8"
+      "bytes": 443,
+      "sha256": "ad6d92385f624fee3614b28c8258a76db5e45192bf71a23752f2643ac7006f67"
     },
     {
       "path": "TheRadioVault.Client.iOS/NowPlayingViewController.cs",
@@ -495,8 +505,8 @@
     },
     {
       "path": "TheRadioVault.Client.iOS/SceneDelegate.cs",
-      "bytes": 1273,
-      "sha256": "f803667418da78f8e3848fe8239489b708b4ccb9ea574422a871fe8378ca3184"
+      "bytes": 1486,
+      "sha256": "30b23e1019024e1e7ee019fdc31d083ebb8dea67839287b4a37dde8cdb174f27"
     },
     {
       "path": "TheRadioVault.Client.iOS/ServerViewController.cs",
@@ -1975,8 +1985,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 516944,
-      "sha256": "3ab6277073f937f3db2215f25e55a703809a1347488e365a0686e5b180b499e7"
+      "bytes": 518399,
+      "sha256": "4e417999ae8f8b1eca0520400210931eea3b1321c2b35a6f6a7092a377217c49"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",

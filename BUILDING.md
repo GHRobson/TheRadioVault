@@ -74,6 +74,11 @@ and provisioning profile with Apple's multicast-networking capability. Pairing
 and playback require the iPhone or Simulator to reach a running Radio Vault
 Server on the same local network.
 
+For acceptance, verify that playback progress appears on another connected
+client after five seconds, pause and seek boundaries persist immediately,
+moving a playing broadcast between iOS and a desktop stops the previous output,
+and the iOS lock screen can play, pause, skip and seek the current broadcast.
+
 ## Release validation
 
 Run:

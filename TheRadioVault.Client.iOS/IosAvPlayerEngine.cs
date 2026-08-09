@@ -12,6 +12,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
     private AVPlayer? _player;
     private NSObject? _endObserver;
     private double _rate = 1d;
+    private bool _muted;
     private MobilePlaybackSnapshot _current = new(false, false, TimeSpan.Zero, null);
     private bool _disposed;
 
@@ -38,6 +39,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
                 ?? throw new InvalidOperationException("The media proxy returned an invalid URL.");
             _player = AVPlayer.FromUrl(nativeUrl);
             _player.AutomaticallyWaitsToMinimizeStalling = true;
+            _player.Muted = _muted;
             if (_player.CurrentItem is { } item)
                 _endObserver = AVPlayerItem.Notifications.ObserveDidPlayToEndTime(item, (_, _) => OnEnded());
             _current = new MobilePlaybackSnapshot(true, false, TimeSpan.Zero, null);
@@ -88,6 +90,16 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
             ThrowIfDisposed();
             _rate = Math.Clamp(rate, 0.5d, 3d);
             if (_player?.Rate > 0.001f) _player.PlayImmediatelyAtRate((float)_rate);
+        }
+    }
+
+    public void SetMuted(bool muted)
+    {
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            _muted = muted;
+            if (_player is not null) _player.Muted = muted;
         }
     }
 

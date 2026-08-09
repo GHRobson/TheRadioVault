@@ -1339,6 +1339,23 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         SourceRoot(), "TheRadioVault.Client.iOS", "IosAvPlayerEngine.cs"));
     True(engine.Contains("AVPlayer", StringComparison.Ordinal));
     True(engine.Contains("AVAudioSessionCategory.Playback", StringComparison.Ordinal));
+    True(engine.Contains("SetMuted", StringComparison.Ordinal));
+
+    var nowPlaying = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "IosNowPlayingService.cs"));
+    True(nowPlaying.Contains("MPNowPlayingInfoCenter", StringComparison.Ordinal));
+    True(nowPlaying.Contains("MPRemoteCommandCenter", StringComparison.Ordinal));
+    True(nowPlaying.Contains("ChangePlaybackPositionCommand", StringComparison.Ordinal));
+    True(nowPlaying.Contains("SkipBackwardCommand", StringComparison.Ordinal));
+
+    var mobileSession = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    True(mobileSession.Contains("WebPlaybackTransferBeginRequest", StringComparison.Ordinal));
+    True(mobileSession.Contains("WebPlaybackTransferReadyRequest", StringComparison.Ordinal));
+    True(mobileSession.Contains("WebPlaybackTransferCommitRequest", StringComparison.Ordinal));
+    True(mobileSession.Contains("WebPlaybackTransferSourceStoppedRequest", StringComparison.Ordinal));
+    True(mobileSession.Contains("WebOfflineProgressUpdate", StringComparison.Ordinal));
+    True(mobileSession.Contains("DurableProgressInterval", StringComparison.Ordinal));
 
     var keychain = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosKeychainConnectionStore.cs"));
@@ -1350,6 +1367,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(client.Contains("WebApiRoutes", StringComparison.Ordinal));
     True(client.Contains("X-RadioVault-Token", StringComparison.Ordinal));
     True(client.Contains("ServerCertificateCustomValidationCallback", StringComparison.Ordinal));
+    True(client.Contains("PlayerWebProgress", StringComparison.Ordinal));
+    True(client.Contains("PlayerTransferBegin", StringComparison.Ordinal));
+    True(client.Contains("OfflineProgress", StringComparison.Ordinal));
 
     var plist = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "Info.plist"));

@@ -17,4 +17,5 @@ public interface IMobilePlaybackEngine : IDisposable
     void Pause();
     void Seek(TimeSpan position);
     void SetRate(double rate);
+    void SetMuted(bool muted);
 }

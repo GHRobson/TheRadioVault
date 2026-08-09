@@ -50,7 +50,9 @@ contracts. See [MACOS-CLIENT.md](MACOS-CLIENT.md) for build and on-Mac acceptanc
 The iOS Client is an early iPhone and iPad alpha built with native UIKit
 controls and navigation. It provides local-network discovery and pairing, a
 mobile Dashboard and searchable Library, canonical multipart playback, native
-Now Playing controls and secure Keychain storage. It uses
+Now Playing controls, lock-screen and Control Centre transport commands,
+generation-safe playback handoff, five-second progress synchronisation and
+secure Keychain storage. It uses
 the existing Server v1 API with certificate pinning; no iOS-specific Server is
 required. See [BUILDING.md](BUILDING.md#ios-client) for the Simulator build.
 

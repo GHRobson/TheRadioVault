@@ -23,11 +23,18 @@ public sealed class SceneDelegate : UIResponder, IUIWindowSceneDelegate
         var services = MobilePlatformServices.Current;
         _session = new MobileClientSession(
             new MobileServerClient(services.ConnectionStore),
-            services.PlaybackEngine);
+            services.PlaybackEngine,
+            services.NowPlayingService);
         var tabs = new RadioVaultTabBarController(_session);
         Window = new UIWindow(windowScene) { RootViewController = tabs };
         Window.MakeKeyAndVisible();
         _ = _session.InitializeAsync();
+    }
+
+    [Export("sceneDidEnterBackground:")]
+    public void DidEnterBackground(UIScene scene)
+    {
+        if (_session is not null) _ = _session.FlushPlaybackAsync();
     }
 
     protected override void Dispose(bool disposing)

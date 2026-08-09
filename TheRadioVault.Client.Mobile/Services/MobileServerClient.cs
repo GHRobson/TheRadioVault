@@ -27,6 +27,10 @@ public sealed class MobileServerClient : IDisposable
 
     public RadioVaultMobileConnection? Connection => _connection;
     public bool IsPaired => _connection?.IsConfigured == true;
+    public string ClientId => _connection?.ClientId
+        ?? throw new InvalidOperationException("Pair this iPhone with a Radio Vault Server first.");
+    public string ClientDisplayName => _connection?.ClientDisplayName
+        ?? "Radio Vault on iPhone";
 
     public async Task<IReadOnlyList<DiscoveredRadioVaultServer>> DiscoverAsync(
         TimeSpan? duration = null,
@@ -172,6 +176,82 @@ public sealed class MobileServerClient : IDisposable
             MobileJsonContext.Default.WebCanonicalMediaManifest,
             cancellationToken);
 
+    public async Task<WebPlaybackSession> GetPlaybackSessionAsync(CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.Player,
+            MobileJsonContext.Default.PlaybackSessionEnvelope,
+            cancellationToken).ConfigureAwait(false)).Session;
+
+    public async Task<WebClientPlaybackResult> UpdateLivePlaybackAsync(
+        WebClientPlaybackUpdate update,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.PlayerWebProgress,
+            update,
+            MobileJsonContext.Default.WebClientPlaybackUpdate,
+            MobileJsonContext.Default.ClientPlaybackEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebPlaybackTransferResult> BeginPlaybackTransferAsync(
+        WebPlaybackTransferBeginRequest request,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.PlayerTransferBegin,
+            request,
+            MobileJsonContext.Default.WebPlaybackTransferBeginRequest,
+            MobileJsonContext.Default.PlaybackTransferEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebPlaybackTransferResult> MarkPlaybackTransferReadyAsync(
+        WebPlaybackTransferReadyRequest request,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.PlayerTransferReady,
+            request,
+            MobileJsonContext.Default.WebPlaybackTransferReadyRequest,
+            MobileJsonContext.Default.PlaybackTransferEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebPlaybackTransferResult> CommitPlaybackTransferAsync(
+        WebPlaybackTransferCommitRequest request,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.PlayerTransferCommit,
+            request,
+            MobileJsonContext.Default.WebPlaybackTransferCommitRequest,
+            MobileJsonContext.Default.PlaybackTransferEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task CancelPlaybackTransferAsync(
+        WebPlaybackTransferCancelRequest request,
+        CancellationToken cancellationToken = default)
+        => _ = await PostJsonAsync(
+            WebApiRoutes.PlayerTransferCancel,
+            request,
+            MobileJsonContext.Default.WebPlaybackTransferCancelRequest,
+            MobileJsonContext.Default.PlaybackTransferEnvelope,
+            cancellationToken).ConfigureAwait(false);
+
+    public async Task AcknowledgePlaybackSourceStoppedAsync(
+        WebPlaybackTransferSourceStoppedRequest request,
+        CancellationToken cancellationToken = default)
+        => _ = await PostJsonAsync(
+            WebApiRoutes.PlayerTransferSourceStopped,
+            request,
+            MobileJsonContext.Default.WebPlaybackTransferSourceStoppedRequest,
+            MobileJsonContext.Default.PlaybackTransferEnvelope,
+            cancellationToken).ConfigureAwait(false);
+
+    public async Task<WebOfflineProgressResult> SaveProgressAsync(
+        WebOfflineProgressUpdate update,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.OfflineProgress(update.EpisodeId),
+            update,
+            MobileJsonContext.Default.WebOfflineProgressUpdate,
+            MobileJsonContext.Default.ProgressEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
     public async Task<HttpResponseMessage> OpenResponseAsync(
         string path,
         string? range,
@@ -202,6 +282,22 @@ public sealed class MobileServerClient : IDisposable
         CancellationToken cancellationToken)
         => await RequiredClient.GetFromJsonAsync(path, typeInfo, cancellationToken).ConfigureAwait(false)
            ?? throw new InvalidOperationException("The Radio Vault Server returned an empty response.");
+
+    private async Task<TResponse> PostJsonAsync<TRequest, TResponse>(
+        string path,
+        TRequest request,
+        JsonTypeInfo<TRequest> requestType,
+        JsonTypeInfo<TResponse> responseType,
+        CancellationToken cancellationToken)
+    {
+        using var response = await RequiredClient.PostAsJsonAsync(
+            path, request, requestType, cancellationToken).ConfigureAwait(false);
+        var result = await response.Content.ReadFromJsonAsync(responseType, cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("The Radio Vault Server returned an empty response.");
+        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.Conflict)
+            throw new HttpRequestException($"The Radio Vault Server rejected the request ({(int)response.StatusCode}).");
+        return result;
+    }
 
     private HttpClient RequiredClient => _client
         ?? throw new InvalidOperationException("Pair this iPhone with a Radio Vault Server first.");
