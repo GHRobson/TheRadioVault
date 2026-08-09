@@ -5,11 +5,14 @@ using TheRadioVault.Client.Mobile.Platform;
 
 namespace TheRadioVault.Client.iOS;
 
-public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
+public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingPlaybackEngine
 {
     private readonly object _gate = new();
     private readonly Timer _timer;
     private AVPlayer? _player;
+    private AVUrlAsset? _streamAsset;
+    private IosMediaResourceLoader? _streamLoader;
+    private CoreFoundation.DispatchQueue? _streamQueue;
     private NSObject? _endObserver;
     private double _rate = 1d;
     private bool _muted;
@@ -39,14 +42,40 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
             using var nativeUrl = NSUrl.FromString(url)
                 ?? throw new InvalidOperationException("The media proxy returned an invalid URL.");
             _player = AVPlayer.FromUrl(nativeUrl);
-            _player.AutomaticallyWaitsToMinimizeStalling = true;
-            _player.Muted = _muted;
-            if (_player.CurrentItem is { } item)
-                _endObserver = AVPlayerItem.Notifications.ObserveDidPlayToEndTime(item, (_, _) => OnEnded());
-            _current = new MobilePlaybackSnapshot(true, false, TimeSpan.Zero, null);
-            _timer.Change(TimeSpan.Zero, TimeSpan.FromMilliseconds(250));
-            PublishLocked();
+            ConfigurePlayerLocked();
         }
+    }
+
+    public void Open(MobilePlaybackSource source)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        lock (_gate)
+        {
+            ThrowIfDisposed();
+            DisposePlayerLocked();
+            using var nativeUrl = NSUrl.FromString(
+                $"radiovault-media://stream/{Uri.EscapeDataString(source.Identifier)}")
+                ?? throw new InvalidOperationException("Radio Vault could not create its native media source.");
+            _streamAsset = new AVUrlAsset(nativeUrl);
+            _streamLoader = new IosMediaResourceLoader(source);
+            _streamQueue = new CoreFoundation.DispatchQueue("com.ghrobson.theradiovault.media-loader");
+            _streamAsset.ResourceLoader.SetDelegate(_streamLoader, _streamQueue);
+            using var item = AVPlayerItem.FromAsset(_streamAsset);
+            _player = AVPlayer.FromPlayerItem(item);
+            ConfigurePlayerLocked();
+        }
+    }
+
+    private void ConfigurePlayerLocked()
+    {
+        if (_player is null) return;
+        _player.AutomaticallyWaitsToMinimizeStalling = true;
+        _player.Muted = _muted;
+        if (_player.CurrentItem is { } item)
+            _endObserver = AVPlayerItem.Notifications.ObserveDidPlayToEndTime(item, (_, _) => OnEnded());
+        _current = new MobilePlaybackSnapshot(true, false, TimeSpan.Zero, null);
+        _timer.Change(TimeSpan.Zero, TimeSpan.FromMilliseconds(250));
+        PublishLocked();
     }
 
     public void Play()
@@ -175,6 +204,13 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine
         _player?.Pause();
         _player?.Dispose();
         _player = null;
+        _streamAsset?.ResourceLoader.SetDelegate(null, null);
+        _streamLoader?.Dispose();
+        _streamLoader = null;
+        _streamAsset?.Dispose();
+        _streamAsset = null;
+        _streamQueue?.Dispose();
+        _streamQueue = null;
     }
 
     private static void ActivateAudioSessionLocked()

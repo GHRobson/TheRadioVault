@@ -960,6 +960,11 @@ public sealed class MobileClientSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(broadcast);
         if (!IsPaired || IsPreparingPlayback) return;
+        SelectedBroadcast = broadcast;
+        NowPlayingTitle = broadcast.Title;
+        NowPlayingSubtitle = broadcast.Subtitle;
+        _remotePlaybackBroadcast = null;
+        _remotePlaybackOwner = string.Empty;
         PreparingPlaybackEpisodeId = broadcast.EpisodeId;
         PlaybackStatus = IsBusy ? "Finishing the startup sync…" : "Preparing secure stream…";
         Notify();
@@ -1203,11 +1208,23 @@ public sealed class MobileClientSession : IDisposable
         }
         else
         {
-            _mediaProxy ??= new MobileMediaProxy(_server);
-            url = _mediaProxy.Register(WebApiRoutes.MediaPart(SelectedBroadcast.EpisodeId, part.MediaFileId));
+            var serverPath = WebApiRoutes.MediaPart(SelectedBroadcast.EpisodeId, part.MediaFileId);
+            if (_playback is IMobileStreamingPlaybackEngine nativeStreaming)
+            {
+                nativeStreaming.Open(new MobilePlaybackSource(
+                    serverPath,
+                    (range, cancellationToken) => _server.OpenResponseAsync(
+                        serverPath, range, cancellationToken)));
+                url = string.Empty;
+            }
+            else
+            {
+                _mediaProxy ??= new MobileMediaProxy(_server);
+                url = _mediaProxy.Register(serverPath);
+            }
         }
         _playback.SetMuted(muted);
-        _playback.Open(url);
+        if (url.Length > 0) _playback.Open(url);
         _playback.SetRate(_speed);
         var localPosition = TimeSpan.FromMilliseconds(Math.Max(0, logicalPositionMs - part.LogicalStartMs));
         _pendingDecoderLogicalPositionMs = logicalPositionMs;
