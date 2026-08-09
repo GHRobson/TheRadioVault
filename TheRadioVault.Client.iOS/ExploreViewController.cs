@@ -23,12 +23,13 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
     }
 
     private bool IsBrowseMode => _browseAll || !string.IsNullOrWhiteSpace(_searchController.SearchBar.Text);
+    protected override string? PageHeading => "Explore";
+    protected override string PageDescription => "People, shows, stories and moments connected directly to your broadcasts.";
 
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
-        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
-        NavigationController!.NavigationBar.PrefersLargeTitles = true;
+        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
         _searchController.SearchBar.Placeholder = "Search people, shows, places, events or articles";
         _searchController.SearchBar.Delegate = this;
         NavigationItem.SearchController = _searchController;
@@ -62,7 +63,7 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
         return section switch
         {
             0 => 1,
-            1 => 4,
+            1 => 1,
             2 => _dashboard.Highlights.OnThisDay.Count,
             3 => _dashboard.FeaturedPages.Count,
             4 => _dashboard.RecentPages.Count,
@@ -128,17 +129,13 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
         if (indexPath.Section == 1)
         {
             var overview = _dashboard.Overview;
-            var stats = new[]
-            {
-                ("Articles", overview.PageCount),
-                ("Dated events", overview.TimelineEventCount),
-                ("Sources", overview.SourceCount),
-                ("Images", overview.ImageCount)
-            };
-            var stat = stats[indexPath.Row];
-            var cell = DetailCell("explore-stat", stat.Item1, stat.Item2.ToString("N0"));
-            cell.SelectionStyle = UITableViewCellSelectionStyle.None;
-            return cell;
+            var stats = new DashboardStatsCell();
+            stats.Configure(
+                ("Articles", overview.PageCount, RadioVaultIcon.Knowledge),
+                ("Events", overview.TimelineEventCount, RadioVaultIcon.Radio),
+                ("Sources", overview.SourceCount, RadioVaultIcon.Library),
+                ("Images", overview.ImageCount, RadioVaultIcon.Download));
+            return stats;
         }
 
         if (indexPath.Section == 2)

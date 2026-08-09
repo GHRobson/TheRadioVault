@@ -7,6 +7,8 @@ namespace TheRadioVault.Client.iOS;
 
 public sealed class ServerViewController : SessionTableViewController
 {
+    protected override string? PageHeading => "Settings";
+    protected override string PageDescription => "Connection, downloads and Radio Vault preferences.";
     private readonly UISwitch _wifiOnlySwitch = new();
     private readonly UITextField _codeField = new()
     {
@@ -43,7 +45,7 @@ public sealed class ServerViewController : SessionTableViewController
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
-        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
+        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
         _codeField.TextColor = RadioVaultTheme.Text;
         _codeField.TintColor = RadioVaultTheme.Accent;
         _addressField.TextColor = RadioVaultTheme.Text;

@@ -8,11 +8,13 @@ namespace TheRadioVault.Client.iOS;
 public sealed class DownloadsViewController : SessionTableViewController
 {
     public DownloadsViewController(MobileClientSession session) : base(session) => Title = "Downloads";
+    protected override string? PageHeading => "Downloads";
+    protected override string PageDescription => "Broadcasts saved on this iPhone for listening without streaming.";
 
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
-        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
+        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
         TableView.RowHeight = UITableView.AutomaticDimension;
         TableView.EstimatedRowHeight = 74;
         NavigationItem.RightBarButtonItem = EditButtonItem;

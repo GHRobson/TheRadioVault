@@ -5,39 +5,29 @@ using UIKit;
 
 namespace TheRadioVault.Client.iOS;
 
-public sealed class LibraryViewController : SessionTableViewController, IUISearchResultsUpdating, IUISearchBarDelegate
+public sealed class LibraryViewController : SessionTableViewController, IUISearchBarDelegate
 {
-    private UISearchController? _searchController;
+    private readonly LibraryControlsHeaderView _header = new(includesPageHeading: true, includesViewModes: false);
     private bool _hideCompleted;
-    private bool IsShowingSearchResults => !string.IsNullOrWhiteSpace(_searchController?.SearchBar.Text);
+    private bool IsShowingSearchResults => !string.IsNullOrWhiteSpace(_header.SearchBar.Text);
 
     public LibraryViewController(MobileClientSession session) : base(session) => Title = "Library";
 
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
-        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
+        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
         TableView.RowHeight = UITableView.AutomaticDimension;
         TableView.EstimatedRowHeight = 74;
-        _searchController = new UISearchController((UIViewController?)null)
-        {
-            ObscuresBackgroundDuringPresentation = false,
-            SearchResultsUpdater = this
-        };
-        _searchController.SearchBar.Placeholder = "Search broadcasts";
-        _searchController.SearchBar.Delegate = this;
-        NavigationItem.SearchController = _searchController;
-        NavigationItem.HidesSearchBarWhenScrolling = false;
-        NavigationItem.RightBarButtonItem = new UIBarButtonItem(
-            RadioVaultIcons.Image(RadioVaultIcon.Completed),
-            UIBarButtonItemStyle.Plain,
-            (_, _) => ToggleHideCompleted());
+        _header.SearchBar.Placeholder = "Search broadcasts";
+        _header.SearchBar.Delegate = this;
+        _header.CompletedButton.TouchUpInside += CompletedButtonTapped;
+        TableView.TableHeaderView = _header;
         UpdateHideCompletedButton();
-        DefinesPresentationContext = true;
         RefreshControl = new UIRefreshControl();
         RefreshControl.ValueChanged += async (_, _) =>
         {
-            await Session.SearchAsync(_searchController?.SearchBar.Text ?? string.Empty, _hideCompleted);
+            await Session.SearchAsync(_header.SearchBar.Text ?? string.Empty, _hideCompleted);
             BeginInvokeOnMainThread(() => RefreshControl?.EndRefreshing());
         };
     }
@@ -161,13 +151,18 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         }
     }
 
-    public void UpdateSearchResultsForSearchController(UISearchController searchController) { }
-
     [Export("searchBarSearchButtonClicked:")]
     public void SearchButtonClicked(UISearchBar searchBar)
     {
         searchBar.ResignFirstResponder();
         _ = Session.SearchAsync(searchBar.Text ?? string.Empty, _hideCompleted);
+    }
+
+    [Export("searchBar:textDidChange:")]
+    public void TextChanged(UISearchBar searchBar, string searchText)
+    {
+        if (string.IsNullOrWhiteSpace(searchText))
+            _ = Session.SearchAsync(string.Empty, _hideCompleted);
     }
 
     [Export("searchBarCancelButtonClicked:")]
@@ -183,28 +178,24 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         _hideCompleted = !_hideCompleted;
         UpdateHideCompletedButton();
         if (IsShowingSearchResults)
-            _ = Session.SearchAsync(_searchController?.SearchBar.Text ?? string.Empty, _hideCompleted);
+            _ = Session.SearchAsync(_header.SearchBar.Text ?? string.Empty, _hideCompleted);
         else
             TableView.ReloadData();
     }
 
+    private void CompletedButtonTapped(object? sender, EventArgs eventArgs) => ToggleHideCompleted();
+
     private void UpdateHideCompletedButton()
     {
-        var button = NavigationItem.RightBarButtonItem;
-        if (button is null) return;
-        button.Image = RadioVaultIcons.Image(
-            RadioVaultIcon.Completed,
-            _hideCompleted ? RadioVaultTheme.Accent : RadioVaultTheme.MutedText);
-        button.AccessibilityLabel = _hideCompleted ? "Show completed broadcasts" : "Hide completed broadcasts";
-        button.AccessibilityValue = _hideCompleted ? "Completed broadcasts hidden" : "Completed broadcasts shown";
+        _header.SetHideCompleted(_hideCompleted);
     }
 
     protected override void Dispose(bool disposing)
     {
         if (disposing)
         {
-            _searchController?.Dispose();
-            _searchController = null;
+            _header.CompletedButton.TouchUpInside -= CompletedButtonTapped;
+            _header.Dispose();
         }
         base.Dispose(disposing);
     }

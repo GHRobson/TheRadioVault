@@ -15,6 +15,8 @@ public sealed class HomeViewController : SessionTableViewController
 
     private MobileBroadcastItem? FeaturedContinue => Session.ContinueListening.FirstOrDefault();
     private IReadOnlyList<MobileBroadcastItem> UpNext => Session.ContinueListening.Skip(1).Take(4).ToArray();
+    protected override string? PageHeading => "Dashboard";
+    protected override string PageDescription => "Continue listening, rediscover the archive, or choose something unexpected.";
 
     public override void ViewDidLoad()
     {
@@ -30,45 +32,42 @@ public sealed class HomeViewController : SessionTableViewController
         };
     }
 
-    public override nint NumberOfSections(UITableView tableView) => 8;
+    public override nint NumberOfSections(UITableView tableView) => 7;
 
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
         0 => 1,
         1 => 1,
         2 => 1,
-        3 => 1,
-        4 => Math.Max(1, UpNext.Count),
-        5 => Math.Max(1, Session.OnThisDay.Count),
-        6 => Math.Max(1, Session.RecentBroadcasts.Take(5).Count()),
-        7 => Math.Max(1, Session.UnheardBroadcasts.Take(5).Count()),
+        3 => Math.Max(1, UpNext.Count),
+        4 => Math.Max(1, Session.OnThisDay.Count),
+        5 => Math.Max(1, Session.RecentBroadcasts.Take(5).Count()),
+        6 => Math.Max(1, Session.UnheardBroadcasts.Take(5).Count()),
         _ => 0
     };
 
     public override string? TitleForHeader(UITableView tableView, nint section) => section switch
     {
-        1 => "Your Library",
-        2 => "Continue listening",
-        3 => "Not sure what to play?",
-        4 => "Up next",
-        5 => "On this day",
-        6 => "Recently added",
-        7 => "Unheard broadcasts",
+        0 => "Your Library",
+        1 => "Continue listening",
+        2 => "Not sure what to play?",
+        3 => "Up next",
+        4 => "On this day",
+        5 => "Recently added",
+        6 => "Unheard broadcasts",
         _ => null
     };
 
     public override string? TitleForFooter(UITableView tableView, nint section) => section switch
     {
-        2 when FeaturedContinue is null => "Choose something from the Library or let Radio Vault pick for you.",
-        3 => "Choose a random unheard broadcast.",
+        1 when FeaturedContinue is null => "Choose something from the Library or let Radio Vault pick for you.",
+        2 => "Choose a random unheard broadcast.",
         _ => null
     };
 
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
-        if (indexPath.Section == 0) return new DashboardHeaderCell();
-
-        if (indexPath.Section == 1)
+        if (indexPath.Section == 0)
         {
             var stats = new DashboardStatsCell();
             stats.Configure(
@@ -79,7 +78,7 @@ public sealed class HomeViewController : SessionTableViewController
             return stats;
         }
 
-        if (indexPath.Section == 2)
+        if (indexPath.Section == 1)
         {
             if (FeaturedContinue is not { } featured)
                 return DetailCell("dashboard-featured-empty", "Nothing waiting to resume", Session.StatusText);
@@ -88,7 +87,7 @@ public sealed class HomeViewController : SessionTableViewController
             return cell;
         }
 
-        if (indexPath.Section == 3)
+        if (indexPath.Section == 2)
         {
             var cell = new UITableViewCell(UITableViewCellStyle.Default, "dashboard-surprise");
             var content = cell.DefaultContentConfiguration;
@@ -108,9 +107,9 @@ public sealed class HomeViewController : SessionTableViewController
         {
             var empty = indexPath.Section switch
             {
-                4 => "Nothing else waiting to resume",
-                5 => "No broadcasts aired on this date",
-                6 => "No recently added broadcasts",
+                3 => "Nothing else waiting to resume",
+                4 => "No broadcasts aired on this date",
+                5 => "No recently added broadcasts",
                 _ => "You have heard everything in the Library"
             };
             return DetailCell("dashboard-empty", empty, "Pull down to refresh the Dashboard.");
@@ -118,7 +117,7 @@ public sealed class HomeViewController : SessionTableViewController
 
         var item = values[indexPath.Row];
         var broadcastCell = new BroadcastProgressCell("dashboard-broadcast");
-        broadcastCell.Configure(item, indexPath.Section == 4
+        broadcastCell.Configure(item, indexPath.Section == 3
             ? $"{item.Source.CollectionName} · ready to resume"
             : $"{item.Subtitle} · {item.Status}");
         broadcastCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
@@ -128,18 +127,18 @@ public sealed class HomeViewController : SessionTableViewController
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (indexPath.Section == 2 && FeaturedContinue is { } featured)
+        if (indexPath.Section == 1 && FeaturedContinue is { } featured)
         {
             _ = Session.PlayAsync(featured);
             return;
         }
-        if (indexPath.Section == 3)
+        if (indexPath.Section == 2)
         {
             var pool = Session.UnheardBroadcasts;
             if (pool.Count > 0) _ = Session.PlayAsync(pool[Random.Shared.Next(pool.Count)]);
             return;
         }
-        if (indexPath.Section < 4) return;
+        if (indexPath.Section < 3) return;
         var values = ValuesForSection(indexPath.Section);
         if (indexPath.Row < values.Count)
             NavigationController?.PushViewController(
@@ -148,18 +147,18 @@ public sealed class HomeViewController : SessionTableViewController
 
     protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
     {
-        if (indexPath.Section == 2) return FeaturedContinue;
-        if (indexPath.Section < 4) return null;
+        if (indexPath.Section == 1) return FeaturedContinue;
+        if (indexPath.Section < 3) return null;
         var values = ValuesForSection(indexPath.Section);
         return indexPath.Row < values.Count ? values[indexPath.Row] : null;
     }
 
     private IReadOnlyList<MobileBroadcastItem> ValuesForSection(nint section) => section switch
     {
-        4 => UpNext,
-        5 => Session.OnThisDay,
-        6 => Session.RecentBroadcasts.Take(5).ToArray(),
-        7 => Session.UnheardBroadcasts.Take(5).ToArray(),
+        3 => UpNext,
+        4 => Session.OnThisDay,
+        5 => Session.RecentBroadcasts.Take(5).ToArray(),
+        6 => Session.UnheardBroadcasts.Take(5).ToArray(),
         _ => []
     };
 }

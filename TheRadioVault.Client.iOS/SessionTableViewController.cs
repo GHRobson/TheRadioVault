@@ -16,6 +16,8 @@ public abstract class SessionTableViewController : UITableViewController
     }
 
     protected MobileClientSession Session { get; }
+    protected virtual string? PageHeading => null;
+    protected virtual string PageDescription => string.Empty;
 
     public override void ViewDidLoad()
     {
@@ -24,6 +26,8 @@ public abstract class SessionTableViewController : UITableViewController
         TableView.BackgroundColor = RadioVaultTheme.Background;
         TableView.SeparatorColor = RadioVaultTheme.Border;
         TableView.SectionHeaderTopPadding = 12;
+        if (!string.IsNullOrWhiteSpace(PageHeading))
+            TableView.TableHeaderView = new PageHeaderView(PageHeading, PageDescription);
     }
 
     public override void ViewWillAppear(bool animated)

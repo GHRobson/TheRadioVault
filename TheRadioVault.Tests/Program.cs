@@ -1437,6 +1437,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(tabs.Contains("ServerViewController", StringComparison.Ordinal));
     True(tabs.Contains("RadioVaultIcons.Image", StringComparison.Ordinal));
     True(tabs.Contains("SetTitleTextAttributes", StringComparison.Ordinal));
+    True(tabs.Contains("CreateTabAppearance", StringComparison.Ordinal));
+    True(tabs.Contains("appearance.Selected.TitleTextAttributes", StringComparison.Ordinal));
     True(tabs.Contains("UIModalPresentationStyle.PageSheet", StringComparison.Ordinal));
     True(tabs.Contains("PrefersGrabberVisible = true", StringComparison.Ordinal));
     True(tabs.Contains("\"Dashboard\"", StringComparison.Ordinal));
@@ -1453,7 +1455,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
-    True(library.Contains("UISearchController", StringComparison.Ordinal));
+    True(!library.Contains("UISearchController", StringComparison.Ordinal));
+    True(library.Contains("LibraryControlsHeaderView", StringComparison.Ordinal));
     True(library.Contains("UITableView", StringComparison.Ordinal));
     True(library.Contains("LibraryCollections", StringComparison.Ordinal));
     True(library.Contains("ShowLibraryViewController", StringComparison.Ordinal));
@@ -1461,7 +1464,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(library.Contains("ContinueListening", StringComparison.Ordinal));
     True(library.Contains("UpNextViewController", StringComparison.Ordinal));
     True(library.Contains("ToggleHideCompleted", StringComparison.Ordinal));
-    True(library.Contains("RadioVaultIcon.Completed", StringComparison.Ordinal));
+    True(library.Contains("SetHideCompleted", StringComparison.Ordinal));
 
     var showLibrary = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ShowLibraryViewController.cs"));
@@ -1470,12 +1473,18 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(showLibrary.Contains("ArchiveLevel.Months", StringComparison.Ordinal));
     True(showLibrary.Contains("ArchiveLevel.Broadcasts", StringComparison.Ordinal));
     True(showLibrary.Contains("ArchiveGridRowCell", StringComparison.Ordinal));
+    True(showLibrary.Contains("GridButtonTapped", StringComparison.Ordinal));
+    True(showLibrary.Contains("ListButtonTapped", StringComparison.Ordinal));
+    True(showLibrary.Contains("includesViewModes", StringComparison.Ordinal));
     True(showLibrary.Contains("ToggleHideCompleted", StringComparison.Ordinal));
     True(showLibrary.Contains("LoadArchivePeriodsAsync", StringComparison.Ordinal));
 
     var iosCells = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultCells.cs"));
-    True(iosCells.Contains("DashboardHeaderCell", StringComparison.Ordinal));
+    True(iosCells.Contains("PageHeaderView", StringComparison.Ordinal));
+    True(iosCells.Contains("LibraryControlsHeaderView", StringComparison.Ordinal));
+    True(iosCells.Contains("CompletedButton", StringComparison.Ordinal));
+    True(iosCells.Contains("UITapGestureRecognizer", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardStatsCell", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardContinueCell", StringComparison.Ordinal));
     True(iosCells.Contains("BroadcastProgressCell", StringComparison.Ordinal));
@@ -1507,6 +1516,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(explore.Contains("PeoplePages", StringComparison.Ordinal));
     True(explore.Contains("TopicPages", StringComparison.Ordinal));
     True(explore.Contains("LoadExploreDashboardAsync", StringComparison.Ordinal));
+    True(explore.Contains("PageHeading => \"Explore\"", StringComparison.Ordinal));
+    True(explore.Contains("DashboardStatsCell", StringComparison.Ordinal));
 
     var exploreArticle = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreArticleViewController.cs"));

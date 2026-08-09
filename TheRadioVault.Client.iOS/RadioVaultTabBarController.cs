@@ -60,6 +60,9 @@ public sealed class RadioVaultTabBarController : UITabBarController
         tabItem.SetTitleTextAttributes(
             new UIStringAttributes { ForegroundColor = tabColor },
             UIControlState.Selected);
+        var tabAppearance = CreateTabAppearance(tabColor);
+        tabItem.StandardAppearance = tabAppearance;
+        tabItem.ScrollEdgeAppearance = tabAppearance;
         var navigation = new UINavigationController(controller)
         {
             TabBarItem = tabItem
@@ -68,6 +71,27 @@ public sealed class RadioVaultTabBarController : UITabBarController
         navigation.NavigationBar.Hidden = false;
         if (navigation.View is { } view) view.BackgroundColor = RadioVaultTheme.Background;
         return navigation;
+    }
+
+    private static UITabBarAppearance CreateTabAppearance(UIColor color)
+    {
+        var appearance = new UITabBarAppearance();
+        appearance.ConfigureWithOpaqueBackground();
+        appearance.BackgroundColor = RadioVaultTheme.Shell;
+        appearance.ShadowColor = RadioVaultTheme.Border;
+        ConfigureItemAppearance(appearance.StackedLayoutAppearance, color);
+        ConfigureItemAppearance(appearance.InlineLayoutAppearance, color);
+        ConfigureItemAppearance(appearance.CompactInlineLayoutAppearance, color);
+        return appearance;
+    }
+
+    private static void ConfigureItemAppearance(UITabBarItemAppearance appearance, UIColor color)
+    {
+        var attributes = new UIStringAttributes { ForegroundColor = color };
+        appearance.Normal.IconColor = color;
+        appearance.Normal.TitleTextAttributes = attributes;
+        appearance.Selected.IconColor = color;
+        appearance.Selected.TitleTextAttributes = attributes;
     }
 
     private void SessionOnTabRequested(int index)

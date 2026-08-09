@@ -1,3 +1,4 @@
+using CoreGraphics;
 using Foundation;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Web.Models;
@@ -5,22 +6,22 @@ using UIKit;
 
 namespace TheRadioVault.Client.iOS;
 
-internal sealed class DashboardHeaderCell : UITableViewCell
+internal sealed class PageHeaderView : UIView
 {
-    public DashboardHeaderCell() : base(UITableViewCellStyle.Default, "dashboard-header")
+    public PageHeaderView(string titleText, string subtitleText)
+        : base(new CGRect(0, 0, 1, 92))
     {
         BackgroundColor = RadioVaultTheme.Background;
-        SelectionStyle = UITableViewCellSelectionStyle.None;
 
         var title = new UILabel
         {
-            Text = "Dashboard",
+            Text = titleText,
             Font = UIFont.SystemFontOfSize(32, UIFontWeight.Bold)!,
             TextColor = RadioVaultTheme.Text
         };
         var subtitle = new UILabel
         {
-            Text = "Continue listening, rediscover the archive, or choose something unexpected.",
+            Text = subtitleText,
             Font = UIFont.SystemFontOfSize(13)!,
             TextColor = RadioVaultTheme.MutedText,
             Lines = 0
@@ -32,13 +33,137 @@ internal sealed class DashboardHeaderCell : UITableViewCell
             Spacing = 4,
             TranslatesAutoresizingMaskIntoConstraints = false
         };
-        ContentView.AddSubview(stack);
+        AddSubview(stack);
         NSLayoutConstraint.ActivateConstraints([
-            stack.LeadingAnchor.ConstraintEqualTo(ContentView.LeadingAnchor, 4),
-            stack.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor, -4),
-            stack.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor, 8),
-            stack.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor, -8)
+            stack.LeadingAnchor.ConstraintEqualTo(LeadingAnchor, 20),
+            stack.TrailingAnchor.ConstraintEqualTo(TrailingAnchor, -20),
+            stack.TopAnchor.ConstraintEqualTo(TopAnchor, 10),
+            stack.BottomAnchor.ConstraintEqualTo(BottomAnchor, -10)
         ]);
+    }
+}
+
+internal sealed class LibraryControlsHeaderView : UIView
+{
+    public LibraryControlsHeaderView(bool includesPageHeading, bool includesViewModes)
+        : base(new CGRect(0, 0, 1, includesPageHeading ? 154 : includesViewModes ? 112 : 58))
+    {
+        BackgroundColor = RadioVaultTheme.Background;
+        SearchBar.SearchBarStyle = UISearchBarStyle.Minimal;
+        SearchBar.SearchTextField.TextColor = RadioVaultTheme.Text;
+        SearchBar.SearchTextField.BackgroundColor = RadioVaultTheme.Surface;
+        SearchBar.SearchTextField.Layer.CornerRadius = 10;
+        SearchBar.SearchTextField.ClipsToBounds = true;
+
+        ConfigureControlButton(CompletedButton, "Completed", RadioVaultIcons.Image(RadioVaultIcon.Completed));
+        CompletedButton.AccessibilityHint = "Hides broadcasts you have finished";
+
+        var searchRow = new UIStackView([SearchBar, CompletedButton])
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Alignment = UIStackViewAlignment.Fill,
+            Distribution = UIStackViewDistribution.Fill,
+            Spacing = 8
+        };
+        CompletedButton.WidthAnchor.ConstraintEqualTo(118).Active = true;
+        searchRow.HeightAnchor.ConstraintEqualTo(46).Active = true;
+
+        var blocks = new List<UIView>();
+        if (includesPageHeading)
+        {
+            var title = new UILabel
+            {
+                Text = "Library",
+                Font = UIFont.SystemFontOfSize(32, UIFontWeight.Bold)!,
+                TextColor = RadioVaultTheme.Text
+            };
+            var subtitle = new UILabel
+            {
+                Text = "Search, browse and rediscover every show in your archive.",
+                Font = UIFont.SystemFontOfSize(13)!,
+                TextColor = RadioVaultTheme.MutedText,
+                Lines = 0
+            };
+            blocks.Add(new UIStackView([title, subtitle])
+            {
+                Axis = UILayoutConstraintAxis.Vertical,
+                Alignment = UIStackViewAlignment.Fill,
+                Spacing = 4
+            });
+        }
+        blocks.Add(searchRow);
+
+        if (includesViewModes)
+        {
+            ConfigureControlButton(GridButton, "Grid", UIImage.GetSystemImage("square.grid.2x2"));
+            ConfigureControlButton(ListButton, "List", UIImage.GetSystemImage("list.bullet"));
+            var modeRow = new UIStackView([GridButton, ListButton])
+            {
+                Axis = UILayoutConstraintAxis.Horizontal,
+                Alignment = UIStackViewAlignment.Fill,
+                Distribution = UIStackViewDistribution.FillEqually,
+                Spacing = 8
+            };
+            modeRow.HeightAnchor.ConstraintEqualTo(40).Active = true;
+            blocks.Add(modeRow);
+        }
+
+        var stack = new UIStackView(blocks.ToArray())
+        {
+            Axis = UILayoutConstraintAxis.Vertical,
+            Alignment = UIStackViewAlignment.Fill,
+            Distribution = UIStackViewDistribution.Fill,
+            Spacing = 8,
+            TranslatesAutoresizingMaskIntoConstraints = false
+        };
+        AddSubview(stack);
+        NSLayoutConstraint.ActivateConstraints([
+            stack.LeadingAnchor.ConstraintEqualTo(LeadingAnchor, 16),
+            stack.TrailingAnchor.ConstraintEqualTo(TrailingAnchor, -16),
+            stack.TopAnchor.ConstraintEqualTo(TopAnchor, 6),
+            stack.BottomAnchor.ConstraintEqualTo(BottomAnchor, -6)
+        ]);
+    }
+
+    public UISearchBar SearchBar { get; } = new();
+    public UIButton CompletedButton { get; } = UIButton.FromType(UIButtonType.System);
+    public UIButton GridButton { get; } = UIButton.FromType(UIButtonType.System);
+    public UIButton ListButton { get; } = UIButton.FromType(UIButtonType.System);
+
+    public void SetHideCompleted(bool hideCompleted)
+    {
+        var color = hideCompleted ? RadioVaultTheme.Accent : RadioVaultTheme.MutedText;
+        CompletedButton.SetImage(RadioVaultIcons.Image(RadioVaultIcon.Completed, color, 18), UIControlState.Normal);
+        CompletedButton.SetTitleColor(color, UIControlState.Normal);
+        CompletedButton.BackgroundColor = hideCompleted ? RadioVaultTheme.AccentSubtle : RadioVaultTheme.Surface;
+        CompletedButton.AccessibilityLabel = hideCompleted ? "Show completed broadcasts" : "Hide completed broadcasts";
+        CompletedButton.AccessibilityValue = hideCompleted ? "Completed broadcasts hidden" : "Completed broadcasts shown";
+    }
+
+    public void SetMode(bool grid)
+    {
+        StyleModeButton(GridButton, grid);
+        StyleModeButton(ListButton, !grid);
+    }
+
+    private static void ConfigureControlButton(UIButton button, string title, UIImage? image)
+    {
+        button.SetTitle($" {title}", UIControlState.Normal);
+        button.SetImage(image, UIControlState.Normal);
+        button.SetTitleColor(RadioVaultTheme.MutedText, UIControlState.Normal);
+        button.TitleLabel!.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
+        button.BackgroundColor = RadioVaultTheme.Surface;
+        button.Layer.CornerRadius = 10;
+    }
+
+    private static void StyleModeButton(UIButton button, bool selected)
+    {
+        button.BackgroundColor = selected ? RadioVaultTheme.AccentSubtle : RadioVaultTheme.Surface;
+        button.SetTitleColor(selected ? RadioVaultTheme.Accent : RadioVaultTheme.MutedText, UIControlState.Normal);
+        button.TintColor = selected ? RadioVaultTheme.Accent : RadioVaultTheme.MutedText;
+        button.AccessibilityTraits = selected
+            ? UIAccessibilityTrait.Button | UIAccessibilityTrait.Selected
+            : UIAccessibilityTrait.Button;
     }
 }
 
@@ -50,7 +175,8 @@ internal sealed class DashboardStatsCell : UITableViewCell
 
     public DashboardStatsCell() : base(UITableViewCellStyle.Default, "dashboard-stats")
     {
-        BackgroundColor = UIColor.Clear;
+        BackgroundColor = RadioVaultTheme.Background;
+        ContentView.BackgroundColor = RadioVaultTheme.Background;
         SelectionStyle = UITableViewCellSelectionStyle.None;
 
         var cards = new UIView[4];
@@ -110,8 +236,8 @@ internal sealed class DashboardStatsCell : UITableViewCell
         };
         ContentView.AddSubview(row);
         NSLayoutConstraint.ActivateConstraints([
-            row.LeadingAnchor.ConstraintEqualTo(ContentView.LeadingAnchor),
-            row.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor),
+            row.LeadingAnchor.ConstraintEqualTo(ContentView.LeadingAnchor, 6),
+            row.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor, -6),
             row.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor, 4),
             row.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor, -4),
             row.HeightAnchor.ConstraintEqualTo(92)
@@ -364,6 +490,8 @@ internal sealed class ArchiveTileControl : UIControl
     public ArchiveTileControl()
     {
         BackgroundColor = RadioVaultTheme.SurfaceRaised;
+        UserInteractionEnabled = true;
+        ExclusiveTouch = true;
         Layer.CornerRadius = 13;
         Layer.BorderColor = RadioVaultTheme.Border.CGColor;
         Layer.BorderWidth = 1;
@@ -410,10 +538,10 @@ internal sealed class ArchiveTileControl : UIControl
             content.TopAnchor.ConstraintEqualTo(TopAnchor, 13),
             content.BottomAnchor.ConstraintEqualTo(BottomAnchor, -13)
         ]);
-        TouchUpInside += (_, _) =>
+        AddGestureRecognizer(new UITapGestureRecognizer(() =>
         {
             if (_period is not null) _selected?.Invoke(_period);
-        };
+        }));
     }
 
     public void Configure(
