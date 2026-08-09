@@ -17,6 +17,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
     private double _rate = 1d;
     private bool _muted;
     private bool _playRequested;
+    private string _lastDiagnosticState = string.Empty;
     private MobilePlaybackSnapshot _current = new(false, false, TimeSpan.Zero, null);
     private bool _disposed;
 
@@ -62,6 +63,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
             _streamAsset.ResourceLoader.SetDelegate(_streamLoader, _streamQueue);
             using var item = AVPlayerItem.FromAsset(_streamAsset);
             _player = AVPlayer.FromPlayerItem(item);
+            Console.Error.WriteLine($"[RadioVault iOS playback] Opened native source {source.Identifier}");
             ConfigurePlayerLocked();
         }
     }
@@ -91,6 +93,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
             // previously made Radio Vault report the temporary wait as a pause.
             _player.Play();
             if (Math.Abs(_rate - 1d) > 0.001d) _player.Rate = (float)_rate;
+            Console.Error.WriteLine($"[RadioVault iOS playback] Play requested at {_rate:0.##}x");
             UpdateLocked();
         }
     }
@@ -167,6 +170,14 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
             _player.PlayImmediatelyAtRate((float)_rate);
         }
         var seconds = _player.CurrentTime.Seconds;
+        var diagnosticState = $"item={_player.CurrentItem?.Status}; control={_player.TimeControlStatus}; " +
+                              $"rate={_player.Rate:0.##}; requested={_playRequested}; " +
+                              $"waiting={_player.ReasonForWaitingToPlay ?? "none"}; error={error}";
+        if (!string.Equals(diagnosticState, _lastDiagnosticState, StringComparison.Ordinal))
+        {
+            _lastDiagnosticState = diagnosticState;
+            Console.Error.WriteLine("[RadioVault iOS playback] " + diagnosticState);
+        }
         var position = double.IsFinite(seconds) && seconds >= 0 ? TimeSpan.FromSeconds(seconds) : TimeSpan.Zero;
         _current = new MobilePlaybackSnapshot(
             true,
@@ -211,6 +222,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
         _streamAsset = null;
         _streamQueue?.Dispose();
         _streamQueue = null;
+        _lastDiagnosticState = string.Empty;
     }
 
     private static void ActivateAudioSessionLocked()
