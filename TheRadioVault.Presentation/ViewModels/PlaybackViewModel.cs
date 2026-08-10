@@ -14,6 +14,12 @@ namespace TheRadioVault.Presentation.ViewModels;
 public sealed class PlaybackViewModel : ObservableObject, IDisposable
 {
     private static readonly double[] Speeds = { 0.5d, 0.75d, 1d, 1.25d, 1.5d, 1.75d, 2d, 2.5d, 3d };
+    // Keep this in step with PlaybackTransferCoordinator.CommitToleranceMs.
+    // A playing source advances while the target decoder opens; using a tighter
+    // client-only window makes the target chase a moving playhead forever even
+    // though the server would safely accept the prepared decoder.
+    private const long PlaybackTransferAlignmentToleranceMs = 3_000;
+    private static readonly TimeSpan PlaybackTransferDecoderReadyTimeout = TimeSpan.FromSeconds(10);
     private readonly PlaybackSessionCoordinator _session;
     private readonly ILocalPlaybackLibraryService _library;
     private readonly ILibraryActionService _actions;
@@ -380,6 +386,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
         var transferPrimedMuted = false;
         var targetAudibleVolume = Volume;
         var playbackStartWatch = System.Diagnostics.Stopwatch.StartNew();
+        var handoffStage = "resolve-broadcast";
         string? postCommitWarning = null;
         StatusText = "Resolving the preferred local recording…";
         // Yield one dispatcher turn so the contextual activity glyph is painted
@@ -409,6 +416,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             PlaybackHandoffSnapshot? latestSnapshot = null;
             if (_handoff.IsAvailable && forceTransactionalTransfer)
             {
+                handoffStage = "read-shared-state";
                 latestSnapshot = await _handoff.GetSnapshotAsync(cancellationToken).ConfigureAwait(true);
                 var latest = latestSnapshot?.ActivePlayback;
                 if (refreshSharedStateBeforeClaim && latest?.RepresentativeEpisodeId is > 0 &&
@@ -440,6 +448,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                     latestSnapshot.IsOwnedByCurrentDevice == false;
                 if (needsTransfer)
                 {
+                    handoffStage = "begin-transfer";
                     StatusText = $"Preparing playback while {latestSnapshot?.OwnerDeviceName ?? "the current device"} keeps playing…";
                     transfer = await _handoff.BeginTransferAsync(
                         descriptor.RepresentativeEpisodeId,
@@ -480,6 +489,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             RaiseCurrentBroadcastState();
             var openedWithPlayback = _desiredPlaying;
             transferPrimedMuted = transfer is not null && openedWithPlayback;
+            handoffStage = transfer is null ? "open-decoder" : "open-muted-target";
             await OpenLogicalPositionAsync(
                 PositionMs,
                 autoPlay: openedWithPlayback,
@@ -501,11 +511,20 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
 
             if (transfer is not null)
             {
+                handoffStage = "wait-for-decoder-ready";
+                StatusText = "Waiting for the prepared audio to become playable…";
+                await WaitForPreparedDecoderAsync(
+                    descriptor,
+                    generation,
+                    transfer.DesiredPlaying,
+                    cancellationToken).ConfigureAwait(true);
+
                 StatusText = "Verifying the prepared decoder…";
                 const int maximumAlignmentPasses = 4;
                 var aligned = false;
                 for (var alignmentPass = 0; alignmentPass < maximumAlignmentPasses; alignmentPass++)
                 {
+                    handoffStage = $"confirm-ready-{alignmentPass + 1}";
                     var preparedPosition = CaptureCurrentLogicalPosition(descriptor);
                     transfer = await _handoff.MarkTransferReadyAsync(
                         transfer,
@@ -531,7 +550,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                     // The source deliberately keeps playing while the target is
                     // prepared. Re-confirm readiness after each seek so a slow
                     // decoder open can never commit against an old source projection.
-                    if (Math.Abs(preparedPosition - transfer.CommitPositionMs) <= 750)
+                    if (Math.Abs(preparedPosition - transfer.CommitPositionMs) <= PlaybackTransferAlignmentToleranceMs)
                     {
                         aligned = true;
                         break;
@@ -539,13 +558,13 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
 
                     StatusText = "Aligning with the latest shared playhead…";
                     PositionMs = Math.Clamp(transfer.CommitPositionMs, 0, Math.Max(0, DurationMs));
-                    await OpenLogicalPositionAsync(
+                    handoffStage = $"align-live-decoder-{alignmentPass + 1}";
+                    await AlignPreparedDecoderAsync(
+                        descriptor,
                         PositionMs,
-                        autoPlay: transfer.DesiredPlaying,
-                        cancellationToken: cancellationToken,
-                        expectedGeneration: generation,
-                        keepMutedAfterOpen: transfer.DesiredPlaying,
-                        registerPlay: false).ConfigureAwait(true);
+                        generation,
+                        transfer.DesiredPlaying,
+                        cancellationToken).ConfigureAwait(true);
                 }
 
                 if (!aligned)
@@ -553,6 +572,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                         "The target decoder could not stay aligned with the source device. The original playback was left unchanged.");
 
                 var finalPreparedPosition = CaptureCurrentLogicalPosition(descriptor);
+                handoffStage = "commit-transfer";
                 var committedSnapshot = await _handoff.CommitTransferAsync(
                     transfer,
                     finalPreparedPosition,
@@ -577,6 +597,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                     // boundary instead of relying on an assumed timer delay.
                     if (transfer.DesiredPlaying)
                     {
+                        handoffStage = "wait-for-source-stop";
                         var sourceStopped = await WaitForPreviousOutputToStopAsync(
                             committedSnapshot, CancellationToken.None).ConfigureAwait(true);
                         if (!sourceStopped)
@@ -587,9 +608,11 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                     // including paused-source transfers that do not need to wait for a
                     // physical stop receipt. A rapid newer handoff must keep this older
                     // target silent rather than allowing two outputs to overlap.
+                    handoffStage = "verify-committed-owner";
                     await EnsureCommittedOwnershipAsync(
                         committedSnapshot.Generation, CancellationToken.None).ConfigureAwait(true);
 
+                    handoffStage = "unmute-target";
                     await EnsureTargetOutputStateAsync(
                         transfer.DesiredPlaying,
                         targetAudibleVolume,
@@ -661,6 +684,21 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
         }
         catch (Exception exception)
         {
+            playbackStartWatch.Stop();
+            RuntimeDiagnosticRecorder.Record(
+                forceTransactionalTransfer ? "handoff" : "playback",
+                forceTransactionalTransfer ? "move-to-device" : "ordinary-start",
+                "failed",
+                playbackStartWatch.ElapsedMilliseconds,
+                exception.Message,
+                new Dictionary<string, string>
+                {
+                    ["stage"] = handoffStage,
+                    ["episodeId"] = (_descriptor?.RepresentativeEpisodeId ?? 0).ToString(),
+                    ["transferCreated"] = (transfer is not null).ToString(),
+                    ["transferCommitted"] = transferCommitted.ToString(),
+                    ["exception"] = exception.GetType().Name
+                });
             if (transferCommitted)
             {
                 if (exception is PlaybackOwnershipMovedException)
@@ -1200,6 +1238,116 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             if (Math.Abs(observedMs - localTargetMs) <= 1_500) return;
             _session.Seek(TimeSpan.FromMilliseconds(localTargetMs));
         }
+    }
+
+    private async Task AlignPreparedDecoderAsync(
+        LocalPlaybackDescriptor descriptor,
+        long logicalPositionMs,
+        long generation,
+        bool desiredPlaying,
+        CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        var target = FindSegment(logicalPositionMs);
+        var current = _segment;
+        var canSeekPreparedDecoder = current is not null &&
+            current.SegmentNumber == target.SegmentNumber &&
+            _session.BroadcastId == descriptor.RepresentativeEpisodeId &&
+            MediaPathMatches(_session.MediaPath, current.MediaPath);
+        if (!canSeekPreparedDecoder)
+        {
+            await OpenLogicalPositionAsync(
+                logicalPositionMs,
+                autoPlay: desiredPlaying,
+                cancellationToken: cancellationToken,
+                expectedGeneration: generation,
+                keepMutedAfterOpen: desiredPlaying,
+                registerPlay: false).ConfigureAwait(true);
+            return;
+        }
+
+        var localTargetMs = Math.Max(0, logicalPositionMs - target.LogicalStartMs);
+        _isSeeking = true;
+        try
+        {
+            PositionMs = Math.Clamp(logicalPositionMs, 0, Math.Max(0, DurationMs));
+            _session.Seek(TimeSpan.FromMilliseconds(localTargetMs));
+            if (desiredPlaying)
+            {
+                _session.SetVolume(0d);
+                if (!_session.IsPlaying) _session.Play();
+            }
+            else if (_session.IsPlaying)
+            {
+                _session.Pause();
+            }
+
+            await ConfirmLogicalPositionAsync(
+                descriptor,
+                target,
+                logicalPositionMs,
+                generation,
+                cancellationToken).ConfigureAwait(true);
+            PositionMs = Math.Clamp(logicalPositionMs, 0, Math.Max(0, DurationMs));
+        }
+        finally
+        {
+            _isSeeking = false;
+        }
+    }
+
+    private async Task WaitForPreparedDecoderAsync(
+        LocalPlaybackDescriptor descriptor,
+        long generation,
+        bool desiredPlaying,
+        CancellationToken cancellationToken)
+    {
+        var deadline = DateTimeOffset.UtcNow.Add(PlaybackTransferDecoderReadyTimeout);
+        while (DateTimeOffset.UtcNow < deadline)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!ReferenceEquals(_descriptor, descriptor) ||
+                generation != Volatile.Read(ref _playbackGeneration))
+            {
+                throw new InvalidOperationException(
+                    "Playback changed before the prepared decoder became ready.");
+            }
+
+            if (_session.Status == PlaybackStatus.Failed)
+                throw new InvalidOperationException(
+                    "The target playback engine failed while preparing the broadcast.");
+
+            if (desiredPlaying)
+            {
+                if (_session.Status == PlaybackStatus.Playing && _session.IsPlaying)
+                {
+                    // AVFoundation can briefly expose Playing while it is still
+                    // transitioning out of Buffering. Require a second stable sample
+                    // before telling the server that the muted target is runnable.
+                    await Task.Delay(TimeSpan.FromMilliseconds(150), cancellationToken).ConfigureAwait(true);
+                    if (_session.Status == PlaybackStatus.Playing && _session.IsPlaying)
+                        return;
+                }
+                else if (_session.Status == PlaybackStatus.Paused)
+                {
+                    _session.SetVolume(0d);
+                    _session.Play();
+                }
+            }
+            else if (_session.Status == PlaybackStatus.Paused)
+            {
+                return;
+            }
+            else if (_session.Status == PlaybackStatus.Playing)
+            {
+                _session.Pause();
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(true);
+        }
+
+        throw new InvalidOperationException(
+            $"The target playback engine remained {_session.Status.ToString().ToLowerInvariant()} while preparing the handoff.");
     }
 
     private LocalPlaybackSegment FindSegment(long logicalPositionMs)

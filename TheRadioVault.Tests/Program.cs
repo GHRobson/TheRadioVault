@@ -679,6 +679,22 @@ static void DesktopSavedAndTransportControlsMatchNativeParity()
     True(shell.Contains("SkipForwardIconTemplate", StringComparison.Ordinal));
     True(shell.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
     True(!shell.Contains("Text=\"{Binding Playback.PlayPauseGlyph}\"", StringComparison.Ordinal));
+
+    var playback = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "PlaybackViewModel.cs"));
+    True(playback.Contains("PlaybackTransferAlignmentToleranceMs = 3_000", StringComparison.Ordinal));
+    True(playback.Contains("<= PlaybackTransferAlignmentToleranceMs", StringComparison.Ordinal));
+    True(playback.Contains("AlignPreparedDecoderAsync", StringComparison.Ordinal));
+    True(playback.Contains("canSeekPreparedDecoder", StringComparison.Ordinal));
+    True(playback.Contains("WaitForPreparedDecoderAsync", StringComparison.Ordinal));
+    True(playback.Contains("PlaybackTransferDecoderReadyTimeout", StringComparison.Ordinal));
+    True(playback.Contains("second stable sample", StringComparison.Ordinal));
+    True(playback.Contains("handoffStage = \"commit-transfer\"", StringComparison.Ordinal));
+    True(playback.Contains("[\"stage\"] = handoffStage", StringComparison.Ordinal));
+
+    var transferCoordinator = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Web", "Services", "PlaybackTransferCoordinator.cs"));
+    True(transferCoordinator.Contains("CommitToleranceMs = 3_000", StringComparison.Ordinal));
 }
 
 static void ParserAcceptsCatalogueStyleInterviewFilenames()

@@ -10,6 +10,10 @@ public sealed class MobileClientSession : IDisposable
 {
     private static readonly double[] PlaybackSpeeds = [0.75d, 1d, 1.25d, 1.5d, 1.75d, 2d];
     private static readonly TimeSpan DurableProgressInterval = TimeSpan.FromSeconds(5);
+    // Matches the server commit tolerance. A running source continues to move
+    // while this decoder is prepared, so a narrower local window can prevent a
+    // valid transfer from ever reaching the commit and source-stop stages.
+    private const long PlaybackTransferAlignmentToleranceMs = 3_000;
     private readonly MobileServerClient _server;
     private readonly MobileDownloadService _downloads;
     private readonly MobileOfflineMutationStore _offlineMutations;
@@ -1612,7 +1616,8 @@ public sealed class MobileClientSession : IDisposable
             _playback.SetRate(_speed);
             if (desiredPlaying && !_playback.Current.IsPlaying) _playback.Play();
             if (!desiredPlaying && _playback.Current.IsPlaying) _playback.Pause();
-            if (Math.Abs(CaptureLogicalPosition() - transfer.CommitPositionMs) <= 750) return transfer;
+            if (Math.Abs(CaptureLogicalPosition() - transfer.CommitPositionMs) <= PlaybackTransferAlignmentToleranceMs)
+                return transfer;
             PlaybackStatus = "Aligning with the latest shared playhead…";
             OpenLogicalPosition(transfer.CommitPositionMs, desiredPlaying, muted: true);
         }

@@ -144,6 +144,8 @@ static Task HandoffKeepsTransactionalBoundaryAsync()
     Contains(sessionSource, "CommitPlaybackTransferAsync", "handoff commit request");
     Contains(sessionSource, "CancelPlaybackTransferAsync", "handoff cancellation path");
     Contains(sessionSource, "receipt.Generation == session.Generation", "committed handoff generation guard");
+    Contains(sessionSource, "PlaybackTransferAlignmentToleranceMs = 3_000", "live-source alignment tolerance");
+    Contains(sessionSource, "<= PlaybackTransferAlignmentToleranceMs", "alignment tolerance use");
     Contains(sessionSource, "if (!committedAway) return Task.CompletedTask", "uncommitted-owner rejection");
     var downloadedBranchStart = sessionSource.IndexOf("if (_offlinePlayback)", StringComparison.Ordinal);
     var streamedBranchStart = sessionSource.IndexOf("if (!IsPaired) return;", downloadedBranchStart, StringComparison.Ordinal);
