@@ -114,6 +114,7 @@ public sealed class MobileClientSession : IDisposable
     public int CachedBroadcastCount => _metadataCache.Snapshot.Broadcasts.Count;
     public int CachedExplorePageCount => _metadataCache.Snapshot.ExplorePages.Count;
     public string StatusText { get; private set; } = "Pair this iPhone with your Radio Vault Server.";
+    public string KnowledgeStatusText { get; private set; } = "Knowledge has not been loaded yet.";
     public string ServerName => _server.Connection?.ServerDisplayName ?? "No server paired";
     public string ServerAddress => _server.Connection is { } connection
         ? $"https://{connection.ServerAddress}:{connection.SecurePort}"
@@ -669,8 +670,23 @@ public sealed class MobileClientSession : IDisposable
     public async Task<MobileKnowledgeSnapshot?> LoadKnowledgeAsync()
     {
         Knowledge = _metadataCache.Snapshot.Knowledge;
+        if (Knowledge is not null)
+            KnowledgeStatusText = $"Saved Knowledge snapshot · {Knowledge.Overview.TotalRecords:N0} records";
         Notify();
-        if (!IsPaired || !IsLiveConnected) return Knowledge;
+        if (!IsPaired)
+        {
+            KnowledgeStatusText = "Pair this iPhone with a Radio Vault Server to load Knowledge.";
+            Notify();
+            return Knowledge;
+        }
+        if (!IsLiveConnected)
+        {
+            KnowledgeStatusText = Knowledge is null
+                ? "Knowledge has not been saved on this iPhone yet. Reconnect to the server and try again."
+                : "Offline · showing the latest saved Knowledge snapshot.";
+            Notify();
+            return Knowledge;
+        }
         try
         {
             var overviewTask = _server.GetKnowledgeOverviewAsync();
@@ -684,13 +700,17 @@ public sealed class MobileClientSession : IDisposable
                 DateTimeOffset.UtcNow);
             _metadataCache.SetKnowledge(Knowledge);
             await _metadataCache.SaveAsync().ConfigureAwait(false);
-            StatusText = $"Knowledge is up to date · {Knowledge.Overview.TotalRecords:N0} records";
+            KnowledgeStatusText = $"Knowledge is up to date · {Knowledge.Overview.TotalRecords:N0} records";
+            StatusText = KnowledgeStatusText;
         }
         catch (Exception exception)
         {
-            StatusText = Knowledge is null
-                ? "Knowledge could not be loaded: " + exception.Message
-                : "Offline · showing saved Knowledge data";
+            KnowledgeStatusText = Knowledge is not null
+                ? "The live Knowledge update failed · showing the latest saved snapshot."
+                : exception is HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.MethodNotAllowed }
+                    ? "The paired server does not expose the Knowledge service. Update Radio Vault Server, then pull down to retry."
+                    : "Knowledge could not be loaded: " + exception.Message;
+            StatusText = KnowledgeStatusText;
         }
         finally { Notify(); }
         return Knowledge;

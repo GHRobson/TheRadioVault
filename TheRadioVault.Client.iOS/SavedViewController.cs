@@ -7,7 +7,9 @@ namespace TheRadioVault.Client.iOS;
 
 public sealed class SavedViewController : SessionTableViewController
 {
+    private readonly SavedControlsHeaderView _header = new();
     private IReadOnlyList<MobileBroadcastItem> _favourites = [];
+    private bool _showFavourites = true;
     private bool _loading;
 
     public SavedViewController(MobileClientSession session) : base(session) => Title = "Saved";
@@ -19,6 +21,9 @@ public sealed class SavedViewController : SessionTableViewController
         base.ViewDidLoad();
         TableView.RowHeight = UITableView.AutomaticDimension;
         TableView.EstimatedRowHeight = 78;
+        TableView.TableHeaderView = _header;
+        _header.FavouritesButton.TouchUpInside += FavouritesButtonTapped;
+        _header.MomentsButton.TouchUpInside += MomentsButtonTapped;
         RefreshControl = new UIRefreshControl();
         RefreshControl.ValueChanged += async (_, _) =>
         {
@@ -34,17 +39,17 @@ public sealed class SavedViewController : SessionTableViewController
         _ = LoadAsync();
     }
 
-    public override nint NumberOfSections(UITableView tableView) => 2;
+    public override nint NumberOfSections(UITableView tableView) => 1;
 
     public override nint RowsInSection(UITableView tableView, nint section)
-        => section == 0 ? Math.Max(1, _favourites.Count) : Math.Max(1, Session.SavedMoments.Count);
+        => _showFavourites ? Math.Max(1, _favourites.Count) : Math.Max(1, Session.SavedMoments.Count);
 
     public override string? TitleForHeader(UITableView tableView, nint section)
-        => section == 0 ? "Favourites" : "Moments";
+        => _showFavourites ? "Favourites" : "Moments";
 
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
-        if (indexPath.Section == 0)
+        if (_showFavourites)
         {
             if (_favourites.Count == 0)
                 return DetailCell("saved-favourites-empty", "No favourites yet", "Favourite a broadcast and it will appear here.");
@@ -66,18 +71,30 @@ public sealed class SavedViewController : SessionTableViewController
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (indexPath.Section == 0 && indexPath.Row < _favourites.Count)
+        if (_showFavourites && indexPath.Row < _favourites.Count)
         {
             NavigationController?.PushViewController(
                 new BroadcastDetailsViewController(Session, _favourites[indexPath.Row]), true);
             return;
         }
-        if (indexPath.Section == 1 && indexPath.Row < Session.SavedMoments.Count)
+        if (!_showFavourites && indexPath.Row < Session.SavedMoments.Count)
             _ = Session.PlayMomentAsync(Session.SavedMoments[indexPath.Row]);
     }
 
     protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
-        => indexPath.Section == 0 && indexPath.Row < _favourites.Count ? _favourites[indexPath.Row] : null;
+        => _showFavourites && indexPath.Row < _favourites.Count ? _favourites[indexPath.Row] : null;
+
+    private void FavouritesButtonTapped(object? sender, EventArgs eventArgs) => SetMode(showFavourites: true);
+
+    private void MomentsButtonTapped(object? sender, EventArgs eventArgs) => SetMode(showFavourites: false);
+
+    private void SetMode(bool showFavourites)
+    {
+        if (_showFavourites == showFavourites) return;
+        _showFavourites = showFavourites;
+        _header.SetMode(showFavourites);
+        TableView.ReloadData();
+    }
 
     private async Task LoadAsync()
     {
@@ -100,5 +117,16 @@ public sealed class SavedViewController : SessionTableViewController
     {
         var duration = TimeSpan.FromMilliseconds(Math.Max(0, milliseconds));
         return duration.TotalHours >= 1 ? $"{(int)duration.TotalHours}:{duration.Minutes:00}:{duration.Seconds:00}" : $"{duration.Minutes}:{duration.Seconds:00}";
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        if (disposing)
+        {
+            _header.FavouritesButton.TouchUpInside -= FavouritesButtonTapped;
+            _header.MomentsButton.TouchUpInside -= MomentsButtonTapped;
+            _header.Dispose();
+        }
+        base.Dispose(disposing);
     }
 }

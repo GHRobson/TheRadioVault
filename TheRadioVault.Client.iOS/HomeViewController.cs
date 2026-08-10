@@ -51,14 +51,19 @@ public sealed class HomeViewController : SessionTableViewController
             await Session.RefreshAsync();
             BeginInvokeOnMainThread(() => RefreshControl?.EndRefreshing());
         };
-        var settings = new UIBarButtonItem(
-            RadioVaultIcons.Image(RadioVaultIcon.Settings),
-            UIBarButtonItemStyle.Plain,
-            (_, _) => NavigationController?.PushViewController(new ServerViewController(Session), true))
+        var settings = UIButton.FromType(UIButtonType.System);
+        settings.SetImage(RadioVaultIcons.Image(RadioVaultIcon.Settings), UIControlState.Normal);
+        settings.BackgroundColor = RadioVaultTheme.SurfaceRaised;
+        settings.Layer.CornerRadius = 19;
+        settings.WidthAnchor.ConstraintEqualTo(38).Active = true;
+        settings.HeightAnchor.ConstraintEqualTo(38).Active = true;
+        settings.TouchUpInside += (_, _) =>
+            NavigationController?.PushViewController(new ServerViewController(Session), true);
+        settings.AccessibilityLabel = "Settings";
+        if (TableView.TableHeaderView is PageHeaderView header)
         {
-            AccessibilityLabel = "Settings"
-        };
-        NavigationItem.RightBarButtonItem = settings;
+            header.SetAccessory(settings);
+        }
     }
 
     public override nint NumberOfSections(UITableView tableView) => 6;

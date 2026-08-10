@@ -708,13 +708,13 @@ public sealed class MobileServerClient : IDisposable
         using (response)
         {
             SetReachable(true);
-            var result = await response.Content.ReadFromJsonAsync(responseType, cancellationToken).ConfigureAwait(false)
-                ?? throw new InvalidOperationException("The Radio Vault Server returned an empty response.");
             if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.Conflict)
                 throw new HttpRequestException(
                     $"The Radio Vault Server rejected the request ({(int)response.StatusCode}).",
                     null,
                     response.StatusCode);
+            var result = await response.Content.ReadFromJsonAsync(responseType, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("The Radio Vault Server returned an empty response.");
             return result;
         }
     }

@@ -1454,11 +1454,12 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(tabs.Contains("HomeViewController", StringComparison.Ordinal));
     True(tabs.Contains("LibraryViewController", StringComparison.Ordinal));
     True(tabs.Contains("ExploreViewController", StringComparison.Ordinal));
-    True(!tabs.Contains("Wrap(new KnowledgeViewController", StringComparison.Ordinal));
-    True(tabs.Contains("DownloadsViewController", StringComparison.Ordinal));
+    True(tabs.Contains("SavedViewController", StringComparison.Ordinal));
+    True(tabs.Contains("KnowledgeViewController", StringComparison.Ordinal));
+    True(!tabs.Contains("Wrap(new DownloadsViewController", StringComparison.Ordinal));
     True(tabs.Contains("RadioVaultMiniPlayerView", StringComparison.Ordinal));
     True(!tabs.Contains("Wrap(new NowPlayingViewController", StringComparison.Ordinal));
-    True(tabs.Contains("ServerViewController", StringComparison.Ordinal));
+    True(!tabs.Contains("Wrap(new ServerViewController", StringComparison.Ordinal));
     True(tabs.Contains("RadioVaultIcons.Image", StringComparison.Ordinal));
     True(tabs.Contains("SetTitleTextAttributes", StringComparison.Ordinal));
     True(tabs.Contains("CreateTabAppearance", StringComparison.Ordinal));
@@ -1466,7 +1467,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(tabs.Contains("UIModalPresentationStyle.PageSheet", StringComparison.Ordinal));
     True(tabs.Contains("PrefersGrabberVisible = true", StringComparison.Ordinal));
     True(tabs.Contains("\"Dashboard\"", StringComparison.Ordinal));
-    True(tabs.Contains("\"Settings\"", StringComparison.Ordinal));
+    True(tabs.Contains("\"Saved\"", StringComparison.Ordinal));
+    True(tabs.Contains("\"Knowledge\"", StringComparison.Ordinal));
     True(!tabs.Contains("controller.NavigationItem.Title = title", StringComparison.Ordinal));
 
     var dashboard = File.ReadAllText(Path.Combine(
@@ -1484,6 +1486,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(dashboard.Contains("HandleFeaturedPlayback", StringComparison.Ordinal));
     True(dashboard.Contains("Session.CurrentBroadcast", StringComparison.Ordinal));
     True(dashboard.Contains("value.EpisodeId != featuredId", StringComparison.Ordinal));
+    True(dashboard.Contains("ServerViewController", StringComparison.Ordinal));
+    True(dashboard.Contains("header.SetAccessory(settings)", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
@@ -1498,6 +1502,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(library.Contains("ToggleHideCompleted", StringComparison.Ordinal));
     True(library.Contains("SetHideCompleted", StringComparison.Ordinal));
     True(library.Contains("LibraryCollectionsFor", StringComparison.Ordinal));
+    True(library.Contains("DownloadsViewController", StringComparison.Ordinal));
 
     var showLibrary = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ShowLibraryViewController.cs"));
@@ -1543,6 +1548,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosTableBase.Contains("ShowsSyncIndicator", StringComparison.Ordinal));
     True(iosTableBase.Contains("UsesInlinePageHeading", StringComparison.Ordinal));
     True(iosTableBase.Contains("RadioVaultIcon.Sync", StringComparison.Ordinal));
+    True(iosTableBase.Contains("Mark as Listened", StringComparison.Ordinal));
+    True(iosTableBase.Contains("Mark as Unlistened", StringComparison.Ordinal));
+    True(iosTableBase.Contains("new UIBarButtonItem(image)", StringComparison.Ordinal));
     True(iosTableBase.Contains("NavigationItem.Title = string.Empty", StringComparison.Ordinal));
     True(iosTableBase.Contains("UINavigationItemBackButtonDisplayMode.Minimal", StringComparison.Ordinal));
     True(!iosTableBase.Contains("UIImage.GetSystemImage", StringComparison.Ordinal));
@@ -1562,7 +1570,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(explore.Contains("Featured articles", StringComparison.Ordinal));
     True(explore.Contains("Recently updated", StringComparison.Ordinal));
     True(explore.Contains("Explore by era", StringComparison.Ordinal));
-    True(explore.Contains("Timeline explorer", StringComparison.Ordinal));
+    True(explore.Contains("Show timelines", StringComparison.Ordinal));
+    True(explore.Contains("ExploreDashboardSection.OnThisDate", StringComparison.Ordinal));
     True(explore.Contains("ShowPages", StringComparison.Ordinal));
     True(explore.Contains("PeoplePages", StringComparison.Ordinal));
     True(explore.Contains("TopicPages", StringComparison.Ordinal));
@@ -1648,10 +1657,24 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(nowPlayingView.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_session.MiniPlayerProgress", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_session.MiniPlayerTime", StringComparison.Ordinal));
-    True(nowPlayingView.Contains("new UIStackView([_elapsedLabel, _totalLabel, _remainingLabel])", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_totalLabel.CenterXAnchor.ConstraintEqualTo(times.CenterXAnchor)", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_elapsedLabel.Text = _session.MiniPlayerElapsedTime", StringComparison.Ordinal));
     True(nowPlayingView.Contains("NowPlayingUpNextView", StringComparison.Ordinal));
     True(nowPlayingView.Contains("playerContent.HeightAnchor.ConstraintGreaterThanOrEqualTo", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_favouriteSaving", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_momentSavedFeedback", StringComparison.Ordinal));
+
+    var savedView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "SavedViewController.cs"));
+    True(savedView.Contains("SavedControlsHeaderView", StringComparison.Ordinal));
+    True(savedView.Contains("FavouritesButtonTapped", StringComparison.Ordinal));
+    True(savedView.Contains("MomentsButtonTapped", StringComparison.Ordinal));
+
+    var knowledgeView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "KnowledgeViewController.cs"));
+    True(knowledgeView.Contains("LoadKnowledgeAsync", StringComparison.Ordinal));
+    True(knowledgeView.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
+    True(knowledgeView.Contains("KnowledgeStatusText", StringComparison.Ordinal));
 
     var nowPlayingQueue = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingUpNextView.cs"));
@@ -1792,6 +1815,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("FlushOfflineMutationsAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("SetListeningStatusAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("TryAutomaticDownloadAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("LoadKnowledgeAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
 
     var pendingChanges = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileOfflineMutationStore.cs"));
@@ -1836,6 +1861,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(client.Contains("ClientWikiOperation(\"browse\")", StringComparison.Ordinal));
     True(client.Contains("ClientWikiOperation(\"dashboard-highlights\")", StringComparison.Ordinal));
     True(client.Contains("ClientWikiOperation(\"page\")", StringComparison.Ordinal));
+    True(client.Contains("ClientResearchOperation(\"overview\")", StringComparison.Ordinal));
+    True(client.Contains("ClientResearchOperation(\"coverage\")", StringComparison.Ordinal));
     True(client.Contains("PairManuallyAsync", StringComparison.Ordinal));
     True(client.Contains("observedThumbprint", StringComparison.Ordinal));
 

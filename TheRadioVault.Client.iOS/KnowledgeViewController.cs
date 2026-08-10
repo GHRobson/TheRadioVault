@@ -34,7 +34,7 @@ public sealed class KnowledgeViewController : SessionTableViewController
         _ = LoadAsync();
     }
 
-    public override nint NumberOfSections(UITableView tableView) => 3;
+    public override nint NumberOfSections(UITableView tableView) => Snapshot is null ? 1 : 3;
 
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
@@ -45,7 +45,7 @@ public sealed class KnowledgeViewController : SessionTableViewController
 
     public override string? TitleForHeader(UITableView tableView, nint section) => section switch
     {
-        0 => "Knowledge dashboard",
+        0 => Snapshot is null ? null : "Knowledge dashboard",
         1 => "Coverage heat maps",
         _ => "Triage"
     };
@@ -62,7 +62,10 @@ public sealed class KnowledgeViewController : SessionTableViewController
         if (indexPath.Section == 0)
         {
             if (Snapshot is null)
-                return DetailCell("knowledge-empty", _loading ? "Loading Knowledge…" : "Knowledge unavailable", Session.StatusText);
+                return DetailCell(
+                    "knowledge-empty",
+                    _loading ? "Loading Knowledge…" : "Knowledge unavailable",
+                    Session.KnowledgeStatusText);
             var overview = Snapshot.Overview;
             var values = new[]
             {

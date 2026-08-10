@@ -39,7 +39,10 @@ public abstract class SessionTableViewController : UITableViewController
     {
         base.ViewWillAppear(animated);
         NavigationItem.Title = string.Empty;
-        NavigationController?.SetNavigationBarHidden(false, animated);
+        var isRootTab = TabBarController is not null &&
+                        NavigationController?.ViewControllers is { Length: > 0 } controllers &&
+                        controllers[0] == this;
+        NavigationController?.SetNavigationBarHidden(isRootTab, animated);
         UpdateConnectionIndicator();
     }
 
@@ -78,11 +81,16 @@ public abstract class SessionTableViewController : UITableViewController
                 RadioVaultIcons.Image(RadioVaultIcon.Favourite),
                 "radiovault.favourite",
                 action => _ = Session.SetFavouriteAsync(broadcast, !broadcast.Source.Favourite));
-            var listeningStatus = UIAction.Create(
-                broadcast.Source.Completed ? "Mark as Unlistened" : "Mark as Listened",
+            var markListened = UIAction.Create(
+                "Mark as Listened",
                 RadioVaultIcons.Image(RadioVaultIcon.Completed),
-                "radiovault.listening-status",
-                action => _ = Session.SetListeningStatusAsync(broadcast, !broadcast.Source.Completed));
+                "radiovault.mark-listened",
+                action => _ = Session.SetListeningStatusAsync(broadcast, true));
+            var markUnlistened = UIAction.Create(
+                "Mark as Unlistened",
+                RadioVaultIcons.Image(RadioVaultIcon.Radio, RadioVaultTheme.MutedText),
+                "radiovault.mark-unlistened",
+                action => _ = Session.SetListeningStatusAsync(broadcast, false));
             var download = UIAction.Create(
                 downloaded ? "Remove Download" : "Download to this iPhone",
                 RadioVaultIcons.Image(downloaded ? RadioVaultIcon.Remove : RadioVaultIcon.Download),
@@ -99,7 +107,7 @@ public abstract class SessionTableViewController : UITableViewController
                 "radiovault.information",
                 action => NavigationController?.PushViewController(
                     new BroadcastDetailsViewController(Session, broadcast), true));
-            return UIMenu.Create("", [play, playNext, addToQueue, favourite, listeningStatus, download, information]);
+            return UIMenu.Create("", [play, playNext, addToQueue, favourite, markListened, markUnlistened, download, information]);
         });
     }
 
@@ -145,53 +153,26 @@ public abstract class SessionTableViewController : UITableViewController
         var current = (NavigationItem.RightBarButtonItems ?? [])
             .Where(item => item.Tag != ConnectionIndicatorTag)
             .ToList();
-        if (Session.ShowsSyncIndicator)
+        if (TableView.TableHeaderView is IConnectionStatusView header)
         {
-            var syncing = new UIBarButtonItem(
-                RadioVaultIcons.Image(RadioVaultIcon.Sync, RadioVaultTheme.ActivityBlue),
-                UIBarButtonItemStyle.Plain,
-                (_, _) => PresentSyncExplanation())
-            {
-                Tag = ConnectionIndicatorTag,
-                AccessibilityLabel = "Syncing the saved Radio Vault catalogue"
-            };
-            current.Add(syncing);
+            header.SetConnectionState(Session.ShowsSyncIndicator, Session.ShowsOfflineIndicator);
         }
-        else if (Session.ShowsOfflineIndicator)
+        else if (Session.ShowsSyncIndicator || Session.ShowsOfflineIndicator)
         {
-            var offline = new UIBarButtonItem(
-                RadioVaultIcons.Image(RadioVaultIcon.Offline, RadioVaultTheme.Settings),
-                UIBarButtonItemStyle.Plain,
-                (_, _) => PresentOfflineExplanation())
+            var image = new UIImageView
             {
-                Tag = ConnectionIndicatorTag,
-                AccessibilityLabel = "Offline · showing saved Radio Vault data"
+                Image = Session.ShowsSyncIndicator
+                    ? RadioVaultIcons.Image(RadioVaultIcon.Sync, RadioVaultTheme.ActivityBlue, 21)
+                    : RadioVaultIcons.Image(RadioVaultIcon.Offline, RadioVaultTheme.Settings, 21),
+                ContentMode = UIViewContentMode.Center,
+                Frame = new CGRect(0, 0, 24, 32),
+                AccessibilityLabel = Session.ShowsSyncIndicator
+                    ? "Syncing the saved Radio Vault catalogue"
+                    : "Offline · showing saved Radio Vault data"
             };
-            current.Add(offline);
+            current.Add(new UIBarButtonItem(image) { Tag = ConnectionIndicatorTag });
         }
         NavigationItem.RightBarButtonItems = current.Count == 0 ? null : current.ToArray();
-    }
-
-    private void PresentSyncExplanation()
-    {
-        var alert = UIAlertController.Create(
-            "Syncing Radio Vault",
-            "This iPhone is updating its complete saved catalogue and Explore archive. You can continue using the app while it finishes.",
-            UIAlertControllerStyle.Alert);
-        alert.AddAction(UIAlertAction.Create("OK", UIAlertActionStyle.Default, null));
-        PresentViewController(alert, true, null);
-    }
-
-    private void PresentOfflineExplanation()
-    {
-        var alert = UIAlertController.Create(
-            "Offline mode",
-            Session.PendingSyncChanges == 0
-                ? "This iPhone cannot currently reach the paired Radio Vault Server. Saved Library and Explore data remain available and will update automatically when the connection returns."
-                : $"This iPhone cannot currently reach the paired Radio Vault Server. {Session.PendingSyncChanges:N0} saved change{(Session.PendingSyncChanges == 1 ? string.Empty : "s")} will upload automatically when the connection returns.",
-            UIAlertControllerStyle.Alert);
-        alert.AddAction(UIAlertAction.Create("OK", UIAlertActionStyle.Default, null));
-        PresentViewController(alert, true, null);
     }
 
     protected override void Dispose(bool disposing)

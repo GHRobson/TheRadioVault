@@ -25,6 +25,9 @@ public sealed class NowPlayingViewController : UIViewController
     private readonly UIActivityIndicatorView _playActivity = new(UIActivityIndicatorViewStyle.Large);
     private readonly NowPlayingUpNextView _upNext;
     private bool _isScrubbing;
+    private bool _favouriteSaving;
+    private bool _momentSaving;
+    private bool _momentSavedFeedback;
     private long _artworkEpisodeId;
     private bool _artworkWasRequestedOnline;
 
@@ -292,9 +295,41 @@ public sealed class NowPlayingViewController : UIViewController
         {
             var title = alert.TextFields?.ElementAtOrDefault(0)?.Text ?? string.Empty;
             var notes = alert.TextFields?.ElementAtOrDefault(1)?.Text ?? string.Empty;
-            _ = _session.AddMomentAsync(title, notes);
+            BeginMomentSave(title, notes);
         }));
         PresentViewController(alert, true, null);
+    }
+
+    private void BeginMomentSave(string title, string notes)
+    {
+        if (_momentSaving) return;
+        _momentSaving = true;
+        _momentSavedFeedback = false;
+        RefreshSavedActionButtons();
+        _ = SaveMomentAsync(title, notes);
+    }
+
+    private async Task SaveMomentAsync(string title, string notes)
+    {
+        var saved = await _session.AddMomentAsync(title, notes).ConfigureAwait(false);
+        BeginInvokeOnMainThread(() =>
+        {
+            _momentSaving = false;
+            _momentSavedFeedback = saved;
+            if (saved)
+            {
+                using var feedback = new UINotificationFeedbackGenerator();
+                feedback.NotificationOccurred(UINotificationFeedbackType.Success);
+            }
+            RefreshSavedActionButtons();
+        });
+        if (!saved) return;
+        await Task.Delay(1400).ConfigureAwait(false);
+        BeginInvokeOnMainThread(() =>
+        {
+            _momentSavedFeedback = false;
+            RefreshSavedActionButtons();
+        });
     }
 
     private void OpenBroadcastInformation()
@@ -305,8 +340,25 @@ public sealed class NowPlayingViewController : UIViewController
 
     private void ToggleFavourite()
     {
-        if (_session.CurrentBroadcast is { } broadcast)
-            _ = _session.SetFavouriteAsync(broadcast, !broadcast.Source.Favourite);
+        if (_favouriteSaving || _session.CurrentBroadcast is not { } broadcast) return;
+        _favouriteSaving = true;
+        RefreshSavedActionButtons();
+        _ = ToggleFavouriteAsync(broadcast, !broadcast.Source.Favourite);
+    }
+
+    private async Task ToggleFavouriteAsync(TheRadioVault.Client.Mobile.Models.MobileBroadcastItem broadcast, bool favourite)
+    {
+        var updated = await _session.SetFavouriteAsync(broadcast, favourite).ConfigureAwait(false);
+        BeginInvokeOnMainThread(() =>
+        {
+            _favouriteSaving = false;
+            if (updated is not null)
+            {
+                using var feedback = new UINotificationFeedbackGenerator();
+                feedback.NotificationOccurred(UINotificationFeedbackType.Success);
+            }
+            RefreshSavedActionButtons();
+        });
     }
 
     private void ProgressSliderFinished(object? sender, EventArgs eventArgs)
@@ -363,12 +415,44 @@ public sealed class NowPlayingViewController : UIViewController
                 broadcast,
                 RadioVaultIcons.Image(RadioVaultIcon.Radio, size: 96, strokeWidth: 1.6f));
         }
-        _momentButton.Enabled = _session.CanControlPlayback;
         _infoButton.Enabled = broadcast is not null;
-        _favouriteButton.Enabled = broadcast is not null;
-        _favouriteButton.SetTitle(
-            broadcast?.Source.Favourite == true ? " Favourited" : " Favourite",
+        RefreshSavedActionButtons();
+    }
+
+    private void RefreshSavedActionButtons()
+    {
+        var broadcast = _session.CurrentBroadcast;
+        _momentButton.Enabled = _session.CanControlPlayback && !_momentSaving;
+        _momentButton.SetTitle(
+            _momentSaving ? " Saving…" : _momentSavedFeedback ? " Saved" : " Moment",
             UIControlState.Normal);
+        _momentButton.SetImage(
+            RadioVaultIcons.Image(
+                _momentSavedFeedback ? RadioVaultIcon.Completed : RadioVaultIcon.Moment,
+                _momentSavedFeedback ? RadioVaultTheme.Completed : RadioVaultTheme.Moment,
+                20),
+            UIControlState.Normal);
+        _momentButton.SetTitleColor(
+            _momentSaving || _momentSavedFeedback ? RadioVaultTheme.Moment : RadioVaultTheme.MutedText,
+            UIControlState.Normal);
+        _momentButton.BackgroundColor = _momentSaving || _momentSavedFeedback
+            ? RadioVaultTheme.AccentSubtle
+            : RadioVaultTheme.SurfaceRaised;
+
+        _favouriteButton.Enabled = broadcast is not null && !_favouriteSaving;
+        var isFavourite = broadcast?.Source.Favourite == true;
+        _favouriteButton.SetTitle(
+            _favouriteSaving ? " Saving…" : isFavourite ? " Favourited" : " Favourite",
+            UIControlState.Normal);
+        _favouriteButton.SetImage(
+            RadioVaultIcons.Image(RadioVaultIcon.Favourite, RadioVaultTheme.Favourite, 20),
+            UIControlState.Normal);
+        _favouriteButton.SetTitleColor(
+            _favouriteSaving || isFavourite ? RadioVaultTheme.Favourite : RadioVaultTheme.MutedText,
+            UIControlState.Normal);
+        _favouriteButton.BackgroundColor = _favouriteSaving || isFavourite
+            ? RadioVaultTheme.Favourite.ColorWithAlpha(0.14f)
+            : RadioVaultTheme.SurfaceRaised;
     }
 
     protected override void Dispose(bool disposing)
