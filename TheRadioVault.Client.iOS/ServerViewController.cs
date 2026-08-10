@@ -10,6 +10,8 @@ public sealed class ServerViewController : SessionTableViewController
     protected override string? PageHeading => "Settings";
     protected override string PageDescription => "Connection, downloads and preferences.";
     private readonly UISwitch _wifiOnlySwitch = new();
+    private readonly UISwitch _autoDownloadSwitch = new();
+    private readonly UISwitch _deleteCompletedSwitch = new();
     private readonly UITextField _codeField = new()
     {
         Placeholder = "Six-digit pairing code",
@@ -54,6 +56,10 @@ public sealed class ServerViewController : SessionTableViewController
         _portField.TintColor = RadioVaultTheme.Accent;
         _wifiOnlySwitch.On = Session.WifiOnlyDownloads;
         _wifiOnlySwitch.ValueChanged += DownloadPolicyChanged;
+        _autoDownloadSwitch.On = Session.AutoDownloadNewBroadcasts;
+        _autoDownloadSwitch.ValueChanged += AutoDownloadPolicyChanged;
+        _deleteCompletedSwitch.On = Session.DeleteCompletedDownloads;
+        _deleteCompletedSwitch.ValueChanged += DeleteCompletedPolicyChanged;
     }
 
     protected override void ReloadSession()
@@ -62,6 +68,8 @@ public sealed class ServerViewController : SessionTableViewController
             _selectedServer = Session.Servers.FirstOrDefault();
         if (Session.IsPaired) _codeField.Text = string.Empty;
         _wifiOnlySwitch.On = Session.WifiOnlyDownloads;
+        _autoDownloadSwitch.On = Session.AutoDownloadNewBroadcasts;
+        _deleteCompletedSwitch.On = Session.DeleteCompletedDownloads;
         base.ReloadSession();
     }
 
@@ -69,8 +77,8 @@ public sealed class ServerViewController : SessionTableViewController
 
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
-        0 => 1,
-        1 => 2,
+        0 => Session.IsPaired ? 2 : 1,
+        1 => 7,
         2 => Session.IsPaired ? 1 : 3,
         3 => Math.Max(1, Session.Servers.Count),
         4 => Session.IsPaired ? 1 : 2,
@@ -90,10 +98,19 @@ public sealed class ServerViewController : SessionTableViewController
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
         if (indexPath.Section == 0)
+        {
+            if (indexPath.Row == 1)
+                return DetailCell(
+                    "sync-diagnostics",
+                    "Sync Status",
+                    Session.PendingSyncChanges == 0
+                        ? "Up to date · view cache and connection details"
+                        : $"{Session.PendingSyncChanges:N0} change{(Session.PendingSyncChanges == 1 ? string.Empty : "s")} waiting to sync");
             return DetailCell(
                 "server-status",
                 Session.ServerName,
                 Session.IsPaired ? $"{Session.ServerAddress}\n{Session.StatusText}" : Session.StatusText);
+        }
 
         if (indexPath.Section == 1)
         {
@@ -108,12 +125,30 @@ public sealed class ServerViewController : SessionTableViewController
                 wifi.SelectionStyle = UITableViewCellSelectionStyle.None;
                 return wifi;
             }
-            return DetailCell(
-                "settings-download-storage",
-                "Radio Vault Storage",
-                Session.PendingDownloadBytes > 0
-                    ? $"{Session.DownloadStorageText} · {FormatBytes(Session.PendingDownloadBytes)} resumable"
-                    : Session.DownloadStorageText);
+            if (indexPath.Row == 1)
+                return SwitchCell(
+                    "settings-auto-download", "Automatically Download New Broadcasts",
+                    "Downloads broadcasts added after you enable this setting", _autoDownloadSwitch);
+            if (indexPath.Row == 2)
+                return SwitchCell(
+                    "settings-delete-completed", "Remove Completed Downloads",
+                    "Keeps listening history while freeing local storage", _deleteCompletedSwitch);
+            if (indexPath.Row == 3)
+                return DetailCell(
+                    "settings-download-storage", "Radio Vault Storage",
+                    Session.PendingDownloadBytes > 0
+                        ? $"{Session.DownloadStorageText} · {FormatBytes(Session.PendingDownloadBytes)} resumable"
+                        : Session.DownloadStorageText);
+            if (indexPath.Row == 4)
+            {
+                var limit = DetailCell(
+                    "settings-storage-limit", "Storage Limit", Session.DownloadStorageLimitText);
+                limit.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+                return limit;
+            }
+            if (indexPath.Row == 5)
+                return ActionCell("settings-check-downloads", "Check Downloaded Files", RadioVaultTheme.Accent);
+            return ActionCell("settings-clean-downloads", "Remove Completed Downloads Now", RadioVaultTheme.Danger);
         }
 
         if (indexPath.Section == 2)
@@ -185,6 +220,18 @@ public sealed class ServerViewController : SessionTableViewController
     {
         tableView.DeselectRow(indexPath, true);
         if (Session.IsBusy) return;
+        if (indexPath.Section == 0 && indexPath.Row == 1)
+        {
+            NavigationController?.PushViewController(new SyncDiagnosticsViewController(Session), true);
+            return;
+        }
+        if (indexPath.Section == 1)
+        {
+            if (indexPath.Row == 4) PresentStorageLimitPicker();
+            else if (indexPath.Row == 5) _ = Session.RepairDownloadsAsync();
+            else if (indexPath.Row == 6) _ = Session.CleanupCompletedDownloadsAsync();
+            return;
+        }
         if (indexPath.Section == 2)
         {
             if (indexPath.Row == 0)
@@ -268,6 +315,57 @@ public sealed class ServerViewController : SessionTableViewController
     private void DownloadPolicyChanged(object? sender, EventArgs eventArgs)
         => Session.WifiOnlyDownloads = _wifiOnlySwitch.On;
 
+    private void AutoDownloadPolicyChanged(object? sender, EventArgs eventArgs)
+        => Session.AutoDownloadNewBroadcasts = _autoDownloadSwitch.On;
+
+    private void DeleteCompletedPolicyChanged(object? sender, EventArgs eventArgs)
+        => Session.DeleteCompletedDownloads = _deleteCompletedSwitch.On;
+
+    private static UITableViewCell SwitchCell(
+        string identifier, string title, string detail, UISwitch control)
+    {
+        var cell = DetailCell(identifier, title, detail);
+        cell.AccessoryView = control;
+        cell.SelectionStyle = UITableViewCellSelectionStyle.None;
+        return cell;
+    }
+
+    private static UITableViewCell ActionCell(string identifier, string title, UIColor color)
+    {
+        var cell = new UITableViewCell(UITableViewCellStyle.Default, identifier);
+        var content = cell.DefaultContentConfiguration;
+        content.Text = title;
+        content.TextProperties.Color = color;
+        content.TextProperties.Alignment = UIListContentTextAlignment.Center;
+        RadioVaultTheme.StyleCell(cell, content);
+        return cell;
+    }
+
+    private void PresentStorageLimitPicker()
+    {
+        var sheet = UIAlertController.Create(
+            "Download Storage Limit",
+            "When the limit is reached, Radio Vault removes completed and then oldest downloads first.",
+            UIAlertControllerStyle.ActionSheet);
+        foreach (var option in new (string Title, long Bytes)[]
+                 {
+                     ("2 GB", 2L * 1024 * 1024 * 1024),
+                     ("5 GB", 5L * 1024 * 1024 * 1024),
+                     ("10 GB", 10L * 1024 * 1024 * 1024),
+                     ("20 GB", 20L * 1024 * 1024 * 1024),
+                     ("No Limit", 0)
+                 })
+            sheet.AddAction(UIAlertAction.Create(option.Title, UIAlertActionStyle.Default, _ =>
+                Session.DownloadStorageLimitBytes = option.Bytes));
+        sheet.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        if (View is { } sourceView && sheet.PopoverPresentationController is { } popover)
+        {
+            popover.SourceView = sourceView;
+            popover.SourceRect = sourceView.Bounds;
+        }
+        PresentViewController(sheet, true, null);
+    }
+
     private static string FormatBytes(long value)
         => value >= 1024L * 1024L * 1024L ? $"{value / (1024d * 1024d * 1024d):0.0} GB"
             : value >= 1024L * 1024L ? $"{value / (1024d * 1024d):0.0} MB"
@@ -275,7 +373,12 @@ public sealed class ServerViewController : SessionTableViewController
 
     protected override void Dispose(bool disposing)
     {
-        if (disposing) _wifiOnlySwitch.ValueChanged -= DownloadPolicyChanged;
+        if (disposing)
+        {
+            _wifiOnlySwitch.ValueChanged -= DownloadPolicyChanged;
+            _autoDownloadSwitch.ValueChanged -= AutoDownloadPolicyChanged;
+            _deleteCompletedSwitch.ValueChanged -= DeleteCompletedPolicyChanged;
+        }
         base.Dispose(disposing);
     }
 }

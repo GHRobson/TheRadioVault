@@ -77,14 +77,17 @@ public sealed class NowPlayingViewController : UIViewController
         _titleLabel.TextColor = RadioVaultTheme.Text;
         _titleLabel.Lines = 0;
         _titleLabel.TextAlignment = UITextAlignment.Center;
+        _titleLabel.AdjustsFontForContentSizeCategory = true;
         _subtitleLabel.Font = (UIFont.PreferredBody ?? UIFont.SystemFontOfSize(17))!;
         _subtitleLabel.TextColor = RadioVaultTheme.MutedText;
         _subtitleLabel.Lines = 0;
         _subtitleLabel.TextAlignment = UITextAlignment.Center;
+        _subtitleLabel.AdjustsFontForContentSizeCategory = true;
         _statusLabel.Font = (UIFont.PreferredFootnote ?? UIFont.SystemFontOfSize(13))!;
         _statusLabel.TextColor = RadioVaultTheme.MutedText;
         _statusLabel.Lines = 0;
         _statusLabel.TextAlignment = UITextAlignment.Center;
+        _statusLabel.AdjustsFontForContentSizeCategory = true;
         ConfigureTimeLabel(_elapsedLabel, UITextAlignment.Left);
         ConfigureTimeLabel(_remainingLabel, UITextAlignment.Center);
         ConfigureTimeLabel(_totalLabel, UITextAlignment.Right);
@@ -108,6 +111,7 @@ public sealed class NowPlayingViewController : UIViewController
         _forwardButton.TintColor = RadioVaultTheme.Accent;
         _speedButton.TouchUpInside += (_, _) => _session.CycleSpeed();
         _speedButton.TitleLabel!.Font = UIFont.SystemFontOfSize(16, UIFontWeight.Semibold)!;
+        _speedButton.TitleLabel.AdjustsFontForContentSizeCategory = true;
         _speedButton.SetTitleColor(RadioVaultTheme.Text, UIControlState.Normal);
         _speedButton.BackgroundColor = RadioVaultTheme.SurfaceRaised;
         _speedButton.Layer.CornerRadius = 19;
@@ -163,13 +167,24 @@ public sealed class NowPlayingViewController : UIViewController
         content.SetCustomSpacing(26, progress);
         content.SetCustomSpacing(16, controls);
 
-        view.AddSubview(content);
+        var scrollView = new UIScrollView
+        {
+            AlwaysBounceVertical = true,
+            ShowsVerticalScrollIndicator = false,
+            TranslatesAutoresizingMaskIntoConstraints = false
+        };
+        view.AddSubview(scrollView);
+        scrollView.AddSubview(content);
         NSLayoutConstraint.ActivateConstraints([
-            content.LeadingAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.LeadingAnchor, 28),
-            content.TrailingAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.TrailingAnchor, -28),
-            content.TopAnchor.ConstraintGreaterThanOrEqualTo(view.SafeAreaLayoutGuide.TopAnchor, 12),
-            content.BottomAnchor.ConstraintLessThanOrEqualTo(view.SafeAreaLayoutGuide.BottomAnchor, -20),
-            content.CenterYAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.CenterYAnchor),
+            scrollView.LeadingAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.LeadingAnchor),
+            scrollView.TrailingAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.TrailingAnchor),
+            scrollView.TopAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.TopAnchor),
+            scrollView.BottomAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.BottomAnchor),
+            content.LeadingAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.LeadingAnchor, 28),
+            content.TrailingAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.TrailingAnchor, -28),
+            content.TopAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.TopAnchor, 16),
+            content.BottomAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.BottomAnchor, -24),
+            content.WidthAnchor.ConstraintEqualTo(scrollView.FrameLayoutGuide.WidthAnchor, -56),
             _backButton.WidthAnchor.ConstraintEqualTo(64),
             _backButton.HeightAnchor.ConstraintEqualTo(64),
             _playButton.WidthAnchor.ConstraintEqualTo(96),
@@ -215,6 +230,7 @@ public sealed class NowPlayingViewController : UIViewController
         button.SetTitleColor(RadioVaultTheme.MutedText, UIControlState.Normal);
         button.SetImage(RadioVaultIcons.Image(icon, size: 20), UIControlState.Normal);
         button.TitleLabel!.Font = UIFont.SystemFontOfSize(12, UIFontWeight.Semibold)!;
+        button.TitleLabel.AdjustsFontForContentSizeCategory = true;
         button.BackgroundColor = RadioVaultTheme.SurfaceRaised;
         button.Layer.CornerRadius = 14;
         button.AccessibilityLabel = title;
@@ -305,9 +321,9 @@ public sealed class NowPlayingViewController : UIViewController
                 broadcast,
                 RadioVaultIcons.Image(RadioVaultIcon.Radio, size: 96, strokeWidth: 1.6f));
         }
-        _momentButton.Enabled = _session.CanControlPlayback && _session.IsLiveConnected;
+        _momentButton.Enabled = _session.CanControlPlayback;
         _infoButton.Enabled = broadcast is not null;
-        _favouriteButton.Enabled = broadcast is not null && _session.IsLiveConnected;
+        _favouriteButton.Enabled = broadcast is not null;
         _favouriteButton.SetTitle(
             broadcast?.Source.Favourite == true ? " Favourited" : " Favourite",
             UIControlState.Normal);

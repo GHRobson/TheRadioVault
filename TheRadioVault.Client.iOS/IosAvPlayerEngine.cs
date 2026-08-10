@@ -14,9 +14,12 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
     private IosMediaResourceLoader? _streamLoader;
     private CoreFoundation.DispatchQueue? _streamQueue;
     private NSObject? _endObserver;
+    private readonly NSObject _interruptionObserver;
+    private readonly NSObject _routeChangeObserver;
     private double _rate = 1d;
     private bool _muted;
     private bool _playRequested;
+    private bool _resumeAfterInterruption;
     private string _lastDiagnosticState = string.Empty;
     private MobilePlaybackSnapshot _current = new(false, false, TimeSpan.Zero, null);
     private bool _disposed;
@@ -26,6 +29,8 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
         var audio = AVAudioSession.SharedInstance();
         audio.SetCategory(AVAudioSessionCategory.Playback);
         audio.SetActive(true);
+        _interruptionObserver = AVAudioSession.Notifications.ObserveInterruption(OnAudioInterrupted);
+        _routeChangeObserver = AVAudioSession.Notifications.ObserveRouteChange(OnAudioRouteChanged);
         _timer = new Timer(Poll, null, Timeout.InfiniteTimeSpan, Timeout.InfiniteTimeSpan);
     }
 
@@ -207,6 +212,48 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
         MediaEnded?.Invoke(this, EventArgs.Empty);
     }
 
+    private void OnAudioInterrupted(object? sender, AVAudioSessionInterruptionEventArgs args)
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            if (args.InterruptionType == AVAudioSessionInterruptionType.Began)
+            {
+                _resumeAfterInterruption = _playRequested;
+                _playRequested = false;
+                _player?.Pause();
+                IosPlaybackDiagnostics.Write("[RadioVault iOS playback] Audio interruption began; playback paused.");
+            }
+            else
+            {
+                IosPlaybackDiagnostics.Write($"[RadioVault iOS playback] Audio interruption ended; option={args.Option}.");
+                if (_resumeAfterInterruption && args.Option.HasFlag(AVAudioSessionInterruptionOptions.ShouldResume))
+                {
+                    ActivateAudioSessionLocked();
+                    _playRequested = true;
+                    _player?.PlayImmediatelyAtRate((float)_rate);
+                }
+                _resumeAfterInterruption = false;
+            }
+            UpdateLocked();
+        }
+    }
+
+    private void OnAudioRouteChanged(object? sender, AVAudioSessionRouteChangeEventArgs args)
+    {
+        lock (_gate)
+        {
+            if (_disposed) return;
+            IosPlaybackDiagnostics.Write($"[RadioVault iOS playback] Audio route changed; reason={args.Reason}.");
+            if (args.Reason == AVAudioSessionRouteChangeReason.OldDeviceUnavailable)
+            {
+                _playRequested = false;
+                _player?.Pause();
+                UpdateLocked();
+            }
+        }
+    }
+
     private void PublishLocked() => StateChanged?.Invoke(this, _current);
 
     private void DisposePlayerLocked()
@@ -243,6 +290,8 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
             if (_disposed) return;
             _disposed = true;
             _timer.Dispose();
+            _interruptionObserver.Dispose();
+            _routeChangeObserver.Dispose();
             DisposePlayerLocked();
         }
     }

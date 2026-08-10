@@ -1614,7 +1614,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
 
     var nowPlayingView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingViewController.cs"));
-    True(nowPlayingView.Contains("content.CenterYAnchor.ConstraintEqualTo", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("UIScrollView", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("ContentLayoutGuide", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("AdjustsFontForContentSizeCategory", StringComparison.Ordinal));
     True(nowPlayingView.Contains("RadioVaultIcon.SkipBack", StringComparison.Ordinal));
     True(nowPlayingView.Contains("RadioVaultIcon.SkipForward", StringComparison.Ordinal));
     True(nowPlayingView.Contains("PresentMomentEditor", StringComparison.Ordinal));
@@ -1684,6 +1686,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(downloads.Contains("FileMode.Append", StringComparison.Ordinal));
     True(downloads.Contains("DiscardPendingAsync", StringComparison.Ordinal));
     True(downloads.Contains("GetStorageAsync", StringComparison.Ordinal));
+    True(downloads.Contains("RemoveCompletedAsync", StringComparison.Ordinal));
+    True(downloads.Contains("TrimToLimitAsync", StringComparison.Ordinal));
+    True(downloads.Contains("RepairAsync", StringComparison.Ordinal));
 
     var downloadsView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "DownloadsViewController.cs"));
@@ -1698,6 +1703,10 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(settingsView.Contains("Download Settings", StringComparison.Ordinal));
     True(settingsView.Contains("WifiOnlyDownloads", StringComparison.Ordinal));
     True(settingsView.Contains("DownloadStorageText", StringComparison.Ordinal));
+    True(settingsView.Contains("AutoDownloadNewBroadcasts", StringComparison.Ordinal));
+    True(settingsView.Contains("DeleteCompletedDownloads", StringComparison.Ordinal));
+    True(settingsView.Contains("PresentStorageLimitPicker", StringComparison.Ordinal));
+    True(settingsView.Contains("SyncDiagnosticsViewController", StringComparison.Ordinal));
     True(settingsView.Contains("Pair using entered address", StringComparison.Ordinal));
     True(settingsView.Contains("PairManuallyAsync", StringComparison.Ordinal));
 
@@ -1706,6 +1715,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(downloadPolicy.Contains("NWPathMonitor", StringComparison.Ordinal));
     True(downloadPolicy.Contains("NWInterfaceType.Wifi", StringComparison.Ordinal));
     True(downloadPolicy.Contains("NSUserDefaults", StringComparison.Ordinal));
+    True(downloadPolicy.Contains("AutoDownloadSince", StringComparison.Ordinal));
+    True(downloadPolicy.Contains("StorageLimitBytes", StringComparison.Ordinal));
 
     var scene = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SceneDelegate.cs"));
@@ -1722,6 +1733,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(engine.Contains("AVPlayer", StringComparison.Ordinal));
     True(engine.Contains("AVAudioSessionCategory.Playback", StringComparison.Ordinal));
     True(engine.Contains("SetMuted", StringComparison.Ordinal));
+    True(engine.Contains("ObserveInterruption", StringComparison.Ordinal));
+    True(engine.Contains("ObserveRouteChange", StringComparison.Ordinal));
+    True(engine.Contains("OldDeviceUnavailable", StringComparison.Ordinal));
 
     var nowPlaying = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosNowPlayingService.cs"));
@@ -1729,6 +1743,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(nowPlaying.Contains("MPRemoteCommandCenter", StringComparison.Ordinal));
     True(nowPlaying.Contains("ChangePlaybackPositionCommand", StringComparison.Ordinal));
     True(nowPlaying.Contains("SkipBackwardCommand", StringComparison.Ordinal));
+    True(nowPlaying.Contains("MPMediaItemArtwork", StringComparison.Ordinal));
 
     var mobileSession = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
@@ -1747,6 +1762,28 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("LoadExploreDashboardAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("LoadExplorePageAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("PairManuallyAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("FlushOfflineMutationsAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("SetListeningStatusAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("TryAutomaticDownloadAsync", StringComparison.Ordinal));
+
+    var pendingChanges = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileOfflineMutationStore.cs"));
+    True(pendingChanges.Contains("pending-changes.json", StringComparison.Ordinal));
+    True(pendingChanges.Contains("EnqueueFavouriteAsync", StringComparison.Ordinal));
+    True(pendingChanges.Contains("EnqueueListeningStatusAsync", StringComparison.Ordinal));
+    True(pendingChanges.Contains("EnqueueMomentAsync", StringComparison.Ordinal));
+    True(pendingChanges.Contains("FileOptions.WriteThrough", StringComparison.Ordinal));
+
+    var syncDiagnostics = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "SyncDiagnosticsViewController.cs"));
+    True(syncDiagnostics.Contains("Pending Changes", StringComparison.Ordinal));
+    True(syncDiagnostics.Contains("RetrySyncAsync", StringComparison.Ordinal));
+
+    var testFlight = File.ReadAllText(Path.Combine(
+        SourceRoot(), "tools", "Build-iOS-TestFlight.command"));
+    True(testFlight.Contains("ArchiveOnBuild=true", StringComparison.Ordinal));
+    True(testFlight.Contains("BuildIpa=true", StringComparison.Ordinal));
+    True(testFlight.Contains("never upload", StringComparison.OrdinalIgnoreCase));
 
     var keychain = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosKeychainConnectionStore.cs"));

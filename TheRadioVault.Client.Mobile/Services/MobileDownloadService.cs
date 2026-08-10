@@ -250,6 +250,80 @@ public sealed class MobileDownloadService
         finally { _gate.Release(); }
     }
 
+    public async Task<int> RemoveCompletedAsync(
+        long? protectedEpisodeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var removals = _records.Values
+                .Where(value => value.Summary.Completed && value.EpisodeId != protectedEpisodeId)
+                .ToArray();
+            foreach (var record in removals)
+            {
+                _records.Remove(record.EpisodeId);
+                DeleteRecordMediaBestEffort(record);
+            }
+            if (removals.Length > 0) await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            return removals.Length;
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<int> TrimToLimitAsync(
+        long limitBytes,
+        long? protectedEpisodeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (limitBytes <= 0) return 0;
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var total = _records.Values.Sum(value => Math.Max(0, value.SizeBytes));
+            var removals = _records.Values
+                .Where(value => value.EpisodeId != protectedEpisodeId)
+                .OrderBy(value => value.Summary.Completed ? 0 : 1)
+                .ThenBy(value => value.DownloadedAt)
+                .TakeWhile(record =>
+                {
+                    if (total <= limitBytes) return false;
+                    total -= Math.Max(0, record.SizeBytes);
+                    return true;
+                })
+                .ToArray();
+            foreach (var record in removals)
+            {
+                _records.Remove(record.EpisodeId);
+                DeleteRecordMediaBestEffort(record);
+            }
+            if (removals.Length > 0) await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            return removals.Length;
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<int> RepairAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var damaged = _records.Values.Where(value => !IsHealthy(value)).ToArray();
+            foreach (var record in damaged)
+            {
+                _records.Remove(record.EpisodeId);
+                DeleteRecordMediaBestEffort(record);
+                DeleteDirectoryBestEffort(PendingPath(record.EpisodeId));
+            }
+            if (damaged.Length > 0) await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            return damaged.Length;
+        }
+        finally { _gate.Release(); }
+    }
+
     public async Task DiscardPendingAsync(long episodeId, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);

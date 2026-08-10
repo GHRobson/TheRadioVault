@@ -28,6 +28,7 @@ public abstract class SessionTableViewController : UITableViewController
         TableView.BackgroundColor = RadioVaultTheme.Background;
         TableView.SeparatorColor = RadioVaultTheme.Border;
         TableView.SectionHeaderTopPadding = 12;
+        TableView.CellLayoutMarginsFollowReadableWidth = true;
         NavigationItem.Title = string.Empty;
         NavigationItem.BackButtonDisplayMode = UINavigationItemBackButtonDisplayMode.Minimal;
         if (!string.IsNullOrWhiteSpace(PageHeading))
@@ -77,6 +78,11 @@ public abstract class SessionTableViewController : UITableViewController
                 RadioVaultIcons.Image(RadioVaultIcon.Favourite),
                 "radiovault.favourite",
                 action => _ = Session.SetFavouriteAsync(broadcast, !broadcast.Source.Favourite));
+            var listeningStatus = UIAction.Create(
+                broadcast.Source.Completed ? "Mark as Unlistened" : "Mark as Listened",
+                RadioVaultIcons.Image(RadioVaultIcon.Completed),
+                "radiovault.listening-status",
+                action => _ = Session.SetListeningStatusAsync(broadcast, !broadcast.Source.Completed));
             var download = UIAction.Create(
                 downloaded ? "Remove Download" : "Download to this iPhone",
                 RadioVaultIcons.Image(downloaded ? RadioVaultIcon.Remove : RadioVaultIcon.Download),
@@ -93,7 +99,7 @@ public abstract class SessionTableViewController : UITableViewController
                 "radiovault.information",
                 action => NavigationController?.PushViewController(
                     new BroadcastDetailsViewController(Session, broadcast), true));
-            return UIMenu.Create("", [play, playNext, addToQueue, favourite, download, information]);
+            return UIMenu.Create("", [play, playNext, addToQueue, favourite, listeningStatus, download, information]);
         });
     }
 
@@ -161,7 +167,9 @@ public abstract class SessionTableViewController : UITableViewController
     {
         var alert = UIAlertController.Create(
             "Offline mode",
-            "This iPhone cannot currently reach the paired Radio Vault Server. Saved Library and Explore data remain available and will update automatically when the connection returns.",
+            Session.PendingSyncChanges == 0
+                ? "This iPhone cannot currently reach the paired Radio Vault Server. Saved Library and Explore data remain available and will update automatically when the connection returns."
+                : $"This iPhone cannot currently reach the paired Radio Vault Server. {Session.PendingSyncChanges:N0} saved change{(Session.PendingSyncChanges == 1 ? string.Empty : "s")} will upload automatically when the connection returns.",
             UIAlertControllerStyle.Alert);
         alert.AddAction(UIAlertAction.Create("OK", UIAlertActionStyle.Default, null));
         PresentViewController(alert, true, null);

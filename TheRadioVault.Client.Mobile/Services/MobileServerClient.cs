@@ -406,6 +406,17 @@ public sealed class MobileServerClient : IDisposable
             MobileJsonContext.Default.MutationEnvelope,
             cancellationToken).ConfigureAwait(false)).Result;
 
+    public async Task<WebMutationResult> SetListeningStatusAsync(
+        long episodeId,
+        bool played,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ListeningStatus(episodeId),
+            new MobileListeningStatusMutation(played),
+            MobileJsonContext.Default.MobileListeningStatusMutation,
+            MobileJsonContext.Default.MutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
     public async Task<WebMomentMutationResult> AddMomentAsync(
         long episodeId,
         WebMomentMutation mutation,

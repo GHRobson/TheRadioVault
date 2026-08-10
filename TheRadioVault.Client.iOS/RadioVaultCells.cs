@@ -10,22 +10,26 @@ namespace TheRadioVault.Client.iOS;
 internal sealed class PageHeaderView : UIView
 {
     public PageHeaderView(string titleText, string subtitleText)
-        : base(new CGRect(0, 0, 1, 92))
+        : base(new CGRect(0, 0, 1, 108))
     {
         BackgroundColor = RadioVaultTheme.Background;
 
         var title = new UILabel
         {
             Text = titleText,
-            Font = UIFont.SystemFontOfSize(32, UIFontWeight.Bold)!,
-            TextColor = RadioVaultTheme.Text
+            Font = (UIFont.PreferredTitle1 ?? UIFont.SystemFontOfSize(32, UIFontWeight.Bold))!,
+            TextColor = RadioVaultTheme.Text,
+            AdjustsFontForContentSizeCategory = true,
+            AdjustsFontSizeToFitWidth = true,
+            MinimumScaleFactor = 0.8f
         };
         var subtitle = new UILabel
         {
             Text = subtitleText,
-            Font = UIFont.SystemFontOfSize(13)!,
+            Font = (UIFont.PreferredSubheadline ?? UIFont.SystemFontOfSize(13))!,
             TextColor = RadioVaultTheme.MutedText,
-            Lines = 0
+            Lines = 0,
+            AdjustsFontForContentSizeCategory = true
         };
         var stack = new UIStackView([title, subtitle])
         {
@@ -92,15 +96,19 @@ internal sealed class LibraryControlsHeaderView : UIView
             var title = new UILabel
             {
                 Text = "Library",
-                Font = UIFont.SystemFontOfSize(32, UIFontWeight.Bold)!,
-                TextColor = RadioVaultTheme.Text
+                Font = (UIFont.PreferredTitle1 ?? UIFont.SystemFontOfSize(32, UIFontWeight.Bold))!,
+                TextColor = RadioVaultTheme.Text,
+                AdjustsFontForContentSizeCategory = true,
+                AdjustsFontSizeToFitWidth = true,
+                MinimumScaleFactor = 0.8f
             };
             var subtitle = new UILabel
             {
                 Text = "Search and browse your archive.",
-                Font = UIFont.SystemFontOfSize(13)!,
+                Font = (UIFont.PreferredSubheadline ?? UIFont.SystemFontOfSize(13))!,
                 TextColor = RadioVaultTheme.MutedText,
-                Lines = 0
+                Lines = 0,
+                AdjustsFontForContentSizeCategory = true
             };
             blocks.Add(new UIStackView([title, subtitle])
             {
@@ -170,6 +178,7 @@ internal sealed class LibraryControlsHeaderView : UIView
         button.SetImage(image, UIControlState.Normal);
         button.SetTitleColor(RadioVaultTheme.MutedText, UIControlState.Normal);
         button.TitleLabel!.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
+        button.TitleLabel.AdjustsFontForContentSizeCategory = true;
         button.BackgroundColor = RadioVaultTheme.Surface;
         button.Layer.CornerRadius = 10;
     }

@@ -39,6 +39,8 @@ public sealed record DiscoveredRadioVaultServer(
 
 public sealed record MobileFavouriteMutation(bool Favourite);
 
+public sealed record MobileListeningStatusMutation(bool Played);
+
 public sealed record MobileQueueAddMutation(long EpisodeId, bool PlayNext = false);
 
 public sealed record MobileQueueMoveMutation(int Direction);
