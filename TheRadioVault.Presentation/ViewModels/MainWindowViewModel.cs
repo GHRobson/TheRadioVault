@@ -44,6 +44,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         Search = search ?? throw new ArgumentNullException(nameof(search));
         Queue = queue;
         Moments = moments;
+        Saved = new SavedViewModel(Library, Moments);
         Transcripts = transcripts ?? throw new ArgumentNullException(nameof(transcripts));
         Research = research ?? throw new ArgumentNullException(nameof(research));
         Wiki = wiki ?? throw new ArgumentNullException(nameof(wiki));
@@ -84,8 +85,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             new ShellNavigationItemViewModel("search", "Search", "Search, shows and collections", "⌕", NavigateToAsync, iconTone: "search"),
             _libraryNavigation,
             new ShellNavigationItemViewModel("wiki", "Explore", "People, shows, history and cited timelines", "W", NavigateToAsync, iconTone: "wiki"),
-            new ShellNavigationItemViewModel("favourites", "Favourites", "Saved broadcasts", "♥", NavigateToAsync, iconTone: "favourite"),
-            new ShellNavigationItemViewModel("moments", "Moments", "Saved points in broadcasts", "◷", NavigateToAsync, iconTone: "moment"),
+            new ShellNavigationItemViewModel("saved", "Saved", "Favourite broadcasts and listening Moments", "◷", NavigateToAsync, iconTone: "moment"),
             new ShellNavigationItemViewModel("research", "Knowledge", "Evidence, metadata and transcription", "◫", NavigateToAsync, iconTone: "research"),
             new ShellNavigationItemViewModel("downloads", "Downloads", "Broadcasts stored on this PC", "↓", NavigateToAsync, iconTone: "progress"),
             new ShellNavigationItemViewModel("tools", "Settings", "Local Library, playback and maintenance", "⚙", NavigateToAsync, iconTone: "settings"),
@@ -121,6 +121,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public SearchViewModel Search { get; }
     public QueueViewModel Queue { get; }
     public MomentsViewModel Moments { get; }
+    public SavedViewModel Saved { get; }
     public TranscriptsViewModel Transcripts { get; }
     public ResearchWorkspaceViewModel Research { get; }
     public WikiViewModel Wiki { get; }
@@ -148,9 +149,8 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         get
         {
             if (string.Equals(CurrentRoute, "dashboard", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(CurrentRoute, "favourites", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(CurrentRoute, "now-playing", StringComparison.OrdinalIgnoreCase)
-                || string.Equals(CurrentRoute, "moments", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(CurrentRoute, "saved", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(CurrentRoute, "transcripts", StringComparison.OrdinalIgnoreCase)
                 || CurrentRoute.StartsWith("research", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(CurrentRoute, "wiki", StringComparison.OrdinalIgnoreCase)
@@ -209,9 +209,16 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             await RefreshLibraryNavigationAsync().ConfigureAwait(true);
             await Dashboard.LoadAsync(force: true).ConfigureAwait(true);
             await Search.LoadAsync(force: true).ConfigureAwait(true);
+            if (string.Equals(CurrentRoute, "saved", StringComparison.OrdinalIgnoreCase) && Saved.IsFavouritesSelected)
+                await Saved.LoadAsync(force: true).ConfigureAwait(true);
         }
         if (Changed("moment"))
-            await Moments.LoadAsync(force: true).ConfigureAwait(true);
+        {
+            if (string.Equals(CurrentRoute, "saved", StringComparison.OrdinalIgnoreCase) && Saved.IsMomentsSelected)
+                await Saved.LoadAsync(force: true).ConfigureAwait(true);
+            else
+                await Moments.LoadAsync(force: true).ConfigureAwait(true);
+        }
         if (Changed("queue"))
             await Queue.LoadAsync(force: true).ConfigureAwait(true);
         if (Changed("transcription", "transcription-control", "job"))
@@ -243,6 +250,14 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     {
         if (string.Equals(route, "queue", StringComparison.OrdinalIgnoreCase)) route = "now-playing";
         if (string.Equals(route, "transcripts", StringComparison.OrdinalIgnoreCase)) route = "research/transcription";
+        SavedSection? savedSection = string.Equals(route, "moments", StringComparison.OrdinalIgnoreCase)
+            ? SavedSection.Moments
+            : string.Equals(route, "favourites", StringComparison.OrdinalIgnoreCase)
+                ? SavedSection.Favourites
+                : null;
+        if (string.Equals(route, "moments", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(route, "favourites", StringComparison.OrdinalIgnoreCase))
+            route = "saved";
         if (string.Equals(route, LibraryRoute, StringComparison.OrdinalIgnoreCase))
             await RefreshLibraryNavigationAsync().ConfigureAwait(true);
         await _navigation.NavigateAsync(NavigationRequest.To(route)).ConfigureAwait(true);
@@ -276,24 +291,17 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 PageDescription = "Search the archive, browse shows, or open a useful collection.";
                 await Search.LoadAsync().ConfigureAwait(true);
                 break;
-            case "favourites":
-                CurrentPage = Library;
-                PageTitle = "Favourites";
-                PageDescription = "Broadcasts you have saved for easy return.";
-                await Library.SelectCollectionAsync(null, null, force: true).ConfigureAwait(true);
-                await Library.SetListeningFilterAsync(LibraryListeningFilter.Favourites).ConfigureAwait(true);
-                break;
             case "now-playing":
                 CurrentPage = NowPlaying;
                 PageTitle = "Now Playing";
                 PageDescription = "Current playback, broadcast context and the queue in one place.";
                 await NowPlaying.LoadAsync().ConfigureAwait(true);
                 break;
-            case "moments":
-                CurrentPage = Moments;
-                PageTitle = "Moments";
-                PageDescription = "Save, annotate and revisit exact points in the archive.";
-                await Moments.LoadAsync().ConfigureAwait(true);
+            case "saved":
+                CurrentPage = Saved;
+                PageTitle = "Saved";
+                PageDescription = "Favourite broadcasts and exact listening Moments in one place.";
+                await Saved.SelectSectionAsync(savedSection ?? Saved.SelectedSection).ConfigureAwait(true);
                 break;
             case "research/transcription":
                 CurrentPage = Transcripts;

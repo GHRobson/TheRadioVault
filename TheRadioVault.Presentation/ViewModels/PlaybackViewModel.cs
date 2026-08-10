@@ -183,6 +183,8 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     public double PrimaryTransportSpinnerAngle => (_loadingGlyphFrame % 12) * 30d;
     public bool ShowMoveToThisDevice => _handoff.IsAvailable && IsPlaybackElsewhere && !IsPrimaryTransportLoading;
     public bool ShowLocalPlayPause => !IsPrimaryTransportLoading && !ShowMoveToThisDevice;
+    public bool ShowPlayIcon => ShowLocalPlayPause && !(_transportPending ? _desiredPlaying : IsPlaying);
+    public bool ShowPauseIcon => ShowLocalPlayPause && (_transportPending ? _desiredPlaying : IsPlaying);
     public bool CanControlLocalTransport => IsLoaded && !IsBusy && !IsPlaybackElsewhere;
     public string PlayPauseGlyph => (_transportPending ? _desiredPlaying : IsPlaying) ? "Ⅱ" : "▶";
     public string PrimaryTransportToolTip => IsPrimaryTransportLoading
@@ -1885,6 +1887,8 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
         RaisePropertyChanged(nameof(PrimaryTransportSpinnerAngle));
         RaisePropertyChanged(nameof(ShowMoveToThisDevice));
         RaisePropertyChanged(nameof(ShowLocalPlayPause));
+        RaisePropertyChanged(nameof(ShowPlayIcon));
+        RaisePropertyChanged(nameof(ShowPauseIcon));
         RaisePropertyChanged(nameof(PlayPauseGlyph));
         RaisePropertyChanged(nameof(PrimaryTransportToolTip));
         RaisePropertyChanged(nameof(CanControlLocalTransport));

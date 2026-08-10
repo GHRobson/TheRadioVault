@@ -1729,6 +1729,43 @@ public sealed class MobileClientSession : IDisposable
         {
             if (_offlinePlayback)
             {
+                if (IsPaired && IsLiveConnected && SelectedBroadcast is not null && _playback.Current.IsOpen)
+                {
+                    var shared = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
+                    if (!await StopForCommittedTransferAsync(shared).ConfigureAwait(false))
+                    {
+                        if (HasActivePlayback(shared) && !IsOwnedByThisDevice(shared))
+                        {
+                            if (ConfirmForeignOwner(shared))
+                            {
+                                if (_playback.Current.IsPlaying) _playback.Pause();
+                                _ownsPlayback = false;
+                                _playbackGeneration = Math.Max(0, shared.Generation);
+                                await ObserveSharedPlaybackAsync(shared).ConfigureAwait(false);
+                                PlaybackStatus = $"Playback moved to {OwnerName(shared)}";
+                                NotifyPlayback();
+                            }
+                        }
+                        else
+                        {
+                            ResetForeignOwnerCandidate();
+                            _playbackGeneration = Math.Max(0, shared.Generation);
+                            if (_ownsPlayback)
+                            {
+                                var downloadedLive = await ReportLivePlaybackAsync(
+                                    force: !HasActivePlayback(shared)).ConfigureAwait(false);
+                                if (downloadedLive.Conflict)
+                                {
+                                    _playback.Pause();
+                                    _ownsPlayback = false;
+                                    PlaybackStatus = downloadedLive.Message;
+                                    NotifyPlayback();
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (SelectedBroadcast is not null && _playback.Current.IsOpen &&
                     (forceDurable || DateTimeOffset.UtcNow - _lastOfflineSave >= DurableProgressInterval))
                 {

@@ -149,6 +149,7 @@ var tests = new (string Name, Action Run)[]
     }),
     ("Avalonia Settings events return to the UI dispatcher", AvaloniaSettingsEventsUseUiDispatcher),
     ("Avalonia Settings explains server ownership", AvaloniaSettingsExplainsServerOwnership),
+    ("Desktop Saved and transport controls match native icon parity", DesktopSavedAndTransportControlsMatchNativeParity),
     ("Mac client remains usable before server pairing", MacClientRemainsUsableBeforeServerPairing),
     ("Alpha 12 completes server ownership and status UX", Alpha12CompletesServerOwnershipAndStatusUx),
     ("Alpha 13 completes remote client monitoring and server installer", Alpha13CompletesRemoteClientMonitoringAndServerInstaller),
@@ -644,6 +645,40 @@ static void AvaloniaSidebarHidesEmptyShowSections()
     var source = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Services", "Services", "LibraryBrowseService.cs"));
     True(source.Contains("countsByShow", StringComparison.Ordinal));
     True(source.Contains("CollectionIdentityResolver.Canonicalize", StringComparison.Ordinal));
+}
+
+static void DesktopSavedAndTransportControlsMatchNativeParity()
+{
+    var navigation = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "MainWindowViewModel.cs"));
+    True(navigation.Contains("new ShellNavigationItemViewModel(\"saved\", \"Saved\"", StringComparison.Ordinal));
+    True(!navigation.Contains("new ShellNavigationItemViewModel(\"favourites\", \"Favourites\"", StringComparison.Ordinal));
+    True(!navigation.Contains("new ShellNavigationItemViewModel(\"moments\", \"Moments\"", StringComparison.Ordinal));
+    True(navigation.Contains("Saved.SelectSectionAsync", StringComparison.Ordinal));
+
+    var savedView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "SavedView.axaml"));
+    True(savedView.Contains("ShowFavouritesCommand", StringComparison.Ordinal));
+    True(savedView.Contains("ShowMomentsCommand", StringComparison.Ordinal));
+    True(savedView.Contains("RvStatFavouriteBrush", StringComparison.Ordinal));
+    True(savedView.Contains("RvMomentBrush", StringComparison.Ordinal));
+
+    var theme = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "App.axaml"));
+    True(theme.Contains("SkipBackIconTemplate", StringComparison.Ordinal));
+    True(theme.Contains("SkipForwardIconTemplate", StringComparison.Ordinal));
+    True(theme.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
+    True(theme.Contains("M8,1 L4,4 L8,7", StringComparison.Ordinal));
+    True(theme.Contains("M16,1 L20,4 L16,7", StringComparison.Ordinal));
+    True(theme.Contains("ShowPlayIcon", StringComparison.Ordinal));
+    True(theme.Contains("ShowPauseIcon", StringComparison.Ordinal));
+
+    var shell = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml"));
+    True(shell.Contains("SkipBackIconTemplate", StringComparison.Ordinal));
+    True(shell.Contains("SkipForwardIconTemplate", StringComparison.Ordinal));
+    True(shell.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
+    True(!shell.Contains("Text=\"{Binding Playback.PlayPauseGlyph}\"", StringComparison.Ordinal));
 }
 
 static void ParserAcceptsCatalogueStyleInterviewFilenames()

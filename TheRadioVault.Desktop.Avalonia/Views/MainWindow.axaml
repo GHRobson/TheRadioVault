@@ -16,6 +16,7 @@
     <DataTemplate DataType="{x:Type vm:SearchViewModel}"><views:SearchView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:QueueViewModel}"><views:QueueView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:MomentsViewModel}"><views:MomentsView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:SavedViewModel}"><views:SavedView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:TranscriptsViewModel}"><views:TranscriptsView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:ResearchWorkspaceViewModel}"><views:ResearchWorkspaceView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:WikiViewModel}"><views:WikiView /></DataTemplate>
@@ -53,8 +54,7 @@
           <NativeMenuItem Header="Library" ToggleType="Radio" Gesture="Meta+2" CommandParameter="library" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItem Header="Search" ToggleType="Radio" CommandParameter="search" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItem Header="Explore" ToggleType="Radio" CommandParameter="wiki" Click="NavigateMenuItem_OnClick" />
-          <NativeMenuItem Header="Favourites" ToggleType="Radio" CommandParameter="favourites" Click="NavigateMenuItem_OnClick" />
-          <NativeMenuItem Header="Moments" ToggleType="Radio" CommandParameter="moments" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Saved" ToggleType="Radio" CommandParameter="saved" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItem Header="Downloads" ToggleType="Radio" CommandParameter="downloads" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItem Header="Now Playing" ToggleType="Radio" CommandParameter="now-playing" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItemSeparator />
@@ -300,52 +300,15 @@
         <Grid Grid.Column="1" RowDefinitions="Auto,Auto" RowSpacing="7" VerticalAlignment="Center">
           <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" Spacing="8">
             <Button Classes="ghost icon-button" Command="{Binding Playback.SkipBackCommand}" ToolTip.Tip="Skip back 15 seconds">
-              <Grid Width="24" Height="24">
-                <Path Data="M5,10 L5,17 C5,18.7 6.3,20 8,20 L17,20 C18.7,20 20,18.7 20,17 L20,7 C20,5.3 18.7,4 17,4 L4,4"
-                      Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
-                      StrokeLineCap="Round" StrokeJoin="Round" />
-                <Path Data="M8,1 L4,4 L8,7"
-                      Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
-                      StrokeLineCap="Round" StrokeJoin="Round" />
-                <TextBlock Text="15" Foreground="{DynamicResource RvAccentBrush}"
-                           FontSize="7.6" FontWeight="Bold" TextAlignment="Center"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3,0,0" />
-              </Grid>
+              <ContentControl Content="Skip back" ContentTemplate="{StaticResource SkipBackIconTemplate}" />
             </Button>
             <Button Classes="primary icon-button" Width="46" MinWidth="46" Height="46"
                     Command="{Binding Playback.PlayPauseCommand}"
                     ToolTip.Tip="{Binding Playback.PrimaryTransportToolTip}">
-              <Grid Width="25" Height="25">
-                <Path IsVisible="{Binding Playback.IsPrimaryTransportLoading}" Width="23" Height="23" Stretch="Uniform"
-                      Data="M12,3 A9,9 0 1 1 4.2,7.5" Stroke="{DynamicResource RvBackgroundBrush}" StrokeThickness="2.3"
-                      StrokeLineCap="Round" RenderTransformOrigin="50%,50%"
-                      HorizontalAlignment="Center" VerticalAlignment="Center">
-                  <Path.RenderTransform><RotateTransform Angle="{Binding Playback.PrimaryTransportSpinnerAngle}" /></Path.RenderTransform>
-                </Path>
-                <TextBlock IsVisible="{Binding Playback.ShowLocalPlayPause}"
-                           Text="{Binding Playback.PlayPauseGlyph}" FontSize="17" FontWeight="Bold"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" />
-                <Grid IsVisible="{Binding Playback.ShowMoveToThisDevice}" Width="25" Height="25"
-                      ToolTip.Tip="Move playback to this PC">
-                  <Path Width="25" Height="25" Stretch="None"
-                        Stroke="{DynamicResource RvBackgroundBrush}" StrokeThickness="1.8"
-                        StrokeLineCap="Round" StrokeJoin="Round"
-                        Data="M7,5 L20,5 L20,17 L7,17 M11,20 L16,20 M13.5,17 L13.5,20 M2,11 L13,11 M9.5,7.5 L13,11 L9.5,14.5" />
-                </Grid>
-              </Grid>
+              <ContentControl Content="{Binding Playback}" ContentTemplate="{StaticResource PrimaryTransportIconTemplate}" />
             </Button>
             <Button Classes="ghost icon-button" Command="{Binding Playback.SkipForwardCommand}" ToolTip.Tip="Skip forward 30 seconds">
-              <Grid Width="24" Height="24">
-                <Path Data="M19,10 L19,17 C19,18.7 17.7,20 16,20 L7,20 C5.3,20 4,18.7 4,17 L4,7 C4,5.3 5.3,4 7,4 L20,4"
-                      Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
-                      StrokeLineCap="Round" StrokeJoin="Round" />
-                <Path Data="M16,1 L20,4 L16,7"
-                      Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
-                      StrokeLineCap="Round" StrokeJoin="Round" />
-                <TextBlock Text="30" Foreground="{DynamicResource RvAccentBrush}"
-                           FontSize="7.6" FontWeight="Bold" TextAlignment="Center"
-                           HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3,0,0" />
-              </Grid>
+              <ContentControl Content="Skip forward" ContentTemplate="{StaticResource SkipForwardIconTemplate}" />
             </Button>
           </StackPanel>
           <Grid Grid.Row="1" ColumnDefinitions="48,*,48" ColumnSpacing="10" VerticalAlignment="Center" Margin="0,0,0,2">
