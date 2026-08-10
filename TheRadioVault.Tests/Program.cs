@@ -1648,6 +1648,17 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(nowPlayingView.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_session.MiniPlayerProgress", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_session.MiniPlayerTime", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("new UIStackView([_elapsedLabel, _totalLabel, _remainingLabel])", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_elapsedLabel.Text = _session.MiniPlayerElapsedTime", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("NowPlayingUpNextView", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("playerContent.HeightAnchor.ConstraintGreaterThanOrEqualTo", StringComparison.Ordinal));
+
+    var nowPlayingQueue = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingUpNextView.cs"));
+    True(nowPlayingQueue.Contains("SHARED QUEUE", StringComparison.Ordinal));
+    True(nowPlayingQueue.Contains("PlayQueueItemAsync", StringComparison.Ordinal));
+    True(nowPlayingQueue.Contains("RemoveQueueItemAsync", StringComparison.Ordinal));
+    True(nowPlayingQueue.Contains("RadioVaultTheme.Accent", StringComparison.Ordinal));
 
     var downloadService = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));

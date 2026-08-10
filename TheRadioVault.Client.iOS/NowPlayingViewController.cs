@@ -23,6 +23,7 @@ public sealed class NowPlayingViewController : UIViewController
     private readonly UIButton _infoButton = UIButton.FromType(UIButtonType.System);
     private readonly UIButton _favouriteButton = UIButton.FromType(UIButtonType.System);
     private readonly UIActivityIndicatorView _playActivity = new(UIActivityIndicatorViewStyle.Large);
+    private readonly NowPlayingUpNextView _upNext;
     private bool _isScrubbing;
     private long _artworkEpisodeId;
     private bool _artworkWasRequestedOnline;
@@ -30,6 +31,7 @@ public sealed class NowPlayingViewController : UIViewController
     public NowPlayingViewController(MobileClientSession session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
+        _upNext = new NowPlayingUpNextView(_session);
         Title = "Now Playing";
         _session.StateChanged += SessionOnStateChanged;
         _session.PlaybackStateChanged += SessionOnStateChanged;
@@ -41,11 +43,6 @@ public sealed class NowPlayingViewController : UIViewController
         if (View is not { } view) return;
         view.BackgroundColor = RadioVaultTheme.Background;
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
-        NavigationItem.LeftBarButtonItem = new UIBarButtonItem(
-            RadioVaultIcons.Image(RadioVaultIcon.UpNext),
-            UIBarButtonItemStyle.Plain,
-            (_, _) => NavigationController?.PushViewController(new UpNextViewController(_session), true));
-        NavigationItem.LeftBarButtonItem.AccessibilityLabel = "Up Next";
         NavigationItem.Title = string.Empty;
         NavigationItem.BackButtonDisplayMode = UINavigationItemBackButtonDisplayMode.Minimal;
 
@@ -140,7 +137,7 @@ public sealed class NowPlayingViewController : UIViewController
             Distribution = UIStackViewDistribution.Fill,
             Spacing = 6
         };
-        var times = new UIStackView([_elapsedLabel, _remainingLabel, _totalLabel])
+        var times = new UIStackView([_elapsedLabel, _totalLabel, _remainingLabel])
         {
             Axis = UILayoutConstraintAxis.Horizontal,
             Alignment = UIStackViewAlignment.Fill,
@@ -160,17 +157,27 @@ public sealed class NowPlayingViewController : UIViewController
             Distribution = UIStackViewDistribution.FillEqually,
             Spacing = 10
         };
-        var content = new UIStackView([artworkStage, metadata, progress, controls, actions, _speedButton, _statusLabel])
+        var speedStage = new UIView();
+        _speedButton.TranslatesAutoresizingMaskIntoConstraints = false;
+        speedStage.AddSubview(_speedButton);
+        var playerContent = new UIStackView([artworkStage, metadata, progress, controls, actions, speedStage, _statusLabel])
         {
             Axis = UILayoutConstraintAxis.Vertical,
             Alignment = UIStackViewAlignment.Fill,
             Distribution = UIStackViewDistribution.Fill,
-            Spacing = 20,
+            Spacing = 20
+        };
+        playerContent.SetCustomSpacing(28, artworkStage);
+        playerContent.SetCustomSpacing(26, progress);
+        playerContent.SetCustomSpacing(16, controls);
+        var content = new UIStackView([playerContent, _upNext])
+        {
+            Axis = UILayoutConstraintAxis.Vertical,
+            Alignment = UIStackViewAlignment.Fill,
+            Distribution = UIStackViewDistribution.Fill,
+            Spacing = 24,
             TranslatesAutoresizingMaskIntoConstraints = false
         };
-        content.SetCustomSpacing(28, artworkStage);
-        content.SetCustomSpacing(26, progress);
-        content.SetCustomSpacing(16, controls);
 
         var scrollView = new UIScrollView
         {
@@ -202,6 +209,7 @@ public sealed class NowPlayingViewController : UIViewController
             content.TrailingAnchor.ConstraintEqualTo(contentHost.TrailingAnchor, -20),
             content.TopAnchor.ConstraintEqualTo(contentHost.TopAnchor, 16),
             content.BottomAnchor.ConstraintEqualTo(contentHost.BottomAnchor, -24),
+            playerContent.HeightAnchor.ConstraintGreaterThanOrEqualTo(scrollView.FrameLayoutGuide.HeightAnchor, -40),
             _backButton.WidthAnchor.ConstraintEqualTo(64),
             _backButton.HeightAnchor.ConstraintEqualTo(64),
             _playButton.WidthAnchor.ConstraintEqualTo(96),
@@ -211,6 +219,9 @@ public sealed class NowPlayingViewController : UIViewController
             _forwardButton.WidthAnchor.ConstraintEqualTo(64),
             _forwardButton.HeightAnchor.ConstraintEqualTo(64),
             actions.HeightAnchor.ConstraintEqualTo(48),
+            speedStage.HeightAnchor.ConstraintEqualTo(38),
+            _speedButton.CenterXAnchor.ConstraintEqualTo(speedStage.CenterXAnchor),
+            _speedButton.CenterYAnchor.ConstraintEqualTo(speedStage.CenterYAnchor),
             _speedButton.WidthAnchor.ConstraintEqualTo(76),
             _speedButton.HeightAnchor.ConstraintEqualTo(38)
         ]);
@@ -230,7 +241,7 @@ public sealed class NowPlayingViewController : UIViewController
 
     private static void ConfigureTimeLabel(UILabel label, UITextAlignment alignment)
     {
-        label.Font = UIFont.MonospacedDigitSystemFontOfSize(11, UIFontWeight.Medium)!;
+        label.Font = UIFont.MonospacedDigitSystemFontOfSize(12, UIFontWeight.Semibold)!;
         label.TextAlignment = alignment;
         label.TextColor = RadioVaultTheme.MutedText;
         label.AdjustsFontSizeToFitWidth = true;
@@ -302,9 +313,10 @@ public sealed class NowPlayingViewController : UIViewController
         _statusLabel.Text = _session.MiniPlayerShowsHandoff
             ? $"Tap the large Radio Vault hand-off button to move playback from {_session.MiniPlayerSubtitle.Replace("Playing on ", string.Empty, StringComparison.Ordinal)} to this iPhone."
             : _session.PlaybackStatus;
-        _elapsedLabel.Text = $"Elapsed  {_session.MiniPlayerElapsedTime}";
-        _remainingLabel.Text = $"Remaining  {_session.MiniPlayerRemainingTime}";
-        _totalLabel.Text = $"Total  {_session.MiniPlayerTotalTime}";
+        _elapsedLabel.Text = _session.MiniPlayerElapsedTime;
+        _totalLabel.Text = _session.MiniPlayerTotalTime;
+        _remainingLabel.Text = _session.MiniPlayerRemainingTime;
+        _upNext.Configure(_session.QueueItems);
         _progressSlider.AccessibilityValue = _session.MiniPlayerTime;
         if (!_isScrubbing) _progressSlider.Value = (float)_session.MiniPlayerProgress;
         var loading = _session.IsPreparingPlayback;
