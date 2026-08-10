@@ -51,6 +51,14 @@ public sealed class HomeViewController : SessionTableViewController
             await Session.RefreshAsync();
             BeginInvokeOnMainThread(() => RefreshControl?.EndRefreshing());
         };
+        var settings = new UIBarButtonItem(
+            RadioVaultIcons.Image(RadioVaultIcon.Settings),
+            UIBarButtonItemStyle.Plain,
+            (_, _) => NavigationController?.PushViewController(new ServerViewController(Session), true))
+        {
+            AccessibilityLabel = "Settings"
+        };
+        NavigationItem.RightBarButtonItem = settings;
     }
 
     public override nint NumberOfSections(UITableView tableView) => 6;

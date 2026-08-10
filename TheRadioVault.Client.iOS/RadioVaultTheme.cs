@@ -23,6 +23,7 @@ public static class RadioVaultTheme
     public static UIColor Completed { get; } = Color(0x52, 0xD6, 0xA2);
     public static UIColor Favourite { get; } = Color(0xF0, 0x8D, 0xB7);
     public static UIColor Wiki { get; } = Color(0x8E, 0xA7, 0xFF);
+    public static UIColor ActivityBlue { get; } = Color(0x68, 0xB5, 0xFF);
     public static UIColor Settings { get; } = Color(0xA9, 0xB0, 0xB8);
     public static UIColor Danger { get; } = Color(0xF8, 0x71, 0x82);
 
@@ -134,9 +135,9 @@ public static class RadioVaultIcons
         RadioVaultIcon.Favourite => RadioVaultTheme.Favourite,
         RadioVaultIcon.Knowledge => RadioVaultTheme.Wiki,
         RadioVaultIcon.Download or RadioVaultIcon.Settings or RadioVaultIcon.Remove or RadioVaultIcon.Offline => RadioVaultTheme.Settings,
-        RadioVaultIcon.Sync => RadioVaultTheme.Progress,
+        RadioVaultIcon.Sync => RadioVaultTheme.ActivityBlue,
         RadioVaultIcon.Completed => RadioVaultTheme.Completed,
-        RadioVaultIcon.InProgress => RadioVaultTheme.Progress,
+        RadioVaultIcon.InProgress => RadioVaultTheme.ActivityBlue,
         RadioVaultIcon.Search => Color(0x78, 0xB6, 0xD8),
         _ => RadioVaultTheme.Accent
     };

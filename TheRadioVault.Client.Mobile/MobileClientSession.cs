@@ -129,6 +129,8 @@ public sealed class MobileClientSession : IDisposable
     public IReadOnlyList<MobileBroadcastItem> UnheardBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> LibraryBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> DownloadedBroadcasts { get; private set; } = [];
+    public IReadOnlyList<WebMomentSummary> SavedMoments { get; private set; } = [];
+    public MobileKnowledgeSnapshot? Knowledge { get; private set; }
     public IReadOnlyList<WebQueueItem> QueueItems { get; private set; } = [];
     public IReadOnlyList<DiscoveredRadioVaultServer> Servers { get; private set; } = [];
     public MobileBroadcastItem? SelectedBroadcast { get; private set; }
@@ -257,7 +259,7 @@ public sealed class MobileClientSession : IDisposable
         Notify();
         if (!IsPaired)
         {
-            TabRequested?.Invoke(4);
+            TabRequested?.Invoke(0);
             return;
         }
 
@@ -585,6 +587,21 @@ public sealed class MobileClientSession : IDisposable
             await _offlineMutations.EnqueueMomentAsync(
                 CurrentServerInstanceId(), broadcast.EpisodeId, position,
                 momentTitle, notes?.Trim() ?? string.Empty, mutationId).ConfigureAwait(false);
+            var savedMoment = new WebMomentSummary(
+                -DateTime.UtcNow.Ticks,
+                broadcast.EpisodeId,
+                broadcast.Source.CollectionName,
+                broadcast.Title,
+                broadcast.Source.AirDate?.ToDateTime(TimeOnly.MinValue),
+                position,
+                momentTitle,
+                notes?.Trim() ?? string.Empty,
+                DateTime.UtcNow);
+            SavedMoments = new[] { savedMoment }
+                .Concat(SavedMoments.Where(value => value.Id >= 0 || value.EpisodeId != broadcast.EpisodeId || value.PositionMs != position))
+                .ToArray();
+            _metadataCache.SetMoments(SavedMoments);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
             await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
             if (IsLiveConnected) await FlushOfflineMutationsAsync().ConfigureAwait(false);
             StatusText = PendingSyncChanges > 0 ? "Moment saved on this iPhone · waiting to sync." : "Moment saved.";
@@ -596,6 +613,135 @@ public sealed class MobileClientSession : IDisposable
             return false;
         }
         finally { SetBusy(false); }
+    }
+
+    public async Task LoadSavedAsync()
+    {
+        SavedMoments = _metadataCache.Snapshot.Moments ?? [];
+        Notify();
+        if (!IsPaired || !IsLiveConnected) return;
+        try
+        {
+            SavedMoments = await _server.GetMomentsAsync().ConfigureAwait(false);
+            _metadataCache.SetMoments(SavedMoments);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            StatusText = $"{FavouriteBroadcasts:N0} favourite{(FavouriteBroadcasts == 1 ? string.Empty : "s")} · {SavedMoments.Count:N0} moment{(SavedMoments.Count == 1 ? string.Empty : "s")}";
+        }
+        catch (Exception exception)
+        {
+            StatusText = SavedMoments.Count > 0
+                ? "Offline · showing saved Favourites and Moments"
+                : "Saved items could not be loaded: " + exception.Message;
+        }
+        finally { Notify(); }
+    }
+
+    public async Task PlayMomentAsync(WebMomentSummary moment)
+    {
+        var broadcast = FindCachedBroadcast(moment.EpisodeId);
+        if (broadcast is null && IsLiveConnected)
+        {
+            try
+            {
+                broadcast = new MobileBroadcastItem(
+                    await _server.GetBroadcastSummaryAsync(moment.EpisodeId).ConfigureAwait(false));
+            }
+            catch (Exception exception)
+            {
+                PlaybackStatus = "Moment could not be opened: " + exception.Message;
+                NotifyPlayback();
+                return;
+            }
+        }
+        if (broadcast is null)
+        {
+            PlaybackStatus = "This Moment's broadcast is not in the saved catalogue.";
+            NotifyPlayback();
+            return;
+        }
+        await PlayAsync(new MobileBroadcastItem(broadcast.Source with
+        {
+            PositionMs = Math.Clamp(moment.PositionMs, 0, Math.Max(moment.PositionMs, broadcast.Source.DurationMs)),
+            Completed = false
+        })).ConfigureAwait(false);
+    }
+
+    public async Task<MobileKnowledgeSnapshot?> LoadKnowledgeAsync()
+    {
+        Knowledge = _metadataCache.Snapshot.Knowledge;
+        Notify();
+        if (!IsPaired || !IsLiveConnected) return Knowledge;
+        try
+        {
+            var overviewTask = _server.GetKnowledgeOverviewAsync();
+            var collectionsTask = _server.GetKnowledgeCollectionsAsync();
+            var reviewsTask = _server.GetKnowledgeDateReviewsAsync();
+            await Task.WhenAll(overviewTask, collectionsTask, reviewsTask).ConfigureAwait(false);
+            Knowledge = new MobileKnowledgeSnapshot(
+                await overviewTask.ConfigureAwait(false),
+                await collectionsTask.ConfigureAwait(false),
+                await reviewsTask.ConfigureAwait(false),
+                DateTimeOffset.UtcNow);
+            _metadataCache.SetKnowledge(Knowledge);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            StatusText = $"Knowledge is up to date · {Knowledge.Overview.TotalRecords:N0} records";
+        }
+        catch (Exception exception)
+        {
+            StatusText = Knowledge is null
+                ? "Knowledge could not be loaded: " + exception.Message
+                : "Offline · showing saved Knowledge data";
+        }
+        finally { Notify(); }
+        return Knowledge;
+    }
+
+    public async Task<MobileKnowledgeCoverage?> LoadKnowledgeCoverageAsync(int collectionId)
+    {
+        if (!IsPaired || !IsLiveConnected) return null;
+        try
+        {
+            StatusText = "Building Knowledge coverage…";
+            Notify();
+            var coverage = await _server.GetKnowledgeCoverageAsync(collectionId).ConfigureAwait(false);
+            StatusText = coverage is null ? "No dated coverage is available for that show." : $"Coverage loaded for {coverage.ShowName}.";
+            return coverage;
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Coverage could not be loaded: " + exception.Message;
+            return null;
+        }
+        finally { Notify(); }
+    }
+
+    public async Task<bool> ResolveKnowledgeDateReviewAsync(MobileKnowledgeDateReview review, int action)
+    {
+        if (!IsPaired || !IsLiveConnected) return false;
+        try
+        {
+            StatusText = action switch
+            {
+                0 => "Accepting the suggested date…",
+                1 => "Keeping the current Library date…",
+                2 => "Ignoring this suggestion…",
+                6 => "Reopening the date suggestion…",
+                _ => "Saving the Knowledge decision…"
+            };
+            Notify();
+            await _server.ResolveKnowledgeDateReviewAsync(
+                review.ResearchId,
+                action,
+                action == 0 ? review.ProposedDate : null).ConfigureAwait(false);
+            await LoadKnowledgeAsync().ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Knowledge decision failed: " + exception.Message;
+            Notify();
+            return false;
+        }
     }
 
     public async Task<MobileBroadcastItem?> SetListeningStatusAsync(MobileBroadcastItem broadcast, bool played)
@@ -1093,20 +1239,26 @@ public sealed class MobileClientSession : IDisposable
         LibraryCollections = [];
         _incompleteLibraryCollections = [];
         QueueItems = [];
+        SavedMoments = [];
+        Knowledge = null;
         TotalBroadcasts = 0;
         CompletedBroadcasts = 0;
         InProgressBroadcasts = 0;
         FavouriteBroadcasts = 0;
         StatusText = "Pairing removed from this iPhone.";
         Notify();
-        TabRequested?.Invoke(4);
+        TabRequested?.Invoke(0);
     }
 
     public MobileBroadcastItem? FindCachedBroadcast(long episodeId)
         => CurrentBroadcast?.EpisodeId == episodeId
             ? CurrentBroadcast
             : LibraryBroadcasts.FirstOrDefault(value => value.EpisodeId == episodeId)
-              ?? DownloadedBroadcasts.FirstOrDefault(value => value.EpisodeId == episodeId);
+              ?? DownloadedBroadcasts.FirstOrDefault(value => value.EpisodeId == episodeId)
+              ?? _metadataCache.Snapshot.Broadcasts
+                  .Where(value => value.RepresentativeEpisodeId == episodeId)
+                  .Select(value => new MobileBroadcastItem(value))
+                  .FirstOrDefault();
 
     public async Task PlayTimelineLinkAsync(MobileWikiTimelineBroadcastLink link)
     {
@@ -2311,6 +2463,8 @@ public sealed class MobileClientSession : IDisposable
             OnThisDay = Convert(overview.OnThisDay);
         }
         QueueItems = snapshot.Queue;
+        SavedMoments = snapshot.Moments ?? [];
+        Knowledge = snapshot.Knowledge;
         Notify();
     }
 

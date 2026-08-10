@@ -428,6 +428,58 @@ public sealed class MobileServerClient : IDisposable
             MobileJsonContext.Default.MomentMutationEnvelope,
             cancellationToken).ConfigureAwait(false)).Result;
 
+    public async Task<IReadOnlyList<WebMomentSummary>> GetMomentsAsync(CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.MomentsAll,
+            MobileJsonContext.Default.MomentsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Moments;
+
+    public async Task<MobileKnowledgeOverview> GetKnowledgeOverviewAsync(CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("overview"),
+            new MobileEmptyMutation(),
+            MobileJsonContext.Default.MobileEmptyMutation,
+            MobileJsonContext.Default.MobileKnowledgeOverviewEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task<IReadOnlyList<MobileKnowledgeCollection>> GetKnowledgeCollectionsAsync(CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("collections"),
+            new MobileEmptyMutation(),
+            MobileJsonContext.Default.MobileEmptyMutation,
+            MobileJsonContext.Default.MobileKnowledgeCollectionsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task<IReadOnlyList<MobileKnowledgeDateReview>> GetKnowledgeDateReviewsAsync(CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("date-reviews"),
+            new MobileKnowledgeDateReviewsRequest(),
+            MobileJsonContext.Default.MobileKnowledgeDateReviewsRequest,
+            MobileJsonContext.Default.MobileKnowledgeDateReviewsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task<MobileKnowledgeCoverage?> GetKnowledgeCoverageAsync(
+        int collectionId,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("coverage"),
+            new MobileKnowledgeCollectionRequest(collectionId),
+            MobileJsonContext.Default.MobileKnowledgeCollectionRequest,
+            MobileJsonContext.Default.MobileKnowledgeCoverageEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task ResolveKnowledgeDateReviewAsync(
+        long researchId,
+        int action,
+        DateOnly? selectedDate = null,
+        CancellationToken cancellationToken = default)
+        => _ = await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("resolve-date-review"),
+            new MobileKnowledgeResolveRequest(researchId, action, selectedDate),
+            MobileJsonContext.Default.MobileKnowledgeResolveRequest,
+            MobileJsonContext.Default.MobileKnowledgeMutationEnvelope,
+            cancellationToken).ConfigureAwait(false);
+
     public async Task<WebQueueMutationResult> AddToQueueAsync(
         long episodeId,
         bool playNext = false,

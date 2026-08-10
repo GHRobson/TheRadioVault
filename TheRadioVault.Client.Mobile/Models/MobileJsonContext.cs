@@ -20,6 +20,12 @@ public sealed record ClientPlaybackEnvelope(WebClientPlaybackResult Result);
 public sealed record PlaybackTransferEnvelope(WebPlaybackTransferResult Result);
 public sealed record ProgressEnvelope(WebOfflineProgressResult Result);
 public sealed record MomentMutationEnvelope(WebMomentMutationResult Result);
+public sealed record MomentsEnvelope(IReadOnlyList<WebMomentSummary> Moments, int Count);
+public sealed record MobileKnowledgeOverviewEnvelope(MobileKnowledgeOverview Value);
+public sealed record MobileKnowledgeCollectionsEnvelope(IReadOnlyList<MobileKnowledgeCollection> Value);
+public sealed record MobileKnowledgeDateReviewsEnvelope(IReadOnlyList<MobileKnowledgeDateReview> Value);
+public sealed record MobileKnowledgeCoverageEnvelope(MobileKnowledgeCoverage? Value);
+public sealed record MobileKnowledgeMutationEnvelope(bool Value);
 
 [JsonSourceGenerationOptions(
     PropertyNameCaseInsensitive = true,
@@ -53,6 +59,7 @@ public sealed record MomentMutationEnvelope(WebMomentMutationResult Result);
 [JsonSerializable(typeof(PlaybackTransferEnvelope))]
 [JsonSerializable(typeof(ProgressEnvelope))]
 [JsonSerializable(typeof(MomentMutationEnvelope))]
+[JsonSerializable(typeof(MomentsEnvelope))]
 [JsonSerializable(typeof(WebMomentMutation))]
 [JsonSerializable(typeof(MobileLibrarySyncEnvelope))]
 [JsonSerializable(typeof(MobileMetadataCacheSnapshot))]
@@ -72,4 +79,12 @@ public sealed record MomentMutationEnvelope(WebMomentMutationResult Result);
 [JsonSerializable(typeof(MobileWikiPageRequest))]
 [JsonSerializable(typeof(MobileWikiImageRequest))]
 [JsonSerializable(typeof(MobileWikiDashboardRequest))]
+[JsonSerializable(typeof(MobileKnowledgeOverviewEnvelope))]
+[JsonSerializable(typeof(MobileKnowledgeCollectionsEnvelope))]
+[JsonSerializable(typeof(MobileKnowledgeDateReviewsEnvelope))]
+[JsonSerializable(typeof(MobileKnowledgeCoverageEnvelope))]
+[JsonSerializable(typeof(MobileKnowledgeMutationEnvelope))]
+[JsonSerializable(typeof(MobileKnowledgeDateReviewsRequest))]
+[JsonSerializable(typeof(MobileKnowledgeCollectionRequest))]
+[JsonSerializable(typeof(MobileKnowledgeResolveRequest))]
 public partial class MobileJsonContext : JsonSerializerContext;

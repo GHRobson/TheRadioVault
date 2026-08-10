@@ -129,14 +129,14 @@ public abstract class SessionTableViewController : UITableViewController
         if (Session.ShowsSyncIndicator)
         {
             var syncing = new UIBarButtonItem(
-                RadioVaultIcons.Image(RadioVaultIcon.Sync, RadioVaultTheme.Progress),
+                RadioVaultIcons.Image(RadioVaultIcon.Sync, RadioVaultTheme.ActivityBlue),
                 UIBarButtonItemStyle.Plain,
                 (_, _) => PresentSyncExplanation())
             {
                 Tag = ConnectionIndicatorTag,
                 AccessibilityLabel = "Syncing the saved Radio Vault catalogue"
             };
-            current.Insert(0, syncing);
+            current.Add(syncing);
         }
         else if (Session.ShowsOfflineIndicator)
         {
@@ -148,7 +148,7 @@ public abstract class SessionTableViewController : UITableViewController
                 Tag = ConnectionIndicatorTag,
                 AccessibilityLabel = "Offline · showing saved Radio Vault data"
             };
-            current.Insert(0, offline);
+            current.Add(offline);
         }
         NavigationItem.RightBarButtonItems = current.Count == 0 ? null : current.ToArray();
     }

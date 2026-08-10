@@ -94,13 +94,25 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         }
 
         var field = DetailFields()[indexPath.Row];
-        return DetailCell("programme-field", field.Label, field.Value);
+        var cell = DetailCell("programme-field", field.Label, field.Value);
+        if (field.IsEntity)
+        {
+            cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+            cell.AccessibilityHint = $"Browse broadcasts and Explore articles for {field.Label.ToLowerInvariant()}";
+        }
+        else cell.SelectionStyle = UITableViewCellSelectionStyle.None;
+        return cell;
     }
 
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
         if (indexPath.Section == 1 && indexPath.Row == 1) PresentQueueActions();
+        if (indexPath.Section == 3 && indexPath.Row < DetailFields().Count)
+        {
+            var field = DetailFields()[indexPath.Row];
+            if (field.IsEntity) PresentEntityOptions(field.Label, field.Value);
+        }
     }
 
     private void PresentQueueActions()
@@ -206,24 +218,61 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         });
     }
 
-    private IReadOnlyList<(string Label, string Value)> DetailFields()
+    private IReadOnlyList<(string Label, string Value, bool IsEntity)> DetailFields()
     {
         if (_details is null) return [];
         return new[]
             {
-                ("Broadcast slot", _details.Slot),
-                ("Edition", _details.Edition),
-                ("Hosts", _details.Hosts),
-                ("Guests", _details.Guests),
-                ("Callers", _details.Callers),
-                ("Mentioned people", _details.MentionedPeople),
-                ("Topics", string.Join(", ", _details.Topics)),
-                ("Archive notes", _details.ArchiveNotes),
-                ("Research notes", _details.ResearchNotes),
-                ("Personal notes", _details.PersonalNotes)
+                ("Broadcast slot", _details.Slot, false),
+                ("Edition", _details.Edition, false),
+                ("Hosts", _details.Hosts, true),
+                ("Guests", _details.Guests, true),
+                ("Callers", _details.Callers, true),
+                ("Mentioned people", _details.MentionedPeople, true),
+                ("Topics", string.Join(", ", _details.Topics), true),
+                ("Archive notes", _details.ArchiveNotes, false),
+                ("Research notes", _details.ResearchNotes, false),
+                ("Personal notes", _details.PersonalNotes, false)
             }
             .Where(field => !string.IsNullOrWhiteSpace(field.Item2))
             .ToArray();
+    }
+
+    private void PresentEntityOptions(string label, string value)
+    {
+        var values = value
+            .Split([',', ';', '|', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToArray();
+        if (values.Length == 0) return;
+        if (values.Length == 1)
+        {
+            _ = OpenEntityAsync(values[0]);
+            return;
+        }
+        var menu = UIAlertController.Create(label, "Choose what to explore", UIAlertControllerStyle.ActionSheet);
+        foreach (var entity in values)
+            menu.AddAction(UIAlertAction.Create(entity, UIAlertActionStyle.Default, action => { _ = OpenEntityAsync(entity); }));
+        menu.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        if (menu.PopoverPresentationController is { } popover)
+        {
+            popover.SourceView = TableView;
+            popover.SourceRect = TableView.Bounds;
+        }
+        PresentViewController(menu, true, null);
+    }
+
+    private async Task OpenEntityAsync(string entity)
+    {
+        var dashboard = await Session.LoadExploreDashboardAsync().ConfigureAwait(false);
+        var page = dashboard?.AllPages.FirstOrDefault(value =>
+            value.Title.Equals(entity, StringComparison.CurrentCultureIgnoreCase) ||
+            value.Slug.Equals(entity.Replace(' ', '-'), StringComparison.OrdinalIgnoreCase));
+        BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+            page is not null
+                ? new ExploreArticleViewController(Session, page)
+                : new EntityBroadcastsViewController(Session, entity),
+            true));
     }
 
     private static UITableViewCell BodyCell(string identifier, string text)

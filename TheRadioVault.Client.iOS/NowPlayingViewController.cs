@@ -86,8 +86,8 @@ public sealed class NowPlayingViewController : UIViewController
         _statusLabel.TextAlignment = UITextAlignment.Center;
         _statusLabel.AdjustsFontForContentSizeCategory = true;
         ConfigureTimeLabel(_elapsedLabel, UITextAlignment.Left);
-        ConfigureTimeLabel(_remainingLabel, UITextAlignment.Center);
-        ConfigureTimeLabel(_totalLabel, UITextAlignment.Right);
+        ConfigureTimeLabel(_remainingLabel, UITextAlignment.Right);
+        ConfigureTimeLabel(_totalLabel, UITextAlignment.Center);
 
         _progressSlider.MinValue = 0;
         _progressSlider.MaxValue = 1;
@@ -125,11 +125,12 @@ public sealed class NowPlayingViewController : UIViewController
         {
             Axis = UILayoutConstraintAxis.Horizontal,
             Alignment = UIStackViewAlignment.Center,
-            Distribution = UIStackViewDistribution.EqualCentering,
-            Spacing = 12,
-            LayoutMargins = new UIEdgeInsets(0, 8, 0, 8),
-            LayoutMarginsRelativeArrangement = true
+            Distribution = UIStackViewDistribution.Fill,
+            Spacing = 8,
+            TranslatesAutoresizingMaskIntoConstraints = false
         };
+        var controlsStage = new UIView();
+        controlsStage.AddSubview(controls);
         var metadata = new UIStackView([_titleLabel, _subtitleLabel])
         {
             Axis = UILayoutConstraintAxis.Vertical,
@@ -137,12 +138,11 @@ public sealed class NowPlayingViewController : UIViewController
             Distribution = UIStackViewDistribution.Fill,
             Spacing = 6
         };
-        var times = new UIStackView([_elapsedLabel, _totalLabel, _remainingLabel])
-        {
-            Axis = UILayoutConstraintAxis.Horizontal,
-            Alignment = UIStackViewAlignment.Fill,
-            Distribution = UIStackViewDistribution.FillEqually
-        };
+        var times = new UIView();
+        _elapsedLabel.TranslatesAutoresizingMaskIntoConstraints = false;
+        _totalLabel.TranslatesAutoresizingMaskIntoConstraints = false;
+        _remainingLabel.TranslatesAutoresizingMaskIntoConstraints = false;
+        times.AddSubviews(_elapsedLabel, _totalLabel, _remainingLabel);
         var progress = new UIStackView([_progressSlider, times])
         {
             Axis = UILayoutConstraintAxis.Vertical,
@@ -160,7 +160,7 @@ public sealed class NowPlayingViewController : UIViewController
         var speedStage = new UIView();
         _speedButton.TranslatesAutoresizingMaskIntoConstraints = false;
         speedStage.AddSubview(_speedButton);
-        var playerContent = new UIStackView([artworkStage, metadata, progress, controls, actions, speedStage, _statusLabel])
+        var playerContent = new UIStackView([artworkStage, metadata, progress, controlsStage, actions, speedStage, _statusLabel])
         {
             Axis = UILayoutConstraintAxis.Vertical,
             Alignment = UIStackViewAlignment.Fill,
@@ -169,7 +169,7 @@ public sealed class NowPlayingViewController : UIViewController
         };
         playerContent.SetCustomSpacing(28, artworkStage);
         playerContent.SetCustomSpacing(26, progress);
-        playerContent.SetCustomSpacing(16, controls);
+        playerContent.SetCustomSpacing(16, controlsStage);
         var content = new UIStackView([playerContent, _upNext])
         {
             Axis = UILayoutConstraintAxis.Vertical,
@@ -210,6 +210,19 @@ public sealed class NowPlayingViewController : UIViewController
             content.TopAnchor.ConstraintEqualTo(contentHost.TopAnchor, 16),
             content.BottomAnchor.ConstraintEqualTo(contentHost.BottomAnchor, -24),
             playerContent.HeightAnchor.ConstraintGreaterThanOrEqualTo(scrollView.FrameLayoutGuide.HeightAnchor, -40),
+            times.HeightAnchor.ConstraintEqualTo(18),
+            _elapsedLabel.LeadingAnchor.ConstraintEqualTo(times.LeadingAnchor),
+            _elapsedLabel.TopAnchor.ConstraintEqualTo(times.TopAnchor),
+            _elapsedLabel.BottomAnchor.ConstraintEqualTo(times.BottomAnchor),
+            _totalLabel.CenterXAnchor.ConstraintEqualTo(times.CenterXAnchor),
+            _totalLabel.TopAnchor.ConstraintEqualTo(times.TopAnchor),
+            _totalLabel.BottomAnchor.ConstraintEqualTo(times.BottomAnchor),
+            _remainingLabel.TrailingAnchor.ConstraintEqualTo(times.TrailingAnchor),
+            _remainingLabel.TopAnchor.ConstraintEqualTo(times.TopAnchor),
+            _remainingLabel.BottomAnchor.ConstraintEqualTo(times.BottomAnchor),
+            controlsStage.HeightAnchor.ConstraintEqualTo(96),
+            controls.CenterXAnchor.ConstraintEqualTo(controlsStage.CenterXAnchor),
+            controls.CenterYAnchor.ConstraintEqualTo(controlsStage.CenterYAnchor),
             _backButton.WidthAnchor.ConstraintEqualTo(64),
             _backButton.HeightAnchor.ConstraintEqualTo(64),
             _playButton.WidthAnchor.ConstraintEqualTo(96),

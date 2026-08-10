@@ -42,7 +42,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         if (IsShowingSearchResults) return Math.Max(1, Session.LibraryBroadcasts.Count);
         return section switch
         {
-            0 => 6,
+            0 => 7,
             1 => 1,
             _ => Math.Max(1, VisibleCollections.Count)
         };
@@ -79,7 +79,8 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
                 ("Continue Listening", $"{Session.InProgressBroadcasts:N0} broadcasts", RadioVaultIcon.InProgress),
                 ("Recently Added", "Newest broadcasts", RadioVaultIcon.Download),
                 ("Unplayed", $"{unplayed:N0} broadcasts", RadioVaultIcon.Radio),
-                ("Completed", $"{Session.CompletedBroadcasts:N0} broadcasts", RadioVaultIcon.Completed)
+                ("Completed", $"{Session.CompletedBroadcasts:N0} broadcasts", RadioVaultIcon.Completed),
+                ("Downloads", Session.DownloadStorageText, RadioVaultIcon.Download)
             };
             var value = values[indexPath.Row];
             var smart = new UITableViewCell(UITableViewCellStyle.Default, "smart-library");
@@ -123,6 +124,11 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
             if (indexPath.Row == 0)
             {
                 NavigationController?.PushViewController(new UpNextViewController(Session), true);
+                return;
+            }
+            if (indexPath.Row == 6)
+            {
+                NavigationController?.PushViewController(new DownloadsViewController(Session), true);
                 return;
             }
             var filters = new[]

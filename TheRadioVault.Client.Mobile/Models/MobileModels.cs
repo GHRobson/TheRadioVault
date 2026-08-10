@@ -47,6 +47,96 @@ public sealed record MobileQueueMoveMutation(int Direction);
 
 public sealed record MobileEmptyMutation;
 
+public sealed record MobileKnowledgeCollection(int? CollectionId, string Name, int RecordCount);
+
+public sealed record MobileKnowledgeOverview(
+    int TotalRecords,
+    int InLibraryRecords,
+    int MissingRecords,
+    int NeedsReviewRecords,
+    int ConflictRecords,
+    int UnsourcedRecords,
+    int WithSummaries,
+    int WithPeople,
+    int WithTopics,
+    int WithSources,
+    DateTimeOffset? LastImportAt,
+    DateOnly? EarliestDate,
+    DateOnly? LatestDate)
+{
+    public int CoveragePercent => TotalRecords <= 0
+        ? 0
+        : (int)Math.Round(100d * (WithSummaries + WithPeople + WithTopics + WithSources) / (TotalRecords * 4d));
+}
+
+public sealed record MobileKnowledgeDateReview(
+    long ResearchId,
+    long EpisodeId,
+    int CollectionId,
+    string ShowName,
+    string Title,
+    string OriginalFilename,
+    string CandidateText,
+    DateOnly? ProposedDate,
+    string CandidateKind,
+    string ReleaseDateText,
+    string RecordingDateText,
+    string Basis,
+    string Provenance,
+    int Confidence,
+    int SourceCount,
+    bool HasSameDayCollision,
+    string DecisionStatus,
+    DateOnly? CurrentLibraryDate,
+    DateTimeOffset UpdatedAt)
+{
+    public string DisplayTitle => string.IsNullOrWhiteSpace(Title) ? OriginalFilename : Title.Trim();
+    public string ProposedDateText => ProposedDate?.ToString("dd MMM yyyy")
+        ?? (string.IsNullOrWhiteSpace(CandidateText) ? "No exact date" : CandidateText);
+    public string EvidenceText => $"{CandidateKind} · {Confidence}% confidence · {SourceCount:N0} source{(SourceCount == 1 ? string.Empty : "s")}";
+}
+
+public sealed record MobileKnowledgeCoverageDay(
+    DateOnly Date,
+    bool IsWeekend,
+    bool HasAudio,
+    bool HasResearch,
+    bool IsKnownMissing,
+    int BroadcastCount,
+    int MetadataScore,
+    string MissingFields,
+    long? RepresentativeEpisodeId,
+    long? ResearchId);
+
+public sealed record MobileKnowledgeCoverage(
+    int CollectionId,
+    string ShowName,
+    DateOnly FirstDate,
+    DateOnly LastDate,
+    IReadOnlyList<MobileKnowledgeCoverageDay> Days)
+{
+    public int DatedBroadcastDays => Days.Count(value => value.HasAudio || value.HasResearch || value.IsKnownMissing);
+    public int GapDays => Days.Count(value => !value.IsWeekend && !value.HasAudio && !value.HasResearch && !value.IsKnownMissing);
+    public int AverageMetadataScore
+    {
+        get
+        {
+            var covered = Days.Where(value => value.HasAudio || value.HasResearch).ToArray();
+            return covered.Length == 0 ? 0 : (int)Math.Round(covered.Average(value => value.MetadataScore));
+        }
+    }
+}
+
+public sealed record MobileKnowledgeSnapshot(
+    MobileKnowledgeOverview Overview,
+    IReadOnlyList<MobileKnowledgeCollection> Collections,
+    IReadOnlyList<MobileKnowledgeDateReview> DateReviews,
+    DateTimeOffset UpdatedAt);
+
+public sealed record MobileKnowledgeDateReviewsRequest(int? CollectionId = null, bool IncludeResolved = false);
+public sealed record MobileKnowledgeCollectionRequest(int? CollectionId);
+public sealed record MobileKnowledgeResolveRequest(long ResearchId, int Action, DateOnly? SelectedDate);
+
 public sealed record MobileLibrarySyncEnvelope(MobileLibrarySync Sync);
 
 public sealed record MobileLibrarySync(
@@ -72,6 +162,8 @@ public sealed record MobileMetadataCacheSnapshot(
     IReadOnlyList<MobileWikiPageSummary> ExplorePages,
     MobileWikiDashboardHighlights? ExploreHighlights,
     IReadOnlyList<MobileWikiPageDocument> ExploreDocuments,
+    IReadOnlyList<WebMomentSummary>? Moments,
+    MobileKnowledgeSnapshot? Knowledge,
     DateTimeOffset UpdatedAt)
 {
     public static MobileMetadataCacheSnapshot Empty(string serverInstanceId) => new(
@@ -87,6 +179,8 @@ public sealed record MobileMetadataCacheSnapshot(
         [],
         null,
         [],
+        [],
+        null,
         DateTimeOffset.MinValue);
 }
 

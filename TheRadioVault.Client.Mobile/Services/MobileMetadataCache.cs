@@ -47,7 +47,8 @@ internal sealed class MobileMetadataCache
             {
                 _snapshot = value with
                 {
-                    Broadcasts = NormalizeBroadcasts(value.Broadcasts)
+                    Broadcasts = NormalizeBroadcasts(value.Broadcasts),
+                    Moments = value.Moments ?? []
                 };
             }
         }
@@ -138,6 +139,18 @@ internal sealed class MobileMetadataCache
                 UpdatedAt = DateTimeOffset.UtcNow
             };
         }
+    }
+
+    public void SetMoments(IReadOnlyList<WebMomentSummary> moments)
+    {
+        lock (_gate)
+            _snapshot = _snapshot with { Moments = moments, UpdatedAt = DateTimeOffset.UtcNow };
+    }
+
+    public void SetKnowledge(MobileKnowledgeSnapshot knowledge)
+    {
+        lock (_gate)
+            _snapshot = _snapshot with { Knowledge = knowledge, UpdatedAt = DateTimeOffset.UtcNow };
     }
 
     public void UpsertBroadcast(WebClientLibraryBroadcastSummary broadcast)
