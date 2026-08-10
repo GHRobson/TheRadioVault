@@ -1490,6 +1490,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(dashboard.Contains("header.SetAccessory(settings)", StringComparison.Ordinal));
     True(dashboard.Contains("DashboardOnThisDayCarouselCell", StringComparison.Ordinal));
     True(dashboard.Contains("announce: false", StringComparison.Ordinal));
+    True(dashboard.Contains("OnThisDayFingerprint", StringComparison.Ordinal));
+    True(dashboard.Contains("new NSRange(0, 3)", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
@@ -1531,6 +1533,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosCells.Contains("DashboardOverviewCell", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardContinueCell", StringComparison.Ordinal));
     True(iosCells.Contains("LibraryQuickAccessCell", StringComparison.Ordinal));
+    True(iosCells.Contains("UserInteractionEnabled = false", StringComparison.Ordinal));
     True(iosCells.Contains("BroadcastProgressCell", StringComparison.Ordinal));
     True(iosCells.Contains("BroadcastHeroCell", StringComparison.Ordinal));
     True(iosCells.Contains("ExploreImageGalleryCell", StringComparison.Ordinal));

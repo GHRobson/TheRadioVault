@@ -29,7 +29,6 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
     private Func<MobileBroadcastItem, Task<WebClientBroadcastDetails?>>? _loadDetails;
     private Action<MobileBroadcastItem>? _openBroadcast;
     private Action<string>? _openEntity;
-    private Action? _layoutChanged;
     private MobileClientSession? _session;
     private NSTimer? _timer;
     private int _index;
@@ -117,15 +116,13 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
         IReadOnlyList<MobileBroadcastItem> items,
         Func<MobileBroadcastItem, Task<WebClientBroadcastDetails?>> loadDetails,
         Action<MobileBroadcastItem> openBroadcast,
-        Action<string> openEntity,
-        Action layoutChanged)
+        Action<string> openEntity)
     {
         _session = session;
         _items = items;
         _loadDetails = loadDetails;
         _openBroadcast = openBroadcast;
         _openEntity = openEntity;
-        _layoutChanged = layoutChanged;
         _index = Math.Clamp(_index, 0, Math.Max(0, items.Count - 1));
         RenderCurrent(animated: false);
         StartTimer();
@@ -148,10 +145,8 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
             _title.Text = item.Title;
             _show.Text = item.Source.CollectionName;
             _date.Text = item.Source.AirDate?.ToString("dddd, d MMMM yyyy") ?? "Date unknown";
-            _peopleHeading.Hidden = true;
-            _people.Hidden = true;
-            _topicsHeading.Hidden = true;
-            _topics.Hidden = true;
+            ConfigurePlaceholder(_people, "Loading people…", RadioVaultTheme.ActivityBlue);
+            ConfigurePlaceholder(_topics, "Loading topics…", RadioVaultTheme.Research);
             ConfigurePips();
             _card.AccessibilityLabel = $"On this day, {item.Title}, {item.Source.CollectionName}, item {_index + 1} of {_items.Count}";
         }
@@ -165,19 +160,21 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
     {
         if (_loadDetails is null) return;
         var details = await _loadDetails(item).ConfigureAwait(false);
-        if (details is null) return;
         BeginInvokeOnMainThread(() =>
         {
             if (generation != _generation || _items.Count == 0 || _items[_index].EpisodeId != item.EpisodeId) return;
-            var people = Split(details.Hosts).Concat(Split(details.Guests)).Distinct(StringComparer.CurrentCultureIgnoreCase).Take(3).ToArray();
-            var topics = details.Topics.Where(value => !string.IsNullOrWhiteSpace(value)).Distinct(StringComparer.CurrentCultureIgnoreCase).Take(3).ToArray();
-            ConfigurePills(_people, people, RadioVaultTheme.ActivityBlue);
-            ConfigurePills(_topics, topics, RadioVaultTheme.Research);
-            _peopleHeading.Hidden = people.Length == 0;
-            _people.Hidden = people.Length == 0;
-            _topicsHeading.Hidden = topics.Length == 0;
-            _topics.Hidden = topics.Length == 0;
-            _layoutChanged?.Invoke();
+            var people = details is null
+                ? []
+                : Split(details.Hosts).Concat(Split(details.Guests))
+                    .Distinct(StringComparer.CurrentCultureIgnoreCase).Take(3).ToArray();
+            var topics = details is null
+                ? []
+                : details.Topics.Where(value => !string.IsNullOrWhiteSpace(value))
+                    .Distinct(StringComparer.CurrentCultureIgnoreCase).Take(3).ToArray();
+            if (people.Length == 0) ConfigurePlaceholder(_people, "No people listed", RadioVaultTheme.ActivityBlue);
+            else ConfigurePills(_people, people, RadioVaultTheme.ActivityBlue);
+            if (topics.Length == 0) ConfigurePlaceholder(_topics, "No topics listed", RadioVaultTheme.Research);
+            else ConfigurePills(_topics, topics, RadioVaultTheme.Research);
         });
     }
 
@@ -218,6 +215,20 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
             button.TouchUpInside += (_, _) => _openEntity?.Invoke(value);
             row.AddArrangedSubview(button);
         }
+    }
+
+    private static void ConfigurePlaceholder(UIStackView row, string text, UIColor color)
+    {
+        Clear(row);
+        var label = new UILabel
+        {
+            Text = text,
+            Font = UIFont.SystemFontOfSize(10, UIFontWeight.Medium)!,
+            TextColor = color.ColorWithAlpha(0.8f),
+            TextAlignment = UITextAlignment.Center
+        };
+        label.HeightAnchor.ConstraintEqualTo(28).Active = true;
+        row.AddArrangedSubview(label);
     }
 
     private void OpenCurrent()

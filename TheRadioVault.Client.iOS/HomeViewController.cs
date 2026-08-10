@@ -7,6 +7,8 @@ namespace TheRadioVault.Client.iOS;
 
 public sealed class HomeViewController : SessionTableViewController
 {
+    private string _onThisDayFingerprint = string.Empty;
+
     public HomeViewController(MobileClientSession session) : base(session)
     {
         Title = "Dashboard";
@@ -42,6 +44,7 @@ public sealed class HomeViewController : SessionTableViewController
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
+        _onThisDayFingerprint = OnThisDayFingerprint();
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
         TableView.RowHeight = UITableView.AutomaticDimension;
         TableView.EstimatedRowHeight = 88;
@@ -140,17 +143,7 @@ public sealed class HomeViewController : SessionTableViewController
                 Session.OnThisDay,
                 item => Session.LoadBroadcastDetailsAsync(item, announce: false),
                 item => NavigationController?.PushViewController(new BroadcastDetailsViewController(Session, item), true),
-                entity => _ = OpenEntityAsync(entity),
-                () =>
-                {
-                    if (TableView.Window is null)
-                    {
-                        return;
-                    }
-
-                    TableView.BeginUpdates();
-                    TableView.EndUpdates();
-                });
+                entity => _ = OpenEntityAsync(entity));
             return carousel;
         }
 
@@ -225,6 +218,25 @@ public sealed class HomeViewController : SessionTableViewController
         if (Session.CanToggleBroadcast(featured.EpisodeId)) Session.TogglePlayPause();
         else _ = Session.PlayAsync(featured);
     }
+
+    protected override void ReloadSession()
+    {
+        var fingerprint = OnThisDayFingerprint();
+        if (!string.Equals(_onThisDayFingerprint, fingerprint, StringComparison.Ordinal))
+        {
+            _onThisDayFingerprint = fingerprint;
+            TableView.ReloadData();
+            return;
+        }
+
+        // Keep the carousel cell alive so background sync and playback updates do
+        // not reset its timer or flash its artwork back to the first broadcast.
+        TableView.ReloadSections(NSIndexSet.FromNSRange(new NSRange(0, 3)), UITableViewRowAnimation.None);
+        TableView.ReloadSections(NSIndexSet.FromNSRange(new NSRange(4, 2)), UITableViewRowAnimation.None);
+    }
+
+    private string OnThisDayFingerprint()
+        => string.Join(",", Session.OnThisDay.Select(value => value.EpisodeId).Order());
 
     private async Task OpenEntityAsync(string entity)
     {

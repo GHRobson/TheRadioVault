@@ -544,7 +544,8 @@ internal sealed class LibraryQuickAccessCell : UITableViewCell
                 Axis = UILayoutConstraintAxis.Vertical,
                 Alignment = UIStackViewAlignment.Center,
                 Spacing = 3,
-                TranslatesAutoresizingMaskIntoConstraints = false
+                TranslatesAutoresizingMaskIntoConstraints = false,
+                UserInteractionEnabled = false
             };
             var card = new UIControl { BackgroundColor = RadioVaultTheme.Surface };
             card.Layer.CornerRadius = 13;
@@ -670,7 +671,8 @@ internal sealed class DashboardOverviewCell : UITableViewCell
             Alignment = UIStackViewAlignment.Center,
             Distribution = UIStackViewDistribution.Fill,
             Spacing = 7,
-            TranslatesAutoresizingMaskIntoConstraints = false
+            TranslatesAutoresizingMaskIntoConstraints = false,
+            UserInteractionEnabled = false
         };
         _surprise.AddSubview(surpriseStack);
         NSLayoutConstraint.ActivateConstraints([
@@ -707,7 +709,8 @@ internal sealed class DashboardOverviewCell : UITableViewCell
                 Axis = UILayoutConstraintAxis.Vertical,
                 Alignment = UIStackViewAlignment.Center,
                 Spacing = 2,
-                TranslatesAutoresizingMaskIntoConstraints = false
+                TranslatesAutoresizingMaskIntoConstraints = false,
+                UserInteractionEnabled = false
             };
             var card = new UIControl { BackgroundColor = RadioVaultTheme.Surface };
             card.Layer.CornerRadius = 13;
