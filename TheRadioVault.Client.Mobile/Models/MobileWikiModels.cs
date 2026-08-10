@@ -38,6 +38,15 @@ public sealed record MobileWikiPageSummary(
         $"{CitationCount:N0} sources · {ImageCount:N0} images · {TimelineEventCount:N0} events";
 }
 
+public sealed record MobileWikiTimelineBroadcastLink(
+    Guid EventId,
+    long EpisodeId,
+    long? MomentId,
+    long? StartMs,
+    long? EndMs,
+    string Label,
+    int SortOrder);
+
 public sealed record MobileWikiTimelineEvent(
     Guid EventId,
     Guid PageId,
@@ -49,9 +58,14 @@ public sealed record MobileWikiTimelineEvent(
     string DatePrecision,
     string DateDisplay,
     int Significance,
-    int SortOrder)
+    int SortOrder,
+    IReadOnlyList<Guid>? SourceIds = null,
+    IReadOnlyList<Guid>? ImageIds = null,
+    IReadOnlyList<MobileWikiTimelineBroadcastLink>? Broadcasts = null)
 {
     public string YearText => StartDate?.Year.ToString() ?? DateDisplay;
+    public string EvidenceSummary =>
+        $"{(SourceIds?.Count ?? 0):N0} sources · {(ImageIds?.Count ?? 0):N0} images · {(Broadcasts?.Count ?? 0):N0} broadcasts";
 }
 
 public sealed record MobileWikiOnThisDayItem(

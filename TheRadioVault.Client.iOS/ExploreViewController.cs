@@ -71,7 +71,7 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
     public override nint NumberOfSections(UITableView tableView)
     {
         if (IsBrowseMode) return 1;
-        return 11;
+        return 10;
     }
 
     public override nint RowsInSection(UITableView tableView, nint section)
@@ -81,16 +81,15 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
         return section switch
         {
             0 => 1,
-            1 => 1,
+            1 => _dashboard.FeaturedPages.Count,
             2 => _dashboard.Gallery.Count > 0 ? 1 : 0,
             3 => _dashboard.Highlights.OnThisDay.Count,
-            4 => _dashboard.FeaturedPages.Count,
-            5 => _dashboard.RecentPages.Count,
-            6 => _dashboard.ShowPages.Count,
-            7 => _dashboard.PeoplePages.Count,
-            8 => _dashboard.TopicPages.Count,
-            9 => _dashboard.Highlights.Eras.Count,
-            10 => _dashboard.TimelinePages.Count,
+            4 => _dashboard.TimelinePages.Count > 0 ? 1 : 0,
+            5 => _dashboard.ShowPages.Count,
+            6 => _dashboard.PeoplePages.Count,
+            7 => _dashboard.TopicPages.Count,
+            8 => _dashboard.Highlights.Eras.Count,
+            9 => _dashboard.RecentPages.Count,
             _ => 0
         };
     }
@@ -102,24 +101,20 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
             : "Search results";
         return section switch
         {
-            1 => "The Explore archive",
+            1 => "Featured articles",
             2 => "Images from the archive",
             3 => "On this date",
-            4 => "Featured starting points",
-            5 => "Recently updated",
-            6 => "Shows",
-            7 => "People",
-            8 => "Topics and stories",
-            9 => "Explore by era",
-            10 => "Travel through the timelines",
+            4 => "Timeline explorer",
+            5 => "Shows",
+            6 => "People",
+            7 => "Topics and stories",
+            8 => "Explore by era",
+            9 => "Recently updated",
             _ => null
         };
     }
 
-    public override string? TitleForFooter(UITableView tableView, nint section)
-        => !IsBrowseMode && section == 0
-            ? "A human-editable history of the archive, grounded in citations, dated images and broadcasts."
-            : null;
+    public override string? TitleForFooter(UITableView tableView, nint section) => null;
 
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
@@ -140,23 +135,13 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
 
         if (indexPath.Section == 0)
         {
-            var overview = _dashboard.Overview;
-            return HeroCell(
-                "Explore the stories behind the archive",
-                $"Shows, people, stories and turning points—connected directly to the broadcasts that preserve them.\n\nExplore {overview.PageCount:N0} articles, {overview.TimelineEventCount:N0} dated events, {overview.SourceCount:N0} sources and {overview.ImageCount:N0} historical images.");
+            var hero = new ExploreDashboardHeroCell();
+            hero.Configure(_dashboard.Overview, _dashboard.Gallery.FirstOrDefault());
+            return hero;
         }
 
         if (indexPath.Section == 1)
-        {
-            var overview = _dashboard.Overview;
-            var stats = new DashboardStatsCell();
-            stats.Configure(
-                ("Articles", overview.PageCount, RadioVaultIcon.Knowledge),
-                ("Events", overview.TimelineEventCount, RadioVaultIcon.Radio),
-                ("Sources", overview.SourceCount, RadioVaultIcon.Library),
-                ("Images", overview.ImageCount, RadioVaultIcon.Download));
-            return stats;
-        }
+            return PageCell("explore-featured", _dashboard.FeaturedPages[indexPath.Row]);
 
         if (indexPath.Section == 2)
         {
@@ -168,13 +153,17 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
         if (indexPath.Section == 3)
         {
             var item = _dashboard.Highlights.OnThisDay[indexPath.Row];
-            return DetailCell(
-                "explore-today",
-                $"{item.Event.YearText} · {item.Event.Title}",
-                string.IsNullOrWhiteSpace(item.Event.Summary) ? item.Page.Title : item.Event.Summary);
+            var timeline = new ExploreTimelineEventCell();
+            timeline.Configure(item.Event);
+            return timeline;
         }
 
-        if (indexPath.Section is >= 4 and <= 8 or 10)
+        if (indexPath.Section == 4)
+            return new ExploreTimelinePromoCell(
+                _dashboard.TimelinePages.Count,
+                _dashboard.TimelinePages.Sum(value => value.TimelineEventCount));
+
+        if (indexPath.Section is >= 5 and <= 7 or 9)
             return PageCell("explore-page", PagesForSection(indexPath.Section)[indexPath.Row]);
 
         var era = _dashboard.Highlights.Eras[indexPath.Row];
@@ -191,18 +180,30 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
             if (indexPath.Row < _visiblePages.Count) OpenPage(_visiblePages[indexPath.Row]);
             return;
         }
-        if (_dashboard is null || indexPath.Section < 3) return;
+        if (_dashboard is null || indexPath.Section < 1) return;
+        if (indexPath.Section == 1)
+        {
+            OpenPage(_dashboard.FeaturedPages[indexPath.Row]);
+            return;
+        }
+        if (indexPath.Section == 2) return;
         if (indexPath.Section == 3)
         {
             OpenPage(_dashboard.Highlights.OnThisDay[indexPath.Row].Page);
             return;
         }
-        if (indexPath.Section is >= 4 and <= 8 or 10)
+        if (indexPath.Section == 4)
+        {
+            NavigationController?.PushViewController(
+                new ExploreTimelineViewController(Session, _dashboard.TimelinePages), true);
+            return;
+        }
+        if (indexPath.Section is >= 5 and <= 7 or 9)
         {
             OpenPage(PagesForSection(indexPath.Section)[indexPath.Row]);
             return;
         }
-        if (indexPath.Section == 9)
+        if (indexPath.Section == 8)
         {
             var era = _dashboard.Highlights.Eras[indexPath.Row];
             _browseAll = true;
@@ -284,12 +285,10 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
     private IReadOnlyList<MobileWikiPageSummary> PagesForSection(nint section)
         => _dashboard is null ? [] : section switch
         {
-            4 => _dashboard.FeaturedPages,
-            5 => _dashboard.RecentPages,
-            6 => _dashboard.ShowPages,
-            7 => _dashboard.PeoplePages,
-            8 => _dashboard.TopicPages,
-            10 => _dashboard.TimelinePages,
+            5 => _dashboard.ShowPages,
+            6 => _dashboard.PeoplePages,
+            7 => _dashboard.TopicPages,
+            9 => _dashboard.RecentPages,
             _ => []
         };
 
@@ -302,13 +301,10 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
         if (page is not null) OpenPage(page);
     }
 
-    private static UITableViewCell PageCell(string identifier, MobileWikiPageSummary page)
+    private UITableViewCell PageCell(string identifier, MobileWikiPageSummary page)
     {
-        var cell = DetailCell(identifier, page.Title,
-            string.IsNullOrWhiteSpace(page.Summary)
-                ? $"{page.PageType} · {page.EvidenceSummary}"
-                : $"{page.Summary}\n{page.PageType} · {page.EvidenceSummary}");
-        cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+        var cell = new ExplorePageCardCell(identifier);
+        cell.Configure(page, _dashboard?.Gallery.FirstOrDefault(value => value.PageId == page.PageId));
         return cell;
     }
 

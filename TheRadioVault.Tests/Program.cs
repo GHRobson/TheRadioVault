@@ -1473,11 +1473,11 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         SourceRoot(), "TheRadioVault.Client.iOS", "HomeViewController.cs"));
     True(dashboard.Contains("Title = \"Dashboard\"", StringComparison.Ordinal));
     True(dashboard.Contains("Continue listening", StringComparison.Ordinal));
-    True(dashboard.Contains("Surprise me", StringComparison.Ordinal));
+    True(dashboard.Contains("DashboardOverviewCell", StringComparison.Ordinal));
     True(dashboard.Contains("On this day", StringComparison.Ordinal));
     True(dashboard.Contains("Recently added", StringComparison.Ordinal));
     True(dashboard.Contains("Unheard broadcasts", StringComparison.Ordinal));
-    True(dashboard.Contains("ConfigureInteractive", StringComparison.Ordinal));
+    True(dashboard.Contains("Session.UnheardBroadcasts", StringComparison.Ordinal));
     True(dashboard.Contains("OpenLibrarySection", StringComparison.Ordinal));
     True(dashboard.Contains("IsPlayingBroadcast", StringComparison.Ordinal));
     True(dashboard.Contains("PreparingPlaybackEpisodeId", StringComparison.Ordinal));
@@ -1519,6 +1519,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosCells.Contains("CompletedButton", StringComparison.Ordinal));
     True(iosCells.Contains("UITapGestureRecognizer", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardStatsCell", StringComparison.Ordinal));
+    True(iosCells.Contains("DashboardOverviewCell", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardContinueCell", StringComparison.Ordinal));
     True(iosCells.Contains("BroadcastProgressCell", StringComparison.Ordinal));
     True(iosCells.Contains("BroadcastHeroCell", StringComparison.Ordinal));
@@ -1558,31 +1559,44 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
 
     var explore = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreViewController.cs"));
-    True(explore.Contains("Explore the stories behind the archive", StringComparison.Ordinal));
-    True(explore.Contains("Featured starting points", StringComparison.Ordinal));
+    True(explore.Contains("Featured articles", StringComparison.Ordinal));
     True(explore.Contains("Recently updated", StringComparison.Ordinal));
     True(explore.Contains("Explore by era", StringComparison.Ordinal));
-    True(explore.Contains("Travel through the timelines", StringComparison.Ordinal));
+    True(explore.Contains("Timeline explorer", StringComparison.Ordinal));
     True(explore.Contains("ShowPages", StringComparison.Ordinal));
     True(explore.Contains("PeoplePages", StringComparison.Ordinal));
     True(explore.Contains("TopicPages", StringComparison.Ordinal));
     True(explore.Contains("LoadExploreDashboardAsync", StringComparison.Ordinal));
     True(explore.Contains("PageHeading => \"Explore\"", StringComparison.Ordinal));
-    True(explore.Contains("DashboardStatsCell", StringComparison.Ordinal));
+    True(explore.Contains("ExploreTimelinePromoCell", StringComparison.Ordinal));
     True(explore.Contains("Images from the archive", StringComparison.Ordinal));
     True(explore.Contains("ExploreImageGalleryCell", StringComparison.Ordinal));
 
     var exploreArticle = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreArticleViewController.cs"));
     True(exploreArticle.Contains("LoadExplorePageAsync", StringComparison.Ordinal));
-    True(exploreArticle.Contains("FormatMarkdown", StringComparison.Ordinal));
+    True(exploreArticle.Contains("ExploreArticleBodyCell", StringComparison.Ordinal));
     True(exploreArticle.Contains("Timeline", StringComparison.Ordinal));
     True(exploreArticle.Contains("LoadExploreImagesAsync", StringComparison.Ordinal));
+
+    var exploreCells = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "ExploreCells.cs"));
+    True(exploreCells.Contains("ExploreDashboardHeroCell", StringComparison.Ordinal));
+    True(exploreCells.Contains("NewYork-Regular", StringComparison.Ordinal));
+    True(exploreCells.Contains("ExploreTimelineEventCell", StringComparison.Ordinal));
+    True(exploreCells.Contains("RADIO VAULT ENCYCLOPEDIA", StringComparison.Ordinal));
+
+    var exploreTimeline = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "ExploreTimelineViewController.cs"));
+    True(exploreTimeline.Contains("Show Timelines", StringComparison.Ordinal));
+    True(exploreTimeline.Contains("PlayTimelineLinkAsync", StringComparison.Ordinal));
+    True(exploreTimeline.Contains("PresentShowPicker", StringComparison.Ordinal));
 
     var theme = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultTheme.cs"));
     True(theme.Contains("0x11, 0x13, 0x17", StringComparison.Ordinal));
     True(theme.Contains("0xF2, 0xC9, 0x4C", StringComparison.Ordinal));
+    True(theme.Contains("public static UIColor Progress { get; } = Accent", StringComparison.Ordinal));
     True(theme.Contains("UIGraphicsImageRenderer", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Knowledge", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Handoff", StringComparison.Ordinal));

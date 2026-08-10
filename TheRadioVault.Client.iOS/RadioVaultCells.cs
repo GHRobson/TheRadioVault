@@ -194,6 +194,194 @@ internal sealed class LibraryControlsHeaderView : UIView
     }
 }
 
+internal sealed class DashboardOverviewCell : UITableViewCell
+{
+    private readonly UIControl _surprise = new();
+    private readonly UIImageView[] _icons = new UIImageView[4];
+    private readonly UILabel[] _titles = new UILabel[4];
+    private readonly UILabel[] _values = new UILabel[4];
+    private readonly UIControl[] _cards = new UIControl[4];
+    private readonly Action?[] _actions = new Action?[4];
+    private Action? _surpriseAction;
+
+    public DashboardOverviewCell() : base(UITableViewCellStyle.Default, "dashboard-overview")
+    {
+        BackgroundColor = RadioVaultTheme.Background;
+        ContentView.BackgroundColor = RadioVaultTheme.Background;
+        SelectionStyle = UITableViewCellSelectionStyle.None;
+
+        _surprise.BackgroundColor = RadioVaultTheme.AccentSubtle;
+        _surprise.Layer.CornerRadius = 18;
+        _surprise.Layer.BorderColor = RadioVaultTheme.Accent.CGColor;
+        _surprise.Layer.BorderWidth = 1;
+        _surprise.TouchUpInside += (_, _) => _surpriseAction?.Invoke();
+        var surpriseIcon = new UIImageView
+        {
+            Image = RadioVaultIcons.Image(RadioVaultIcon.Radio, RadioVaultTheme.Accent, 42, 2.2),
+            ContentMode = UIViewContentMode.ScaleAspectFit
+        };
+        var surpriseEyebrow = new UILabel
+        {
+            Text = "SURPRISE ME",
+            Font = UIFont.SystemFontOfSize(10, UIFontWeight.Bold)!,
+            TextColor = RadioVaultTheme.Accent,
+            TextAlignment = UITextAlignment.Center
+        };
+        var surpriseTitle = new UILabel
+        {
+            Text = "Play something unexpected",
+            Font = UIFont.SystemFontOfSize(17, UIFontWeight.Bold)!,
+            TextColor = RadioVaultTheme.Text,
+            TextAlignment = UITextAlignment.Center,
+            Lines = 3,
+            AdjustsFontSizeToFitWidth = true,
+            MinimumScaleFactor = 0.8f
+        };
+        var surpriseHint = new UILabel
+        {
+            Text = "An unheard broadcast",
+            Font = UIFont.SystemFontOfSize(11)!,
+            TextColor = RadioVaultTheme.MutedText,
+            TextAlignment = UITextAlignment.Center,
+            Lines = 2
+        };
+        var surpriseStack = new UIStackView([surpriseIcon, surpriseEyebrow, surpriseTitle, surpriseHint])
+        {
+            Axis = UILayoutConstraintAxis.Vertical,
+            Alignment = UIStackViewAlignment.Center,
+            Distribution = UIStackViewDistribution.Fill,
+            Spacing = 7,
+            TranslatesAutoresizingMaskIntoConstraints = false
+        };
+        _surprise.AddSubview(surpriseStack);
+        NSLayoutConstraint.ActivateConstraints([
+            surpriseIcon.WidthAnchor.ConstraintEqualTo(42),
+            surpriseIcon.HeightAnchor.ConstraintEqualTo(42),
+            surpriseStack.LeadingAnchor.ConstraintEqualTo(_surprise.LeadingAnchor, 10),
+            surpriseStack.TrailingAnchor.ConstraintEqualTo(_surprise.TrailingAnchor, -10),
+            surpriseStack.CenterYAnchor.ConstraintEqualTo(_surprise.CenterYAnchor)
+        ]);
+
+        var cardViews = new UIView[4];
+        for (var index = 0; index < cardViews.Length; index++)
+        {
+            var icon = new UIImageView { ContentMode = UIViewContentMode.ScaleAspectFit };
+            var value = new UILabel
+            {
+                Font = UIFont.SystemFontOfSize(18, UIFontWeight.Bold)!,
+                TextColor = RadioVaultTheme.Text,
+                TextAlignment = UITextAlignment.Center,
+                AdjustsFontSizeToFitWidth = true,
+                MinimumScaleFactor = 0.65f
+            };
+            var title = new UILabel
+            {
+                Font = UIFont.SystemFontOfSize(9, UIFontWeight.Semibold)!,
+                TextColor = RadioVaultTheme.MutedText,
+                TextAlignment = UITextAlignment.Center,
+                Lines = 1,
+                AdjustsFontSizeToFitWidth = true,
+                MinimumScaleFactor = 0.65f
+            };
+            var stack = new UIStackView([icon, value, title])
+            {
+                Axis = UILayoutConstraintAxis.Vertical,
+                Alignment = UIStackViewAlignment.Center,
+                Spacing = 2,
+                TranslatesAutoresizingMaskIntoConstraints = false
+            };
+            var card = new UIControl { BackgroundColor = RadioVaultTheme.Surface };
+            card.Layer.CornerRadius = 13;
+            card.Layer.BorderColor = RadioVaultTheme.Border.CGColor;
+            card.Layer.BorderWidth = 1;
+            card.AddSubview(stack);
+            NSLayoutConstraint.ActivateConstraints([
+                icon.WidthAnchor.ConstraintEqualTo(21),
+                icon.HeightAnchor.ConstraintEqualTo(21),
+                stack.LeadingAnchor.ConstraintEqualTo(card.LeadingAnchor, 4),
+                stack.TrailingAnchor.ConstraintEqualTo(card.TrailingAnchor, -4),
+                stack.CenterYAnchor.ConstraintEqualTo(card.CenterYAnchor)
+            ]);
+            var captured = index;
+            card.TouchUpInside += (_, _) => _actions[captured]?.Invoke();
+            cardViews[index] = card;
+            _cards[index] = card;
+            _icons[index] = icon;
+            _titles[index] = title;
+            _values[index] = value;
+        }
+
+        var upper = new UIStackView([cardViews[0], cardViews[1]])
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Distribution = UIStackViewDistribution.FillEqually,
+            Spacing = 7
+        };
+        var lower = new UIStackView([cardViews[2], cardViews[3]])
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Distribution = UIStackViewDistribution.FillEqually,
+            Spacing = 7
+        };
+        var libraryLabel = new UILabel
+        {
+            Text = "YOUR LIBRARY",
+            Font = UIFont.SystemFontOfSize(10, UIFontWeight.Bold)!,
+            TextColor = RadioVaultTheme.MutedText
+        };
+        var grid = new UIStackView([libraryLabel, upper, lower])
+        {
+            Axis = UILayoutConstraintAxis.Vertical,
+            Alignment = UIStackViewAlignment.Fill,
+            Distribution = UIStackViewDistribution.Fill,
+            Spacing = 7
+        };
+        var root = new UIStackView([_surprise, grid])
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Alignment = UIStackViewAlignment.Fill,
+            Distribution = UIStackViewDistribution.Fill,
+            Spacing = 10,
+            TranslatesAutoresizingMaskIntoConstraints = false
+        };
+        ContentView.AddSubview(root);
+        NSLayoutConstraint.ActivateConstraints([
+            root.LeadingAnchor.ConstraintEqualTo(ContentView.LeadingAnchor, 2),
+            root.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor, -2),
+            root.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor, 4),
+            root.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor, -4),
+            root.HeightAnchor.ConstraintEqualTo(180),
+            _surprise.WidthAnchor.ConstraintEqualTo(root.WidthAnchor, 0.42f),
+            upper.HeightAnchor.ConstraintEqualTo(74),
+            lower.HeightAnchor.ConstraintEqualTo(74)
+        ]);
+    }
+
+    public void Configure(
+        bool canSurprise,
+        Action surprise,
+        params (string Title, int Value, RadioVaultIcon Icon, Action Action)[] stats)
+    {
+        _surprise.Enabled = canSurprise;
+        _surprise.Alpha = canSurprise ? 1 : 0.5f;
+        _surpriseAction = surprise;
+        _surprise.AccessibilityLabel = canSurprise
+            ? "Surprise me with an unheard broadcast"
+            : "No unheard broadcasts available";
+        _surprise.AccessibilityTraits = UIAccessibilityTrait.Button;
+        for (var index = 0; index < _titles.Length; index++)
+        {
+            var stat = stats[index];
+            _titles[index].Text = stat.Title;
+            _values[index].Text = stat.Value.ToString("N0");
+            _icons[index].Image = RadioVaultIcons.Image(stat.Icon, size: 21);
+            _actions[index] = stat.Action;
+            _cards[index].AccessibilityLabel = $"{stat.Title}, {stat.Value:N0}, open in Library";
+            _cards[index].AccessibilityTraits = UIAccessibilityTrait.Button;
+        }
+    }
+}
+
 internal sealed class DashboardStatsCell : UITableViewCell
 {
     private readonly UIImageView[] _icons = new UIImageView[4];
@@ -516,7 +704,7 @@ internal sealed class BroadcastProgressCell : UITableViewCell
         _subtitle.Text = detail;
         _percentage.Text = $"{progress:0}%";
         _progress.Progress = (float)(progress / 100d);
-        _progress.ProgressTintColor = completed ? RadioVaultTheme.Completed : RadioVaultTheme.Progress;
+        _progress.ProgressTintColor = RadioVaultTheme.Accent;
         AccessibilityValue = $"{progress:0} percent listened";
     }
 }
@@ -718,7 +906,7 @@ internal sealed class BroadcastHeroCell : UITableViewCell
         _date.Text = item.Source.AirDate?.ToString("dddd, d MMMM yyyy") ?? "Date unknown";
         _status.Text = item.Status;
         _progress.Progress = (float)(item.DisplayProgress / 100d);
-        _progress.ProgressTintColor = item.Source.Completed ? RadioVaultTheme.Completed : RadioVaultTheme.Progress;
+        _progress.ProgressTintColor = RadioVaultTheme.Accent;
     }
 }
 

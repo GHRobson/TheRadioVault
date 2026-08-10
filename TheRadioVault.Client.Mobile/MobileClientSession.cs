@@ -1102,6 +1102,45 @@ public sealed class MobileClientSession : IDisposable
         TabRequested?.Invoke(4);
     }
 
+    public MobileBroadcastItem? FindCachedBroadcast(long episodeId)
+        => CurrentBroadcast?.EpisodeId == episodeId
+            ? CurrentBroadcast
+            : LibraryBroadcasts.FirstOrDefault(value => value.EpisodeId == episodeId)
+              ?? DownloadedBroadcasts.FirstOrDefault(value => value.EpisodeId == episodeId);
+
+    public async Task PlayTimelineLinkAsync(MobileWikiTimelineBroadcastLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        var broadcast = FindCachedBroadcast(link.EpisodeId);
+        if (broadcast is null && IsLiveConnected)
+        {
+            try
+            {
+                broadcast = new MobileBroadcastItem(
+                    await _server.GetBroadcastSummaryAsync(link.EpisodeId).ConfigureAwait(false));
+            }
+            catch (Exception exception)
+            {
+                PlaybackStatus = "Timeline playback failed: " + exception.Message;
+                NotifyPlayback();
+                return;
+            }
+        }
+        if (broadcast is null)
+        {
+            PlaybackStatus = "That timeline broadcast is not available in the saved catalogue.";
+            NotifyPlayback();
+            return;
+        }
+        if (link.StartMs is { } startMs)
+            broadcast = new MobileBroadcastItem(broadcast.Source with
+            {
+                PositionMs = Math.Max(0, startMs),
+                Completed = false
+            });
+        await PlayAsync(broadcast).ConfigureAwait(false);
+    }
+
     public async Task PlayAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
@@ -2486,8 +2525,9 @@ public sealed class MobileClientSession : IDisposable
                 .OrderByDescending(value => value.CitationCount).ThenBy(value => value.Title).Take(10).ToArray(),
             all.Where(value => value.PageType.Equals("Topic", StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(value => value.CitationCount).ThenBy(value => value.Title).Take(10).ToArray(),
-            all.Where(value => value.TimelineEventCount > 0)
-                .OrderByDescending(value => value.TimelineEventCount).ThenBy(value => value.Title).Take(8).ToArray(),
+            all.Where(value => value.PageType.Equals("Show", StringComparison.OrdinalIgnoreCase) &&
+                               value.TimelineEventCount > 0)
+                .OrderBy(value => value.Title, StringComparer.CurrentCultureIgnoreCase).ToArray(),
             highlights,
             gallery);
     }

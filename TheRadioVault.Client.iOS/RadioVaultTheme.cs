@@ -17,7 +17,9 @@ public static class RadioVaultTheme
     public static UIColor SubtleText { get; } = Color(0x7F, 0x87, 0x91);
     public static UIColor Accent { get; } = Color(0xF2, 0xC9, 0x4C);
     public static UIColor AccentSubtle { get; } = Color(0x3A, 0x33, 0x1A);
-    public static UIColor Progress { get; } = Color(0x68, 0xB5, 0xFF);
+    // Playback progress is part of the core Radio Vault identity, so every
+    // determinate progress surface uses the same yellow as the primary accent.
+    public static UIColor Progress { get; } = Accent;
     public static UIColor Completed { get; } = Color(0x52, 0xD6, 0xA2);
     public static UIColor Favourite { get; } = Color(0xF0, 0x8D, 0xB7);
     public static UIColor Wiki { get; } = Color(0x8E, 0xA7, 0xFF);

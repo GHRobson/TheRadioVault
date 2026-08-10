@@ -60,6 +60,8 @@ public sealed class RadioVaultMiniPlayerView : UIView
             TranslatesAutoresizingMaskIntoConstraints = false
         };
         _progress.TranslatesAutoresizingMaskIntoConstraints = false;
+        _progress.ProgressTintColor = RadioVaultTheme.Accent;
+        _progress.TrackTintColor = RadioVaultTheme.Border;
         AddSubview(row);
         AddSubview(_progress);
         NSLayoutConstraint.ActivateConstraints([
@@ -108,9 +110,13 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _actionButton.SetImage(loading
             ? null
             : _session.MiniPlayerShowsHandoff
-                ? RadioVaultIcons.Image(RadioVaultIcon.Handoff)
-                : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play), UIControlState.Normal);
-        _actionButton.TintColor = RadioVaultTheme.Progress;
+                ? RadioVaultIcons.Image(RadioVaultIcon.Handoff, RadioVaultTheme.Accent, 30, 2.5)
+                : RadioVaultIcons.Image(
+                    _session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play,
+                    RadioVaultTheme.Accent,
+                    30,
+                    2.5), UIControlState.Normal);
+        _actionButton.TintColor = RadioVaultTheme.Accent;
         _actionButton.Enabled = !loading && _session.MiniPlayerCanAct;
         _actionButton.AccessibilityLabel = loading
             ? "Loading broadcast"

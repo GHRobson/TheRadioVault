@@ -53,36 +53,32 @@ public sealed class HomeViewController : SessionTableViewController
         };
     }
 
-    public override nint NumberOfSections(UITableView tableView) => 7;
+    public override nint NumberOfSections(UITableView tableView) => 6;
 
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
         0 => 1,
         1 => 1,
-        2 => 1,
-        3 => Math.Max(1, UpNext.Count),
-        4 => Math.Max(1, Session.OnThisDay.Count),
-        5 => Math.Max(1, Session.RecentBroadcasts.Take(5).Count()),
-        6 => Math.Max(1, Session.UnheardBroadcasts.Take(5).Count()),
+        2 => Math.Max(1, UpNext.Count),
+        3 => Math.Max(1, Session.OnThisDay.Count),
+        4 => Math.Max(1, Session.RecentBroadcasts.Take(5).Count()),
+        5 => Math.Max(1, Session.UnheardBroadcasts.Take(5).Count()),
         _ => 0
     };
 
     public override string? TitleForHeader(UITableView tableView, nint section) => section switch
     {
-        0 => "Your Library",
-        1 => "Not sure what to play?",
-        2 => "Continue listening",
-        3 => "Up next",
-        4 => "On this day",
-        5 => "Recently added",
-        6 => "Unheard broadcasts",
+        1 => "Continue listening",
+        2 => "Up next",
+        3 => "On this day",
+        4 => "Recently added",
+        5 => "Unheard broadcasts",
         _ => null
     };
 
     public override string? TitleForFooter(UITableView tableView, nint section) => section switch
     {
-        1 => "Choose a random unheard broadcast.",
-        2 when FeaturedContinue is null => "Choose something from the Library or let Radio Vault pick for you.",
+        1 when FeaturedContinue is null => "Choose something from the Library or let Radio Vault pick for you.",
         _ => null
     };
 
@@ -90,8 +86,14 @@ public sealed class HomeViewController : SessionTableViewController
     {
         if (indexPath.Section == 0)
         {
-            var stats = new DashboardStatsCell();
-            stats.ConfigureInteractive(
+            var overview = new DashboardOverviewCell();
+            overview.Configure(
+                Session.UnheardBroadcasts.Count > 0,
+                () =>
+                {
+                    var pool = Session.UnheardBroadcasts;
+                    if (pool.Count > 0) _ = Session.PlayAsync(pool[Random.Shared.Next(pool.Count)]);
+                },
                 ("Broadcasts", Session.TotalBroadcasts, RadioVaultIcon.Library,
                     () => OpenLibrarySection("All Broadcasts", "All")),
                 ("In progress", Session.InProgressBroadcasts, RadioVaultIcon.InProgress,
@@ -100,25 +102,10 @@ public sealed class HomeViewController : SessionTableViewController
                     () => OpenLibrarySection("Completed", "Completed")),
                 ("Favourites", Session.FavouriteBroadcasts, RadioVaultIcon.Favourite,
                     () => OpenLibrarySection("Favourites", "Favourites")));
-            return stats;
+            return overview;
         }
 
         if (indexPath.Section == 1)
-        {
-            var cell = new UITableViewCell(UITableViewCellStyle.Default, "dashboard-surprise");
-            var content = cell.DefaultContentConfiguration;
-            content.Text = "Surprise me";
-            content.SecondaryText = "Play a random unheard broadcast";
-            content.Image = RadioVaultIcons.Image(RadioVaultIcon.Radio);
-            RadioVaultTheme.StyleCell(cell, content);
-            cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
-            cell.SelectionStyle = Session.UnheardBroadcasts.Count == 0
-                ? UITableViewCellSelectionStyle.None
-                : UITableViewCellSelectionStyle.Default;
-            return cell;
-        }
-
-        if (indexPath.Section == 2)
         {
             if (FeaturedContinue is not { } featured)
                 return DetailCell("dashboard-featured-empty", "Nothing waiting to resume", Session.StatusText);
@@ -137,9 +124,9 @@ public sealed class HomeViewController : SessionTableViewController
         {
             var empty = indexPath.Section switch
             {
-                3 => "Nothing else waiting to resume",
-                4 => "No broadcasts aired on this date",
-                5 => "No recently added broadcasts",
+                2 => "Nothing else waiting to resume",
+                3 => "No broadcasts aired on this date",
+                4 => "No recently added broadcasts",
                 _ => "You have heard everything in the Library"
             };
             return DetailCell("dashboard-empty", empty, "Pull down to refresh the Dashboard.");
@@ -147,7 +134,7 @@ public sealed class HomeViewController : SessionTableViewController
 
         var item = values[indexPath.Row];
         var broadcastCell = new BroadcastProgressCell("dashboard-broadcast");
-        broadcastCell.Configure(Session, item, indexPath.Section == 3
+        broadcastCell.Configure(Session, item, indexPath.Section == 2
             ? $"{item.Source.CollectionName} · ready to resume"
             : $"{item.Subtitle} · {item.Status}");
         broadcastCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
@@ -157,18 +144,12 @@ public sealed class HomeViewController : SessionTableViewController
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (indexPath.Section == 1)
-        {
-            var pool = Session.UnheardBroadcasts;
-            if (pool.Count > 0) _ = Session.PlayAsync(pool[Random.Shared.Next(pool.Count)]);
-            return;
-        }
-        if (indexPath.Section == 2 && FeaturedContinue is { } featured)
+        if (indexPath.Section == 1 && FeaturedContinue is { } featured)
         {
             HandleFeaturedPlayback(featured);
             return;
         }
-        if (indexPath.Section < 3) return;
+        if (indexPath.Section < 2) return;
         var values = ValuesForSection(indexPath.Section);
         if (indexPath.Row < values.Count)
             NavigationController?.PushViewController(
@@ -177,18 +158,18 @@ public sealed class HomeViewController : SessionTableViewController
 
     protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
     {
-        if (indexPath.Section == 2) return FeaturedContinue;
-        if (indexPath.Section < 3) return null;
+        if (indexPath.Section == 1) return FeaturedContinue;
+        if (indexPath.Section < 2) return null;
         var values = ValuesForSection(indexPath.Section);
         return indexPath.Row < values.Count ? values[indexPath.Row] : null;
     }
 
     private IReadOnlyList<MobileBroadcastItem> ValuesForSection(nint section) => section switch
     {
-        3 => UpNext,
-        4 => Session.OnThisDay,
-        5 => Session.RecentBroadcasts.Take(5).ToArray(),
-        6 => Session.UnheardBroadcasts.Take(5).ToArray(),
+        2 => UpNext,
+        3 => Session.OnThisDay,
+        4 => Session.RecentBroadcasts.Take(5).ToArray(),
+        5 => Session.UnheardBroadcasts.Take(5).ToArray(),
         _ => []
     };
 

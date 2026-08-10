@@ -95,6 +95,9 @@ public sealed class NowPlayingViewController : UIViewController
         _progressSlider.MinValue = 0;
         _progressSlider.MaxValue = 1;
         _progressSlider.Continuous = true;
+        _progressSlider.MinimumTrackTintColor = RadioVaultTheme.Accent;
+        _progressSlider.MaximumTrackTintColor = RadioVaultTheme.Border;
+        _progressSlider.ThumbTintColor = RadioVaultTheme.Accent;
         _progressSlider.TouchDown += (_, _) => _isScrubbing = true;
         _progressSlider.TouchUpInside += ProgressSliderFinished;
         _progressSlider.TouchUpOutside += ProgressSliderFinished;
@@ -125,8 +128,10 @@ public sealed class NowPlayingViewController : UIViewController
         {
             Axis = UILayoutConstraintAxis.Horizontal,
             Alignment = UIStackViewAlignment.Center,
-            Distribution = UIStackViewDistribution.EqualSpacing,
-            Spacing = 24
+            Distribution = UIStackViewDistribution.EqualCentering,
+            Spacing = 12,
+            LayoutMargins = new UIEdgeInsets(0, 8, 0, 8),
+            LayoutMarginsRelativeArrangement = true
         };
         var metadata = new UIStackView([_titleLabel, _subtitleLabel])
         {
@@ -171,6 +176,8 @@ public sealed class NowPlayingViewController : UIViewController
         {
             AlwaysBounceVertical = true,
             ShowsVerticalScrollIndicator = false,
+            ShowsHorizontalScrollIndicator = false,
+            DirectionalLockEnabled = true,
             TranslatesAutoresizingMaskIntoConstraints = false
         };
         view.AddSubview(scrollView);
@@ -180,11 +187,10 @@ public sealed class NowPlayingViewController : UIViewController
             scrollView.TrailingAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.TrailingAnchor),
             scrollView.TopAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.TopAnchor),
             scrollView.BottomAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.BottomAnchor),
-            content.LeadingAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.LeadingAnchor, 28),
-            content.TrailingAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.TrailingAnchor, -28),
             content.TopAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.TopAnchor, 16),
             content.BottomAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.BottomAnchor, -24),
-            content.WidthAnchor.ConstraintEqualTo(scrollView.FrameLayoutGuide.WidthAnchor, -56),
+            content.CenterXAnchor.ConstraintEqualTo(scrollView.FrameLayoutGuide.CenterXAnchor),
+            content.WidthAnchor.ConstraintEqualTo(scrollView.FrameLayoutGuide.WidthAnchor, -40),
             _backButton.WidthAnchor.ConstraintEqualTo(64),
             _backButton.HeightAnchor.ConstraintEqualTo(64),
             _playButton.WidthAnchor.ConstraintEqualTo(96),
