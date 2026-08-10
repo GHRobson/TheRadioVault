@@ -1496,6 +1496,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(dashboard.Contains("RefreshVisibleBroadcasts", StringComparison.Ordinal));
     True(dashboard.Contains("Session.RecentBroadcasts.Take(5)", StringComparison.Ordinal));
     True(dashboard.Contains("Session.UnheardBroadcasts.Take(5)", StringComparison.Ordinal));
+    True(dashboard.Contains("new NSMutableIndexSet", StringComparison.Ordinal));
+    True(dashboard.Contains("changedSections.Add", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
@@ -1650,7 +1652,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(miniPlayer.Contains("IsPreparingPlayback", StringComparison.Ordinal));
     True(miniPlayer.Contains("UIActivityIndicatorView", StringComparison.Ordinal));
     True(miniPlayer.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
-    True(miniPlayer.Contains("UIGlassEffect.Create", StringComparison.Ordinal));
+    True(miniPlayer.Contains("UIVisualEffectView", StringComparison.Ordinal));
     True(miniPlayer.Contains("SystemChromeMaterialDark", StringComparison.Ordinal));
 
     var nowPlayingView = File.ReadAllText(Path.Combine(

@@ -99,16 +99,7 @@ public sealed class RadioVaultMiniPlayerView : UIView
     }
 
     private static UIVisualEffect CreateBackgroundEffect()
-    {
-        if (OperatingSystem.IsIOSVersionAtLeast(26))
-        {
-            var glass = UIGlassEffect.Create(UIGlassEffectStyle.Regular);
-            glass.TintColor = RadioVaultTheme.Shell.ColorWithAlpha(0.22f);
-            return glass;
-        }
-
-        return UIBlurEffect.FromStyle(UIBlurEffectStyle.SystemChromeMaterialDark);
-    }
+        => UIBlurEffect.FromStyle(UIBlurEffectStyle.SystemChromeMaterialDark);
 
     public event EventHandler? Tapped;
 

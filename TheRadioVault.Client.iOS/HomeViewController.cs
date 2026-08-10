@@ -229,18 +229,25 @@ public sealed class HomeViewController : SessionTableViewController
     protected override void ReloadSession()
     {
         var next = CaptureSectionFingerprints();
+        using var changedSections = new NSMutableIndexSet();
         for (var section = 0; section < next.Length; section++)
         {
             if (!string.Equals(_sectionFingerprints[section], next[section], StringComparison.Ordinal))
             {
                 _sectionFingerprints[section] = next[section];
-                TableView.ReloadSections(NSIndexSet.FromIndex(section), UITableViewRowAnimation.None);
+                changedSections.Add((nuint)section);
             }
             else if (section is 2 or 4 or 5)
             {
                 RefreshVisibleBroadcasts(section);
             }
         }
+
+        // UIKit validates all row-count changes as one transaction. Reloading
+        // changed sections individually can crash while the initial sync fills
+        // several Dashboard lists at the same time.
+        if (changedSections.Count > 0)
+            TableView.ReloadSections(changedSections, UITableViewRowAnimation.None);
     }
 
     private string[] CaptureSectionFingerprints()
