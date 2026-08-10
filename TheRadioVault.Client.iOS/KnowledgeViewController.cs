@@ -52,7 +52,9 @@ public sealed class KnowledgeViewController : SessionTableViewController
 
     public override string? TitleForFooter(UITableView tableView, nint section) => section switch
     {
+        1 when Snapshot?.IsLibraryFallback == true => "Coverage is built from the complete catalogue saved on this iPhone. Update the paired server to add research evidence.",
         1 => "Open a show to see daily metadata coverage, gaps and known missing broadcasts.",
+        2 when Snapshot?.IsLibraryFallback == true => "Research decisions require the current Radio Vault Server Knowledge service.",
         2 => "Swipe right to accept, left to keep the current date, or up to ignore a suggestion.",
         _ => null
     };
@@ -62,12 +64,20 @@ public sealed class KnowledgeViewController : SessionTableViewController
         if (indexPath.Section == 0)
         {
             if (Snapshot is null)
-                return DetailCell(
+                return IconDetailCell(
                     "knowledge-empty",
-                    _loading ? "Loading Knowledge…" : "Knowledge unavailable",
-                    Session.KnowledgeStatusText);
+                    _loading ? "Loading Knowledge…" : "Retry Knowledge",
+                    Session.KnowledgeStatusText,
+                    _loading ? RadioVaultIcon.Knowledge : RadioVaultIcon.Sync,
+                    disclosure: !_loading);
             var overview = Snapshot.Overview;
-            var values = new[]
+            var values = Snapshot.IsLibraryFallback ? new[]
+            {
+                ("Library broadcasts", $"{overview.TotalRecords:N0} broadcasts cached on this iPhone", RadioVaultIcon.Knowledge),
+                ("Available offline", $"{overview.InLibraryRecords:N0} catalogue records ready", RadioVaultIcon.Library),
+                ("Needs attention", $"{overview.NeedsReviewRecords:N0} broadcasts need metadata attention", RadioVaultIcon.InProgress),
+                ("Summary coverage", $"{overview.WithSummaries:N0} broadcasts have descriptions", RadioVaultIcon.Completed)
+            } : new[]
             {
                 ("Research records", $"{overview.TotalRecords:N0} archived records", RadioVaultIcon.Knowledge),
                 ("Linked to Library", $"{overview.InLibraryRecords:N0} records have broadcasts", RadioVaultIcon.Library),
@@ -86,7 +96,9 @@ public sealed class KnowledgeViewController : SessionTableViewController
             return IconCell(
                 "knowledge-coverage",
                 collection.Name,
-                $"{collection.RecordCount:N0} knowledge record{(collection.RecordCount == 1 ? string.Empty : "s")}",
+                Snapshot?.IsLibraryFallback == true
+                    ? $"{collection.RecordCount:N0} saved broadcast{(collection.RecordCount == 1 ? string.Empty : "s")}"
+                    : $"{collection.RecordCount:N0} knowledge record{(collection.RecordCount == 1 ? string.Empty : "s")}",
                 RadioVaultIcon.Grid,
                 disclosure: true);
         }
@@ -94,19 +106,23 @@ public sealed class KnowledgeViewController : SessionTableViewController
         var count = Snapshot?.DateReviews.Count ?? 0;
         return IconCell(
             "knowledge-triage",
-            "Review date suggestions",
-            count == 0 ? "Nothing is waiting for a decision" : $"{count:N0} suggestion{(count == 1 ? string.Empty : "s")} waiting",
+            Snapshot?.IsLibraryFallback == true ? "Research decisions" : "Review date suggestions",
+            Snapshot?.IsLibraryFallback == true
+                ? "Update the paired server to enable triage"
+                : count == 0 ? "Nothing is waiting for a decision" : $"{count:N0} suggestion{(count == 1 ? string.Empty : "s")} waiting",
             RadioVaultIcon.InProgress,
-            disclosure: true);
+            disclosure: Snapshot?.IsLibraryFallback != true);
     }
 
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (indexPath.Section == 1 && indexPath.Row < Collections.Count && Collections[indexPath.Row].CollectionId is { } id)
+        if (Snapshot is null && indexPath.Section == 0)
+            _ = LoadAsync();
+        else if (indexPath.Section == 1 && indexPath.Row < Collections.Count && Collections[indexPath.Row].CollectionId is { } id)
             NavigationController?.PushViewController(
                 new KnowledgeCoverageViewController(Session, id, Collections[indexPath.Row].Name), true);
-        else if (indexPath.Section == 2)
+        else if (indexPath.Section == 2 && Snapshot?.IsLibraryFallback != true)
             NavigationController?.PushViewController(new KnowledgeTriageViewController(Session), true);
     }
 

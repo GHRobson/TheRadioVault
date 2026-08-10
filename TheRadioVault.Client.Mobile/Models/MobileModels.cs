@@ -131,7 +131,8 @@ public sealed record MobileKnowledgeSnapshot(
     MobileKnowledgeOverview Overview,
     IReadOnlyList<MobileKnowledgeCollection> Collections,
     IReadOnlyList<MobileKnowledgeDateReview> DateReviews,
-    DateTimeOffset UpdatedAt);
+    DateTimeOffset UpdatedAt,
+    bool IsLibraryFallback = false);
 
 public sealed record MobileKnowledgeDateReviewsRequest(int? CollectionId = null, bool IncludeResolved = false);
 public sealed record MobileKnowledgeCollectionRequest(int? CollectionId);

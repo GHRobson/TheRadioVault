@@ -73,7 +73,7 @@ public sealed class HomeViewController : SessionTableViewController
         0 => 1,
         1 => 1,
         2 => Math.Max(1, UpNext.Count),
-        3 => Math.Max(1, Session.OnThisDay.Count),
+        3 => 1,
         4 => Math.Max(1, Session.RecentBroadcasts.Take(5).Count()),
         5 => Math.Max(1, Session.UnheardBroadcasts.Take(5).Count()),
         _ => 0
@@ -132,6 +132,28 @@ public sealed class HomeViewController : SessionTableViewController
             return cell;
         }
 
+        if (indexPath.Section == 3 && Session.OnThisDay.Count > 0)
+        {
+            var carousel = new DashboardOnThisDayCarouselCell();
+            carousel.Configure(
+                Session,
+                Session.OnThisDay,
+                item => Session.LoadBroadcastDetailsAsync(item, announce: false),
+                item => NavigationController?.PushViewController(new BroadcastDetailsViewController(Session, item), true),
+                entity => _ = OpenEntityAsync(entity),
+                () =>
+                {
+                    if (TableView.Window is null)
+                    {
+                        return;
+                    }
+
+                    TableView.BeginUpdates();
+                    TableView.EndUpdates();
+                });
+            return carousel;
+        }
+
         var values = ValuesForSection(indexPath.Section);
         if (values.Count == 0)
         {
@@ -162,7 +184,7 @@ public sealed class HomeViewController : SessionTableViewController
             HandleFeaturedPlayback(featured);
             return;
         }
-        if (indexPath.Section < 2) return;
+        if (indexPath.Section < 2 || indexPath.Section == 3) return;
         var values = ValuesForSection(indexPath.Section);
         if (indexPath.Row < values.Count)
             NavigationController?.PushViewController(
@@ -172,7 +194,7 @@ public sealed class HomeViewController : SessionTableViewController
     protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
     {
         if (indexPath.Section == 1) return FeaturedContinue;
-        if (indexPath.Section < 2) return null;
+        if (indexPath.Section < 2 || indexPath.Section == 3) return null;
         var values = ValuesForSection(indexPath.Section);
         return indexPath.Row < values.Count ? values[indexPath.Row] : null;
     }
@@ -202,5 +224,18 @@ public sealed class HomeViewController : SessionTableViewController
         if (Session.PreparingPlaybackEpisodeId == featured.EpisodeId) return;
         if (Session.CanToggleBroadcast(featured.EpisodeId)) Session.TogglePlayPause();
         else _ = Session.PlayAsync(featured);
+    }
+
+    private async Task OpenEntityAsync(string entity)
+    {
+        var dashboard = await Session.LoadExploreDashboardAsync().ConfigureAwait(false);
+        var page = dashboard?.AllPages.FirstOrDefault(value =>
+            value.Title.Equals(entity, StringComparison.CurrentCultureIgnoreCase) ||
+            value.Slug.Equals(entity.Replace(' ', '-'), StringComparison.OrdinalIgnoreCase));
+        BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+            page is not null
+                ? new ExploreArticleViewController(Session, page)
+                : new EntityBroadcastsViewController(Session, entity),
+            true));
     }
 }

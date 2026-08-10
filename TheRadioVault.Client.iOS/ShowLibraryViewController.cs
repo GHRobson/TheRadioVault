@@ -13,6 +13,7 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
     private enum ArchiveLevel { Years, Months, Broadcasts }
 
     private readonly int? _collectionId;
+    private readonly string? _collectionName;
     private readonly string _rootTitle;
     private readonly string _filter;
     private readonly bool _supportsViewModes;
@@ -37,6 +38,7 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
         : base(session)
     {
         _collectionId = collectionId;
+        _collectionName = collectionId.HasValue ? title : null;
         _rootTitle = title;
         _filter = filter;
         _supportsViewModes = filter.Equals("All", StringComparison.OrdinalIgnoreCase);
@@ -307,7 +309,8 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
                 _filter,
                 requestedYear,
                 requestedMonth,
-                requestedHideCompleted).ConfigureAwait(false);
+                requestedHideCompleted,
+                _collectionName).ConfigureAwait(false);
             BeginInvokeOnMainThread(() =>
             {
                 if (generation != _loadGeneration) return;
@@ -320,7 +323,8 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
         var periods = await Session.LoadArchivePeriodsAsync(
             _collectionId,
             requestedLevel == ArchiveLevel.Months ? requestedYear : null,
-            requestedHideCompleted).ConfigureAwait(false);
+            requestedHideCompleted,
+            _collectionName).ConfigureAwait(false);
         BeginInvokeOnMainThread(() =>
         {
             if (generation != _loadGeneration) return;

@@ -282,8 +282,20 @@ internal sealed class ExploreArticleHeaderCell : UITableViewCell
 
 internal sealed class ExploreArticleBodyCell : UITableViewCell
 {
-    public ExploreArticleBodyCell(string? markdown) : base(UITableViewCellStyle.Default, "explore-article-body")
+    private static readonly System.Text.RegularExpressions.Regex InlineTokens = new(
+        @"\[\[(?<target>[^\]|]+)(?:\|(?<label>[^\]]+))?\]\]|\[(?<label2>[^\]]+)\]\(wiki:(?<target2>[^)]+)\)|\*\*(?<bold>[^*]+)\*\*|\*(?<italic>[^*]+)\*",
+        System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    private readonly IReadOnlyList<string> _linkTargets;
+    private readonly Action<string>? _navigate;
+    private readonly List<UITextViewDelegate> _linkDelegates = [];
+
+    public ExploreArticleBodyCell(
+        string? markdown,
+        IReadOnlyList<string>? linkTargets = null,
+        Action<string>? navigate = null) : base(UITableViewCellStyle.Default, "explore-article-body")
     {
+        _linkTargets = linkTargets ?? [];
+        _navigate = navigate;
         BackgroundColor = RadioVaultTheme.Surface;
         SelectionStyle = UITableViewCellSelectionStyle.None;
         var content = new UIStackView
@@ -303,7 +315,7 @@ internal sealed class ExploreArticleBodyCell : UITableViewCell
         ]);
     }
 
-    private static IEnumerable<UIView> Blocks(string? markdown)
+    private IEnumerable<UIView> Blocks(string? markdown)
     {
         if (string.IsNullOrWhiteSpace(markdown))
         {
@@ -340,9 +352,9 @@ internal sealed class ExploreArticleBodyCell : UITableViewCell
                     yield return Paragraph(string.Join(" ", paragraph), false);
                     paragraph.Clear();
                 }
-                yield return Paragraph("•  " + Clean(line[2..]), false);
+                yield return Paragraph("•  " + line[2..].Trim(), false);
             }
-            else paragraph.Add(Clean(line));
+            else paragraph.Add(line);
         }
         if (paragraph.Count > 0) yield return Paragraph(string.Join(" ", paragraph), false);
     }
@@ -357,15 +369,105 @@ internal sealed class ExploreArticleBodyCell : UITableViewCell
             AdjustsFontForContentSizeCategory = true
         };
 
-    private static UILabel Paragraph(string text, bool muted)
-        => new()
+    private UIView Paragraph(string text, bool muted)
+    {
+        var view = new UITextView
         {
-            Text = text,
-            Font = ExploreTypography.Serif(17),
-            TextColor = muted ? RadioVaultTheme.MutedText : RadioVaultTheme.Text,
-            Lines = 0,
-            AdjustsFontForContentSizeCategory = true
+            BackgroundColor = UIColor.Clear,
+            Editable = false,
+            Selectable = true,
+            ScrollEnabled = false,
+            TextContainerInset = UIEdgeInsets.Zero,
+            DataDetectorTypes = UIDataDetectorType.None
         };
+        view.TextContainer.LineFragmentPadding = 0;
+        view.AttributedText = RenderInline(text, muted);
+        view.WeakLinkTextAttributes = new UIStringAttributes
+        {
+            ForegroundColor = RadioVaultTheme.Wiki,
+            UnderlineStyle = NSUnderlineStyle.Single
+        }.Dictionary;
+        var linkDelegate = new ExploreLinkTextViewDelegate(target => _navigate?.Invoke(target));
+        _linkDelegates.Add(linkDelegate);
+        view.Delegate = linkDelegate;
+        return view;
+    }
+
+    private NSAttributedString RenderInline(string source, bool muted)
+    {
+        var text = new System.Text.StringBuilder();
+        var links = new List<(int Start, int Length, string Target)>();
+        var bold = new List<(int Start, int Length)>();
+        var italic = new List<(int Start, int Length)>();
+        var cursor = 0;
+        foreach (System.Text.RegularExpressions.Match match in InlineTokens.Matches(source))
+        {
+            if (match.Index > cursor) text.Append(source[cursor..match.Index]);
+            var start = text.Length;
+            if (match.Groups["target"].Success)
+            {
+                var label = match.Groups["label"].Success ? match.Groups["label"].Value : match.Groups["target"].Value;
+                text.Append(label);
+                links.Add((start, label.Length, match.Groups["target"].Value));
+            }
+            else if (match.Groups["target2"].Success)
+            {
+                var label = match.Groups["label2"].Value;
+                text.Append(label);
+                links.Add((start, label.Length, match.Groups["target2"].Value));
+            }
+            else if (match.Groups["bold"].Success)
+            {
+                var value = match.Groups["bold"].Value;
+                text.Append(value);
+                bold.Add((start, value.Length));
+            }
+            else
+            {
+                var value = match.Groups["italic"].Value;
+                text.Append(value);
+                italic.Add((start, value.Length));
+            }
+            cursor = match.Index + match.Length;
+        }
+        if (cursor < source.Length) text.Append(source[cursor..]);
+
+        var plain = text.ToString();
+        foreach (var target in _linkTargets)
+        {
+            var searchFrom = 0;
+            while (searchFrom < plain.Length)
+            {
+                var index = plain.IndexOf(target, searchFrom, StringComparison.CurrentCultureIgnoreCase);
+                if (index < 0) break;
+                var overlaps = links.Any(link => index < link.Start + link.Length && index + target.Length > link.Start);
+                if (!overlaps && IsWordBoundary(plain, index, target.Length)) links.Add((index, target.Length, target));
+                searchFrom = index + target.Length;
+            }
+        }
+
+        var result = new NSMutableAttributedString(plain);
+        var full = new NSRange(0, plain.Length);
+        result.AddAttribute(UIStringAttributeKey.Font, ExploreTypography.Serif(17), full);
+        result.AddAttribute(UIStringAttributeKey.ForegroundColor, muted ? RadioVaultTheme.MutedText : RadioVaultTheme.Text, full);
+        foreach (var range in bold)
+            result.AddAttribute(UIStringAttributeKey.Font, ExploreTypography.Serif(17, UIFontWeight.Bold), new NSRange(range.Start, range.Length));
+        foreach (var range in italic)
+            result.AddAttribute(UIStringAttributeKey.Obliqueness, NSNumber.FromFloat(0.18f), new NSRange(range.Start, range.Length));
+        foreach (var link in links)
+            result.AddAttribute(
+                UIStringAttributeKey.Link,
+                new NSUrl($"radiovault://link/{Uri.EscapeDataString(link.Target)}"),
+                new NSRange(link.Start, link.Length));
+        return result;
+    }
+
+    private static bool IsWordBoundary(string text, int index, int length)
+    {
+        var before = index == 0 || !char.IsLetterOrDigit(text[index - 1]);
+        var after = index + length >= text.Length || !char.IsLetterOrDigit(text[index + length]);
+        return before && after;
+    }
 
     private static string Clean(string value)
         => System.Text.RegularExpressions.Regex.Replace(
@@ -373,6 +475,18 @@ internal sealed class ExploreArticleBodyCell : UITableViewCell
                 @"\[([^\]]+)\]\([^\)]+\)",
                 "$1")
             .Trim();
+
+    private sealed class ExploreLinkTextViewDelegate(Action<string> selected) : UITextViewDelegate
+    {
+        public override bool ShouldInteractWithUrl(UITextView textView, NSUrl url, NSRange characterRange)
+        {
+            const string prefix = "radiovault://link/";
+            var absolute = url.AbsoluteString ?? string.Empty;
+            if (!absolute.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return true;
+            selected(Uri.UnescapeDataString(absolute[prefix.Length..]));
+            return false;
+        }
+    }
 }
 
 internal sealed class ExploreTimelineEventCell : UITableViewCell

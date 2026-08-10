@@ -504,6 +504,115 @@ internal sealed class SavedControlsHeaderView : UIView, IConnectionStatusView
     }
 }
 
+internal sealed class LibraryQuickAccessCell : UITableViewCell
+{
+    private readonly UIImageView[] _icons = new UIImageView[8];
+    private readonly UILabel[] _titles = new UILabel[8];
+    private readonly UILabel[] _details = new UILabel[8];
+    private readonly UIControl[] _cards = new UIControl[8];
+    private readonly Action?[] _actions = new Action?[8];
+
+    public LibraryQuickAccessCell() : base(UITableViewCellStyle.Default, "library-quick-access")
+    {
+        BackgroundColor = RadioVaultTheme.Background;
+        ContentView.BackgroundColor = RadioVaultTheme.Background;
+        SelectionStyle = UITableViewCellSelectionStyle.None;
+        var cardViews = new UIView[8];
+        for (var index = 0; index < cardViews.Length; index++)
+        {
+            var icon = new UIImageView { ContentMode = UIViewContentMode.ScaleAspectFit };
+            var title = new UILabel
+            {
+                Font = UIFont.SystemFontOfSize(10, UIFontWeight.Semibold)!,
+                TextColor = RadioVaultTheme.Text,
+                TextAlignment = UITextAlignment.Center,
+                Lines = 2,
+                AdjustsFontSizeToFitWidth = true,
+                MinimumScaleFactor = 0.72f
+            };
+            var detail = new UILabel
+            {
+                Font = UIFont.MonospacedDigitSystemFontOfSize(11, UIFontWeight.Bold)!,
+                TextColor = RadioVaultTheme.MutedText,
+                TextAlignment = UITextAlignment.Center,
+                Lines = 1,
+                AdjustsFontSizeToFitWidth = true,
+                MinimumScaleFactor = 0.7f
+            };
+            var stack = new UIStackView([icon, title, detail])
+            {
+                Axis = UILayoutConstraintAxis.Vertical,
+                Alignment = UIStackViewAlignment.Center,
+                Spacing = 3,
+                TranslatesAutoresizingMaskIntoConstraints = false
+            };
+            var card = new UIControl { BackgroundColor = RadioVaultTheme.Surface };
+            card.Layer.CornerRadius = 13;
+            card.Layer.BorderColor = RadioVaultTheme.Border.CGColor;
+            card.Layer.BorderWidth = 1;
+            card.AddSubview(stack);
+            NSLayoutConstraint.ActivateConstraints([
+                icon.WidthAnchor.ConstraintEqualTo(22),
+                icon.HeightAnchor.ConstraintEqualTo(22),
+                stack.LeadingAnchor.ConstraintEqualTo(card.LeadingAnchor, 3),
+                stack.TrailingAnchor.ConstraintEqualTo(card.TrailingAnchor, -3),
+                stack.CenterYAnchor.ConstraintEqualTo(card.CenterYAnchor)
+            ]);
+            var captured = index;
+            card.TouchUpInside += (_, _) => _actions[captured]?.Invoke();
+            cardViews[index] = card;
+            _cards[index] = card;
+            _icons[index] = icon;
+            _titles[index] = title;
+            _details[index] = detail;
+        }
+
+        var upper = new UIStackView(cardViews.Take(4).ToArray())
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Distribution = UIStackViewDistribution.FillEqually,
+            Spacing = 7
+        };
+        var lower = new UIStackView(cardViews.Skip(4).ToArray())
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Distribution = UIStackViewDistribution.FillEqually,
+            Spacing = 7
+        };
+        var root = new UIStackView([upper, lower])
+        {
+            Axis = UILayoutConstraintAxis.Vertical,
+            Alignment = UIStackViewAlignment.Fill,
+            Distribution = UIStackViewDistribution.FillEqually,
+            Spacing = 7,
+            TranslatesAutoresizingMaskIntoConstraints = false
+        };
+        ContentView.AddSubview(root);
+        NSLayoutConstraint.ActivateConstraints([
+            root.LeadingAnchor.ConstraintEqualTo(ContentView.LeadingAnchor, 8),
+            root.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor, -8),
+            root.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor, 4),
+            root.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor, -8),
+            root.HeightAnchor.ConstraintEqualTo(164)
+        ]);
+    }
+
+    public void Configure(params (string Title, string Detail, RadioVaultIcon Icon, Action Action)[] items)
+    {
+        for (var index = 0; index < _cards.Length; index++)
+        {
+            var item = items[index];
+            _titles[index].Text = item.Title;
+            _details[index].Text = item.Detail;
+            _icons[index].Image = RadioVaultIcons.Image(item.Icon, size: 22);
+            _actions[index] = item.Action;
+            _cards[index].AccessibilityLabel = $"{item.Title}, {item.Detail}";
+            _cards[index].AccessibilityHint = "Open this Library section";
+            _cards[index].AccessibilityTraits = UIAccessibilityTrait.Button;
+        }
+    }
+}
+
 internal sealed class DashboardOverviewCell : UITableViewCell
 {
     private readonly UIControl _surprise = new();
@@ -633,13 +742,7 @@ internal sealed class DashboardOverviewCell : UITableViewCell
             Distribution = UIStackViewDistribution.FillEqually,
             Spacing = 7
         };
-        var libraryLabel = new UILabel
-        {
-            Text = "YOUR LIBRARY",
-            Font = UIFont.SystemFontOfSize(10, UIFontWeight.Bold)!,
-            TextColor = RadioVaultTheme.MutedText
-        };
-        var grid = new UIStackView([libraryLabel, upper, lower])
+        var grid = new UIStackView([upper, lower])
         {
             Axis = UILayoutConstraintAxis.Vertical,
             Alignment = UIStackViewAlignment.Fill,
@@ -660,7 +763,7 @@ internal sealed class DashboardOverviewCell : UITableViewCell
             root.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor, -2),
             root.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor, 4),
             root.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor, -4),
-            root.HeightAnchor.ConstraintEqualTo(180),
+            root.HeightAnchor.ConstraintEqualTo(155),
             _surprise.WidthAnchor.ConstraintEqualTo(root.WidthAnchor, 0.42f),
             upper.HeightAnchor.ConstraintEqualTo(74),
             lower.HeightAnchor.ConstraintEqualTo(74)

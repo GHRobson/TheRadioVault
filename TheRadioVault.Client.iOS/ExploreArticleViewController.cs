@@ -10,6 +10,7 @@ public sealed class ExploreArticleViewController : SessionTableViewController
     private readonly MobileWikiPageSummary _summary;
     private MobileWikiPageDocument? _document;
     private IReadOnlyList<MobileExploreImage> _images = [];
+    private IReadOnlyList<MobileWikiPageSummary> _linkPages = [];
     private bool _loading;
 
     public ExploreArticleViewController(MobileClientSession session, MobileWikiPageSummary summary) : base(session)
@@ -59,7 +60,10 @@ public sealed class ExploreArticleViewController : SessionTableViewController
         if (indexPath.Section == 1)
             return new ExploreArticleImageCell(_images[0]);
         if (indexPath.Section == 2)
-            return new ExploreArticleBodyCell(_document!.BodyMarkdown);
+            return new ExploreArticleBodyCell(
+                _document!.BodyMarkdown,
+                InlineLinkTargets(),
+                target => _ = OpenInlineLinkAsync(target));
         if (indexPath.Section == 3)
             return new ExploreArticleImageCell(_images[indexPath.Row + 1]);
         if (indexPath.Section == 4)
@@ -127,7 +131,9 @@ public sealed class ExploreArticleViewController : SessionTableViewController
         if (_loading) return;
         _loading = true;
         TableView.ReloadData();
+        var dashboardTask = Session.LoadExploreDashboardAsync();
         var document = await Session.LoadExplorePageAsync(_summary.PageId).ConfigureAwait(false);
+        var dashboard = await dashboardTask.ConfigureAwait(false);
         var images = document is null
             ? Array.Empty<MobileExploreImage>()
             : await Session.LoadExploreImagesAsync(document).ConfigureAwait(false);
@@ -135,6 +141,7 @@ public sealed class ExploreArticleViewController : SessionTableViewController
         {
             _document = document;
             _images = images;
+            _linkPages = dashboard?.AllPages ?? [];
             _loading = false;
             if (document is not null)
             {
@@ -142,5 +149,49 @@ public sealed class ExploreArticleViewController : SessionTableViewController
             }
             TableView.ReloadData();
         });
+    }
+
+    private IReadOnlyList<string> InlineLinkTargets()
+        => _linkPages
+            .Where(value => value.PageId != _summary.PageId)
+            .Select(value => value.Title)
+            .Concat(Session.LibraryCollectionsFor(false).Select(value => value.CollectionName))
+            .Where(value => !string.IsNullOrWhiteSpace(value) && value.Trim().Length >= 3)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .OrderByDescending(value => value.Length)
+            .ToArray();
+
+    private async Task OpenInlineLinkAsync(string target)
+    {
+        var normalized = NormalizeTarget(target);
+        var page = _linkPages.FirstOrDefault(value =>
+            NormalizeTarget(value.Title) == normalized || NormalizeTarget(value.Slug) == normalized);
+        if (page is not null)
+        {
+            BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+                new ExploreArticleViewController(Session, page), true));
+            return;
+        }
+
+        var collection = Session.LibraryCollectionsFor(false).FirstOrDefault(value =>
+            NormalizeTarget(value.CollectionName) == normalized);
+        if (collection is not null)
+        {
+            BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+                new ShowLibraryViewController(Session, collection.CollectionId, collection.CollectionName), true));
+            return;
+        }
+
+        await Task.Yield();
+        BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+            new EntityBroadcastsViewController(Session, target), true));
+    }
+
+    private static string NormalizeTarget(string value)
+    {
+        var text = Uri.UnescapeDataString((value ?? string.Empty).Trim());
+        if (text.StartsWith("wiki:", StringComparison.OrdinalIgnoreCase)) text = text[5..];
+        return string.Join(' ', new string(text.ToLowerInvariant().Select(character => char.IsLetterOrDigit(character) ? character : ' ').ToArray())
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries));
     }
 }

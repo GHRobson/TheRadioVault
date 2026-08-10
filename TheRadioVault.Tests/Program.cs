@@ -1488,6 +1488,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(dashboard.Contains("value.EpisodeId != featuredId", StringComparison.Ordinal));
     True(dashboard.Contains("ServerViewController", StringComparison.Ordinal));
     True(dashboard.Contains("header.SetAccessory(settings)", StringComparison.Ordinal));
+    True(dashboard.Contains("DashboardOnThisDayCarouselCell", StringComparison.Ordinal));
+    True(dashboard.Contains("announce: false", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
@@ -1503,6 +1505,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(library.Contains("SetHideCompleted", StringComparison.Ordinal));
     True(library.Contains("LibraryCollectionsFor", StringComparison.Ordinal));
     True(library.Contains("DownloadsViewController", StringComparison.Ordinal));
+    True(library.Contains("LibraryQuickAccessCell", StringComparison.Ordinal));
+    True(library.Contains("RadioVaultIcon.Radio", StringComparison.Ordinal));
 
     var showLibrary = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ShowLibraryViewController.cs"));
@@ -1526,6 +1530,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosCells.Contains("DashboardStatsCell", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardOverviewCell", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardContinueCell", StringComparison.Ordinal));
+    True(iosCells.Contains("LibraryQuickAccessCell", StringComparison.Ordinal));
     True(iosCells.Contains("BroadcastProgressCell", StringComparison.Ordinal));
     True(iosCells.Contains("BroadcastHeroCell", StringComparison.Ordinal));
     True(iosCells.Contains("ExploreImageGalleryCell", StringComparison.Ordinal));
@@ -1587,6 +1592,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(exploreArticle.Contains("ExploreArticleBodyCell", StringComparison.Ordinal));
     True(exploreArticle.Contains("Timeline", StringComparison.Ordinal));
     True(exploreArticle.Contains("LoadExploreImagesAsync", StringComparison.Ordinal));
+    True(exploreArticle.Contains("InlineLinkTargets", StringComparison.Ordinal));
+    True(exploreArticle.Contains("ShowLibraryViewController", StringComparison.Ordinal));
 
     var exploreCells = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreCells.cs"));
@@ -1594,6 +1601,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(exploreCells.Contains("NewYork-Regular", StringComparison.Ordinal));
     True(exploreCells.Contains("ExploreTimelineEventCell", StringComparison.Ordinal));
     True(exploreCells.Contains("RADIO VAULT ENCYCLOPEDIA", StringComparison.Ordinal));
+    True(exploreCells.Contains("radiovault://link/", StringComparison.Ordinal));
+    True(exploreCells.Contains("ShouldInteractWithUrl", StringComparison.Ordinal));
 
     var exploreTimeline = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreTimelineViewController.cs"));
@@ -1675,6 +1684,12 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(knowledgeView.Contains("LoadKnowledgeAsync", StringComparison.Ordinal));
     True(knowledgeView.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
     True(knowledgeView.Contains("KnowledgeStatusText", StringComparison.Ordinal));
+    True(knowledgeView.Contains("IsLibraryFallback", StringComparison.Ordinal));
+
+    var metadataPills = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "MetadataPillsCell.cs"));
+    True(metadataPills.Contains("Layer.CornerRadius = 16", StringComparison.Ordinal));
+    True(metadataPills.Contains("Open related broadcasts and Explore articles", StringComparison.Ordinal));
 
     var nowPlayingQueue = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingUpNextView.cs"));
@@ -1724,6 +1739,14 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("_pendingDecoderLogicalPositionMs", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("Finishing the startup sync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("public string MiniPlayerTime", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("CombineCollections", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("NormalizeCollectionName", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("BuildLibraryKnowledgeSnapshot", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("BuildLibraryKnowledgeCoverage", StringComparison.Ordinal));
+
+    var iconGenerator = File.ReadAllText(Path.Combine(SourceRoot(), "design", "logo", "generate-brand-assets.py"));
+    True(iconGenerator.Contains("RadioVault-logo-ios-source.png", StringComparison.Ordinal));
+    True(File.Exists(Path.Combine(SourceRoot(), "TheRadioVault.Client.iOS", "Assets.xcassets", "AppIcon.appiconset", "AppIcon-1024.png")));
 
     var downloads = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));

@@ -94,13 +94,15 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         }
 
         var field = DetailFields()[indexPath.Row];
-        var cell = DetailCell("programme-field", field.Label, field.Value);
         if (field.IsEntity)
         {
-            cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
-            cell.AccessibilityHint = $"Browse broadcasts and Explore articles for {field.Label.ToLowerInvariant()}";
+            var values = EntityValues(field.Value);
+            var pills = new MetadataPillsCell();
+            pills.Configure(field.Label, values, EntityColor(field.Label), entity => _ = OpenEntityAsync(entity));
+            return pills;
         }
-        else cell.SelectionStyle = UITableViewCellSelectionStyle.None;
+        var cell = DetailCell("programme-field", field.Label, field.Value);
+        cell.SelectionStyle = UITableViewCellSelectionStyle.None;
         return cell;
     }
 
@@ -108,11 +110,6 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
     {
         tableView.DeselectRow(indexPath, true);
         if (indexPath.Section == 1 && indexPath.Row == 1) PresentQueueActions();
-        if (indexPath.Section == 3 && indexPath.Row < DetailFields().Count)
-        {
-            var field = DetailFields()[indexPath.Row];
-            if (field.IsEntity) PresentEntityOptions(field.Label, field.Value);
-        }
     }
 
     private void PresentQueueActions()
@@ -261,6 +258,21 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         }
         PresentViewController(menu, true, null);
     }
+
+    private static IReadOnlyList<string> EntityValues(string value)
+        => value
+            .Split([',', ';', '|', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToArray();
+
+    private static UIColor EntityColor(string label) => label switch
+    {
+        "Hosts" => RadioVaultTheme.ActivityBlue,
+        "Guests" => RadioVaultTheme.Moment,
+        "Topics" => RadioVaultTheme.Research,
+        "Callers" => RadioVaultTheme.Accent,
+        _ => RadioVaultTheme.Wiki
+    };
 
     private async Task OpenEntityAsync(string entity)
     {
