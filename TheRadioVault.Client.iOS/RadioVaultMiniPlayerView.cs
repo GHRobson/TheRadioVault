@@ -12,14 +12,21 @@ public sealed class RadioVaultMiniPlayerView : UIView
     private readonly UIButton _actionButton = UIButton.FromType(UIButtonType.System);
     private readonly UIActivityIndicatorView _activity = new(UIActivityIndicatorViewStyle.Medium);
     private readonly UIProgressView _progress = new(UIProgressViewStyle.Default);
+    private readonly UIVisualEffectView _glassBackground;
     private long _artworkEpisodeId;
     private bool _artworkWasRequestedOnline;
 
     public RadioVaultMiniPlayerView(MobileClientSession session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
+        _glassBackground = new UIVisualEffectView(CreateBackgroundEffect())
+        {
+            TranslatesAutoresizingMaskIntoConstraints = false,
+            UserInteractionEnabled = false
+        };
+        _glassBackground.ContentView.BackgroundColor = RadioVaultTheme.Shell.ColorWithAlpha(0.16f);
         TranslatesAutoresizingMaskIntoConstraints = false;
-        BackgroundColor = RadioVaultTheme.SurfaceRaised;
+        BackgroundColor = UIColor.Clear;
         Layer.BorderColor = RadioVaultTheme.Border.CGColor;
         Layer.BorderWidth = 1;
         Layer.CornerRadius = 24;
@@ -61,10 +68,15 @@ public sealed class RadioVaultMiniPlayerView : UIView
         };
         _progress.TranslatesAutoresizingMaskIntoConstraints = false;
         _progress.ProgressTintColor = RadioVaultTheme.Accent;
-        _progress.TrackTintColor = RadioVaultTheme.Border;
+        _progress.TrackTintColor = RadioVaultTheme.Border.ColorWithAlpha(0.72f);
+        AddSubview(_glassBackground);
         AddSubview(row);
         AddSubview(_progress);
         NSLayoutConstraint.ActivateConstraints([
+            _glassBackground.LeadingAnchor.ConstraintEqualTo(LeadingAnchor),
+            _glassBackground.TrailingAnchor.ConstraintEqualTo(TrailingAnchor),
+            _glassBackground.TopAnchor.ConstraintEqualTo(TopAnchor),
+            _glassBackground.BottomAnchor.ConstraintEqualTo(BottomAnchor),
             row.LeadingAnchor.ConstraintEqualTo(LeadingAnchor, 8),
             row.TrailingAnchor.ConstraintEqualTo(TrailingAnchor, -10),
             row.TopAnchor.ConstraintEqualTo(TopAnchor, 7),
@@ -84,6 +96,18 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _session.StateChanged += SessionOnStateChanged;
         _session.PlaybackStateChanged += SessionOnStateChanged;
         Reload();
+    }
+
+    private static UIVisualEffect CreateBackgroundEffect()
+    {
+        if (OperatingSystem.IsIOSVersionAtLeast(26))
+        {
+            var glass = UIGlassEffect.Create(UIGlassEffectStyle.Regular);
+            glass.TintColor = RadioVaultTheme.Shell.ColorWithAlpha(0.22f);
+            return glass;
+        }
+
+        return UIBlurEffect.FromStyle(UIBlurEffectStyle.SystemChromeMaterialDark);
     }
 
     public event EventHandler? Tapped;

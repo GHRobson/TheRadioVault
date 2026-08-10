@@ -7,7 +7,7 @@ namespace TheRadioVault.Client.iOS;
 
 public sealed class HomeViewController : SessionTableViewController
 {
-    private string _onThisDayFingerprint = string.Empty;
+    private string[] _sectionFingerprints = new string[6];
 
     public HomeViewController(MobileClientSession session) : base(session)
     {
@@ -38,13 +38,20 @@ public sealed class HomeViewController : SessionTableViewController
                 .ToArray();
         }
     }
+
+    private IReadOnlyList<MobileBroadcastItem> RecentlyAdded
+        => Session.RecentBroadcasts.Take(5).ToArray();
+
+    private IReadOnlyList<MobileBroadcastItem> Unheard
+        => Session.UnheardBroadcasts.Take(5).ToArray();
+
     protected override string? PageHeading => "Dashboard";
     protected override string PageDescription => "Your archive at a glance.";
 
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
-        _onThisDayFingerprint = OnThisDayFingerprint();
+        _sectionFingerprints = CaptureSectionFingerprints();
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
         TableView.RowHeight = UITableView.AutomaticDimension;
         TableView.EstimatedRowHeight = 88;
@@ -77,8 +84,8 @@ public sealed class HomeViewController : SessionTableViewController
         1 => 1,
         2 => Math.Max(1, UpNext.Count),
         3 => 1,
-        4 => Math.Max(1, Session.RecentBroadcasts.Take(5).Count()),
-        5 => Math.Max(1, Session.UnheardBroadcasts.Take(5).Count()),
+        4 => Math.Max(1, RecentlyAdded.Count),
+        5 => Math.Max(1, Unheard.Count),
         _ => 0
     };
 
@@ -196,8 +203,8 @@ public sealed class HomeViewController : SessionTableViewController
     {
         2 => UpNext,
         3 => Session.OnThisDay,
-        4 => Session.RecentBroadcasts.Take(5).ToArray(),
-        5 => Session.UnheardBroadcasts.Take(5).ToArray(),
+        4 => RecentlyAdded,
+        5 => Unheard,
         _ => []
     };
 
@@ -221,22 +228,56 @@ public sealed class HomeViewController : SessionTableViewController
 
     protected override void ReloadSession()
     {
-        var fingerprint = OnThisDayFingerprint();
-        if (!string.Equals(_onThisDayFingerprint, fingerprint, StringComparison.Ordinal))
+        var next = CaptureSectionFingerprints();
+        for (var section = 0; section < next.Length; section++)
         {
-            _onThisDayFingerprint = fingerprint;
-            TableView.ReloadData();
-            return;
+            if (!string.Equals(_sectionFingerprints[section], next[section], StringComparison.Ordinal))
+            {
+                _sectionFingerprints[section] = next[section];
+                TableView.ReloadSections(NSIndexSet.FromIndex(section), UITableViewRowAnimation.None);
+            }
+            else if (section is 2 or 4 or 5)
+            {
+                RefreshVisibleBroadcasts(section);
+            }
         }
-
-        // Keep the carousel cell alive so background sync and playback updates do
-        // not reset its timer or flash its artwork back to the first broadcast.
-        TableView.ReloadSections(NSIndexSet.FromNSRange(new NSRange(0, 3)), UITableViewRowAnimation.None);
-        TableView.ReloadSections(NSIndexSet.FromNSRange(new NSRange(4, 2)), UITableViewRowAnimation.None);
     }
 
-    private string OnThisDayFingerprint()
-        => string.Join(",", Session.OnThisDay.Select(value => value.EpisodeId).Order());
+    private string[] CaptureSectionFingerprints()
+    {
+        var featured = FeaturedContinue;
+        return
+        [
+            $"{Session.TotalBroadcasts}:{Session.InProgressBroadcasts}:{Session.CompletedBroadcasts}:{Session.FavouriteBroadcasts}:{Session.UnheardBroadcasts.Count}",
+            featured is null
+                ? "empty"
+                : $"{BroadcastFingerprint([featured])}:{Session.PreparingPlaybackEpisodeId}:{Session.IsPlayingBroadcast(featured.EpisodeId)}",
+            BroadcastIdentityFingerprint(UpNext),
+            string.Join(",", Session.OnThisDay.Select(value => value.EpisodeId).Order()),
+            BroadcastIdentityFingerprint(RecentlyAdded),
+            BroadcastIdentityFingerprint(Unheard)
+        ];
+    }
+
+    private static string BroadcastFingerprint(IEnumerable<MobileBroadcastItem> values)
+        => string.Join("|", values.Select(value =>
+            $"{value.EpisodeId}:{value.DisplayProgress:0.###}:{value.Source.Completed}:{value.Source.Favourite}:{value.Status}"));
+
+    private static string BroadcastIdentityFingerprint(IEnumerable<MobileBroadcastItem> values)
+        => string.Join(",", values.Select(value => value.EpisodeId));
+
+    private void RefreshVisibleBroadcasts(int section)
+    {
+        var values = ValuesForSection(section);
+        for (var row = 0; row < values.Count; row++)
+        {
+            if (TableView.CellAt(NSIndexPath.FromRowSection(row, section)) is not BroadcastProgressCell cell) continue;
+            var item = values[row];
+            cell.Configure(Session, item, section == 2
+                ? $"{item.Source.CollectionName} · ready to resume"
+                : $"{item.Subtitle} · {item.Status}");
+        }
+    }
 
     private async Task OpenEntityAsync(string entity)
     {
