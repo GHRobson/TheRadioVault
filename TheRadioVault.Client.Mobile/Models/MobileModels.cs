@@ -185,6 +185,51 @@ public sealed record MobileMetadataCacheSnapshot(
         DateTimeOffset.MinValue);
 }
 
+public sealed record MobileDiagnosticSnapshot(
+    DateTimeOffset CapturedAt,
+    bool IsPaired,
+    bool IsLiveConnected,
+    bool IsMetadataSyncing,
+    bool IsBusy,
+    string ServerName,
+    string ServerAddress,
+    string StatusText,
+    int PendingChanges,
+    int PendingFavouriteChanges,
+    int PendingListeningChanges,
+    int PendingMomentChanges,
+    DateTimeOffset? LastSyncAttemptAt,
+    DateTimeOffset? LastSuccessfulSyncAt,
+    string LastSyncError,
+    DateTimeOffset CacheUpdatedAt,
+    long CacheSyncSequence,
+    string CacheSyncRevision,
+    int CachedBroadcasts,
+    int CachedCollections,
+    int CachedExplorePages,
+    int CachedExploreDocuments,
+    int CachedExploreImages,
+    int CachedMoments,
+    bool HasKnowledge,
+    int DownloadCount,
+    long DownloadedBytes,
+    long PendingDownloadBytes,
+    bool IsDownloading,
+    bool IsDownloadPaused,
+    long? ActiveDownloadEpisodeId,
+    string DownloadStatus,
+    bool HasMiniPlayer,
+    long? CurrentEpisodeId,
+    bool IsPlaying,
+    bool CanControlPlayback,
+    bool MiniPlayerShowsHandoff,
+    string PlaybackStatus,
+    string PlaybackTime,
+    bool WifiOnlyDownloads,
+    bool AutoDownloadNewBroadcasts,
+    bool DeleteCompletedDownloads,
+    long DownloadStorageLimitBytes);
+
 public sealed class MobileBroadcastItem
 {
     public MobileBroadcastItem(WebClientLibraryBroadcastSummary value)

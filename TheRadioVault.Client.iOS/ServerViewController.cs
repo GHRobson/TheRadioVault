@@ -102,9 +102,9 @@ public sealed class ServerViewController : SessionTableViewController
             if (indexPath.Row == 1)
                 return DetailCell(
                     "sync-diagnostics",
-                    "Sync Status",
+                    "Diagnostics",
                     Session.PendingSyncChanges == 0
-                        ? "Up to date · view cache and connection details"
+                        ? "View connection, cache, downloads and playback details"
                         : $"{Session.PendingSyncChanges:N0} change{(Session.PendingSyncChanges == 1 ? string.Empty : "s")} waiting to sync");
             return DetailCell(
                 "server-status",

@@ -269,6 +269,65 @@ public sealed class MobileClientSession : IDisposable
         await RefreshAsync().ConfigureAwait(false);
     }
 
+    public async Task<MobileDiagnosticSnapshot> GetDiagnosticSnapshotAsync()
+    {
+        var pending = await _offlineMutations
+            .GetPendingAsync(CurrentServerInstanceId())
+            .ConfigureAwait(false);
+        var storage = await _downloads.GetStorageAsync().ConfigureAwait(false);
+        var cache = _metadataCache.Snapshot;
+        var cachedImages = cache.ExploreDocuments
+            .SelectMany(value => value.Images)
+            .Select(value => value.ImageId)
+            .Distinct()
+            .Count(_metadataCache.HasImage);
+
+        return new MobileDiagnosticSnapshot(
+            DateTimeOffset.UtcNow,
+            IsPaired,
+            IsLiveConnected,
+            IsMetadataSyncing,
+            IsBusy,
+            ServerName,
+            ServerAddress,
+            StatusText,
+            pending.Count,
+            pending.Count(value => value.Kind == MobileOfflineMutationKind.Favourite),
+            pending.Count(value => value.Kind == MobileOfflineMutationKind.ListeningStatus),
+            pending.Count(value => value.Kind == MobileOfflineMutationKind.Moment),
+            LastSyncAttemptAt,
+            LastSuccessfulSyncAt,
+            LastSyncError,
+            cache.UpdatedAt,
+            cache.SyncSequence,
+            cache.SyncRevision,
+            cache.Broadcasts.Count,
+            cache.Broadcasts.Select(value => value.CollectionId).Distinct().Count(),
+            cache.ExplorePages.Count,
+            cache.ExploreDocuments.Count,
+            cachedImages,
+            cache.Moments?.Count ?? 0,
+            cache.Knowledge is not null,
+            storage.DownloadCount,
+            storage.CompletedBytes,
+            storage.PendingBytes,
+            IsDownloading,
+            IsDownloadPaused,
+            ActiveDownloadEpisodeId,
+            DownloadStatus,
+            HasMiniPlayer,
+            CurrentBroadcast?.EpisodeId,
+            IsPlaying,
+            CanControlPlayback,
+            MiniPlayerShowsHandoff,
+            PlaybackStatus,
+            MiniPlayerTime,
+            WifiOnlyDownloads,
+            AutoDownloadNewBroadcasts,
+            DeleteCompletedDownloads,
+            DownloadStorageLimitBytes);
+    }
+
     public async Task RefreshAsync()
     {
         if (!IsPaired || IsBusy) return;

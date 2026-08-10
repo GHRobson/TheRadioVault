@@ -243,6 +243,19 @@ jobs:
           -p:ContinuousIntegrationBuild=true
           -p:Deterministic=true
 
+      - name: Build iOS offline regression runner
+        run: >-
+          dotnet build
+          TheRadioVault.Client.Mobile.Tests/TheRadioVault.Client.Mobile.Tests.csproj
+          -c Release -warnaserror
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+
+      - name: Run iOS offline and handoff regression checks
+        run: >-
+          dotnet run --project TheRadioVault.Client.Mobile.Tests/TheRadioVault.Client.Mobile.Tests.csproj
+          -c Release --no-build
+
       - name: Build smoke-test runner
         run: >-
           dotnet build
