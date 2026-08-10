@@ -973,6 +973,13 @@ internal sealed partial class WebArchiveProvider : IWebArchiveProvider, IDisposa
         if (episode is null)
             return new WebOfflineProgressResult(false, "Broadcast not found.");
 
+        var receivedAt = DateTimeOffset.UtcNow;
+        if (!update.AllowRewind && OfflineProgressOrderingPolicy.IsStale(
+                update.CapturedAt, episode.LastPlayedAt, receivedAt))
+            return new WebOfflineProgressResult(false,
+                "Radio Vault already has progress or a manual listening change made after this offline record.",
+                episode);
+
         // AllowRewind identifies a live desktop-client progress write rather than an
         // offline-download reconciliation. It may only be accepted from the current
         // playback owner, otherwise a stale laptop could overwrite the device that
@@ -1020,7 +1027,9 @@ internal sealed partial class WebArchiveProvider : IWebArchiveProvider, IDisposa
 
         var speed = Math.Clamp(update.Speed, 0.5d, 3d);
         _database.SavePlaybackState(episode.Id, position, duration, completed, speed,
-            incrementPlayCount: update.IncrementPlayCount, allowPositionReset: mayResetPosition);
+            incrementPlayCount: update.IncrementPlayCount,
+            allowPositionReset: mayResetPosition,
+            playedAt: OfflineProgressOrderingPolicy.EffectivePlayedAt(update.CapturedAt, receivedAt));
         var now = DateTimeOffset.UtcNow;
         _events.Publish(new PlaybackChangedEvent(episode.Id, position, duration, false, now));
         if (completed) _events.Publish(new ListeningStatusChangedEvent(new[] { episode.Id }, "Completed", now));

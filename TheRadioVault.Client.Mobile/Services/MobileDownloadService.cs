@@ -280,26 +280,35 @@ public sealed class MobileDownloadService
         return new Uri(path).AbsoluteUri;
     }
 
-    public async Task UpdateProgressAsync(
+    public async Task<bool> UpdateProgressAsync(
         long episodeId,
         long positionMs,
         bool completed,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
-            if (!_records.TryGetValue(episodeId, out var record)) return;
+            if (!_records.TryGetValue(episodeId, out var record)) return false;
+            var durationMs = Math.Max(record.DurationMs, record.Summary.DurationMs);
+            var normalizedPosition = durationMs > 0
+                ? Math.Clamp(positionMs, 0, durationMs)
+                : Math.Max(0, positionMs);
+            if (completed && durationMs > 0) normalizedPosition = durationMs;
+            if (record.Summary.PositionMs == normalizedPosition && record.Summary.Completed == completed)
+                return false;
             var summary = record.Summary with
             {
-                PositionMs = Math.Max(0, positionMs),
+                PositionMs = normalizedPosition,
                 Completed = completed,
-                InProgress = !completed && positionMs > 0,
-                LastPlayedAt = DateTimeOffset.UtcNow
+                InProgress = !completed && normalizedPosition > 0,
+                LastPlayedAt = capturedAt.ToUniversalTime()
             };
             _records[episodeId] = record with { Summary = summary };
             await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            return true;
         }
         finally { _gate.Release(); }
     }

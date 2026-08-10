@@ -366,6 +366,7 @@ var tests = new (string Name, Action Run)[]
     ("Web API manages queue", WebApiManagesQueue),
     ("Web API preserves Moment identity while editing", WebApiEditsMomentInPlace),
     ("Web API synchronises offline progress", WebApiSynchronisesOfflineProgress),
+    ("Offline progress ordering preserves newer manual changes", OfflineProgressOrderingPreservesNewerManualChanges),
     ("Web API permits explicit LAN progress rewind", WebApiPermitsExplicitLanProgressRewind),
     ("Web client includes manual offline downloads", WebClientIncludesManualOfflineDownloads),
     ("Anywhere exposes the server transcription workspace", AnywhereExposesServerTranscriptionWorkspace),
@@ -5557,7 +5558,7 @@ static void WebApiSynchronisesOfflineProgress()
 {
     WithWebServer(async (port, token) =>
     {
-        using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
         using var response = await client.PostAsJsonAsync(
             $"http://127.0.0.1:{port}/api/v1/broadcasts/9/offline-progress?token={Uri.EscapeDataString(token)}",
             new
@@ -5590,6 +5591,49 @@ static void WebApiSynchronisesOfflineProgress()
         True(!staleBody.GetProperty("result").GetProperty("changed").GetBoolean());
         Equal(240_000L, staleBody.GetProperty("result").GetProperty("episode").GetProperty("positionMs").GetInt64());
     });
+}
+
+static void OfflineProgressOrderingPreservesNewerManualChanges()
+{
+    var receivedAt = new DateTimeOffset(2026, 8, 10, 10, 0, 0, TimeSpan.Zero);
+    var offlineListening = new DateTimeOffset(2026, 8, 10, 8, 0, 0, TimeSpan.Zero);
+    var olderCanonical = new DateTime(2026, 8, 10, 7, 0, 0, DateTimeKind.Utc);
+    var laterManualChange = new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc);
+
+    True(!OfflineProgressOrderingPolicy.IsStale(offlineListening, olderCanonical, receivedAt));
+    True(OfflineProgressOrderingPolicy.IsStale(offlineListening, laterManualChange, receivedAt));
+    True(OfflineProgressOrderingPolicy.IsStale(receivedAt.AddMinutes(6), null, receivedAt));
+    Equal(offlineListening, OfflineProgressOrderingPolicy.EffectivePlayedAt(offlineListening, receivedAt));
+
+    var mobileSession = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    True(mobileSession.Contains("DownloadedProgressSnapshot", StringComparison.Ordinal));
+    True(mobileSession.Contains("CaptureDownloadedProgress", StringComparison.Ordinal));
+    True(mobileSession.Contains("_completedPlaybackEpisodeId", StringComparison.Ordinal));
+    True(mobileSession.Contains("changed || snapshot.IncrementPlayCount", StringComparison.Ordinal));
+    var playAsync = mobileSession.IndexOf("public async Task PlayAsync", StringComparison.Ordinal);
+    var flushPrevious = mobileSession.IndexOf("await FlushPlaybackAsync().ConfigureAwait(false);", playAsync, StringComparison.Ordinal);
+    var selectNext = mobileSession.IndexOf("SelectedBroadcast = broadcast;", flushPrevious, StringComparison.Ordinal);
+    True(flushPrevious >= 0 && selectNext > flushPrevious);
+
+    var downloads = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
+    True(downloads.Contains("public async Task<bool> UpdateProgressAsync", StringComparison.Ordinal));
+    True(downloads.Contains("record.Summary.PositionMs == normalizedPosition", StringComparison.Ordinal));
+
+    var iosEngine = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "IosAvPlayerEngine.cs"));
+    True(iosEngine.Contains("ReferenceEquals(_player?.CurrentItem, endedItem)", StringComparison.Ordinal));
+
+    var archiveProvider = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Infrastructure", "Services", "WebArchiveProvider.cs"));
+    True(archiveProvider.Contains("OfflineProgressOrderingPolicy.IsStale", StringComparison.Ordinal));
+    True(archiveProvider.Contains("playedAt: OfflineProgressOrderingPolicy.EffectivePlayedAt", StringComparison.Ordinal));
+
+    var database = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Infrastructure", "Services", "DatabaseService.cs"));
+    True(database.Contains("var receivedAt = DateTimeOffset.UtcNow", StringComparison.Ordinal));
+    True(database.Contains("var playedAtValue = (playedAt ?? DateTimeOffset.UtcNow)", StringComparison.Ordinal));
 }
 
 

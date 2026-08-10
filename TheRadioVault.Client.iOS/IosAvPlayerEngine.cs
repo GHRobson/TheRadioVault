@@ -76,7 +76,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
         _player.AutomaticallyWaitsToMinimizeStalling = true;
         _player.Muted = _muted;
         if (_player.CurrentItem is { } item)
-            _endObserver = AVPlayerItem.Notifications.ObserveDidPlayToEndTime(item, (_, _) => OnEnded());
+            _endObserver = AVPlayerItem.Notifications.ObserveDidPlayToEndTime(item, (_, _) => OnEnded(item));
         _current = new MobilePlaybackSnapshot(true, false, TimeSpan.Zero, null);
         _timer.Change(TimeSpan.Zero, TimeSpan.FromMilliseconds(250));
         PublishLocked();
@@ -196,11 +196,11 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
         return double.IsFinite(seconds) && seconds > 0 ? TimeSpan.FromSeconds(seconds) : null;
     }
 
-    private void OnEnded()
+    private void OnEnded(AVPlayerItem endedItem)
     {
         lock (_gate)
         {
-            if (_disposed) return;
+            if (_disposed || !ReferenceEquals(_player?.CurrentItem, endedItem)) return;
             _playRequested = false;
             UpdateLocked();
         }
