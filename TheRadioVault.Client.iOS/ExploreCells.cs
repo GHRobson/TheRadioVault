@@ -164,7 +164,7 @@ internal sealed class ExplorePageCardCell : UITableViewCell
         _summary.Text = string.IsNullOrWhiteSpace(page.Summary) ? "Open this article to read more." : page.Summary;
         _evidence.Text = page.EvidenceSummary;
         _image.Image = image is null
-            ? RadioVaultIcons.Image(RadioVaultIcon.Knowledge, RadioVaultTheme.Wiki, 42, 1.7)
+            ? RadioVaultIcons.Image(RadioVaultIcon.Explore, RadioVaultTheme.Wiki, 42, 1.7)
             : UIImage.LoadFromData(NSData.FromArray(image.Content));
         _image.ContentMode = image is null ? UIViewContentMode.Center : UIViewContentMode.ScaleAspectFill;
         _image.AccessibilityLabel = image?.AltText;

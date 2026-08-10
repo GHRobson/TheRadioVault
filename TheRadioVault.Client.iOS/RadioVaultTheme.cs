@@ -23,6 +23,8 @@ public static class RadioVaultTheme
     public static UIColor Completed { get; } = Color(0x52, 0xD6, 0xA2);
     public static UIColor Favourite { get; } = Color(0xF0, 0x8D, 0xB7);
     public static UIColor Wiki { get; } = Color(0x8E, 0xA7, 0xFF);
+    public static UIColor Moment { get; } = Color(0xE8, 0xA4, 0x5E);
+    public static UIColor Research { get; } = Color(0xB4, 0x9A, 0xF2);
     public static UIColor ActivityBlue { get; } = Color(0x68, 0xB5, 0xFF);
     public static UIColor Settings { get; } = Color(0xA9, 0xB0, 0xB8);
     public static UIColor Danger { get; } = Color(0xF8, 0x71, 0x82);
@@ -83,6 +85,7 @@ public enum RadioVaultIcon
     Favourite,
     Play,
     Pause,
+    Explore,
     Knowledge,
     Download,
     Settings,
@@ -133,7 +136,9 @@ public static class RadioVaultIcons
         RadioVaultIcon.Play or RadioVaultIcon.Pause or RadioVaultIcon.UpNext or RadioVaultIcon.Handoff or
             RadioVaultIcon.SkipBack or RadioVaultIcon.SkipForward => RadioVaultTheme.Progress,
         RadioVaultIcon.Favourite => RadioVaultTheme.Favourite,
-        RadioVaultIcon.Knowledge => RadioVaultTheme.Wiki,
+        RadioVaultIcon.Explore => RadioVaultTheme.Wiki,
+        RadioVaultIcon.Moment => RadioVaultTheme.Moment,
+        RadioVaultIcon.Knowledge => RadioVaultTheme.Research,
         RadioVaultIcon.Download or RadioVaultIcon.Settings or RadioVaultIcon.Remove or RadioVaultIcon.Offline => RadioVaultTheme.Settings,
         RadioVaultIcon.Sync => RadioVaultTheme.ActivityBlue,
         RadioVaultIcon.Completed => RadioVaultTheme.Completed,
@@ -180,7 +185,7 @@ public static class RadioVaultIcons
                 Lines(context, (9, 6), (9, 18));
                 Lines(context, (15, 6), (15, 18));
                 break;
-            case RadioVaultIcon.Knowledge:
+            case RadioVaultIcon.Explore:
                 context.MoveTo(4, 5);
                 context.AddCurveToPoint(7, 4, 9.5f, 4.5f, 12, 6);
                 context.AddLineToPoint(12, 20);
@@ -196,6 +201,12 @@ public static class RadioVaultIcons
                 Lines(context, (14, 9), (17, 9));
                 Lines(context, (7, 12), (10, 12));
                 Lines(context, (14, 12), (17, 12));
+                break;
+            case RadioVaultIcon.Knowledge:
+                Polygon(context, false, (5, 3), (15, 3), (19, 7), (19, 20), (5, 20));
+                Lines(context, (15, 3), (15, 7), (19, 7));
+                Lines(context, (8, 11), (16, 11));
+                Lines(context, (8, 15), (14, 15));
                 break;
             case RadioVaultIcon.Download:
                 Lines(context, (12, 3), (12, 15));
@@ -303,9 +314,7 @@ public static class RadioVaultIcons
                 DrawSkip(context, color, "30", forward: true);
                 break;
             case RadioVaultIcon.Moment:
-                Lines(context, (6, 3), (18, 3), (18, 21), (12, 17), (6, 21), (6, 3));
-                Lines(context, (12, 7), (12, 14));
-                Lines(context, (8.5, 10.5), (15.5, 10.5));
+                Polygon(context, false, (6, 3), (18, 3), (18, 21), (12, 16.7), (6, 21));
                 break;
             case RadioVaultIcon.Offline:
                 context.MoveTo(5, 16);

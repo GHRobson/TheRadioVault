@@ -17,8 +17,8 @@ public sealed class RadioVaultTabBarController : UITabBarController
         [
             Wrap(new HomeViewController(session), "Dashboard", RadioVaultIcon.Home, 0),
             Wrap(new LibraryViewController(session), "Library", RadioVaultIcon.Library, 1),
-            Wrap(new ExploreViewController(session), "Explore", RadioVaultIcon.Radio, 2),
-            Wrap(new SavedViewController(session), "Saved", RadioVaultIcon.Favourite, 3),
+            Wrap(new ExploreViewController(session), "Explore", RadioVaultIcon.Explore, 2),
+            Wrap(new SavedViewController(session), "Saved", RadioVaultIcon.Moment, 3),
             Wrap(new KnowledgeViewController(session), "Knowledge", RadioVaultIcon.Knowledge, 4)
         ];
         _session.TabRequested += SessionOnTabRequested;

@@ -126,13 +126,7 @@ public sealed class KnowledgeViewController : SessionTableViewController
         RadioVaultIcon icon,
         bool disclosure)
     {
-        var cell = DetailCell(identifier, title, detail);
-        var content = (UIListContentConfiguration)cell.ContentConfiguration!;
-        content.Image = RadioVaultIcons.Image(icon);
-        RadioVaultTheme.StyleCell(cell, content);
-        cell.Accessory = disclosure ? UITableViewCellAccessory.DisclosureIndicator : UITableViewCellAccessory.None;
-        cell.SelectionStyle = disclosure ? UITableViewCellSelectionStyle.Default : UITableViewCellSelectionStyle.None;
-        return cell;
+        return IconDetailCell(identifier, title, detail, icon, disclosure);
     }
 }
 

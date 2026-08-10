@@ -114,6 +114,25 @@ public abstract class SessionTableViewController : UITableViewController
         return cell;
     }
 
+    protected static UITableViewCell IconDetailCell(
+        string reuseIdentifier,
+        string title,
+        string detail,
+        RadioVaultIcon icon,
+        bool disclosure = false)
+    {
+        var cell = new UITableViewCell(UITableViewCellStyle.Default, reuseIdentifier);
+        var content = cell.DefaultContentConfiguration;
+        content.Text = title;
+        content.SecondaryText = detail;
+        content.SecondaryTextProperties.NumberOfLines = 2;
+        content.Image = RadioVaultIcons.Image(icon);
+        RadioVaultTheme.StyleCell(cell, content);
+        cell.Accessory = disclosure ? UITableViewCellAccessory.DisclosureIndicator : UITableViewCellAccessory.None;
+        cell.SelectionStyle = disclosure ? UITableViewCellSelectionStyle.Default : UITableViewCellSelectionStyle.None;
+        return cell;
+    }
+
     private void SessionOnStateChanged(object? sender, EventArgs eventArgs)
         => BeginInvokeOnMainThread(() =>
         {

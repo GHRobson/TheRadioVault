@@ -60,12 +60,7 @@ public sealed class SavedViewController : SessionTableViewController
         var title = string.IsNullOrWhiteSpace(moment.Title) ? moment.EpisodeTitle : moment.Title;
         var date = moment.AirDate?.ToString("dd MMM yyyy") ?? "Date unknown";
         var detail = $"{moment.Show} · {date} · {FormatTime(moment.PositionMs)}";
-        var momentCell = DetailCell("saved-moment", title, detail);
-        var content = (UIListContentConfiguration)momentCell.ContentConfiguration!;
-        content.Image = RadioVaultIcons.Image(RadioVaultIcon.Moment);
-        RadioVaultTheme.StyleCell(momentCell, content);
-        momentCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
-        return momentCell;
+        return IconDetailCell("saved-moment", title, detail, RadioVaultIcon.Moment, disclosure: true);
     }
 
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)

@@ -319,7 +319,7 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
         content.SecondaryTextProperties.Font = UIFont.SystemFontOfSize(13)!;
         content.SecondaryTextProperties.Color = RadioVaultTheme.MutedText;
         content.SecondaryTextProperties.NumberOfLines = 0;
-        content.Image = RadioVaultIcons.Image(RadioVaultIcon.Knowledge, size: 42);
+        content.Image = RadioVaultIcons.Image(RadioVaultIcon.Explore, size: 42);
         RadioVaultTheme.StyleCell(cell, content);
         cell.BackgroundColor = RadioVaultTheme.SurfaceRaised;
         cell.SelectionStyle = UITableViewCellSelectionStyle.None;
