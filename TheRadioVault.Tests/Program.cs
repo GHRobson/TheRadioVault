@@ -1630,6 +1630,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingViewController.cs"));
     True(nowPlayingView.Contains("UIScrollView", StringComparison.Ordinal));
     True(nowPlayingView.Contains("ContentLayoutGuide", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("contentHost.WidthAnchor.ConstraintEqualTo(scrollView.FrameLayoutGuide.WidthAnchor)", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("content.LeadingAnchor.ConstraintEqualTo(contentHost.LeadingAnchor, 20)", StringComparison.Ordinal));
     True(nowPlayingView.Contains("AdjustsFontForContentSizeCategory", StringComparison.Ordinal));
     True(nowPlayingView.Contains("RadioVaultIcon.SkipBack", StringComparison.Ordinal));
     True(nowPlayingView.Contains("RadioVaultIcon.SkipForward", StringComparison.Ordinal));

@@ -180,17 +180,28 @@ public sealed class NowPlayingViewController : UIViewController
             DirectionalLockEnabled = true,
             TranslatesAutoresizingMaskIntoConstraints = false
         };
+        var contentHost = new UIView
+        {
+            BackgroundColor = UIColor.Clear,
+            TranslatesAutoresizingMaskIntoConstraints = false
+        };
         view.AddSubview(scrollView);
-        scrollView.AddSubview(content);
+        scrollView.AddSubview(contentHost);
+        contentHost.AddSubview(content);
         NSLayoutConstraint.ActivateConstraints([
             scrollView.LeadingAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.LeadingAnchor),
             scrollView.TrailingAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.TrailingAnchor),
             scrollView.TopAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.TopAnchor),
             scrollView.BottomAnchor.ConstraintEqualTo(view.SafeAreaLayoutGuide.BottomAnchor),
-            content.TopAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.TopAnchor, 16),
-            content.BottomAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.BottomAnchor, -24),
-            content.CenterXAnchor.ConstraintEqualTo(scrollView.FrameLayoutGuide.CenterXAnchor),
-            content.WidthAnchor.ConstraintEqualTo(scrollView.FrameLayoutGuide.WidthAnchor, -40),
+            contentHost.LeadingAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.LeadingAnchor),
+            contentHost.TrailingAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.TrailingAnchor),
+            contentHost.TopAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.TopAnchor),
+            contentHost.BottomAnchor.ConstraintEqualTo(scrollView.ContentLayoutGuide.BottomAnchor),
+            contentHost.WidthAnchor.ConstraintEqualTo(scrollView.FrameLayoutGuide.WidthAnchor),
+            content.LeadingAnchor.ConstraintEqualTo(contentHost.LeadingAnchor, 20),
+            content.TrailingAnchor.ConstraintEqualTo(contentHost.TrailingAnchor, -20),
+            content.TopAnchor.ConstraintEqualTo(contentHost.TopAnchor, 16),
+            content.BottomAnchor.ConstraintEqualTo(contentHost.BottomAnchor, -24),
             _backButton.WidthAnchor.ConstraintEqualTo(64),
             _backButton.HeightAnchor.ConstraintEqualTo(64),
             _playButton.WidthAnchor.ConstraintEqualTo(96),
