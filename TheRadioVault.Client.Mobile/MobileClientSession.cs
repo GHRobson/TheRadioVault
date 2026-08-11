@@ -20,6 +20,7 @@ public sealed class MobileClientSession : IDisposable
     private readonly MobileOfflineMutationStore _offlineMutations;
     private readonly IMobilePlaybackEngine _playback;
     private readonly MobilePlaybackOwnershipCoordinator _playbackOwnership;
+    private readonly MobilePlaybackTimeline _playbackTimeline = new();
     private readonly IMobileNowPlayingService _nowPlaying;
     private readonly IMobileDownloadPolicy _downloadPolicy;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
@@ -40,16 +41,9 @@ public sealed class MobileClientSession : IDisposable
     private byte[]? _nowPlayingArtwork;
     private long _nowPlayingArtworkEpisodeId;
     private string _remotePlaybackOwner = string.Empty;
-    private IReadOnlyList<WebCanonicalMediaPart> _parts = Array.Empty<WebCanonicalMediaPart>();
     private IReadOnlyList<WebClientLibraryCollectionSummary> _incompleteLibraryCollections = [];
-    private int _partIndex;
     private double _speed = 1d;
     private long _playbackGeneration;
-    private long _logicalPositionMs;
-    private long _logicalDurationMs;
-    private long? _completedPlaybackEpisodeId;
-    private long? _pendingDecoderLogicalPositionMs;
-    private DateTimeOffset _pendingDecoderPositionUntil;
     private DateTimeOffset _lastDurableSave = DateTimeOffset.MinValue;
     private DateTimeOffset _lastOfflineSave = DateTimeOffset.MinValue;
     private bool _explicitSeekPending;
@@ -1217,9 +1211,8 @@ public sealed class MobileClientSession : IDisposable
             _ownsPlayback = true;
             _remotePlaybackBroadcast = null;
             _remotePlaybackOwner = string.Empty;
-            _parts = record.Parts
-                .OrderBy(part => part.PartNumber)
-                .Select(part => new WebCanonicalMediaPart(
+            _playbackTimeline.Load(
+                record.Parts.Select(part => new WebCanonicalMediaPart(
                     part.PartNumber,
                     part.PartTotal,
                     part.LogicalStartMs,
@@ -1227,15 +1220,14 @@ public sealed class MobileClientSession : IDisposable
                     part.MediaFileId,
                     part.SizeBytes,
                     "Downloaded",
-                    string.Empty))
-                .ToArray();
-            _logicalDurationMs = Math.Max(record.DurationMs, _parts.Max(part => part.LogicalEndMs));
+                    string.Empty)),
+                record.DurationMs);
             SelectedBroadcast = new MobileBroadcastItem(record.Summary);
             NowPlayingTitle = SelectedBroadcast.Title;
             NowPlayingSubtitle = SelectedBroadcast.Subtitle + " · Downloaded";
             _pendingPlayCountEpisodes.TryAdd(SelectedBroadcast.EpisodeId, 0);
             _lastOfflineSave = DateTimeOffset.MinValue;
-            var position = Math.Clamp(record.Summary.PositionMs, 0, _logicalDurationMs);
+            var position = _playbackTimeline.ClampPosition(record.Summary.PositionMs);
             OpenLogicalPosition(position, play: true, muted: false);
             PlaybackStatus = "Playing download on this iPhone";
         }
@@ -1446,11 +1438,8 @@ public sealed class MobileClientSession : IDisposable
             if (manifest.Parts.Count == 0)
                 throw new InvalidOperationException("This broadcast has no playable media parts.");
 
-            _parts = manifest.Parts.OrderBy(part => part.PartNumber).ToArray();
-            _logicalDurationMs = Math.Max(
-                Math.Max(0, manifest.DurationMs),
-                _parts.Max(part => Math.Max(0, part.LogicalEndMs)));
-            var logicalPosition = Math.Clamp(broadcast.Source.PositionMs, 0, _logicalDurationMs);
+            _playbackTimeline.Load(manifest.Parts, manifest.DurationMs);
+            var logicalPosition = _playbackTimeline.ClampPosition(broadcast.Source.PositionMs);
             TracePlayback($"Requesting shared playback session at position {logicalPosition}.");
             var shared = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
             TracePlayback($"Shared playback received: generation={shared.Generation}; owner={shared.OwnerClientId}; active={_playbackOwnership.HasActivePlayback(shared)}.");
@@ -1473,7 +1462,7 @@ public sealed class MobileClientSession : IDisposable
                     _server.ClientId,
                     broadcast.EpisodeId,
                     logicalPosition,
-                    _logicalDurationMs,
+                    _playbackTimeline.DurationMs,
                     _speed,
                     desiredPlaying,
                     _server.ClientDisplayName,
@@ -1487,7 +1476,7 @@ public sealed class MobileClientSession : IDisposable
             SelectedBroadcast = ApplyPlaybackProgress(
                 broadcast.Source,
                 logicalPosition,
-                _logicalDurationMs,
+                _playbackTimeline.DurationMs,
                 completed: false,
                 anotherDeviceOwnsPlayback && shared.Player.UpdatedAt is { } sharedUpdatedAt
                     ? sharedUpdatedAt
@@ -1576,8 +1565,8 @@ public sealed class MobileClientSession : IDisposable
 
     public void SeekToProgress(double progress)
     {
-        if (!CanControlPlayback || _logicalDurationMs <= 0) return;
-        SeekLogical((long)Math.Round(Math.Clamp(progress, 0d, 1d) * _logicalDurationMs));
+        if (!CanControlPlayback || _playbackTimeline.DurationMs <= 0) return;
+        SeekLogical((long)Math.Round(Math.Clamp(progress, 0d, 1d) * _playbackTimeline.DurationMs));
     }
 
     public void CycleSpeed()
@@ -1604,7 +1593,7 @@ public sealed class MobileClientSession : IDisposable
                 _server.ClientId,
                 transfer.TransferId,
                 CaptureLogicalPosition(),
-                _logicalDurationMs,
+                _playbackTimeline.DurationMs,
                 DecoderReady: true,
                 DesiredPlaying: desiredPlaying,
                 OverrideDesiredPlaying: false,
@@ -1645,15 +1634,9 @@ public sealed class MobileClientSession : IDisposable
 
     private void OpenLogicalPosition(long logicalPositionMs, bool play, bool muted)
     {
-        if (_parts.Count == 0 || SelectedBroadcast is null) return;
-        logicalPositionMs = Math.Clamp(logicalPositionMs, 0, Math.Max(0, _logicalDurationMs));
-        if (_completedPlaybackEpisodeId == SelectedBroadcast.EpisodeId &&
-            logicalPositionMs < Math.Max(0, _logicalDurationMs - 5_000))
-            _completedPlaybackEpisodeId = null;
-        var index = Array.FindIndex(_parts.ToArray(), part =>
-            logicalPositionMs >= part.LogicalStartMs && logicalPositionMs < part.LogicalEndMs);
-        _partIndex = index >= 0 ? index : _parts.Count - 1;
-        var part = _parts[_partIndex];
+        if (!_playbackTimeline.HasParts || SelectedBroadcast is null) return;
+        var part = _playbackTimeline.SelectPart(logicalPositionMs);
+        logicalPositionMs = _playbackTimeline.PositionMs;
         string url;
         if (_activeDownload is { } download)
         {
@@ -1684,13 +1667,13 @@ public sealed class MobileClientSession : IDisposable
         _playback.SetMuted(muted);
         if (url.Length > 0) _playback.Open(url);
         _playback.SetRate(_speed);
-        var localPosition = TimeSpan.FromMilliseconds(Math.Max(0, logicalPositionMs - part.LogicalStartMs));
-        _pendingDecoderLogicalPositionMs = logicalPositionMs;
-        _pendingDecoderPositionUntil = DateTimeOffset.UtcNow.AddSeconds(8);
+        var localPosition = _playbackTimeline.LocalPosition(logicalPositionMs);
+        _playbackTimeline.PrepareDecoder(logicalPositionMs, DateTimeOffset.UtcNow, TimeSpan.FromSeconds(8));
         if (localPosition > TimeSpan.Zero) _playback.Seek(localPosition);
         if (play) _playback.Play(); else _playback.Pause();
-        _logicalPositionMs = logicalPositionMs;
-        PlaybackStatus = _parts.Count > 1 ? $"Playing part {_partIndex + 1} of {_parts.Count}" : "Playing";
+        PlaybackStatus = _playbackTimeline.Parts.Count > 1
+            ? $"Playing part {_playbackTimeline.PartIndex + 1} of {_playbackTimeline.Parts.Count}"
+            : "Playing";
     }
 
     private void TracePlayback(string message)
@@ -1705,24 +1688,18 @@ public sealed class MobileClientSession : IDisposable
     private void SeekLogical(long logicalPositionMs)
     {
         if (!CanControlPlayback || SelectedBroadcast is null) return;
-        logicalPositionMs = Math.Clamp(logicalPositionMs, 0, Math.Max(0, _logicalDurationMs));
-        if (_completedPlaybackEpisodeId == SelectedBroadcast.EpisodeId &&
-            logicalPositionMs < Math.Max(0, _logicalDurationMs - 5_000))
-            _completedPlaybackEpisodeId = null;
-        var targetPart = Array.FindIndex(_parts.ToArray(), part =>
-            logicalPositionMs >= part.LogicalStartMs && logicalPositionMs < part.LogicalEndMs);
-        if (targetPart < 0) targetPart = _parts.Count - 1;
+        logicalPositionMs = _playbackTimeline.ClampPosition(logicalPositionMs);
+        var targetPart = _playbackTimeline.FindPartIndex(logicalPositionMs);
         var shouldPlay = _playback.Current.IsPlaying;
-        if (targetPart != _partIndex)
+        if (targetPart != _playbackTimeline.PartIndex)
         {
             OpenLogicalPosition(logicalPositionMs, shouldPlay, muted: false);
         }
         else
         {
-            _playback.Seek(TimeSpan.FromMilliseconds(
-                Math.Max(0, logicalPositionMs - _parts[_partIndex].LogicalStartMs)));
+            _playback.Seek(_playbackTimeline.LocalPosition(logicalPositionMs));
         }
-        _logicalPositionMs = logicalPositionMs;
+        _playbackTimeline.SetPosition(logicalPositionMs);
         _explicitSeekPending = true;
         NotifyPlayback();
         _ = FlushPlaybackAsync();
@@ -1849,12 +1826,11 @@ public sealed class MobileClientSession : IDisposable
             if (SelectedBroadcast is { } selected)
             {
                 var position = CaptureLogicalPosition();
-                var completed = _logicalDurationMs > 0 &&
-                                position >= Math.Max(0, _logicalDurationMs - 5_000);
+                var completed = _playbackTimeline.IsCompleted();
                 ApplyPlaybackProgress(
                     selected.Source,
                     position,
-                    _logicalDurationMs,
+                    _playbackTimeline.DurationMs,
                     completed,
                     DateTimeOffset.UtcNow);
                 Notify();
@@ -1953,7 +1929,7 @@ public sealed class MobileClientSession : IDisposable
             _server.ClientId,
             broadcast.EpisodeId,
             CaptureLogicalPosition(),
-            _logicalDurationMs,
+            _playbackTimeline.DurationMs,
             _playback.Current.IsPlaying,
             _speed,
             Completed: IsCompleted(),
@@ -1971,14 +1947,13 @@ public sealed class MobileClientSession : IDisposable
         var explicitSeek = _explicitSeekPending;
         var incrementPlayCount = _pendingPlayCountEpisodes.ContainsKey(broadcast.EpisodeId);
         var position = CaptureLogicalPosition();
-        var completed = _completedPlaybackEpisodeId == broadcast.EpisodeId ||
-                        (_logicalDurationMs > 0 && position >= Math.Max(0, _logicalDurationMs - 5_000));
-        if (completed && _logicalDurationMs > 0) position = _logicalDurationMs;
+        var completed = _playbackTimeline.IsCompleted();
+        if (completed && _playbackTimeline.DurationMs > 0) position = _playbackTimeline.DurationMs;
         var result = await _server.SaveProgressAsync(new WebOfflineProgressUpdate(
             _server.ClientId,
             broadcast.EpisodeId,
             position,
-            _logicalDurationMs,
+            _playbackTimeline.DurationMs,
             Completed: completed,
             Speed: _speed,
             CapturedAt: DateTimeOffset.UtcNow,
@@ -2007,7 +1982,7 @@ public sealed class MobileClientSession : IDisposable
             ApplyPlaybackProgress(
                 broadcast.Source,
                 position,
-                _logicalDurationMs,
+                _playbackTimeline.DurationMs,
                 completed,
                 _lastDurableSave);
         }
@@ -2015,37 +1990,19 @@ public sealed class MobileClientSession : IDisposable
     }
 
     private long CaptureLogicalPosition()
-    {
-        if (_partIndex < 0 || _partIndex >= _parts.Count) return Math.Max(0, _logicalPositionMs);
-        var observed = _parts[_partIndex].LogicalStartMs + (long)_playback.Current.Position.TotalMilliseconds;
-        if (_pendingDecoderLogicalPositionMs is { } pending)
-        {
-            if (Math.Abs(observed - pending) <= 1_500)
-            {
-                _pendingDecoderLogicalPositionMs = null;
-            }
-            else if (DateTimeOffset.UtcNow <= _pendingDecoderPositionUntil)
-            {
-                _logicalPositionMs = Math.Clamp(pending, 0, Math.Max(0, _logicalDurationMs));
-                return _logicalPositionMs;
-            }
-            else
-            {
-                _pendingDecoderLogicalPositionMs = null;
-            }
-        }
-        _logicalPositionMs = Math.Clamp(observed, 0, Math.Max(0, _logicalDurationMs));
-        return _logicalPositionMs;
-    }
+        => _playbackTimeline.CaptureDecoderPosition(_playback.Current.Position, DateTimeOffset.UtcNow);
 
     private bool IsCompleted()
-        => _logicalDurationMs > 0 && CaptureLogicalPosition() >= Math.Max(0, _logicalDurationMs - 5_000);
+    {
+        CaptureLogicalPosition();
+        return _playbackTimeline.IsCompleted();
+    }
 
     private long MiniPlayerPositionMs => _remotePlaybackBroadcast?.Source.PositionMs
-        ?? Math.Clamp(_logicalPositionMs, 0, Math.Max(0, _logicalDurationMs));
+        ?? _playbackTimeline.PositionMs;
 
     private long MiniPlayerDurationMs => _remotePlaybackBroadcast?.Source.DurationMs
-        ?? Math.Max(0, _logicalDurationMs);
+        ?? _playbackTimeline.DurationMs;
 
     private static long ProjectPosition(WebPlaybackState state)
     {
@@ -2075,16 +2032,12 @@ public sealed class MobileClientSession : IDisposable
 
     private void PlaybackOnMediaEnded(object? sender, EventArgs eventArgs)
     {
-        if (_partIndex + 1 < _parts.Count)
+        if (_playbackTimeline.TryGetNextPart(out var nextPart))
         {
-            _partIndex++;
-            OpenLogicalPosition(_parts[_partIndex].LogicalStartMs, play: true, muted: false);
+            OpenLogicalPosition(nextPart!.LogicalStartMs, play: true, muted: false);
             return;
         }
-        _completedPlaybackEpisodeId = SelectedBroadcast?.EpisodeId;
-        _logicalPositionMs = _logicalDurationMs;
-        _pendingDecoderLogicalPositionMs = _logicalDurationMs;
-        _pendingDecoderPositionUntil = DateTimeOffset.UtcNow.AddSeconds(15);
+        _playbackTimeline.MarkCompleted(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(15));
         PlaybackStatus = "Finished";
         NotifyPlayback();
         _ = FlushPlaybackAsync();
@@ -2093,8 +2046,8 @@ public sealed class MobileClientSession : IDisposable
     private void PlaybackOnStateChanged(object? sender, MobilePlaybackSnapshot snapshot)
     {
         var logicalMs = CaptureLogicalPosition();
-        PlaybackProgress = _logicalDurationMs <= 0 ? 0 : Math.Clamp(logicalMs / (double)_logicalDurationMs, 0d, 1d);
-        PlaybackTime = $"{FormatTime(TimeSpan.FromMilliseconds(logicalMs))} / {FormatTime(TimeSpan.FromMilliseconds(_logicalDurationMs))}";
+        PlaybackProgress = _playbackTimeline.Progress;
+        PlaybackTime = $"{FormatTime(TimeSpan.FromMilliseconds(logicalMs))} / {FormatTime(TimeSpan.FromMilliseconds(_playbackTimeline.DurationMs))}";
         if (!string.IsNullOrWhiteSpace(snapshot.Error)) PlaybackStatus = "Playback failed: " + snapshot.Error;
         NotifyPlayback();
     }
@@ -2406,10 +2359,9 @@ public sealed class MobileClientSession : IDisposable
     {
         var broadcast = SelectedBroadcast ?? throw new InvalidOperationException("No downloaded broadcast is loaded.");
         var episodeId = broadcast.EpisodeId;
-        var durationMs = Math.Max(0, _logicalDurationMs);
+        var durationMs = _playbackTimeline.DurationMs;
         var positionMs = CaptureLogicalPosition();
-        var completed = _completedPlaybackEpisodeId == episodeId ||
-                        (durationMs > 0 && positionMs >= Math.Max(0, durationMs - 5_000));
+        var completed = _playbackTimeline.IsCompleted();
         if (completed && durationMs > 0) positionMs = durationMs;
         return new DownloadedProgressSnapshot(
             episodeId,
@@ -2979,8 +2931,8 @@ public sealed class MobileClientSession : IDisposable
         _nowPlaying.Update(new MobileNowPlayingSnapshot(
             NowPlayingTitle,
             NowPlayingSubtitle,
-            TimeSpan.FromMilliseconds(Math.Max(0, _logicalPositionMs)),
-            TimeSpan.FromMilliseconds(Math.Max(0, _logicalDurationMs)),
+            TimeSpan.FromMilliseconds(_playbackTimeline.PositionMs),
+            TimeSpan.FromMilliseconds(_playbackTimeline.DurationMs),
             _speed,
             _playback.Current.IsPlaying,
             SelectedBroadcast is not null && _playback.Current.IsOpen && _ownsPlayback,

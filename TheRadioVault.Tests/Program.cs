@@ -1787,6 +1787,11 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         "TheRadioVault.Client.Mobile",
         "Playback",
         "MobilePlaybackOwnershipCoordinator.cs"));
+    var mobilePlaybackTimelineSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Playback",
+        "MobilePlaybackTimeline.cs"));
     True(mobileCacheSessionSource.Contains("SynchronizeMetadataCacheAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
@@ -1810,7 +1815,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("ApplyPlaybackProgress", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("LoadArtworkAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("overview.ContinueListening", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("_pendingDecoderLogicalPositionMs", StringComparison.Ordinal));
+    True(mobilePlaybackTimelineSource.Contains("_pendingDecoderLogicalPositionMs", StringComparison.Ordinal));
+    True(mobilePlaybackTimelineSource.Contains("CaptureDecoderPosition", StringComparison.Ordinal));
+    True(mobilePlaybackTimelineSource.Contains("TryGetNextPart", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("Finishing the startup sync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("public string MiniPlayerTime", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("CombineCollections", StringComparison.Ordinal));
@@ -5803,9 +5810,12 @@ static void OfflineProgressOrderingPreservesNewerManualChanges()
 
     var mobileSession = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    var mobileTimeline = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Playback", "MobilePlaybackTimeline.cs"));
     True(mobileSession.Contains("DownloadedProgressSnapshot", StringComparison.Ordinal));
     True(mobileSession.Contains("CaptureDownloadedProgress", StringComparison.Ordinal));
-    True(mobileSession.Contains("_completedPlaybackEpisodeId", StringComparison.Ordinal));
+    True(mobileTimeline.Contains("public bool Completed", StringComparison.Ordinal));
+    True(mobileSession.Contains("_playbackTimeline.IsCompleted()", StringComparison.Ordinal));
     True(mobileSession.Contains("changed || snapshot.IncrementPlayCount", StringComparison.Ordinal));
     var playAsync = mobileSession.IndexOf("public async Task PlayAsync", StringComparison.Ordinal);
     var flushPrevious = mobileSession.IndexOf("await FlushPlaybackAsync().ConfigureAwait(false);", playAsync, StringComparison.Ordinal);

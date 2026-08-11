@@ -1,7 +1,7 @@
 {
   "version": "0.41.0",
-  "generatedAtUtc": "2026-08-11T18:28:02.0798150Z",
-  "fileCount": 1035,
+  "generatedAtUtc": "2026-08-11T18:36:37.4567800Z",
+  "fileCount": 1036,
   "files": [
     {
       "path": ".editorconfig",
@@ -40,8 +40,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 169784,
-      "sha256": "4aca9e47d4d2d1d79be6c219c05e4f46b47089ca1b3eac45891767c967626483"
+      "bytes": 169973,
+      "sha256": "cdb0c1a0900ed60cc56bc6f53f81491c688ad622f4ecd55b2df9735849f93c25"
     },
     {
       "path": "DEVELOPMENT.md",
@@ -305,8 +305,8 @@
     },
     {
       "path": "TheRadioVault.Client.Mobile.Tests/Program.cs",
-      "bytes": 15980,
-      "sha256": "8d962e978be814e493990db6e30e7eaa466a92e66743a89cca1c7f8ad44a51dc"
+      "bytes": 18925,
+      "sha256": "132f18dedf57cfc9f7d6c9a7bb3f8a1f1d76d9adb64cdc6f16589c90863eca2c"
     },
     {
       "path": "TheRadioVault.Client.Mobile.Tests/TheRadioVault.Client.Mobile.Tests.csproj",
@@ -315,8 +315,8 @@
     },
     {
       "path": "TheRadioVault.Client.Mobile/MobileClientSession.cs",
-      "bytes": 140469,
-      "sha256": "ee6f4bc8680dc0dafd6a2fdcd262f83ec1e05c4ab2a2c79c31b9f44dbe0b6f89"
+      "bytes": 137761,
+      "sha256": "1cc209a9fd1d19c0685ccaeeeca7c889ba59414ec495a02895a5f9e22e0bebfc"
     },
     {
       "path": "TheRadioVault.Client.Mobile/Models/MobileDownloadModels.cs",
@@ -372,6 +372,11 @@
       "path": "TheRadioVault.Client.Mobile/Playback/MobilePlaybackOwnershipCoordinator.cs",
       "bytes": 3587,
       "sha256": "f8dbb132b74d34ce6faf60e4a99bc1f1c6ea9c56a0a59b2acbc80d5c37083c6f"
+    },
+    {
+      "path": "TheRadioVault.Client.Mobile/Playback/MobilePlaybackTimeline.cs",
+      "bytes": 4969,
+      "sha256": "8fe09d2f22f569104be00f7a8754b0a3f82162a013b7f9d0dbcf87c4b5d2c68b"
     },
     {
       "path": "TheRadioVault.Client.Mobile/Services/MobileDownloadService.cs",
@@ -2095,8 +2100,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 570348,
-      "sha256": "710f009eb13afd80bc35188dcad17fe17c76ac61b09231f5a3e9c89e561fadf3"
+      "bytes": 570978,
+      "sha256": "9669fe6c8a21d6b988ded0b827e954b96b3ff4864c77d15fb9bcb266eb24cf6f"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",
@@ -2550,8 +2555,8 @@
     },
     {
       "path": "docs/architecture/ARCHITECTURE_BOUNDARIES.md",
-      "bytes": 6724,
-      "sha256": "f8769a8f12886004a9b7ac9fc8eb6921ac973cc985509338e4fcfc9176e96645"
+      "bytes": 6915,
+      "sha256": "db8fde36b77e81dee998d50678a935d86938d0789c947eca66a452117281a951"
     },
     {
       "path": "docs/architecture/AVALONIA_HANDOFF.md",
@@ -5030,8 +5035,8 @@
     },
     {
       "path": "docs/roadmap/RADIOVAULT_ROADMAP.md",
-      "bytes": 7360,
-      "sha256": "e15e7b95a5b7d9327d11c0fc7d7ff78a906dab1546fc7998146ff27e6004fd9f"
+      "bytes": 7372,
+      "sha256": "16a44678a99c531441574b94e16fb432c6abe21381d773dd29d1e15b8092936c"
     },
     {
       "path": "global.json",

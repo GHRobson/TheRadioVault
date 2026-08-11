@@ -1,6 +1,7 @@
 # Unreleased — 0.44 architecture and testability
 
 - Began splitting the mobile session façade by extracting shared playback-ownership and handoff-evidence rules into a focused coordinator with behavioural regression tests.
+- Extracted multipart logical-position mapping, decoder-settling protection, seeking and completion state into a side-effect-free mobile playback timeline with focused regression coverage.
 
 # 0.41.0
 

@@ -14,7 +14,10 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Offline mutations keep one latest decision per broadcast", OfflineMutationsStayIsolatedAsync),
     ("Handoff keeps its transactional ownership boundary", HandoffKeepsTransactionalBoundaryAsync),
     ("Legacy playback ownership requires stable evidence", LegacyPlaybackOwnershipRequiresStableEvidenceAsync),
-    ("Committed handoff ownership is trusted immediately", CommittedHandoffOwnershipIsTrustedImmediatelyAsync)
+    ("Committed handoff ownership is trusted immediately", CommittedHandoffOwnershipIsTrustedImmediatelyAsync),
+    ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
+    ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
+    ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync)
 };
 
 var failures = new List<string>();
@@ -240,6 +243,70 @@ static WebPlaybackSession PlaybackSession(
         CommittedTransfer = receipt
     };
 }
+
+static Task PlaybackTimelineMapsMultipartRecordingsAsync()
+{
+    var timeline = new MobilePlaybackTimeline();
+    timeline.Load(
+        [MediaPart(2, 60_000, 120_000), MediaPart(1, 0, 60_000)],
+        declaredDurationMs: 100_000);
+
+    Equal(120_000L, timeline.DurationMs, "Multipart logical duration");
+    Equal(2, timeline.SelectPart(60_000).PartNumber, "Part ordering at boundary");
+    Equal(1, timeline.PartIndex, "Selected second-part index");
+    Equal(TimeSpan.Zero, timeline.LocalPosition(60_000), "Second-part local start");
+    timeline.SetPosition(30_000);
+    Equal(0.25d, timeline.Progress, "Logical timeline progress");
+    timeline.SelectPart(10_000);
+    Ensure(timeline.TryGetNextPart(out var nextPart), "The next media part was not found.");
+    Equal(2, nextPart!.PartNumber, "Next media part");
+    return Task.CompletedTask;
+}
+
+static Task PlaybackTimelineProtectsDecoderSettlingAsync()
+{
+    var timeline = new MobilePlaybackTimeline();
+    timeline.Load([MediaPart(1, 0, 60_000), MediaPart(2, 60_000, 120_000)], 120_000);
+    timeline.SelectPart(65_000);
+    var now = DateTimeOffset.UtcNow;
+    timeline.PrepareDecoder(65_000, now, TimeSpan.FromSeconds(8));
+
+    Equal(65_000L, timeline.CaptureDecoderPosition(TimeSpan.Zero, now.AddSeconds(1)),
+        "Protected logical position while decoder settles");
+    Equal(64_000L, timeline.CaptureDecoderPosition(TimeSpan.FromSeconds(4), now.AddSeconds(2)),
+        "Aligned decoder position");
+
+    timeline.PrepareDecoder(65_000, now, TimeSpan.FromSeconds(8));
+    Equal(60_000L, timeline.CaptureDecoderPosition(TimeSpan.Zero, now.AddSeconds(9)),
+        "Observed position after settle deadline");
+    return Task.CompletedTask;
+}
+
+static Task PlaybackTimelinePreservesCompletionAsync()
+{
+    var timeline = new MobilePlaybackTimeline();
+    timeline.Load([MediaPart(1, 0, 100_000)], 100_000);
+    timeline.SelectPart(95_000);
+    Ensure(timeline.IsCompleted(), "The five-second completion tolerance was lost.");
+
+    timeline.MarkCompleted(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(15));
+    Equal(100_000L, timeline.PositionMs, "Completed position");
+    Ensure(timeline.Completed, "Natural completion was not retained.");
+    timeline.SetPosition(94_999);
+    Ensure(!timeline.Completed && !timeline.IsCompleted(), "A real rewind did not clear completion.");
+    return Task.CompletedTask;
+}
+
+static WebCanonicalMediaPart MediaPart(int partNumber, long logicalStartMs, long logicalEndMs)
+    => new(
+        partNumber,
+        2,
+        logicalStartMs,
+        logicalEndMs,
+        partNumber,
+        1_024,
+        "Available",
+        string.Empty);
 
 static async Task WithSeededDownloadsAsync(Func<MobileDownloadService, Task> action)
 {

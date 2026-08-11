@@ -50,7 +50,7 @@ Exit criteria: conflict suites pass, a backup restores onto a clean server, and 
 
 Goal: reduce the cost and risk of every later feature without rewriting working behaviour.
 
-Status: in progress on `refactor/mobile-session-coordinators`. The first slice extracts mobile playback-ownership and handoff-evidence rules from `MobileClientSession` into a focused, behaviour-tested coordinator while retaining the session as the public façade.
+Status: in progress on `refactor/mobile-session-coordinators`. Mobile playback-ownership, handoff-evidence and multipart timeline rules have been extracted from `MobileClientSession` into focused, behaviour-tested components while retaining the session as the public façade.
 
 - Split `MobileClientSession` into sync, playback, download and Explore coordinators.
 - Split `LocalWebServer` into static assets and grouped route handlers.
