@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using TheRadioVault.Client.Mobile.Downloads;
+using TheRadioVault.Client.Mobile.Explore;
+using TheRadioVault.Client.Mobile.Knowledge;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Client.Mobile.Playback;
@@ -27,11 +29,12 @@ public sealed class MobileClientSession : IDisposable
     private readonly MobilePlaybackTimeline _playbackTimeline = new();
     private readonly IMobileNowPlayingService _nowPlaying;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
-    private readonly SemaphoreSlim _exploreSyncGate = new(1, 1);
     private readonly Timer _syncTimer;
     private readonly Timer _metadataSyncTimer;
     private readonly MobileMetadataCache _metadataCache;
     private readonly MobileMetadataSynchronizationCoordinator _metadataSynchronization;
+    private readonly MobileExploreQueryCoordinator _exploreQueries;
+    private readonly MobileKnowledgeQueryCoordinator _knowledgeQueries;
     private readonly ConcurrentDictionary<long, Task<byte[]?>> _artworkRequests = new();
     private readonly ConcurrentDictionary<long, WebClientBroadcastDetails> _broadcastDetails = new();
     private readonly ConcurrentDictionary<long, byte> _pendingPlayCountEpisodes = new();
@@ -96,6 +99,14 @@ public sealed class MobileClientSession : IDisposable
             new MobileMetadataSynchronizationTransport(_server),
             _metadataCache,
             Notify);
+        _exploreQueries = new MobileExploreQueryCoordinator(
+            new MobileExploreTransport(_server),
+            _metadataCache,
+            _metadataSynchronization.BeginActivity,
+            Notify);
+        _knowledgeQueries = new MobileKnowledgeQueryCoordinator(
+            new MobileKnowledgeTransport(_server),
+            _metadataCache);
         _playback.StateChanged += PlaybackOnStateChanged;
         _playback.MediaEnded += PlaybackOnMediaEnded;
         _nowPlaying.CommandReceived += NowPlayingOnCommandReceived;
@@ -127,7 +138,7 @@ public sealed class MobileClientSession : IDisposable
     public int CachedBroadcastCount => _metadataCache.Snapshot.Broadcasts.Count;
     public int CachedExplorePageCount => _metadataCache.Snapshot.ExplorePages.Count;
     public string StatusText { get; private set; } = "Pair this iPhone with your Radio Vault Server.";
-    public string KnowledgeStatusText { get; private set; } = "Knowledge has not been loaded yet.";
+    public string KnowledgeStatusText => _knowledgeQueries.Status;
     public string ServerName => _server.Connection?.ServerDisplayName ?? "No server paired";
     public string ServerAddress => _server.Connection is { } connection
         ? $"https://{connection.ServerAddress}:{connection.SecurePort}"
@@ -144,7 +155,7 @@ public sealed class MobileClientSession : IDisposable
     public IReadOnlyList<MobileBroadcastItem> LibraryBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> DownloadedBroadcasts => _downloads.Broadcasts;
     public IReadOnlyList<WebMomentSummary> SavedMoments { get; private set; } = [];
-    public MobileKnowledgeSnapshot? Knowledge { get; private set; }
+    public MobileKnowledgeSnapshot? Knowledge => _knowledgeQueries.Knowledge;
     public IReadOnlyList<WebQueueItem> QueueItems { get; private set; } = [];
     public IReadOnlyList<DiscoveredRadioVaultServer> Servers { get; private set; } = [];
     public MobileBroadcastItem? SelectedBroadcast { get; private set; }
@@ -345,7 +356,9 @@ public sealed class MobileClientSession : IDisposable
                 ApplyMetadataSnapshot();
             }
             if (_metadataCache.Snapshot.ExploreOverview is null)
-                await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
+                await _exploreQueries
+                    .RefreshCacheAsync(warmEntireCache: false, IsPaired, IsLiveConnected)
+                    .ConfigureAwait(false);
             await _downloads.RefreshAsync().ConfigureAwait(false);
             QueueItems = await _server.GetQueueAsync().ConfigureAwait(false);
             _metadataCache.SetQueue(QueueItems);
@@ -510,43 +523,17 @@ public sealed class MobileClientSession : IDisposable
     }
 
     public async Task<MobileExploreDashboard?> LoadExploreDashboardAsync()
-    {
-        var cached = BuildExploreDashboard();
-        if (cached is not null)
-        {
-            if (IsLiveConnected) _ = RefreshExploreCacheAsync(warmEntireCache: false);
-            return cached;
-        }
-        if (!IsPaired || IsBusy) return null;
-        await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
-        return BuildExploreDashboard();
-    }
+        => await _exploreQueries
+            .LoadDashboardAsync(IsPaired, IsLiveConnected, IsBusy)
+            .ConfigureAwait(false);
 
     public async Task<MobileWikiPageDocument?> LoadExplorePageAsync(Guid pageId)
     {
-        var cached = _metadataCache.FindExploreDocument(pageId);
-        if (cached is not null)
-        {
-            if (IsLiveConnected) _ = RefreshExplorePageAsync(pageId);
-            return cached;
-        }
-        if (!IsPaired || IsBusy) return null;
-        try
-        {
-            var page = await _server.GetWikiPageAsync(pageId).ConfigureAwait(false);
-            if (page is not null)
-            {
-                _metadataCache.UpsertExploreDocuments([page]);
-                await _metadataCache.SaveAsync().ConfigureAwait(false);
-            }
-            StatusText = page is null ? "That Explore article could not be found." : $"Loaded {page.Title}.";
-            return page;
-        }
-        catch (Exception exception)
-        {
-            StatusText = "Explore article failed: " + exception.Message;
-            return null;
-        }
+        var result = await _exploreQueries
+            .LoadPageAsync(pageId, IsPaired, IsLiveConnected, IsBusy)
+            .ConfigureAwait(false);
+        if (result.Status is not null) StatusText = result.Status;
+        return result.Page;
     }
 
     public IReadOnlyList<WebClientLibraryCollectionSummary> LibraryCollectionsFor(bool hideCompleted)
@@ -556,33 +543,9 @@ public sealed class MobileClientSession : IDisposable
 
     public async Task<IReadOnlyList<MobileExploreImage>> LoadExploreImagesAsync(
         MobileWikiPageDocument document)
-    {
-        ArgumentNullException.ThrowIfNull(document);
-        var images = new List<MobileExploreImage>();
-        foreach (var link in document.Images.OrderBy(value => value.SortOrder))
-        {
-            var bytes = _metadataCache.ReadImage(link.ImageId);
-            if ((bytes is null || bytes.Length == 0) && IsLiveConnected)
-            {
-                try
-                {
-                    var downloaded = await _server.GetWikiImageAsync(link.ImageId).ConfigureAwait(false);
-                    if (downloaded is not null)
-                    {
-                        await _metadataCache.SaveImageAsync(downloaded).ConfigureAwait(false);
-                        bytes = downloaded.Content;
-                    }
-                }
-                catch (Exception exception)
-                {
-                    System.Diagnostics.Trace.WriteLine($"[iOS Explore image] {exception}");
-                }
-            }
-            if (bytes is null || bytes.Length == 0) continue;
-            images.Add(ToExploreImage(document, link, bytes));
-        }
-        return images;
-    }
+        => await _exploreQueries
+            .LoadImagesAsync(document, IsLiveConnected)
+            .ConfigureAwait(false);
 
     public Task RefreshMetadataAsync() => SynchronizeMetadataCacheAsync(forceExploreRefresh: false);
 
@@ -737,114 +700,47 @@ public sealed class MobileClientSession : IDisposable
 
     public async Task<MobileKnowledgeSnapshot?> LoadKnowledgeAsync()
     {
-        Knowledge = _metadataCache.Snapshot.Knowledge ?? BuildLibraryKnowledgeSnapshot();
-        if (Knowledge is not null)
-            KnowledgeStatusText = Knowledge.IsLibraryFallback
-                ? $"Library coverage ready · {Knowledge.Overview.TotalRecords:N0} broadcasts"
-                : $"Saved Knowledge snapshot · {Knowledge.Overview.TotalRecords:N0} records";
+        var task = _knowledgeQueries.LoadAsync(IsPaired, IsLiveConnected);
+        StatusText = KnowledgeStatusText;
         Notify();
-        if (!IsPaired)
-        {
-            KnowledgeStatusText = "Pair this iPhone with a Radio Vault Server to load Knowledge.";
-            Notify();
-            return Knowledge;
-        }
-        if (!IsLiveConnected)
-        {
-            KnowledgeStatusText = Knowledge is null
-                ? "Knowledge has not been saved on this iPhone yet. Reconnect to the server and try again."
-                : Knowledge.IsLibraryFallback
-                    ? "Offline · showing coverage from the saved Library catalogue."
-                    : "Offline · showing the latest saved Knowledge snapshot.";
-            Notify();
-            return Knowledge;
-        }
-        try
-        {
-            var overviewTask = _server.GetKnowledgeOverviewAsync();
-            var collectionsTask = _server.GetKnowledgeCollectionsAsync();
-            var reviewsTask = _server.GetKnowledgeDateReviewsAsync();
-            await Task.WhenAll(overviewTask, collectionsTask, reviewsTask).ConfigureAwait(false);
-            Knowledge = new MobileKnowledgeSnapshot(
-                await overviewTask.ConfigureAwait(false),
-                await collectionsTask.ConfigureAwait(false),
-                await reviewsTask.ConfigureAwait(false),
-                DateTimeOffset.UtcNow);
-            _metadataCache.SetKnowledge(Knowledge);
-            await _metadataCache.SaveAsync().ConfigureAwait(false);
-            KnowledgeStatusText = $"Knowledge is up to date · {Knowledge.Overview.TotalRecords:N0} records";
-            StatusText = KnowledgeStatusText;
-        }
-        catch (Exception exception)
-        {
-            KnowledgeStatusText = Knowledge is not null
-                ? Knowledge.IsLibraryFallback
-                    ? "Library coverage is ready. Update Radio Vault Server for research evidence and triage."
-                    : "The live Knowledge update failed · showing the latest saved snapshot."
-                : exception is HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.MethodNotAllowed }
-                    ? "The paired server does not expose the Knowledge service. Update Radio Vault Server, then pull down to retry."
-                    : "Knowledge could not be loaded: " + exception.Message;
-            StatusText = KnowledgeStatusText;
-        }
-        finally { Notify(); }
-        return Knowledge;
+        var knowledge = await task.ConfigureAwait(false);
+        StatusText = KnowledgeStatusText;
+        Notify();
+        return knowledge;
     }
 
     public async Task<MobileKnowledgeCoverage?> LoadKnowledgeCoverageAsync(int collectionId)
     {
-        if (!IsPaired || !IsLiveConnected)
-        {
-            var saved = BuildLibraryKnowledgeCoverage(collectionId);
-            StatusText = saved is null ? "No saved coverage is available for that show." : $"Saved Library coverage loaded for {saved.ShowName}.";
-            Notify();
-            return saved;
-        }
-        try
+        if (IsPaired && IsLiveConnected)
         {
             StatusText = "Building Knowledge coverage…";
             Notify();
-            var coverage = await _server.GetKnowledgeCoverageAsync(collectionId).ConfigureAwait(false);
-            StatusText = coverage is null ? "No dated coverage is available for that show." : $"Coverage loaded for {coverage.ShowName}.";
-            return coverage;
         }
-        catch (Exception exception)
-        {
-            var saved = BuildLibraryKnowledgeCoverage(collectionId);
-            StatusText = saved is null
-                ? "Coverage could not be loaded: " + exception.Message
-                : $"Live Knowledge is unavailable · showing saved Library coverage for {saved.ShowName}.";
-            return saved;
-        }
-        finally { Notify(); }
+        var result = await _knowledgeQueries
+            .LoadCoverageAsync(collectionId, IsPaired, IsLiveConnected)
+            .ConfigureAwait(false);
+        StatusText = result.Status;
+        Notify();
+        return result.Coverage;
     }
 
     public async Task<bool> ResolveKnowledgeDateReviewAsync(MobileKnowledgeDateReview review, int action)
     {
         if (!IsPaired || !IsLiveConnected) return false;
-        try
+        var task = _knowledgeQueries.ResolveDateReviewAsync(review, action, IsPaired, IsLiveConnected);
+        StatusText = action switch
         {
-            StatusText = action switch
-            {
-                0 => "Accepting the suggested date…",
-                1 => "Keeping the current Library date…",
-                2 => "Ignoring this suggestion…",
-                6 => "Reopening the date suggestion…",
-                _ => "Saving the Knowledge decision…"
-            };
-            Notify();
-            await _server.ResolveKnowledgeDateReviewAsync(
-                review.ResearchId,
-                action,
-                action == 0 ? review.ProposedDate : null).ConfigureAwait(false);
-            await LoadKnowledgeAsync().ConfigureAwait(false);
-            return true;
-        }
-        catch (Exception exception)
-        {
-            StatusText = "Knowledge decision failed: " + exception.Message;
-            Notify();
-            return false;
-        }
+            0 => "Accepting the suggested date…",
+            1 => "Keeping the current Library date…",
+            2 => "Ignoring this suggestion…",
+            6 => "Reopening the date suggestion…",
+            _ => "Saving the Knowledge decision…"
+        };
+        Notify();
+        var result = await task.ConfigureAwait(false);
+        StatusText = KnowledgeStatusText;
+        Notify();
+        return result;
     }
 
     public async Task<MobileBroadcastItem?> SetListeningStatusAsync(MobileBroadcastItem broadcast, bool played)
@@ -1206,7 +1102,7 @@ public sealed class MobileClientSession : IDisposable
         _incompleteLibraryCollections = [];
         QueueItems = [];
         SavedMoments = [];
-        Knowledge = null;
+        _knowledgeQueries.Clear();
         TotalBroadcasts = 0;
         CompletedBroadcasts = 0;
         InProgressBroadcasts = 0;
@@ -1915,7 +1811,9 @@ public sealed class MobileClientSession : IDisposable
 
                     if (synchronization.ExploreRefreshRequired)
                     {
-                        await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
+                        await _exploreQueries
+                            .RefreshCacheAsync(warmEntireCache: false, IsPaired, IsLiveConnected)
+                            .ConfigureAwait(false);
                         warmExplore = true;
                     }
                     await _metadataCache.SaveAsync().ConfigureAwait(false);
@@ -1931,7 +1829,8 @@ public sealed class MobileClientSession : IDisposable
                 ApplyMetadataSnapshot();
             }
         }
-        if (warmExplore) _ = RefreshExploreCacheAsync(warmEntireCache: true);
+        if (warmExplore)
+            _ = _exploreQueries.RefreshCacheAsync(warmEntireCache: true, IsPaired, IsLiveConnected);
         if (DeleteCompletedDownloads) _ = CleanupCompletedDownloadsAsync();
         if (AutoDownloadNewBroadcasts) _ = TryAutomaticDownloadAsync();
     }
@@ -2148,7 +2047,7 @@ public sealed class MobileClientSession : IDisposable
         }
         QueueItems = snapshot.Queue;
         SavedMoments = snapshot.Moments ?? [];
-        Knowledge = snapshot.Knowledge;
+        _knowledgeQueries.AdoptCachedSnapshot();
         Notify();
     }
 
@@ -2312,207 +2211,8 @@ public sealed class MobileClientSession : IDisposable
             })
             .ToArray();
 
-    private MobileKnowledgeSnapshot? BuildLibraryKnowledgeSnapshot()
-    {
-        var broadcasts = _metadataCache.Snapshot.Broadcasts;
-        if (broadcasts.Count == 0) return null;
-        var dated = broadcasts.Where(value => value.AirDate.HasValue).ToArray();
-        var collections = CombineCollections(broadcasts
-                .GroupBy(value => new { value.CollectionId, value.CollectionName })
-                .Select(group => new WebClientLibraryCollectionSummary(group.Key.CollectionId, group.Key.CollectionName, group.Count())))
-            .Select(value => new MobileKnowledgeCollection(value.CollectionId, value.CollectionName, value.BroadcastCount))
-            .ToArray();
-        var overview = new MobileKnowledgeOverview(
-            broadcasts.Count,
-            broadcasts.Count,
-            0,
-            broadcasts.Count(value => value.NeedsAttention),
-            0,
-            0,
-            broadcasts.Count(value => !string.IsNullOrWhiteSpace(value.Description)),
-            0,
-            0,
-            0,
-            null,
-            dated.Select(value => value.AirDate).Min(),
-            dated.Select(value => value.AirDate).Max());
-        return new MobileKnowledgeSnapshot(overview, collections, [], _metadataCache.Snapshot.UpdatedAt, true);
-    }
-
-    private MobileKnowledgeCoverage? BuildLibraryKnowledgeCoverage(int collectionId)
-    {
-        var collection = Knowledge?.Collections.FirstOrDefault(value => value.CollectionId == collectionId);
-        var collectionName = collection?.Name ?? LibraryCollections.FirstOrDefault(value => value.CollectionId == collectionId)?.CollectionName;
-        if (string.IsNullOrWhiteSpace(collectionName)) return null;
-        var key = NormalizeCollectionName(collectionName);
-        var broadcasts = _metadataCache.Snapshot.Broadcasts
-            .Where(value => value.AirDate.HasValue && NormalizeCollectionName(value.CollectionName) == key)
-            .ToArray();
-        if (broadcasts.Length == 0) return null;
-        var first = broadcasts.Min(value => value.AirDate!.Value);
-        var last = broadcasts.Max(value => value.AirDate!.Value);
-        var byDate = broadcasts.GroupBy(value => value.AirDate!.Value).ToDictionary(group => group.Key, group => group.ToArray());
-        var days = new List<MobileKnowledgeCoverageDay>();
-        for (var date = first; date <= last; date = date.AddDays(1))
-        {
-            byDate.TryGetValue(date, out var dated);
-            dated ??= [];
-            var score = dated.Length == 0 ? 0 : (int)Math.Round(dated.Average(MetadataScore));
-            days.Add(new MobileKnowledgeCoverageDay(
-                date,
-                date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday,
-                dated.Length > 0,
-                false,
-                false,
-                dated.Length,
-                score,
-                dated.Length == 0 ? "No saved broadcast" : score >= 75 ? string.Empty : "More metadata can be added",
-                dated.FirstOrDefault()?.RepresentativeEpisodeId,
-                null));
-        }
-        return new MobileKnowledgeCoverage(collectionId, collectionName, first, last, days);
-    }
-
-    private static double MetadataScore(WebClientLibraryBroadcastSummary value)
-    {
-        var score = 25d;
-        if (!string.IsNullOrWhiteSpace(value.Title)) score += 15;
-        if (!string.IsNullOrWhiteSpace(value.Description)) score += 25;
-        if (!string.IsNullOrWhiteSpace(value.ArtworkPath)) score += 15;
-        if (value.RecordingCount > 0) score += 10;
-        if (value.SegmentCount > 0) score += 10;
-        return Math.Min(100, score);
-    }
-
     private static string NormalizeCollectionName(string? value)
         => new((value ?? string.Empty).Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
-
-    private async Task RefreshExploreCacheAsync(bool warmEntireCache)
-    {
-        if (!IsPaired || !IsLiveConnected) return;
-        await _exploreSyncGate.WaitAsync().ConfigureAwait(false);
-        var metadataActivity = _metadataSynchronization.BeginActivity();
-        try
-        {
-            var overview = await _server.GetWikiOverviewAsync().ConfigureAwait(false);
-            var pages = await _server.BrowseWikiAsync(limit: 5000).ConfigureAwait(false);
-            var today = DateTime.Today;
-            var highlights = await _server.GetWikiDashboardHighlightsAsync(today.Month, today.Day).ConfigureAwait(false);
-            _metadataCache.SetExplore(overview, pages, highlights);
-
-            var existing = _metadataCache.Snapshot.ExploreDocuments.ToDictionary(value => value.PageId);
-            var candidates = warmEntireCache
-                ? pages
-                : pages.Where(value => value.ImageCount > 0)
-                    .OrderByDescending(value => value.Status.Equals("Published", StringComparison.OrdinalIgnoreCase))
-                    .ThenByDescending(value => value.ImageCount)
-                    .Take(8)
-                    .ToArray();
-            var refreshed = new List<MobileWikiPageDocument>();
-            foreach (var page in candidates)
-            {
-                if (existing.TryGetValue(page.PageId, out var document) && document.Revision == page.Revision)
-                {
-                    refreshed.Add(document);
-                    continue;
-                }
-                var loaded = await _server.GetWikiPageAsync(page.PageId).ConfigureAwait(false);
-                if (loaded is not null) refreshed.Add(loaded);
-            }
-            _metadataCache.UpsertExploreDocuments(refreshed);
-
-            foreach (var imageId in refreshed
-                         .SelectMany(value => value.Images)
-                         .Select(value => value.ImageId)
-                         .Distinct())
-            {
-                if (_metadataCache.HasImage(imageId)) continue;
-                var image = await _server.GetWikiImageAsync(imageId).ConfigureAwait(false);
-                if (image is not null) await _metadataCache.SaveImageAsync(image).ConfigureAwait(false);
-            }
-            await _metadataCache.SaveAsync().ConfigureAwait(false);
-            Notify();
-        }
-        catch (Exception exception)
-        {
-            System.Diagnostics.Trace.WriteLine($"[iOS Explore cache] {exception}");
-        }
-        finally
-        {
-            metadataActivity.Dispose();
-            _exploreSyncGate.Release();
-        }
-    }
-
-    private async Task RefreshExplorePageAsync(Guid pageId)
-    {
-        try
-        {
-            var page = await _server.GetWikiPageAsync(pageId).ConfigureAwait(false);
-            if (page is null) return;
-            _metadataCache.UpsertExploreDocuments([page]);
-            await LoadExploreImagesAsync(page).ConfigureAwait(false);
-            await _metadataCache.SaveAsync().ConfigureAwait(false);
-        }
-        catch (Exception exception)
-        {
-            System.Diagnostics.Trace.WriteLine($"[iOS Explore page refresh] {exception}");
-        }
-    }
-
-    private MobileExploreDashboard? BuildExploreDashboard()
-    {
-        var snapshot = _metadataCache.Snapshot;
-        if (snapshot.ExploreOverview is not { } overview ||
-            snapshot.ExploreHighlights is not { } highlights) return null;
-        var all = snapshot.ExplorePages;
-        var featured = all
-            .OrderByDescending(value => value.Status.Equals("Published", StringComparison.OrdinalIgnoreCase))
-            .ThenByDescending(value => value.CitationCount + value.ImageCount + value.TimelineEventCount)
-            .ThenByDescending(value => value.UpdatedAt)
-            .Take(6)
-            .ToArray();
-        var order = featured.Select((value, index) => (value.PageId, index)).ToDictionary(value => value.PageId, value => value.index);
-        var gallery = snapshot.ExploreDocuments
-            .Where(value => value.Images.Count > 0)
-            .OrderBy(value => order.GetValueOrDefault(value.PageId, int.MaxValue))
-            .ThenBy(value => value.Title)
-            .SelectMany(document => document.Images.OrderBy(link => link.SortOrder).Take(1)
-                .Select(link => (document, link, bytes: _metadataCache.ReadImage(link.ImageId))))
-            .Where(value => value.bytes is { Length: > 0 })
-            .Take(8)
-            .Select(value => ToExploreImage(value.document, value.link, value.bytes!))
-            .ToArray();
-        return new MobileExploreDashboard(
-            overview,
-            all,
-            featured,
-            all.OrderByDescending(value => value.UpdatedAt).Take(8).ToArray(),
-            all.Where(value => value.PageType.Equals("Show", StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(value => value.TimelineEventCount).ThenBy(value => value.Title).Take(10).ToArray(),
-            all.Where(value => value.PageType.Equals("Person", StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(value => value.CitationCount).ThenBy(value => value.Title).Take(10).ToArray(),
-            all.Where(value => value.PageType.Equals("Topic", StringComparison.OrdinalIgnoreCase))
-                .OrderByDescending(value => value.CitationCount).ThenBy(value => value.Title).Take(10).ToArray(),
-            all.Where(value => value.PageType.Equals("Show", StringComparison.OrdinalIgnoreCase) &&
-                               value.TimelineEventCount > 0)
-                .OrderBy(value => value.Title, StringComparer.CurrentCultureIgnoreCase).ToArray(),
-            highlights,
-            gallery);
-    }
-
-    private static MobileExploreImage ToExploreImage(
-        MobileWikiPageDocument document,
-        MobileWikiPageImageLink link,
-        byte[] bytes)
-        => new(
-            link.ImageId,
-            document.PageId,
-            document.Title,
-            string.IsNullOrWhiteSpace(link.Image?.Caption) ? document.Title : link.Image.Caption,
-            string.IsNullOrWhiteSpace(link.Image?.AltText) ? document.Title : link.Image.AltText,
-            link.Image?.MediaType ?? "image/jpeg",
-            bytes);
 
     private static bool Contains(string? value, string query)
         => value?.Contains(query, StringComparison.CurrentCultureIgnoreCase) == true;
@@ -2627,6 +2327,6 @@ public sealed class MobileClientSession : IDisposable
         _playback.Dispose();
         _server.Dispose();
         _syncGate.Dispose();
-        _exploreSyncGate.Dispose();
+        _exploreQueries.Dispose();
     }
 }

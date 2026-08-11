@@ -6,6 +6,7 @@
 - Extracted serialized mobile library metadata synchronization—including change-feed cursors, reset paging, delta/deletion application, durable cache adoption and activity state—behind a fakeable transport with focused behavioural tests.
 - Extracted durable mobile offline-mutation synchronization for favourites, listened state and Moments, including ordered single-flight replay, duplicate acceptance, already-applied recovery and first-failure retention.
 - Extracted mobile download lifecycle, Wi-Fi/retention policy, pause/resume/cancel state, storage maintenance and durable-index projection behind a focused coordinator, plus isolated downloaded-progress authority reconciliation from the session façade.
+- Extracted cache-first mobile Explore page/image hydration and Knowledge snapshot, coverage and triage queries behind fakeable transports, reducing the session façade while preserving offline Library fallbacks.
 
 # 0.41.0
 

@@ -1802,6 +1802,21 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         "TheRadioVault.Client.Mobile",
         "Synchronization",
         "MobileMetadataSynchronizationCoordinator.cs"));
+    var mobileExploreQuerySource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Explore",
+        "MobileExploreQueryCoordinator.cs"));
+    var mobileKnowledgeQuerySource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Knowledge",
+        "MobileKnowledgeQueryCoordinator.cs"));
+    var mobileDownloadedProgressSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Synchronization",
+        "MobileDownloadedProgressSynchronizationCoordinator.cs"));
     True(mobileCacheSessionSource.Contains("SynchronizeMetadataCacheAsync", StringComparison.Ordinal));
     True(mobileMetadataSynchronizationSource.Contains("SynchronizeLibraryAsync", StringComparison.Ordinal));
     True(mobileMetadataSynchronizationSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
@@ -1809,7 +1824,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileMetadataSynchronizationSource.Contains("afterCacheApplied", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("BuildCachedArchivePeriods", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("RefreshExploreCacheAsync", StringComparison.Ordinal));
+    True(mobileExploreQuerySource.Contains("RefreshCacheAsync", StringComparison.Ordinal));
+    True(mobileExploreQuerySource.Contains("BuildDashboard", StringComparison.Ordinal));
+    True(mobileExploreQuerySource.Contains("LoadImagesAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("IsMetadataSyncing", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ApplyOnlineOverview", StringComparison.Ordinal));
     True(mobileMetadataSynchronizationSource.Contains("_gate.WaitAsync", StringComparison.Ordinal));
@@ -1825,9 +1842,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobilePlaybackOwnershipSource.Contains("_foreignOwnerCandidateSamples >= 2", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("SynchronizeDownloadedProgressWithServerAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("SynchronizeStoredDownloadedProgressWithServerAsync", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("hasNewerOfflineProgress", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("AllowRewind: false", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("ExpectedGeneration: 0", StringComparison.Ordinal));
+    True(mobileDownloadedProgressSource.Contains("HasNewerOfflineProgress", StringComparison.Ordinal));
+    True(mobileDownloadedProgressSource.Contains("AllowRewind: false", StringComparison.Ordinal));
+    True(mobileDownloadedProgressSource.Contains("ExpectedGeneration: 0", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("_downloads.ReconcileSummariesAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ApplyPlaybackProgress", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("LoadArtworkAsync", StringComparison.Ordinal));
@@ -1839,8 +1856,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("public string MiniPlayerTime", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("CombineCollections", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("NormalizeCollectionName", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("BuildLibraryKnowledgeSnapshot", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("BuildLibraryKnowledgeCoverage", StringComparison.Ordinal));
+    True(mobileKnowledgeQuerySource.Contains("BuildLibrarySnapshot", StringComparison.Ordinal));
+    True(mobileKnowledgeQuerySource.Contains("BuildLibraryCoverage", StringComparison.Ordinal));
+    True(mobileKnowledgeQuerySource.Contains("ResolveDateReviewAsync", StringComparison.Ordinal));
 
     var iconGenerator = File.ReadAllText(Path.Combine(SourceRoot(), "design", "logo", "generate-brand-assets.py"));
     True(iconGenerator.Contains("RadioVault-logo-ios-source.png", StringComparison.Ordinal));

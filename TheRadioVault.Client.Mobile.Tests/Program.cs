@@ -1,6 +1,8 @@
 using System.Text.Json;
 using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Downloads;
+using TheRadioVault.Client.Mobile.Explore;
+using TheRadioVault.Client.Mobile.Knowledge;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Client.Mobile.Playback;
@@ -33,6 +35,11 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Download coordinator protects active media and reconciles summaries", DownloadCoordinatorProtectsAndReconcilesAsync),
     ("Downloaded progress synchronization adopts the canonical result", DownloadedProgressSynchronizationAdoptsCanonicalAsync),
     ("Downloaded progress synchronization preserves conflicts and newer offline state", DownloadedProgressSynchronizationPreservesAuthorityAsync),
+    ("Explore coordinator warms pages and images into the offline cache", ExploreCoordinatorWarmsOfflineCacheAsync),
+    ("Explore coordinator serializes concurrent cache refreshes", ExploreCoordinatorSerializesRefreshesAsync),
+    ("Knowledge coordinator builds offline Library coverage", KnowledgeCoordinatorBuildsOfflineCoverageAsync),
+    ("Knowledge coordinator persists live snapshots", KnowledgeCoordinatorPersistsLiveSnapshotAsync),
+    ("Knowledge coordinator sends explicit date-review decisions", KnowledgeCoordinatorSendsDateReviewDecisionAsync),
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
     ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync)
@@ -866,6 +873,172 @@ static Task PlaybackTimelinePreservesCompletionAsync()
     return Task.CompletedTask;
 }
 
+static async Task ExploreCoordinatorWarmsOfflineCacheAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var pageId = Guid.NewGuid();
+        var imageId = Guid.NewGuid();
+        var summary = WikiSummary(pageId, imageCount: 1, timelineEventCount: 2);
+        var document = WikiDocument(pageId, imageId);
+        var transport = new FakeExploreTransport(
+            new MobileWikiOverview(1, 1, 0, 2, 3, 1, 2, DateTimeOffset.UtcNow, null),
+            [summary],
+            new MobileWikiDashboardHighlights([], [new MobileWikiEraSummary(1990, 1999, 2, 1)]),
+            [document],
+            [new MobileWikiImageContent(imageId, "image/png", "show.png", [1, 2, 3, 4])]);
+        var cache = new MobileMetadataCache(root, "server-a");
+        var activityCount = 0;
+        var stateChanges = 0;
+        using var coordinator = new MobileExploreQueryCoordinator(
+            transport,
+            cache,
+            () => new CallbackDisposable(() => activityCount--, () => activityCount++),
+            () => stateChanges++,
+            () => new DateOnly(2026, 8, 11));
+
+        await coordinator.RefreshCacheAsync(warmEntireCache: false, isPaired: true, isLiveConnected: true);
+
+        Equal(0, activityCount, "Explore synchronization activity count");
+        Equal(1, stateChanges, "Explore state-change notifications");
+        Equal((8, 11), transport.HighlightRequest, "Explore highlight date");
+        Ensure(cache.FindExploreDocument(pageId) is not null, "Explore document was not cached.");
+        Ensure(cache.HasImage(imageId), "Explore image was not cached.");
+        var dashboard = coordinator.BuildDashboard() ??
+                        throw new InvalidOperationException("Cached Explore dashboard was not built.");
+        Equal(1, dashboard.Gallery.Count, "Explore cached gallery images");
+
+        var offlineTransport = new FakeExploreTransport(
+            transport.Overview,
+            [],
+            new MobileWikiDashboardHighlights([], []),
+            [],
+            []);
+        using var offline = new MobileExploreQueryCoordinator(
+            offlineTransport,
+            cache,
+            () => new CallbackDisposable(),
+            () => { });
+        var cachedPage = await offline.LoadPageAsync(pageId, true, false, false);
+        Equal(document, cachedPage.Page!, "Offline Explore page");
+        var cachedImages = await offline.LoadImagesAsync(document, false);
+        Equal(1, cachedImages.Count, "Offline Explore images");
+        Equal(0, offlineTransport.PageRequests, "Offline Explore transport page requests");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task ExploreCoordinatorSerializesRefreshesAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var transport = new FakeExploreTransport(
+            new MobileWikiOverview(0, 0, 0, 0, 0, 0, 0, null, null),
+            [],
+            new MobileWikiDashboardHighlights([], []),
+            [],
+            [])
+        {
+            RequestDelay = TimeSpan.FromMilliseconds(15)
+        };
+        var cache = new MobileMetadataCache(root, "server-a");
+        using var coordinator = new MobileExploreQueryCoordinator(
+            transport,
+            cache,
+            () => new CallbackDisposable(),
+            () => { });
+
+        await Task.WhenAll(
+            coordinator.RefreshCacheAsync(false, true, true),
+            coordinator.RefreshCacheAsync(false, true, true));
+
+        Equal(1, transport.MaximumConcurrentRequests, "Concurrent Explore refresh requests");
+        Equal(2, transport.OverviewRequests, "Serialized Explore refresh count");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task KnowledgeCoordinatorBuildsOfflineCoverageAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var first = Summary(101, "Dated", 0, false, null) with
+        {
+            AirDate = new DateOnly(2026, 8, 10),
+            CollectionName = "Regression Show"
+        };
+        var second = Summary(202, "Undated", 0, false, null) with { AirDate = null };
+        var cache = new MobileMetadataCache(root, "server-a");
+        cache.ReplaceCompleteLibrary("server-a", [first, second], Overview(first, second));
+        var transport = new FakeKnowledgeTransport();
+        var coordinator = new MobileKnowledgeQueryCoordinator(transport, cache);
+
+        var knowledge = await coordinator.LoadAsync(isPaired: true, isLiveConnected: false) ??
+                        throw new InvalidOperationException("Offline Knowledge fallback was not created.");
+        Ensure(knowledge.IsLibraryFallback, "Offline Knowledge did not identify its Library fallback.");
+        Equal(2, knowledge.Overview.TotalRecords, "Offline Knowledge records");
+        var collectionId = knowledge.Collections.Single().CollectionId ??
+                           throw new InvalidOperationException("Fallback collection has no identifier.");
+        var coverage = await coordinator.LoadCoverageAsync(collectionId, true, false);
+        Ensure(coverage.Coverage is not null, "Offline Knowledge coverage was not created.");
+        Equal(1, coverage.Coverage!.DatedBroadcastDays, "Offline Knowledge dated days");
+        Equal(0, transport.OverviewRequests, "Offline Knowledge transport requests");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task KnowledgeCoordinatorPersistsLiveSnapshotAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var updatedAt = new DateTimeOffset(2026, 8, 11, 9, 30, 0, TimeSpan.Zero);
+        var transport = new FakeKnowledgeTransport
+        {
+            Overview = new MobileKnowledgeOverview(25, 20, 5, 3, 1, 2, 18, 12, 10, 8, null, null, null),
+            Collections = [new MobileKnowledgeCollection(1, "Regression Show", 25)]
+        };
+        var cache = new MobileMetadataCache(root, "server-a");
+        var coordinator = new MobileKnowledgeQueryCoordinator(transport, cache, () => updatedAt);
+
+        var knowledge = await coordinator.LoadAsync(isPaired: true, isLiveConnected: true) ??
+                        throw new InvalidOperationException("Live Knowledge was not loaded.");
+
+        Equal(25, knowledge.Overview.TotalRecords, "Live Knowledge records");
+        Equal(updatedAt, knowledge.UpdatedAt, "Live Knowledge update time");
+        Equal(knowledge, cache.Snapshot.Knowledge!, "Persisted Knowledge snapshot");
+        Equal(1, transport.OverviewRequests, "Live Knowledge overview requests");
+        Equal(1, transport.CollectionRequests, "Live Knowledge collection requests");
+        Equal(1, transport.ReviewRequests, "Live Knowledge review requests");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task KnowledgeCoordinatorSendsDateReviewDecisionAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var transport = new FakeKnowledgeTransport();
+        var cache = new MobileMetadataCache(root, "server-a");
+        var coordinator = new MobileKnowledgeQueryCoordinator(transport, cache);
+        var review = KnowledgeReview(9001, new DateOnly(1997, 4, 12));
+
+        Ensure(await coordinator.ResolveDateReviewAsync(review, 0, true, true),
+            "Accepting a Knowledge date review failed.");
+        Equal((9001L, 0, review.ProposedDate), transport.Decisions.Single(), "Accepted Knowledge decision");
+
+        transport.Decisions.Clear();
+        Ensure(await coordinator.ResolveDateReviewAsync(review, 2, true, true),
+            "Ignoring a Knowledge date review failed.");
+        Equal((9001L, 2, (DateOnly?)null), transport.Decisions.Single(), "Ignored Knowledge decision");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
 static WebCanonicalMediaPart MediaPart(int partNumber, long logicalStartMs, long logicalEndMs)
     => new(
         partNumber,
@@ -1006,6 +1179,78 @@ static WebClientLibraryBroadcastSummary Summary(
         string.Empty,
         0);
 
+static MobileWikiPageSummary WikiSummary(
+    Guid pageId,
+    int imageCount = 0,
+    int timelineEventCount = 0)
+    => new(
+        pageId,
+        "regression-show",
+        "Regression Show",
+        "Show",
+        "A cached Explore page.",
+        "Published",
+        3,
+        new DateTimeOffset(2026, 8, 11, 8, 0, 0, TimeSpan.Zero),
+        2,
+        imageCount,
+        timelineEventCount);
+
+static MobileWikiPageDocument WikiDocument(Guid pageId, Guid imageId)
+{
+    var image = new MobileWikiImageRecord(
+        imageId,
+        "show.png",
+        "image/png",
+        4,
+        "Regression artwork",
+        "Regression Show",
+        string.Empty,
+        string.Empty,
+        string.Empty,
+        null,
+        null,
+        null,
+        string.Empty,
+        string.Empty);
+    return new MobileWikiPageDocument(
+        pageId,
+        "regression-show",
+        "Regression Show",
+        "Show",
+        "A cached Explore page.",
+        "# Regression Show",
+        "Published",
+        3,
+        new DateTimeOffset(2026, 8, 11, 8, 0, 0, TimeSpan.Zero),
+        "Regression Test",
+        [],
+        [new MobileWikiPageImageLink(pageId, imageId, "Hero", 0, image)],
+        []);
+}
+
+static MobileKnowledgeDateReview KnowledgeReview(long researchId, DateOnly proposedDate)
+    => new(
+        researchId,
+        101,
+        1,
+        "Regression Show",
+        "Regression Broadcast",
+        "regression.mp3",
+        proposedDate.ToString("yyyy-MM-dd"),
+        proposedDate,
+        "Exact",
+        string.Empty,
+        string.Empty,
+        "Filename",
+        "Regression test",
+        95,
+        1,
+        false,
+        "Pending",
+        null,
+        DateTimeOffset.UtcNow);
+
 static string CreateTemporaryDirectory()
 {
     var path = Path.Combine(Path.GetTempPath(), "radiovault-mobile-tests", Guid.NewGuid().ToString("N"));
@@ -1046,6 +1291,162 @@ static void Contains(string source, string expected, string label)
 {
     if (!source.Contains(expected, StringComparison.Ordinal))
         throw new InvalidOperationException($"Missing {label}: {expected}");
+}
+
+file sealed class CallbackDisposable : IDisposable
+{
+    private readonly Action _onDispose;
+    private bool _disposed;
+
+    public CallbackDisposable(Action? onDispose = null, Action? onCreate = null)
+    {
+        _onDispose = onDispose ?? (() => { });
+        onCreate?.Invoke();
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        _onDispose();
+    }
+}
+
+file sealed class FakeExploreTransport(
+    MobileWikiOverview overview,
+    IReadOnlyList<MobileWikiPageSummary> pages,
+    MobileWikiDashboardHighlights highlights,
+    IReadOnlyList<MobileWikiPageDocument> documents,
+    IReadOnlyList<MobileWikiImageContent> images) : IMobileExploreTransport
+{
+    private readonly Dictionary<Guid, MobileWikiPageDocument> _documents =
+        documents.ToDictionary(value => value.PageId);
+    private readonly Dictionary<Guid, MobileWikiImageContent> _images =
+        images.ToDictionary(value => value.ImageId);
+    private int _activeRequests;
+    private int _maximumConcurrentRequests;
+
+    public MobileWikiOverview Overview { get; } = overview;
+    public TimeSpan RequestDelay { get; init; }
+    public int OverviewRequests { get; private set; }
+    public int PageRequests { get; private set; }
+    public int MaximumConcurrentRequests => Volatile.Read(ref _maximumConcurrentRequests);
+    public (int Month, int Day) HighlightRequest { get; private set; }
+
+    public async Task<MobileWikiOverview> GetOverviewAsync(CancellationToken cancellationToken = default)
+    {
+        OverviewRequests++;
+        await TrackRequestAsync(cancellationToken);
+        return Overview;
+    }
+
+    public async Task<IReadOnlyList<MobileWikiPageSummary>> BrowseAsync(
+        int limit,
+        CancellationToken cancellationToken = default)
+    {
+        await TrackRequestAsync(cancellationToken);
+        return pages.Take(limit).ToArray();
+    }
+
+    public async Task<MobileWikiDashboardHighlights> GetDashboardHighlightsAsync(
+        int month,
+        int day,
+        CancellationToken cancellationToken = default)
+    {
+        HighlightRequest = (month, day);
+        await TrackRequestAsync(cancellationToken);
+        return highlights;
+    }
+
+    public async Task<MobileWikiPageDocument?> GetPageAsync(
+        Guid pageId,
+        CancellationToken cancellationToken = default)
+    {
+        PageRequests++;
+        await TrackRequestAsync(cancellationToken);
+        return _documents.GetValueOrDefault(pageId);
+    }
+
+    public async Task<MobileWikiImageContent?> GetImageAsync(
+        Guid imageId,
+        CancellationToken cancellationToken = default)
+    {
+        await TrackRequestAsync(cancellationToken);
+        return _images.GetValueOrDefault(imageId);
+    }
+
+    private async Task TrackRequestAsync(CancellationToken cancellationToken)
+    {
+        var active = Interlocked.Increment(ref _activeRequests);
+        UpdateMaximum(active);
+        try
+        {
+            if (RequestDelay > TimeSpan.Zero)
+                await Task.Delay(RequestDelay, cancellationToken);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeRequests);
+        }
+    }
+
+    private void UpdateMaximum(int candidate)
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref _maximumConcurrentRequests);
+            if (candidate <= current) return;
+            if (Interlocked.CompareExchange(ref _maximumConcurrentRequests, candidate, current) == current) return;
+        }
+    }
+}
+
+file sealed class FakeKnowledgeTransport : IMobileKnowledgeTransport
+{
+    public MobileKnowledgeOverview Overview { get; init; } =
+        new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, null, null, null);
+    public IReadOnlyList<MobileKnowledgeCollection> Collections { get; init; } = [];
+    public IReadOnlyList<MobileKnowledgeDateReview> Reviews { get; init; } = [];
+    public MobileKnowledgeCoverage? Coverage { get; init; }
+    public int OverviewRequests { get; private set; }
+    public int CollectionRequests { get; private set; }
+    public int ReviewRequests { get; private set; }
+    public List<(long ResearchId, int Action, DateOnly? SelectedDate)> Decisions { get; } = [];
+
+    public Task<MobileKnowledgeOverview> GetOverviewAsync(CancellationToken cancellationToken = default)
+    {
+        OverviewRequests++;
+        return Task.FromResult(Overview);
+    }
+
+    public Task<IReadOnlyList<MobileKnowledgeCollection>> GetCollectionsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        CollectionRequests++;
+        return Task.FromResult(Collections);
+    }
+
+    public Task<IReadOnlyList<MobileKnowledgeDateReview>> GetDateReviewsAsync(
+        CancellationToken cancellationToken = default)
+    {
+        ReviewRequests++;
+        return Task.FromResult(Reviews);
+    }
+
+    public Task<MobileKnowledgeCoverage?> GetCoverageAsync(
+        int collectionId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(Coverage);
+
+    public Task ResolveDateReviewAsync(
+        long researchId,
+        int action,
+        DateOnly? selectedDate,
+        CancellationToken cancellationToken = default)
+    {
+        Decisions.Add((researchId, action, selectedDate));
+        return Task.CompletedTask;
+    }
 }
 
 file sealed class MemoryConnectionStore : IMobileConnectionStore
