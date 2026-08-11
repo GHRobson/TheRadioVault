@@ -177,6 +177,61 @@
               Data="M8,5 L18,12 L8,19 Z" />
       </DataTemplate>
 
+      <DataTemplate x:Key="SkipBackIconTemplate">
+        <Grid Width="24" Height="24">
+          <Path Data="M5,10 L5,17 C5,18.7 6.3,20 8,20 L17,20 C18.7,20 20,18.7 20,17 L20,7 C20,5.3 18.7,4 17,4 L4,4"
+                Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
+                StrokeLineCap="Round" StrokeJoin="Round" />
+          <Path Data="M8,1 L4,4 L8,7"
+                Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
+                StrokeLineCap="Round" StrokeJoin="Round" />
+          <TextBlock Text="15" Foreground="{DynamicResource RvAccentBrush}"
+                     FontSize="7.6" FontWeight="Bold" TextAlignment="Center"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3,0,0" />
+        </Grid>
+      </DataTemplate>
+
+      <DataTemplate x:Key="SkipForwardIconTemplate">
+        <Grid Width="24" Height="24">
+          <Path Data="M19,10 L19,17 C19,18.7 17.7,20 16,20 L7,20 C5.3,20 4,18.7 4,17 L4,7 C4,5.3 5.3,4 7,4 L20,4"
+                Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
+                StrokeLineCap="Round" StrokeJoin="Round" />
+          <Path Data="M16,1 L20,4 L16,7"
+                Stroke="{DynamicResource RvAccentBrush}" StrokeThickness="1.75"
+                StrokeLineCap="Round" StrokeJoin="Round" />
+          <TextBlock Text="30" Foreground="{DynamicResource RvAccentBrush}"
+                     FontSize="7.6" FontWeight="Bold" TextAlignment="Center"
+                     HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3,0,0" />
+        </Grid>
+      </DataTemplate>
+
+      <DataTemplate x:Key="PrimaryTransportIconTemplate">
+        <Grid Width="25" Height="25">
+          <Path IsVisible="{Binding IsPrimaryTransportLoading}" Width="23" Height="23" Stretch="Uniform"
+                Data="M12,3 A9,9 0 1 1 4.2,7.5" Stroke="{DynamicResource RvAccentContrastBrush}" StrokeThickness="2.3"
+                StrokeLineCap="Round" RenderTransformOrigin="50%,50%"
+                HorizontalAlignment="Center" VerticalAlignment="Center">
+            <Path.RenderTransform><RotateTransform Angle="{Binding PrimaryTransportSpinnerAngle}" /></Path.RenderTransform>
+          </Path>
+          <Path IsVisible="{Binding ShowPlayIcon}" Width="25" Height="25" Stretch="None"
+                Fill="{DynamicResource RvAccentContrastBrush}" Stroke="{DynamicResource RvAccentContrastBrush}"
+                StrokeThickness="1.4" StrokeLineCap="Round" StrokeJoin="Round"
+                Data="M8,5 L18,12 L8,19 Z" />
+          <Grid IsVisible="{Binding ShowPauseIcon}" Width="25" Height="25">
+            <Path Data="M9,6 L9,18 M15,6 L15,18"
+                  Stroke="{DynamicResource RvAccentContrastBrush}" StrokeThickness="2.7"
+                  StrokeLineCap="Round" StrokeJoin="Round" />
+          </Grid>
+          <Grid IsVisible="{Binding ShowMoveToThisDevice}" Width="25" Height="25"
+                ToolTip.Tip="Move playback to this PC">
+            <Path Width="25" Height="25" Stretch="None"
+                  Stroke="{DynamicResource RvAccentContrastBrush}" StrokeThickness="1.8"
+                  StrokeLineCap="Round" StrokeJoin="Round"
+                  Data="M7,5 L20,5 L20,17 L7,17 M11,20 L16,20 M13.5,17 L13.5,20 M2,11 L13,11 M9.5,7.5 L13,11 L9.5,14.5" />
+          </Grid>
+        </Grid>
+      </DataTemplate>
+
       <DataTemplate x:Key="MissingArtworkIconTemplate">
         <Viewbox Stretch="Uniform">
           <Grid Width="48" Height="48">
@@ -314,6 +369,24 @@
     <Style Selector="Button.secondary:pointerover">
       <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
       <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.secondary">
+      <Setter Property="MinHeight" Value="38" />
+      <Setter Property="Padding" Value="14,8" />
+      <Setter Property="CornerRadius" Value="9" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceRaisedBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.secondary:pointerover">
+      <Setter Property="Background" Value="{DynamicResource RvSurfaceHoverBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvBorderStrongBrush}" />
+    </Style>
+    <Style Selector="ToggleButton.secondary:checked">
+      <Setter Property="Background" Value="{DynamicResource RvAccentMutedSubtleBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource RvAccentMutedBrush}" />
+      <Setter Property="Foreground" Value="{DynamicResource RvTextBrush}" />
     </Style>
     <Style Selector="Button.ghost">
       <Setter Property="Background" Value="Transparent" />

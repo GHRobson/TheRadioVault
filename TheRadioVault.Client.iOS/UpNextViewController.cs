@@ -1,3 +1,4 @@
+using CoreGraphics;
 using Foundation;
 using TheRadioVault.Client.Mobile;
 using UIKit;
@@ -12,6 +13,8 @@ public sealed class UpNextViewController : SessionTableViewController
     {
         base.ViewDidLoad();
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
+        TableView.RowHeight = UITableView.AutomaticDimension;
+        TableView.EstimatedRowHeight = 74;
         NavigationItem.LeftBarButtonItem = new UIBarButtonItem(
             "Now Playing",
             UIBarButtonItemStyle.Plain,
@@ -44,12 +47,34 @@ public sealed class UpNextViewController : SessionTableViewController
         if (Session.QueueItems.Count == 0)
             return DetailCell("empty-queue", "Nothing Up Next", "Add a broadcast from Library or Broadcast Details.");
         var item = Session.QueueItems[indexPath.Row];
-        var cell = DetailCell(
-            "queue-item",
-            item.Episode.Title,
-            $"{item.Position + 1}. {item.Episode.Show} · {item.Episode.Status}");
+        var cell = new BroadcastProgressCell("queue-item");
+        cell.Configure(Session, item.Episode, $"{item.Position + 1}. {item.Episode.Show} · {item.Episode.Status}");
         cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
         return cell;
+    }
+
+    public override UIContextMenuConfiguration? GetContextMenuConfiguration(
+        UITableView tableView,
+        NSIndexPath indexPath,
+        CGPoint point)
+    {
+        if (indexPath.Row >= Session.QueueItems.Count) return null;
+        var queueItem = Session.QueueItems[indexPath.Row];
+        return UIContextMenuConfiguration.Create(null, null, suggestedActions =>
+        {
+            var play = UIAction.Create(
+                "Play Now",
+                RadioVaultIcons.Image(RadioVaultIcon.Play),
+                "radiovault.queue.play",
+                action => _ = Session.PlayQueueItemAsync(queueItem));
+            var remove = UIAction.Create(
+                "Remove from Up Next",
+                RadioVaultIcons.Image(RadioVaultIcon.Remove),
+                "radiovault.queue.remove",
+                action => _ = Session.RemoveQueueItemAsync(queueItem));
+            remove.Attributes = UIMenuElementAttributes.Destructive;
+            return UIMenu.Create("", [play, remove]);
+        });
     }
 
     public override bool CanEditRow(UITableView tableView, NSIndexPath indexPath)

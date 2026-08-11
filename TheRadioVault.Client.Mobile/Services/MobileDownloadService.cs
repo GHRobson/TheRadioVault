@@ -250,6 +250,80 @@ public sealed class MobileDownloadService
         finally { _gate.Release(); }
     }
 
+    public async Task<int> RemoveCompletedAsync(
+        long? protectedEpisodeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var removals = _records.Values
+                .Where(value => value.Summary.Completed && value.EpisodeId != protectedEpisodeId)
+                .ToArray();
+            foreach (var record in removals)
+            {
+                _records.Remove(record.EpisodeId);
+                DeleteRecordMediaBestEffort(record);
+            }
+            if (removals.Length > 0) await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            return removals.Length;
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<int> TrimToLimitAsync(
+        long limitBytes,
+        long? protectedEpisodeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (limitBytes <= 0) return 0;
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var total = _records.Values.Sum(value => Math.Max(0, value.SizeBytes));
+            var removals = _records.Values
+                .Where(value => value.EpisodeId != protectedEpisodeId)
+                .OrderBy(value => value.Summary.Completed ? 0 : 1)
+                .ThenBy(value => value.DownloadedAt)
+                .TakeWhile(record =>
+                {
+                    if (total <= limitBytes) return false;
+                    total -= Math.Max(0, record.SizeBytes);
+                    return true;
+                })
+                .ToArray();
+            foreach (var record in removals)
+            {
+                _records.Remove(record.EpisodeId);
+                DeleteRecordMediaBestEffort(record);
+            }
+            if (removals.Length > 0) await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            return removals.Length;
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task<int> RepairAsync(CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var damaged = _records.Values.Where(value => !IsHealthy(value)).ToArray();
+            foreach (var record in damaged)
+            {
+                _records.Remove(record.EpisodeId);
+                DeleteRecordMediaBestEffort(record);
+                DeleteDirectoryBestEffort(PendingPath(record.EpisodeId));
+            }
+            if (damaged.Length > 0) await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            return damaged.Length;
+        }
+        finally { _gate.Release(); }
+    }
+
     public async Task DiscardPendingAsync(long episodeId, CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -280,26 +354,63 @@ public sealed class MobileDownloadService
         return new Uri(path).AbsoluteUri;
     }
 
-    public async Task UpdateProgressAsync(
+    public async Task<bool> UpdateProgressAsync(
         long episodeId,
         long positionMs,
         bool completed,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
     {
         await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
         try
         {
             await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
-            if (!_records.TryGetValue(episodeId, out var record)) return;
+            if (!_records.TryGetValue(episodeId, out var record)) return false;
+            var durationMs = Math.Max(record.DurationMs, record.Summary.DurationMs);
+            var normalizedPosition = durationMs > 0
+                ? Math.Clamp(positionMs, 0, durationMs)
+                : Math.Max(0, positionMs);
+            if (completed && durationMs > 0) normalizedPosition = durationMs;
+            if (record.Summary.PositionMs == normalizedPosition && record.Summary.Completed == completed)
+                return false;
             var summary = record.Summary with
             {
-                PositionMs = Math.Max(0, positionMs),
+                PositionMs = normalizedPosition,
                 Completed = completed,
-                InProgress = !completed && positionMs > 0,
-                LastPlayedAt = DateTimeOffset.UtcNow
+                InProgress = !completed && normalizedPosition > 0,
+                LastPlayedAt = capturedAt.ToUniversalTime()
             };
             _records[episodeId] = record with { Summary = summary };
             await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+        finally { _gate.Release(); }
+    }
+
+    public async Task ReconcileSummariesAsync(
+        IEnumerable<WebClientLibraryBroadcastSummary> summaries,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(summaries);
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var changed = false;
+            foreach (var summary in summaries)
+            {
+                if (!_records.TryGetValue(summary.RepresentativeEpisodeId, out var record)) continue;
+                var local = record.Summary;
+                var serverPlayedAt = summary.LastPlayedAt ?? DateTimeOffset.MinValue;
+                var localPlayedAt = local.LastPlayedAt ?? DateTimeOffset.MinValue;
+                var serverIsNewer = serverPlayedAt >= localPlayedAt ||
+                                    summary.PositionMs > local.PositionMs ||
+                                    (summary.Completed && !local.Completed);
+                if (!serverIsNewer || summary == local) continue;
+                _records[record.EpisodeId] = record with { Summary = summary };
+                changed = true;
+            }
+            if (changed) await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
         }
         finally { _gate.Release(); }
     }

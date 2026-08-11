@@ -4,7 +4,7 @@ $version = (Get-Content (Join-Path $root "VERSION.txt") -Raw).Trim()
 $projectPath = Join-Path $root "TheRadioVault.Desktop.Avalonia\TheRadioVault.Desktop.Avalonia.csproj"
 $hostPath = Join-Path $root "TheRadioVault.Desktop.Avalonia\Composition\AvaloniaApplicationHost.cs"
 
-if ($version -ne "0.35.0-alpha9-buildfix3") {
+if ($version -ne "0.41.0") {
     throw "Unexpected VERSION.txt value: $version"
 }
 if (-not (Test-Path $projectPath)) { throw "Avalonia project is missing." }
@@ -498,7 +498,10 @@ foreach ($marker in @('IConnectedAccessService', 'NativeConnectedAccessService')
 }
 $mainWindowViewPath = Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\MainWindow.axaml"
 $mainWindowViewText = Get-Content $mainWindowViewPath -Raw
-if ($mainWindowViewText -notmatch "ShowMoveToThisDevice") {
+$desktopThemePath = Join-Path $root "TheRadioVault.Desktop.Avalonia\App.axaml"
+$desktopThemeText = Get-Content $desktopThemePath -Raw
+if ($mainWindowViewText -notmatch "PrimaryTransportIconTemplate" -or
+    $desktopThemeText -notmatch "ShowMoveToThisDevice") {
     throw "The native centre transport is missing its move-to-this-device state."
 }
 $dashboardViewPath = Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\DashboardView.axaml"
@@ -1034,8 +1037,9 @@ $stableFoundationText = Get-Content (Join-Path $root "tools\Test-AvaloniaFoundat
 foreach ($marker in @('<h1 align="center">Radio Vault</h1>', 'Bring your old radio collection back to life.', 'browse your collection by show, year, month and broadcast', 'Radio Vault Server', 'Radio Vault Web', 'Your collection stays on your own hardware', 'should not be exposed directly to the public internet', '## Download the latest test builds', 'actions/workflows/ci.yml?query=branch%3Amain', 'windows-client-and-server', 'macos-client-and-server-osx-arm64-unsigned', 'linux-client-and-server-x64', 'ios-client-simulator-arm64-unsigned', '## AI disclosure', 'does not contain a generative-AI assistant', 'speech-recognition models installed and run locally')) {
     if ($stableReadmeText -notmatch [regex]::Escape($marker)) { throw "Radio Vault marketing README marker missing: $marker" }
 }
-foreach ($marker in @('# Building Radio Vault 0.35.0 Alpha 9', 'package-server-installer.ps1', 'package-client-installer.ps1', 'SOURCE_MANIFEST.sha256.json')) {
-    if ($stableBuildingText -notmatch [regex]::Escape($marker)) { throw "0.35 Alpha 1 build-guide marker missing: $marker" }
+if ($stableReadmeText -match [regex]::Escape('repository is currently private')) { throw 'Public Radio Vault README still describes the repository as private.' }
+foreach ($marker in @('# Building Radio Vault 0.41.0', 'local-release-gate.sh', 'package-macos-local.sh', 'package-server-installer.ps1', 'package-client-installer.ps1', 'SOURCE_MANIFEST.sha256.json')) {
+    if ($stableBuildingText -notmatch [regex]::Escape($marker)) { throw "0.41 build-guide marker missing: $marker" }
 }
 foreach ($marker in @("foundationVersion = '0.35-alpha9-knowledge-portability'", 'databaseSchema = 47', 'lanCapabilityGeneration = 40', 'remoteClientMigrated = $true', 'encryptedRemoteCache = $true', 'automaticReconnect = $true', 'remotePlaybackMigrated = $true')) {
     if ($stableFoundationText -notmatch [regex]::Escape($marker)) { throw "0.35 Alpha 1 architecture-report marker missing: $marker" }

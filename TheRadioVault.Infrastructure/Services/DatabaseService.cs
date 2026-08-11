@@ -529,7 +529,8 @@ public sealed partial class DatabaseService
         double playbackSpeed,
         bool incrementPlayCount = false,
         bool incrementCompletionCount = false,
-        bool allowPositionReset = false)
+        bool allowPositionReset = false,
+        DateTimeOffset? playedAt = null)
     {
         var ids = ExpandCanonicalStateEpisodeIds(episodeId);
         if (ids.Count == 0) return;
@@ -541,7 +542,8 @@ public sealed partial class DatabaseService
         var effectiveDuration = Math.Max(Math.Max(0, durationMs), existing.DurationMs);
         var effectiveCompleted = preserveExistingProgress ? existing.Completed : completed;
         var effectiveSpeed = playbackSpeed > 0 ? playbackSpeed : existing.PlaybackSpeed > 0 ? existing.PlaybackSpeed : 1d;
-        var now = DateTime.UtcNow.ToString("O");
+        var receivedAt = DateTimeOffset.UtcNow.UtcDateTime.ToString("O");
+        var playedAtValue = (playedAt ?? DateTimeOffset.UtcNow).UtcDateTime.ToString("O");
 
         using var connection = OpenConnection();
         using var transaction = connection.BeginTransaction();
@@ -584,14 +586,14 @@ public sealed partial class DatabaseService
             command.Parameters.AddWithValue("$completedAt", effectiveCompleted && existing.LastPlayedAt.HasValue
                 ? existing.LastPlayedAt.Value.ToUniversalTime().ToString("O")
                 : (object)DBNull.Value);
-            command.Parameters.AddWithValue("$now", now);
+            command.Parameters.AddWithValue("$now", playedAtValue);
             command.ExecuteNonQuery();
 
             using var status = connection.CreateCommand();
             status.Transaction = transaction;
             status.CommandText = "UPDATE episodes SET status=$status,updated_at=$now WHERE id=$id";
             status.Parameters.AddWithValue("$status", effectiveCompleted ? "Completed" : effectivePosition > 0 ? "In Progress" : "Unplayed");
-            status.Parameters.AddWithValue("$now", now);
+            status.Parameters.AddWithValue("$now", receivedAt);
             status.Parameters.AddWithValue("$id", stateEpisodeId);
             status.ExecuteNonQuery();
         }

@@ -6,19 +6,30 @@ namespace TheRadioVault.Client.iOS;
 public sealed class RadioVaultMiniPlayerView : UIView
 {
     private readonly MobileClientSession _session;
+    private readonly UIImageView _artwork = new();
     private readonly UILabel _titleLabel = new();
     private readonly UILabel _subtitleLabel = new();
     private readonly UIButton _actionButton = UIButton.FromType(UIButtonType.System);
+    private readonly UIActivityIndicatorView _activity = new(UIActivityIndicatorViewStyle.Medium);
     private readonly UIProgressView _progress = new(UIProgressViewStyle.Default);
+    private readonly UIVisualEffectView _glassBackground;
+    private long _artworkEpisodeId;
+    private bool _artworkWasRequestedOnline;
 
     public RadioVaultMiniPlayerView(MobileClientSession session)
     {
         _session = session ?? throw new ArgumentNullException(nameof(session));
+        _glassBackground = new UIVisualEffectView(CreateBackgroundEffect())
+        {
+            TranslatesAutoresizingMaskIntoConstraints = false,
+            UserInteractionEnabled = false
+        };
+        _glassBackground.ContentView.BackgroundColor = RadioVaultTheme.Shell.ColorWithAlpha(0.16f);
         TranslatesAutoresizingMaskIntoConstraints = false;
-        BackgroundColor = RadioVaultTheme.SurfaceRaised;
+        BackgroundColor = UIColor.Clear;
         Layer.BorderColor = RadioVaultTheme.Border.CGColor;
         Layer.BorderWidth = 1;
-        Layer.CornerRadius = 12;
+        Layer.CornerRadius = 24;
         Layer.MasksToBounds = true;
         AccessibilityTraits = UIAccessibilityTrait.Button;
 
@@ -31,6 +42,13 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _subtitleLabel.Lines = 1;
         _subtitleLabel.LineBreakMode = UILineBreakMode.TailTruncation;
         _actionButton.TouchUpInside += (_, _) => _session.MiniPlayerAction();
+        _activity.Color = RadioVaultTheme.Accent;
+        _activity.HidesWhenStopped = true;
+        _activity.TranslatesAutoresizingMaskIntoConstraints = false;
+        _actionButton.AddSubview(_activity);
+        _artwork.BackgroundColor = RadioVaultTheme.AccentSubtle;
+        _artwork.Layer.CornerRadius = 10;
+        _artwork.Layer.MasksToBounds = true;
 
         var labels = new UIStackView([_titleLabel, _subtitleLabel])
         {
@@ -40,7 +58,7 @@ public sealed class RadioVaultMiniPlayerView : UIView
             Spacing = 1
         };
         labels.UserInteractionEnabled = true;
-        var row = new UIStackView([labels, _actionButton])
+        var row = new UIStackView([_artwork, labels, _actionButton])
         {
             Axis = UILayoutConstraintAxis.Horizontal,
             Alignment = UIStackViewAlignment.Center,
@@ -49,15 +67,26 @@ public sealed class RadioVaultMiniPlayerView : UIView
             TranslatesAutoresizingMaskIntoConstraints = false
         };
         _progress.TranslatesAutoresizingMaskIntoConstraints = false;
+        _progress.ProgressTintColor = RadioVaultTheme.Accent;
+        _progress.TrackTintColor = RadioVaultTheme.Border.ColorWithAlpha(0.72f);
+        AddSubview(_glassBackground);
         AddSubview(row);
         AddSubview(_progress);
         NSLayoutConstraint.ActivateConstraints([
-            row.LeadingAnchor.ConstraintEqualTo(LeadingAnchor, 14),
+            _glassBackground.LeadingAnchor.ConstraintEqualTo(LeadingAnchor),
+            _glassBackground.TrailingAnchor.ConstraintEqualTo(TrailingAnchor),
+            _glassBackground.TopAnchor.ConstraintEqualTo(TopAnchor),
+            _glassBackground.BottomAnchor.ConstraintEqualTo(BottomAnchor),
+            row.LeadingAnchor.ConstraintEqualTo(LeadingAnchor, 8),
             row.TrailingAnchor.ConstraintEqualTo(TrailingAnchor, -10),
             row.TopAnchor.ConstraintEqualTo(TopAnchor, 7),
             row.BottomAnchor.ConstraintEqualTo(_progress.TopAnchor, -6),
             _actionButton.WidthAnchor.ConstraintEqualTo(44),
             _actionButton.HeightAnchor.ConstraintEqualTo(44),
+            _artwork.WidthAnchor.ConstraintEqualTo(42),
+            _artwork.HeightAnchor.ConstraintEqualTo(42),
+            _activity.CenterXAnchor.ConstraintEqualTo(_actionButton.CenterXAnchor),
+            _activity.CenterYAnchor.ConstraintEqualTo(_actionButton.CenterYAnchor),
             _progress.LeadingAnchor.ConstraintEqualTo(LeadingAnchor),
             _progress.TrailingAnchor.ConstraintEqualTo(TrailingAnchor),
             _progress.BottomAnchor.ConstraintEqualTo(BottomAnchor)
@@ -68,6 +97,9 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _session.PlaybackStateChanged += SessionOnStateChanged;
         Reload();
     }
+
+    private static UIVisualEffect CreateBackgroundEffect()
+        => UIBlurEffect.FromStyle(UIBlurEffectStyle.SystemChromeMaterialDark);
 
     public event EventHandler? Tapped;
 
@@ -80,14 +112,30 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _titleLabel.Text = _session.MiniPlayerTitle;
         _subtitleLabel.Text = _session.MiniPlayerSubtitle;
         _progress.Progress = (float)_session.MiniPlayerProgress;
-        _actionButton.SetImage(
-            _session.MiniPlayerShowsHandoff
-                ? RadioVaultIcons.Image(RadioVaultIcon.Handoff)
-                : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play),
-            UIControlState.Normal);
-        _actionButton.TintColor = RadioVaultTheme.Progress;
-        _actionButton.Enabled = _session.MiniPlayerCanAct;
-        _actionButton.AccessibilityLabel = _session.MiniPlayerShowsHandoff
+        if (_session.CurrentBroadcast is { } broadcast &&
+            (_artworkEpisodeId != broadcast.EpisodeId ||
+             (!_artworkWasRequestedOnline && _session.IsLiveConnected)))
+        {
+            _artworkEpisodeId = broadcast.EpisodeId;
+            _artworkWasRequestedOnline = _session.IsLiveConnected;
+            RadioVaultArtwork.Load(_artwork, _session, broadcast);
+        }
+        var loading = _session.IsPreparingPlayback;
+        if (loading) _activity.StartAnimating(); else _activity.StopAnimating();
+        _actionButton.SetImage(loading
+            ? null
+            : _session.MiniPlayerShowsHandoff
+                ? RadioVaultIcons.Image(RadioVaultIcon.Handoff, RadioVaultTheme.Accent, 30, 2.5)
+                : RadioVaultIcons.Image(
+                    _session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play,
+                    RadioVaultTheme.Accent,
+                    30,
+                    2.5), UIControlState.Normal);
+        _actionButton.TintColor = RadioVaultTheme.Accent;
+        _actionButton.Enabled = !loading && _session.MiniPlayerCanAct;
+        _actionButton.AccessibilityLabel = loading
+            ? "Loading broadcast"
+            : _session.MiniPlayerShowsHandoff
             ? "Move playback to this iPhone"
             : _session.IsPlaying ? "Pause" : "Play";
         AccessibilityLabel = $"Now Playing, {_session.MiniPlayerTitle}, {_session.MiniPlayerSubtitle}";

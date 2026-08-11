@@ -20,6 +20,23 @@ test where appropriate and report which targets were actually verified.
 
 ## Validate locally
 
+On Apple Silicon macOS, the normal local gate is:
+
+```zsh
+./local-release-gate.sh
+```
+
+This validates the Mac Client, Mac Server, shared handoff checks, mobile
+offline/sync checks and the iOS simulator without using GitHub Actions. Add
+`--package` to create local Client and Server ZIP/DMG installers as well. Logs
+are written beneath `artifacts/local`. The script reads the SDK pinned in
+`global.json`, selects the full Xcode installation for iOS, and fails early if
+product version values have drifted.
+
+Use `./package-macos-local.sh` when only refreshed Mac installers are needed.
+The existing PowerShell packaging scripts remain the cross-platform/CI
+implementation.
+
 On Windows, run the complete release gate:
 
 ```powershell
@@ -66,8 +83,12 @@ dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj \
 ./package-linux.sh
 ```
 
-Local validation is helpful, but GitHub's Windows, macOS, Linux and iOS checks are the
-merge authority.
+Local validation is the normal development loop. GitHub's Windows, macOS,
+Linux and iOS checks remain the independent merge authority. Radio Vault's
+standard GitHub-hosted runners are available without metered build minutes
+while the repository is public. Every pushed branch is checked, but feature
+work must still remain off `main` until the complete platform workflow passes
+and the affected apps have had proportionate hands-on testing.
 
 ## Publish the change
 
@@ -91,8 +112,12 @@ After merging, delete the topic branch and update each computer with
 ## Releases
 
 Create releases from a version tag on a tested `main` commit, for example
-`v0.35.0-alpha9-buildfix3`. The Windows, Mac and Linux Clients and Servers and the iOS Client
+`v0.41.0`. The Windows, Mac and Linux Clients and Servers and the iOS Client
 for a release must all identify the same commit and `VERSION.txt` value.
+
+The current engineering roadmap and cross-platform audit are maintained in
+[`docs/roadmap/RADIOVAULT_ROADMAP.md`](docs/roadmap/RADIOVAULT_ROADMAP.md) and
+[`docs/architecture/SOURCE_AUDIT_2026-08-11.md`](docs/architecture/SOURCE_AUDIT_2026-08-11.md).
 
 Unsigned CI artifacts are for testing. Public Mac distribution still requires
 Developer ID signing and notarization; public Windows distribution should use

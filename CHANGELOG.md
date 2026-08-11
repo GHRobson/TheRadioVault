@@ -1,3 +1,11 @@
+# 0.41.0
+
+- Made the source repository public so standard GitHub-hosted parity builds are no longer metered, while retaining read-only workflow permissions.
+- Added a one-command local macOS/iOS release gate and native Mac Client/Server packaging so normal development does not depend on hosted CI.
+- Hardened iOS Lock Screen metadata and remote media commands by coalescing playback updates and keeping UIKit/MediaPlayer work on the main thread.
+- Aligned Client, Server and iOS product versions and added a regression check that prevents future drift.
+- Added the cross-platform source audit and staged roadmap through Radio Vault 1.0.
+
 # 0.35.0-alpha9-buildfix3
 
 - Adds the first Apple Silicon macOS Client bundle, reusing the complete Avalonia interface and the existing paired Windows Server contracts without adding a macOS Server.

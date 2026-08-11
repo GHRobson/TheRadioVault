@@ -51,7 +51,7 @@ public sealed class ShellNavigationItemViewModel : ObservableObject
     public bool IsSearchIcon => Route == "search";
     public bool IsLibraryIcon => Route.StartsWith("library", StringComparison.OrdinalIgnoreCase);
     public bool IsFavouriteIcon => Route == "favourites";
-    public bool IsMomentIcon => Route == "moments";
+    public bool IsMomentIcon => Route is "saved" or "moments";
     public bool IsTranscriptsIcon => Route == "transcripts";
     public bool IsNowPlayingIcon => Route == "now-playing";
     public bool IsResearchIcon => Route == "research";

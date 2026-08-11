@@ -7,10 +7,10 @@
     <RootNamespace>TheRadioVault.Desktop.Avalonia</RootNamespace>
     <AssemblyName>TheRadioVault</AssemblyName>
     <Product>The Radio Vault</Product>
-    <Version>0.35.0-alpha9-buildfix3</Version>
-    <AssemblyVersion>0.35.0.9</AssemblyVersion>
-    <FileVersion>0.35.0.9</FileVersion>
-    <InformationalVersion>0.35.0-alpha9-buildfix3</InformationalVersion>
+    <Version>0.41.0</Version>
+    <AssemblyVersion>0.41.0.0</AssemblyVersion>
+    <FileVersion>0.41.0.0</FileVersion>
+    <InformationalVersion>0.41.0</InformationalVersion>
     <AvaloniaUseCompiledBindingsByDefault>false</AvaloniaUseCompiledBindingsByDefault>
     <ApplicationIcon Condition="'$(OS)' == 'Windows_NT' Or $([System.String]::Copy('$(RuntimeIdentifier)').StartsWith('win-'))">Assets\RadioVault.ico</ApplicationIcon>
   </PropertyGroup>

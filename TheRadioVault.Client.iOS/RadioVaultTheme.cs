@@ -1,4 +1,5 @@
 using CoreGraphics;
+using Foundation;
 using UIKit;
 
 namespace TheRadioVault.Client.iOS;
@@ -16,19 +17,24 @@ public static class RadioVaultTheme
     public static UIColor SubtleText { get; } = Color(0x7F, 0x87, 0x91);
     public static UIColor Accent { get; } = Color(0xF2, 0xC9, 0x4C);
     public static UIColor AccentSubtle { get; } = Color(0x3A, 0x33, 0x1A);
-    public static UIColor Progress { get; } = Color(0x68, 0xB5, 0xFF);
+    // Playback progress is part of the core Radio Vault identity, so every
+    // determinate progress surface uses the same yellow as the primary accent.
+    public static UIColor Progress { get; } = Accent;
     public static UIColor Completed { get; } = Color(0x52, 0xD6, 0xA2);
     public static UIColor Favourite { get; } = Color(0xF0, 0x8D, 0xB7);
     public static UIColor Wiki { get; } = Color(0x8E, 0xA7, 0xFF);
+    public static UIColor Moment { get; } = Color(0xE8, 0xA4, 0x5E);
+    public static UIColor Research { get; } = Color(0xB4, 0x9A, 0xF2);
+    public static UIColor ActivityBlue { get; } = Color(0x68, 0xB5, 0xFF);
     public static UIColor Settings { get; } = Color(0xA9, 0xB0, 0xB8);
     public static UIColor Danger { get; } = Color(0xF8, 0x71, 0x82);
 
     public static void ApplyGlobalAppearance()
     {
         var navigation = new UINavigationBarAppearance();
-        navigation.ConfigureWithOpaqueBackground();
-        navigation.BackgroundColor = Shell;
-        navigation.ShadowColor = Border;
+        navigation.ConfigureWithTransparentBackground();
+        navigation.BackgroundColor = UIColor.Clear;
+        navigation.ShadowColor = UIColor.Clear;
         navigation.TitleTextAttributes = new UIStringAttributes { ForegroundColor = Text };
         navigation.LargeTitleTextAttributes = new UIStringAttributes { ForegroundColor = Text };
         UINavigationBar.Appearance.StandardAppearance = navigation;
@@ -79,13 +85,28 @@ public enum RadioVaultIcon
     Favourite,
     Play,
     Pause,
+    Explore,
     Knowledge,
     Download,
     Settings,
     Completed,
+    InProgress,
     UpNext,
     Radio,
-    Handoff
+    Handoff,
+    Grid,
+    List,
+    PlayNext,
+    Queue,
+    Remove,
+    Info,
+    Back,
+    Close,
+    SkipBack,
+    SkipForward,
+    Moment,
+    Offline,
+    Sync
 }
 
 public static class RadioVaultIcons
@@ -105,25 +126,30 @@ public static class RadioVaultIcons
             context.SetLineCap(CGLineCap.Round);
             context.SetLineJoin(CGLineJoin.Round);
 
-            Draw(context, icon);
+            Draw(context, icon, color);
         });
         return image.ImageWithRenderingMode(UIImageRenderingMode.AlwaysOriginal);
     }
 
-    private static UIColor ColorFor(RadioVaultIcon icon) => icon switch
+    public static UIColor ColorFor(RadioVaultIcon icon) => icon switch
     {
-        RadioVaultIcon.Play or RadioVaultIcon.Pause or RadioVaultIcon.UpNext or RadioVaultIcon.Handoff => RadioVaultTheme.Progress,
+        RadioVaultIcon.Play or RadioVaultIcon.Pause or RadioVaultIcon.UpNext or RadioVaultIcon.Handoff or
+            RadioVaultIcon.SkipBack or RadioVaultIcon.SkipForward => RadioVaultTheme.Progress,
         RadioVaultIcon.Favourite => RadioVaultTheme.Favourite,
-        RadioVaultIcon.Knowledge => RadioVaultTheme.Wiki,
-        RadioVaultIcon.Download or RadioVaultIcon.Settings => RadioVaultTheme.Settings,
+        RadioVaultIcon.Explore => RadioVaultTheme.Wiki,
+        RadioVaultIcon.Moment => RadioVaultTheme.Moment,
+        RadioVaultIcon.Knowledge => RadioVaultTheme.Research,
+        RadioVaultIcon.Download or RadioVaultIcon.Settings or RadioVaultIcon.Remove or RadioVaultIcon.Offline => RadioVaultTheme.Settings,
+        RadioVaultIcon.Sync => RadioVaultTheme.ActivityBlue,
         RadioVaultIcon.Completed => RadioVaultTheme.Completed,
+        RadioVaultIcon.InProgress => RadioVaultTheme.ActivityBlue,
         RadioVaultIcon.Search => Color(0x78, 0xB6, 0xD8),
         _ => RadioVaultTheme.Accent
     };
 
     private static UIColor Color(byte red, byte green, byte blue) => UIColor.FromRGB(red, green, blue);
 
-    private static void Draw(CGContext context, RadioVaultIcon icon)
+    private static void Draw(CGContext context, RadioVaultIcon icon, UIColor color)
     {
         switch (icon)
         {
@@ -159,7 +185,7 @@ public static class RadioVaultIcons
                 Lines(context, (9, 6), (9, 18));
                 Lines(context, (15, 6), (15, 18));
                 break;
-            case RadioVaultIcon.Knowledge:
+            case RadioVaultIcon.Explore:
                 context.MoveTo(4, 5);
                 context.AddCurveToPoint(7, 4, 9.5f, 4.5f, 12, 6);
                 context.AddLineToPoint(12, 20);
@@ -176,6 +202,12 @@ public static class RadioVaultIcons
                 Lines(context, (7, 12), (10, 12));
                 Lines(context, (14, 12), (17, 12));
                 break;
+            case RadioVaultIcon.Knowledge:
+                Polygon(context, false, (5, 3), (15, 3), (19, 7), (19, 20), (5, 20));
+                Lines(context, (15, 3), (15, 7), (19, 7));
+                Lines(context, (8, 11), (16, 11));
+                Lines(context, (8, 15), (14, 15));
+                break;
             case RadioVaultIcon.Download:
                 Lines(context, (12, 3), (12, 15));
                 Lines(context, (8, 11), (12, 15), (16, 11));
@@ -191,6 +223,10 @@ public static class RadioVaultIcons
                 break;
             case RadioVaultIcon.Completed:
                 Lines(context, (3, 13), (9, 19), (21, 6));
+                break;
+            case RadioVaultIcon.InProgress:
+                context.StrokeEllipseInRect(new CGRect(3, 3, 18, 18));
+                Lines(context, (12, 7), (12, 12), (16, 14));
                 break;
             case RadioVaultIcon.UpNext:
                 Lines(context, (4, 7), (15, 7));
@@ -225,7 +261,139 @@ public static class RadioVaultIcons
                 Lines(context, (3, 10.5), (13, 10.5));
                 Lines(context, (9, 6.5), (13, 10.5), (9, 14.5));
                 break;
+            case RadioVaultIcon.Grid:
+                RoundedRect(context, new CGRect(4, 4, 6, 6), 1);
+                RoundedRect(context, new CGRect(14, 4, 6, 6), 1);
+                RoundedRect(context, new CGRect(4, 14, 6, 6), 1);
+                RoundedRect(context, new CGRect(14, 14, 6, 6), 1);
+                break;
+            case RadioVaultIcon.List:
+                context.FillEllipseInRect(new CGRect(3.5, 5, 3, 3));
+                context.FillEllipseInRect(new CGRect(3.5, 10.5, 3, 3));
+                context.FillEllipseInRect(new CGRect(3.5, 16, 3, 3));
+                Lines(context, (9, 6.5), (20, 6.5));
+                Lines(context, (9, 12), (20, 12));
+                Lines(context, (9, 17.5), (20, 17.5));
+                break;
+            case RadioVaultIcon.PlayNext:
+                Lines(context, (4, 6), (13, 6));
+                Lines(context, (4, 11), (13, 11));
+                Lines(context, (4, 16), (10, 16));
+                Polygon(context, false, (15, 13), (20, 16.5), (15, 20));
+                break;
+            case RadioVaultIcon.Queue:
+                Lines(context, (4, 7), (15, 7));
+                Lines(context, (4, 12), (15, 12));
+                Lines(context, (4, 17), (12, 17));
+                Lines(context, (19, 13), (19, 21));
+                Lines(context, (15, 17), (23, 17));
+                break;
+            case RadioVaultIcon.Remove:
+                Lines(context, (8, 7), (8.8, 20), (15.2, 20), (16, 7));
+                Lines(context, (6, 7), (18, 7));
+                Lines(context, (10, 4), (14, 4));
+                Lines(context, (11, 10), (11, 17));
+                Lines(context, (14, 10), (14, 17));
+                break;
+            case RadioVaultIcon.Info:
+                context.StrokeEllipseInRect(new CGRect(3, 3, 18, 18));
+                context.FillEllipseInRect(new CGRect(11, 7, 2, 2));
+                Lines(context, (12, 11), (12, 17));
+                break;
+            case RadioVaultIcon.Back:
+                Lines(context, (15.5, 5), (8.5, 12), (15.5, 19));
+                break;
+            case RadioVaultIcon.Close:
+                Lines(context, (5, 5), (19, 19));
+                Lines(context, (19, 5), (5, 19));
+                break;
+            case RadioVaultIcon.SkipBack:
+                DrawSkip(context, color, "15", forward: false);
+                break;
+            case RadioVaultIcon.SkipForward:
+                DrawSkip(context, color, "30", forward: true);
+                break;
+            case RadioVaultIcon.Moment:
+                Polygon(context, false, (6, 3), (18, 3), (18, 21), (12, 16.7), (6, 21));
+                break;
+            case RadioVaultIcon.Offline:
+                context.MoveTo(5, 16);
+                context.AddCurveToPoint(2, 15, 3, 10, 7, 10);
+                context.AddCurveToPoint(8, 5, 15, 4, 17, 9);
+                context.AddCurveToPoint(22, 9, 23, 16, 18, 17);
+                context.AddLineToPoint(7, 17);
+                context.StrokePath();
+                Lines(context, (4, 4), (20, 20));
+                break;
+            case RadioVaultIcon.Sync:
+                DrawSync(context);
+                break;
         }
+    }
+
+    private static void DrawSkip(CGContext context, UIColor color, string seconds, bool forward)
+    {
+        if (forward)
+        {
+            context.MoveTo(19, 10);
+            context.AddLineToPoint(19, 17);
+            context.AddCurveToPoint(19, 18.7f, 17.7f, 20, 16, 20);
+            context.AddLineToPoint(7, 20);
+            context.AddCurveToPoint(5.3f, 20, 4, 18.7f, 4, 17);
+            context.AddLineToPoint(4, 7);
+            context.AddCurveToPoint(4, 5.3f, 5.3f, 4, 7, 4);
+            context.AddLineToPoint(20, 4);
+            context.StrokePath();
+            Lines(context, (16, 1), (20, 4), (16, 7));
+        }
+        else
+        {
+            context.MoveTo(5, 10);
+            context.AddLineToPoint(5, 17);
+            context.AddCurveToPoint(5, 18.7f, 6.3f, 20, 8, 20);
+            context.AddLineToPoint(17, 20);
+            context.AddCurveToPoint(18.7f, 20, 20, 18.7f, 20, 17);
+            context.AddLineToPoint(20, 7);
+            context.AddCurveToPoint(20, 5.3f, 18.7f, 4, 17, 4);
+            context.AddLineToPoint(4, 4);
+            context.StrokePath();
+            Lines(context, (8, 1), (4, 4), (8, 7));
+        }
+
+        using var label = new NSString(seconds);
+        var attributes = new UIStringAttributes
+        {
+            ForegroundColor = color,
+            Font = UIFont.BoldSystemFontOfSize(7.6f)
+        };
+        var measured = label.GetSizeUsingAttributes(attributes);
+        label.DrawString(
+            new CGPoint(12 - measured.Width / 2, 7.1),
+            attributes);
+    }
+
+    private static void DrawSync(CGContext context)
+    {
+        context.MoveTo(4, 10);
+        context.AddLineToPoint(4, 7);
+        context.AddCurveToPoint(4, 5.3f, 5.3f, 4, 7, 4);
+        context.AddLineToPoint(20, 4);
+        context.StrokePath();
+        Lines(context, (16, 1), (20, 4), (16, 7));
+
+        context.MoveTo(20, 14);
+        context.AddLineToPoint(20, 17);
+        context.AddCurveToPoint(20, 18.7f, 18.7f, 20, 17, 20);
+        context.AddLineToPoint(4, 20);
+        context.StrokePath();
+        Lines(context, (8, 17), (4, 20), (8, 23));
+    }
+
+    private static void RoundedRect(CGContext context, CGRect rect, double radius)
+    {
+        using var path = UIBezierPath.FromRoundedRect(rect, (nfloat)radius);
+        context.AddPath(path.CGPath!);
+        context.StrokePath();
     }
 
     private static void Lines(CGContext context, params (double X, double Y)[] points)

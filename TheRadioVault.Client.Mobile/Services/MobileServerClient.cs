@@ -17,6 +17,7 @@ public sealed class MobileServerClient : IDisposable
     private readonly IMobileConnectionStore _store;
     private HttpClient? _client;
     private RadioVaultMobileConnection? _connection;
+    private bool _isReachable;
 
     public MobileServerClient(IMobileConnectionStore store)
     {
@@ -27,6 +28,8 @@ public sealed class MobileServerClient : IDisposable
 
     public RadioVaultMobileConnection? Connection => _connection;
     public bool IsPaired => _connection?.IsConfigured == true;
+    public bool IsReachable => _isReachable;
+    public event EventHandler? ConnectivityChanged;
     public string ClientId => _connection?.ClientId
         ?? throw new InvalidOperationException("Pair this iPhone with a Radio Vault Server first.");
     public string ClientDisplayName => _connection?.ClientDisplayName
@@ -223,10 +226,12 @@ public sealed class MobileServerClient : IDisposable
 
     public async Task<WebFederationBootstrap> TestConnectionAsync(CancellationToken cancellationToken = default)
     {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(8));
         var envelope = await GetJsonAsync(
             WebApiRoutes.FederationBootstrap,
             MobileJsonContext.Default.BootstrapEnvelope,
-            cancellationToken).ConfigureAwait(false);
+            timeout.Token).ConfigureAwait(false);
         if (!string.Equals(envelope.FederationBootstrap.Server.InstanceId, _connection?.ServerInstanceId, StringComparison.Ordinal))
             throw new InvalidOperationException("The saved address now belongs to a different Radio Vault Server.");
         return envelope.FederationBootstrap;
@@ -241,6 +246,7 @@ public sealed class MobileServerClient : IDisposable
     public async Task<WebClientLibraryBrowseResult> BrowseAsync(
         string? searchText,
         int limit = 100,
+        int offset = 0,
         int? collectionId = null,
         string filter = "All",
         int? year = null,
@@ -254,13 +260,35 @@ public sealed class MobileServerClient : IDisposable
                     (collectionId is > 0 ? "&collectionId=" + collectionId.Value : string.Empty) +
                     (year is > 0 ? "&year=" + year.Value : string.Empty) +
                     (month is > 0 ? "&month=" + month.Value : string.Empty) +
-                    "&filter=" + Uri.EscapeDataString(filter) + "&limit=" + Math.Clamp(limit, 1, 250) +
-                    "&offset=0&newestFirst=true&scope=" + Uri.EscapeDataString(searchScope) +
+                    "&filter=" + Uri.EscapeDataString(filter) + "&limit=" + Math.Clamp(limit, 1, 10000) +
+                    "&offset=" + Math.Max(0, offset) + "&newestFirst=true&scope=" + Uri.EscapeDataString(searchScope) +
                     "&hasTranscript=" + hasTranscript + "&hideCompleted=" + hideCompleted;
         return (await GetJsonAsync(
             WebApiRoutes.ClientLibraryBrowse + query,
             MobileJsonContext.Default.BrowseEnvelope,
             cancellationToken).ConfigureAwait(false)).Result;
+    }
+
+    public async Task<MobileLibrarySync> GetLibrarySyncAsync(
+        string sessionId,
+        long sequence,
+        string revision,
+        CancellationToken cancellationToken = default)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(8));
+        var path = WebApiRoutes.FederationLibrarySync +
+                   "?after=" + Math.Max(0, sequence) +
+                   "&session=" + Uri.EscapeDataString(sessionId ?? string.Empty) +
+                   "&revision=" + Uri.EscapeDataString(revision ?? string.Empty) +
+                   "&metadataOnly=true";
+        var sync = (await GetJsonAsync(
+            path,
+            MobileJsonContext.Default.MobileLibrarySyncEnvelope,
+            timeout.Token).ConfigureAwait(false)).Sync;
+        if (!string.Equals(sync.ServerInstanceId, _connection?.ServerInstanceId, StringComparison.Ordinal))
+            throw new InvalidOperationException("The cache refresh was answered by a different Radio Vault Server.");
+        return sync;
     }
 
     public async Task<WebClientLibrarySearchFacets> GetSearchFacetsAsync(CancellationToken cancellationToken = default)
@@ -341,6 +369,16 @@ public sealed class MobileServerClient : IDisposable
             MobileJsonContext.Default.MobileWikiPageEnvelope,
             cancellationToken).ConfigureAwait(false)).Value;
 
+    public async Task<MobileWikiImageContent?> GetWikiImageAsync(
+        Guid imageId,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientWikiOperation("image"),
+            new MobileWikiImageRequest(imageId),
+            MobileJsonContext.Default.MobileWikiImageRequest,
+            MobileJsonContext.Default.MobileWikiImageEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
     public async Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
         long episodeId,
         CancellationToken cancellationToken = default)
@@ -367,6 +405,80 @@ public sealed class MobileServerClient : IDisposable
             MobileJsonContext.Default.MobileFavouriteMutation,
             MobileJsonContext.Default.MutationEnvelope,
             cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebMutationResult> SetListeningStatusAsync(
+        long episodeId,
+        bool played,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ListeningStatus(episodeId),
+            new MobileListeningStatusMutation(played),
+            MobileJsonContext.Default.MobileListeningStatusMutation,
+            MobileJsonContext.Default.MutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebMomentMutationResult> AddMomentAsync(
+        long episodeId,
+        WebMomentMutation mutation,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.Moments(episodeId),
+            mutation,
+            MobileJsonContext.Default.WebMomentMutation,
+            MobileJsonContext.Default.MomentMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<IReadOnlyList<WebMomentSummary>> GetMomentsAsync(CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.MomentsAll,
+            MobileJsonContext.Default.MomentsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Moments;
+
+    public async Task<MobileKnowledgeOverview> GetKnowledgeOverviewAsync(CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("overview"),
+            new MobileEmptyMutation(),
+            MobileJsonContext.Default.MobileEmptyMutation,
+            MobileJsonContext.Default.MobileKnowledgeOverviewEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task<IReadOnlyList<MobileKnowledgeCollection>> GetKnowledgeCollectionsAsync(CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("collections"),
+            new MobileEmptyMutation(),
+            MobileJsonContext.Default.MobileEmptyMutation,
+            MobileJsonContext.Default.MobileKnowledgeCollectionsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task<IReadOnlyList<MobileKnowledgeDateReview>> GetKnowledgeDateReviewsAsync(CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("date-reviews"),
+            new MobileKnowledgeDateReviewsRequest(),
+            MobileJsonContext.Default.MobileKnowledgeDateReviewsRequest,
+            MobileJsonContext.Default.MobileKnowledgeDateReviewsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task<MobileKnowledgeCoverage?> GetKnowledgeCoverageAsync(
+        int collectionId,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("coverage"),
+            new MobileKnowledgeCollectionRequest(collectionId),
+            MobileJsonContext.Default.MobileKnowledgeCollectionRequest,
+            MobileJsonContext.Default.MobileKnowledgeCoverageEnvelope,
+            cancellationToken).ConfigureAwait(false)).Value;
+
+    public async Task ResolveKnowledgeDateReviewAsync(
+        long researchId,
+        int action,
+        DateOnly? selectedDate = null,
+        CancellationToken cancellationToken = default)
+        => _ = await PostJsonAsync(
+            WebApiRoutes.ClientResearchOperation("resolve-date-review"),
+            new MobileKnowledgeResolveRequest(researchId, action, selectedDate),
+            MobileJsonContext.Default.MobileKnowledgeResolveRequest,
+            MobileJsonContext.Default.MobileKnowledgeMutationEnvelope,
+            cancellationToken).ConfigureAwait(false);
 
     public async Task<WebQueueMutationResult> AddToQueueAsync(
         long episodeId,
@@ -498,6 +610,20 @@ public sealed class MobileServerClient : IDisposable
             MobileJsonContext.Default.ProgressEnvelope,
             cancellationToken).ConfigureAwait(false)).Result;
 
+    public async Task<byte[]> GetArtworkAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        using var response = await OpenResponseAsync(
+            WebApiRoutes.Artwork(episodeId),
+            range: null,
+            cancellationToken).ConfigureAwait(false);
+        var content = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+        if (content.Length > 20 * 1024 * 1024)
+            throw new InvalidDataException("Broadcast artwork exceeds the 20 MB mobile limit.");
+        return content;
+    }
+
     public async Task<HttpResponseMessage> OpenResponseAsync(
         string path,
         string? range,
@@ -505,8 +631,18 @@ public sealed class MobileServerClient : IDisposable
     {
         var request = new HttpRequestMessage(HttpMethod.Get, path);
         if (!string.IsNullOrWhiteSpace(range)) request.Headers.TryAddWithoutValidation("Range", range);
-        var response = await RequiredClient.SendAsync(
-            request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        HttpResponseMessage response;
+        try
+        {
+            response = await RequiredClient.SendAsync(
+                request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+            SetReachable(true);
+        }
+        catch
+        {
+            SetReachable(false);
+            throw;
+        }
         if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.PartialContent)
         {
             response.Dispose();
@@ -520,14 +656,36 @@ public sealed class MobileServerClient : IDisposable
         _store.Delete();
         _connection = null;
         ReplaceClient(null);
+        SetReachable(false);
     }
 
     private async Task<T> GetJsonAsync<T>(
         string path,
         JsonTypeInfo<T> typeInfo,
         CancellationToken cancellationToken)
-        => await RequiredClient.GetFromJsonAsync(path, typeInfo, cancellationToken).ConfigureAwait(false)
-           ?? throw new InvalidOperationException("The Radio Vault Server returned an empty response.");
+    {
+        HttpResponseMessage response;
+        try
+        {
+            response = await RequiredClient.GetAsync(path, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            SetReachable(false);
+            throw;
+        }
+        using (response)
+        {
+            SetReachable(true);
+            if (!response.IsSuccessStatusCode)
+                throw new HttpRequestException(
+                    $"The Radio Vault Server rejected the request ({(int)response.StatusCode}).",
+                    null,
+                    response.StatusCode);
+            return await response.Content.ReadFromJsonAsync(typeInfo, cancellationToken).ConfigureAwait(false)
+                   ?? throw new InvalidOperationException("The Radio Vault Server returned an empty response.");
+        }
+    }
 
     private async Task<TResponse> PostJsonAsync<TRequest, TResponse>(
         string path,
@@ -536,13 +694,29 @@ public sealed class MobileServerClient : IDisposable
         JsonTypeInfo<TResponse> responseType,
         CancellationToken cancellationToken)
     {
-        using var response = await RequiredClient.PostAsJsonAsync(
-            path, request, requestType, cancellationToken).ConfigureAwait(false);
-        var result = await response.Content.ReadFromJsonAsync(responseType, cancellationToken).ConfigureAwait(false)
-            ?? throw new InvalidOperationException("The Radio Vault Server returned an empty response.");
-        if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.Conflict)
-            throw new HttpRequestException($"The Radio Vault Server rejected the request ({(int)response.StatusCode}).");
-        return result;
+        HttpResponseMessage response;
+        try
+        {
+            response = await RequiredClient.PostAsJsonAsync(
+                path, request, requestType, cancellationToken).ConfigureAwait(false);
+        }
+        catch
+        {
+            SetReachable(false);
+            throw;
+        }
+        using (response)
+        {
+            SetReachable(true);
+            if (!response.IsSuccessStatusCode && response.StatusCode != System.Net.HttpStatusCode.Conflict)
+                throw new HttpRequestException(
+                    $"The Radio Vault Server rejected the request ({(int)response.StatusCode}).",
+                    null,
+                    response.StatusCode);
+            var result = await response.Content.ReadFromJsonAsync(responseType, cancellationToken).ConfigureAwait(false)
+                ?? throw new InvalidOperationException("The Radio Vault Server returned an empty response.");
+            return result;
+        }
     }
 
     private HttpClient RequiredClient => _client
@@ -572,6 +746,13 @@ public sealed class MobileServerClient : IDisposable
         var previous = _client;
         _client = replacement;
         previous?.Dispose();
+    }
+
+    private void SetReachable(bool reachable)
+    {
+        if (_isReachable == reachable) return;
+        _isReachable = reachable;
+        ConnectivityChanged?.Invoke(this, EventArgs.Empty);
     }
 
     internal static string NormalizeThumbprint(string? value)

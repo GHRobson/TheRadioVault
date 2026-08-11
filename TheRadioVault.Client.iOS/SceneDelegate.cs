@@ -43,6 +43,12 @@ public sealed class SceneDelegate : UIResponder, IUIWindowSceneDelegate
         if (_session is not null) _ = _session.FlushPlaybackAsync();
     }
 
+    [Export("sceneDidBecomeActive:")]
+    public void DidBecomeActive(UIScene scene)
+    {
+        if (_session is not null) _ = _session.RefreshMetadataAsync();
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)

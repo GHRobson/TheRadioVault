@@ -25,6 +25,7 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         base.ViewDidLoad();
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
         TableView.RowHeight = UITableView.AutomaticDimension;
+        TableView.EstimatedRowHeight = 92;
         _ = LoadAsync();
     }
 
@@ -32,8 +33,8 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
 
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
-        0 => 3,
-        1 => 5,
+        0 => 1,
+        1 => 2,
         2 => 1,
         3 => DetailFields().Count,
         _ => 0
@@ -41,9 +42,8 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
 
     public override string? TitleForHeader(UITableView tableView, nint section) => section switch
     {
-        0 => _broadcast.Title,
-        1 => "Actions",
-        2 => "Summary",
+        1 => "Listen and save",
+        2 => "About this broadcast",
         3 => DetailFields().Count > 0 ? "Programme details" : null,
         _ => null
     };
@@ -55,49 +55,38 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
     {
         if (indexPath.Section == 0)
         {
-            var date = _broadcast.Source.AirDate?.ToString("dddd, d MMMM yyyy") ?? "Date unknown";
-            return indexPath.Row switch
-            {
-                0 => DetailCell("show", "Show", _broadcast.Source.CollectionName),
-                1 => DetailCell("date", "Air date", date),
-                _ => DetailCell("listening", "Listening", _broadcast.Status)
-            };
+            var hero = new BroadcastHeroCell();
+            hero.Configure(Session, _broadcast);
+            return hero;
+        }
+
+        if (indexPath.Section == 1 && indexPath.Row == 0)
+        {
+            var actions = new BroadcastActionStripCell();
+            actions.Configure(
+                _broadcast,
+                _isDownloaded,
+                () => _ = Session.PlayAsync(_broadcast),
+                () => _ = ToggleFavouriteAsync(),
+                HandleDownloadAction);
+            return actions;
         }
 
         if (indexPath.Section == 1)
         {
-            var cell = new UITableViewCell(UITableViewCellStyle.Default, "broadcast-action");
-            var content = cell.DefaultContentConfiguration;
-            (content.Text, content.Image) = indexPath.Row switch
-            {
-                0 => (_broadcast.HasProgress ? "Resume" : "Play", RadioVaultIcons.Image(RadioVaultIcon.Play)),
-                1 => (_broadcast.Source.Favourite ? "Remove from Favourites" : "Add to Favourites",
-                    RadioVaultIcons.Image(RadioVaultIcon.Favourite)),
-                2 => ("Play Next", RadioVaultIcons.Image(RadioVaultIcon.UpNext)),
-                3 => ("Play Last", RadioVaultIcons.Image(RadioVaultIcon.UpNext, RadioVaultTheme.MutedText)),
-                _ when Session.IsDownloading && Session.ActiveDownloadEpisodeId == _broadcast.EpisodeId
-                    => ("Downloading…", RadioVaultIcons.Image(RadioVaultIcon.Download)),
-                _ when Session.IsDownloadPaused && Session.ActiveDownloadEpisodeId == _broadcast.EpisodeId
-                    => ("Resume Download", UIImage.GetSystemImage("arrow.clockwise.circle")),
-                _ when _isDownloaded => ("Remove Download", UIImage.GetSystemImage("trash")),
-                _ => ("Download to this iPhone", RadioVaultIcons.Image(RadioVaultIcon.Download))
-            };
-            content.TextProperties.Color = indexPath.Row == 4 && _isDownloaded
-                ? RadioVaultTheme.Danger
-                : RadioVaultTheme.Accent;
-            content.SecondaryTextProperties.Color = RadioVaultTheme.MutedText;
-            cell.BackgroundColor = RadioVaultTheme.Surface;
-            cell.ContentConfiguration = content;
-            cell.SelectionStyle = Session.IsBusy || Session.IsDownloading
-                ? UITableViewCellSelectionStyle.None
-                : UITableViewCellSelectionStyle.Default;
-            return cell;
+            var queue = DetailCell(
+                "broadcast-queue-actions",
+                "Queue options",
+                "Play next or add this broadcast to the end of Up Next");
+            queue.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+            return queue;
         }
 
         if (indexPath.Section == 2)
         {
             var text = _details is null
-                ? (Session.IsBusy ? "Loading from Radio Vault Server…" : "No summary is available.")
+                ? (Session.IsBusy ? "Loading from Radio Vault Server…" :
+                    string.IsNullOrWhiteSpace(_broadcast.Description) ? "No summary is available." : _broadcast.Description)
                 : string.IsNullOrWhiteSpace(_details.Summary)
                     ? "No summary is available."
                     : _details.Summary;
@@ -105,37 +94,41 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         }
 
         var field = DetailFields()[indexPath.Row];
-        return DetailCell("programme-field", field.Label, field.Value);
+        if (field.IsEntity)
+        {
+            var values = EntityValues(field.Value);
+            var pills = new MetadataPillsCell();
+            pills.Configure(field.Label, values, EntityColor(field.Label), entity => _ = OpenEntityAsync(entity));
+            return pills;
+        }
+        var cell = DetailCell("programme-field", field.Label, field.Value);
+        cell.SelectionStyle = UITableViewCellSelectionStyle.None;
+        return cell;
     }
 
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (indexPath.Section != 1 || Session.IsBusy || Session.IsDownloading) return;
-        switch (indexPath.Row)
+        if (indexPath.Section == 1 && indexPath.Row == 1) PresentQueueActions();
+    }
+
+    private void PresentQueueActions()
+    {
+        var menu = UIAlertController.Create(
+            "Queue options",
+            _broadcast.Title,
+            UIAlertControllerStyle.ActionSheet);
+        menu.AddAction(UIAlertAction.Create("Play Next", UIAlertActionStyle.Default,
+            action => _ = AddToQueueAsync(playNext: true)));
+        menu.AddAction(UIAlertAction.Create("Add to End of Queue", UIAlertActionStyle.Default,
+            action => _ = AddToQueueAsync(playNext: false)));
+        menu.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        if (menu.PopoverPresentationController is { } popover)
         {
-            case 0:
-                _ = Session.PlayAsync(_broadcast);
-                break;
-            case 1:
-                _ = ToggleFavouriteAsync();
-                break;
-            case 2:
-                _ = AddToQueueAsync(playNext: true);
-                break;
-            case 3:
-                _ = AddToQueueAsync(playNext: false);
-                break;
-            case 4 when _isDownloaded:
-                ConfirmRemoveDownload();
-                break;
-            case 4 when Session.IsDownloadPaused && Session.ActiveDownloadEpisodeId == _broadcast.EpisodeId:
-                _ = Session.ResumeDownloadAsync();
-                break;
-            case 4:
-                _ = DownloadAsync();
-                break;
+            popover.SourceView = TableView;
+            popover.SourceRect = TableView.Bounds;
         }
+        PresentViewController(menu, true, null);
     }
 
     private async Task LoadAsync()
@@ -168,6 +161,21 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
     {
         await Session.AddToQueueAsync(_broadcast, playNext).ConfigureAwait(false);
         if (!_disposed) BeginInvokeOnMainThread(() => TableView.ReloadData());
+    }
+
+    private void HandleDownloadAction()
+    {
+        if (_isDownloaded)
+        {
+            ConfirmRemoveDownload();
+            return;
+        }
+        if (Session.IsDownloadPaused && Session.ActiveDownloadEpisodeId == _broadcast.EpisodeId)
+        {
+            _ = Session.ResumeDownloadAsync();
+            return;
+        }
+        if (!Session.IsDownloading) _ = DownloadAsync();
     }
 
     private async Task DownloadAsync()
@@ -207,24 +215,76 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         });
     }
 
-    private IReadOnlyList<(string Label, string Value)> DetailFields()
+    private IReadOnlyList<(string Label, string Value, bool IsEntity)> DetailFields()
     {
         if (_details is null) return [];
         return new[]
             {
-                ("Broadcast slot", _details.Slot),
-                ("Edition", _details.Edition),
-                ("Hosts", _details.Hosts),
-                ("Guests", _details.Guests),
-                ("Callers", _details.Callers),
-                ("Mentioned people", _details.MentionedPeople),
-                ("Topics", string.Join(", ", _details.Topics)),
-                ("Archive notes", _details.ArchiveNotes),
-                ("Research notes", _details.ResearchNotes),
-                ("Personal notes", _details.PersonalNotes)
+                ("Broadcast slot", _details.Slot, false),
+                ("Edition", _details.Edition, false),
+                ("Hosts", _details.Hosts, true),
+                ("Guests", _details.Guests, true),
+                ("Callers", _details.Callers, true),
+                ("Mentioned people", _details.MentionedPeople, true),
+                ("Topics", string.Join(", ", _details.Topics), true),
+                ("Archive notes", _details.ArchiveNotes, false),
+                ("Research notes", _details.ResearchNotes, false),
+                ("Personal notes", _details.PersonalNotes, false)
             }
             .Where(field => !string.IsNullOrWhiteSpace(field.Item2))
             .ToArray();
+    }
+
+    private void PresentEntityOptions(string label, string value)
+    {
+        var values = value
+            .Split([',', ';', '|', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToArray();
+        if (values.Length == 0) return;
+        if (values.Length == 1)
+        {
+            _ = OpenEntityAsync(values[0]);
+            return;
+        }
+        var menu = UIAlertController.Create(label, "Choose what to explore", UIAlertControllerStyle.ActionSheet);
+        foreach (var entity in values)
+            menu.AddAction(UIAlertAction.Create(entity, UIAlertActionStyle.Default, action => { _ = OpenEntityAsync(entity); }));
+        menu.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        if (menu.PopoverPresentationController is { } popover)
+        {
+            popover.SourceView = TableView;
+            popover.SourceRect = TableView.Bounds;
+        }
+        PresentViewController(menu, true, null);
+    }
+
+    private static IReadOnlyList<string> EntityValues(string value)
+        => value
+            .Split([',', ';', '|', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Distinct(StringComparer.CurrentCultureIgnoreCase)
+            .ToArray();
+
+    private static UIColor EntityColor(string label) => label switch
+    {
+        "Hosts" => RadioVaultTheme.ActivityBlue,
+        "Guests" => RadioVaultTheme.Moment,
+        "Topics" => RadioVaultTheme.Research,
+        "Callers" => RadioVaultTheme.Accent,
+        _ => RadioVaultTheme.Wiki
+    };
+
+    private async Task OpenEntityAsync(string entity)
+    {
+        var dashboard = await Session.LoadExploreDashboardAsync().ConfigureAwait(false);
+        var page = dashboard?.AllPages.FirstOrDefault(value =>
+            value.Title.Equals(entity, StringComparison.CurrentCultureIgnoreCase) ||
+            value.Slug.Equals(entity.Replace(' ', '-'), StringComparison.OrdinalIgnoreCase));
+        BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+            page is not null
+                ? new ExploreArticleViewController(Session, page)
+                : new EntityBroadcastsViewController(Session, entity),
+            true));
     }
 
     private static UITableViewCell BodyCell(string identifier, string text)

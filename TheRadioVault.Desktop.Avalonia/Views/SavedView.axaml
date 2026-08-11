@@ -1,0 +1,43 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Desktop.Avalonia.Views.SavedView">
+  <Grid RowDefinitions="Auto,Auto,*">
+    <StackPanel Margin="{StaticResource RvPagePadding}" Spacing="3">
+      <TextBlock Text="Saved" Classes="display-title" />
+      <TextBlock Text="Favourite broadcasts and exact listening Moments in one place."
+                 Classes="muted" FontSize="12" />
+    </StackPanel>
+
+    <Border Grid.Row="1" Margin="28,0,28,0" Classes="card" Padding="7">
+      <Grid ColumnDefinitions="*,*" ColumnSpacing="7">
+        <ToggleButton IsChecked="{Binding IsFavouritesSelected, Mode=OneWay}"
+                      Command="{Binding ShowFavouritesCommand}"
+                      Classes="secondary" HorizontalContentAlignment="Center" Padding="16,9">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Width="19" Height="19" Stretch="Uniform"
+                  Stroke="{DynamicResource RvStatFavouriteBrush}" StrokeThickness="1.9"
+                  StrokeLineCap="Round" StrokeJoin="Round"
+                  Data="M12,20 L5.2,13.8 C2,10.8 3.7,6 7.5,6 C9.4,6 11,7.1 12,8.7 C13,7.1 14.6,6 16.5,6 C20.3,6 22,10.8 18.8,13.8 Z" />
+            <TextBlock Text="Favourites" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </StackPanel>
+        </ToggleButton>
+        <ToggleButton Grid.Column="1" IsChecked="{Binding IsMomentsSelected, Mode=OneWay}"
+                      Command="{Binding ShowMomentsCommand}"
+                      Classes="secondary" HorizontalContentAlignment="Center" Padding="16,9">
+          <StackPanel Orientation="Horizontal" Spacing="8">
+            <Path Width="19" Height="19" Stretch="Uniform"
+                  Stroke="{DynamicResource RvMomentBrush}" StrokeThickness="1.9"
+                  StrokeLineCap="Round" StrokeJoin="Round"
+                  Data="M6,3 L18,3 L18,21 L12,16.7 L6,21 Z" />
+            <TextBlock Text="Moments" FontWeight="SemiBold" VerticalAlignment="Center" />
+          </StackPanel>
+        </ToggleButton>
+      </Grid>
+    </Border>
+
+    <Grid Grid.Row="2">
+      <ContentControl IsVisible="{Binding IsFavouritesSelected}" Content="{Binding Library}" />
+      <ContentControl IsVisible="{Binding IsMomentsSelected}" Content="{Binding Moments}" />
+    </Grid>
+  </Grid>
+</UserControl>

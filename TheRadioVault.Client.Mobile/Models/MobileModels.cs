@@ -39,11 +39,196 @@ public sealed record DiscoveredRadioVaultServer(
 
 public sealed record MobileFavouriteMutation(bool Favourite);
 
+public sealed record MobileListeningStatusMutation(bool Played);
+
 public sealed record MobileQueueAddMutation(long EpisodeId, bool PlayNext = false);
 
 public sealed record MobileQueueMoveMutation(int Direction);
 
 public sealed record MobileEmptyMutation;
+
+public sealed record MobileKnowledgeCollection(int? CollectionId, string Name, int RecordCount);
+
+public sealed record MobileKnowledgeOverview(
+    int TotalRecords,
+    int InLibraryRecords,
+    int MissingRecords,
+    int NeedsReviewRecords,
+    int ConflictRecords,
+    int UnsourcedRecords,
+    int WithSummaries,
+    int WithPeople,
+    int WithTopics,
+    int WithSources,
+    DateTimeOffset? LastImportAt,
+    DateOnly? EarliestDate,
+    DateOnly? LatestDate)
+{
+    public int CoveragePercent => TotalRecords <= 0
+        ? 0
+        : (int)Math.Round(100d * (WithSummaries + WithPeople + WithTopics + WithSources) / (TotalRecords * 4d));
+}
+
+public sealed record MobileKnowledgeDateReview(
+    long ResearchId,
+    long EpisodeId,
+    int CollectionId,
+    string ShowName,
+    string Title,
+    string OriginalFilename,
+    string CandidateText,
+    DateOnly? ProposedDate,
+    string CandidateKind,
+    string ReleaseDateText,
+    string RecordingDateText,
+    string Basis,
+    string Provenance,
+    int Confidence,
+    int SourceCount,
+    bool HasSameDayCollision,
+    string DecisionStatus,
+    DateOnly? CurrentLibraryDate,
+    DateTimeOffset UpdatedAt)
+{
+    public string DisplayTitle => string.IsNullOrWhiteSpace(Title) ? OriginalFilename : Title.Trim();
+    public string ProposedDateText => ProposedDate?.ToString("dd MMM yyyy")
+        ?? (string.IsNullOrWhiteSpace(CandidateText) ? "No exact date" : CandidateText);
+    public string EvidenceText => $"{CandidateKind} · {Confidence}% confidence · {SourceCount:N0} source{(SourceCount == 1 ? string.Empty : "s")}";
+}
+
+public sealed record MobileKnowledgeCoverageDay(
+    DateOnly Date,
+    bool IsWeekend,
+    bool HasAudio,
+    bool HasResearch,
+    bool IsKnownMissing,
+    int BroadcastCount,
+    int MetadataScore,
+    string MissingFields,
+    long? RepresentativeEpisodeId,
+    long? ResearchId);
+
+public sealed record MobileKnowledgeCoverage(
+    int CollectionId,
+    string ShowName,
+    DateOnly FirstDate,
+    DateOnly LastDate,
+    IReadOnlyList<MobileKnowledgeCoverageDay> Days)
+{
+    public int DatedBroadcastDays => Days.Count(value => value.HasAudio || value.HasResearch || value.IsKnownMissing);
+    public int GapDays => Days.Count(value => !value.IsWeekend && !value.HasAudio && !value.HasResearch && !value.IsKnownMissing);
+    public int AverageMetadataScore
+    {
+        get
+        {
+            var covered = Days.Where(value => value.HasAudio || value.HasResearch).ToArray();
+            return covered.Length == 0 ? 0 : (int)Math.Round(covered.Average(value => value.MetadataScore));
+        }
+    }
+}
+
+public sealed record MobileKnowledgeSnapshot(
+    MobileKnowledgeOverview Overview,
+    IReadOnlyList<MobileKnowledgeCollection> Collections,
+    IReadOnlyList<MobileKnowledgeDateReview> DateReviews,
+    DateTimeOffset UpdatedAt,
+    bool IsLibraryFallback = false);
+
+public sealed record MobileKnowledgeDateReviewsRequest(int? CollectionId = null, bool IncludeResolved = false);
+public sealed record MobileKnowledgeCollectionRequest(int? CollectionId);
+public sealed record MobileKnowledgeResolveRequest(long ResearchId, int Action, DateOnly? SelectedDate);
+
+public sealed record MobileLibrarySyncEnvelope(MobileLibrarySync Sync);
+
+public sealed record MobileLibrarySync(
+    string ServerInstanceId,
+    string SessionId,
+    long Sequence,
+    string LibraryRevision,
+    bool ResetRequired,
+    bool NoChanges,
+    IReadOnlyList<WebChangeEvent> Changes,
+    DateTimeOffset GeneratedAt);
+
+public sealed record MobileMetadataCacheSnapshot(
+    int Version,
+    string ServerInstanceId,
+    string SyncSessionId,
+    long SyncSequence,
+    string SyncRevision,
+    IReadOnlyList<WebClientLibraryBroadcastSummary> Broadcasts,
+    WebClientLibraryOverview? Overview,
+    IReadOnlyList<WebQueueItem> Queue,
+    MobileWikiOverview? ExploreOverview,
+    IReadOnlyList<MobileWikiPageSummary> ExplorePages,
+    MobileWikiDashboardHighlights? ExploreHighlights,
+    IReadOnlyList<MobileWikiPageDocument> ExploreDocuments,
+    IReadOnlyList<WebMomentSummary>? Moments,
+    MobileKnowledgeSnapshot? Knowledge,
+    DateTimeOffset UpdatedAt)
+{
+    public static MobileMetadataCacheSnapshot Empty(string serverInstanceId) => new(
+        1,
+        serverInstanceId,
+        string.Empty,
+        0,
+        string.Empty,
+        [],
+        null,
+        [],
+        null,
+        [],
+        null,
+        [],
+        [],
+        null,
+        DateTimeOffset.MinValue);
+}
+
+public sealed record MobileDiagnosticSnapshot(
+    DateTimeOffset CapturedAt,
+    bool IsPaired,
+    bool IsLiveConnected,
+    bool IsMetadataSyncing,
+    bool IsBusy,
+    string ServerName,
+    string ServerAddress,
+    string StatusText,
+    int PendingChanges,
+    int PendingFavouriteChanges,
+    int PendingListeningChanges,
+    int PendingMomentChanges,
+    DateTimeOffset? LastSyncAttemptAt,
+    DateTimeOffset? LastSuccessfulSyncAt,
+    string LastSyncError,
+    DateTimeOffset CacheUpdatedAt,
+    long CacheSyncSequence,
+    string CacheSyncRevision,
+    int CachedBroadcasts,
+    int CachedCollections,
+    int CachedExplorePages,
+    int CachedExploreDocuments,
+    int CachedExploreImages,
+    int CachedMoments,
+    bool HasKnowledge,
+    int DownloadCount,
+    long DownloadedBytes,
+    long PendingDownloadBytes,
+    bool IsDownloading,
+    bool IsDownloadPaused,
+    long? ActiveDownloadEpisodeId,
+    string DownloadStatus,
+    bool HasMiniPlayer,
+    long? CurrentEpisodeId,
+    bool IsPlaying,
+    bool CanControlPlayback,
+    bool MiniPlayerShowsHandoff,
+    string PlaybackStatus,
+    string PlaybackTime,
+    bool WifiOnlyDownloads,
+    bool AutoDownloadNewBroadcasts,
+    bool DeleteCompletedDownloads,
+    long DownloadStorageLimitBytes);
 
 public sealed class MobileBroadcastItem
 {
@@ -63,6 +248,7 @@ public sealed class MobileBroadcastItem
     public string Subtitle { get; }
     public string Description => Source.Description ?? string.Empty;
     public double Progress { get; }
+    public double DisplayProgress => Source.Completed ? 100d : Progress;
     public bool HasProgress => Progress > 0.5d;
     public string Status => Source.Completed ? "Played" : Source.InProgress ? $"{Progress:0}% listened" : "Unplayed";
 }

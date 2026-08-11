@@ -19,7 +19,8 @@ public sealed record MobileNowPlayingSnapshot(
     TimeSpan Duration,
     double Rate,
     bool IsPlaying,
-    bool IsAvailable);
+    bool IsAvailable,
+    byte[]? Artwork = null);
 
 public interface IMobileNowPlayingService : IDisposable
 {

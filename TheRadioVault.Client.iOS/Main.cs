@@ -7,6 +7,7 @@ public static class Application
 {
     public static void Main(string[] args)
     {
+        IosPlaybackDiagnostics.Reset();
         MobilePlatformServices.Configure(new MobilePlatformServiceSet(
             new IosKeychainConnectionStore(),
             new IosAvPlayerEngine(),

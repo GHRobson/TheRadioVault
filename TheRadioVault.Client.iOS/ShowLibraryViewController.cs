@@ -8,22 +8,26 @@ namespace TheRadioVault.Client.iOS;
 
 public sealed class ShowLibraryViewController : SessionTableViewController, IUISearchBarDelegate
 {
-    private enum ArchiveViewMode { Years, Months, Broadcasts }
+    private const string GridPreferenceKey = "radiovault.library.prefers-grid";
+    private const string GridPreferenceSetKey = "radiovault.library.view-choice-set";
+    private enum ArchiveLevel { Years, Months, Broadcasts }
 
     private readonly int? _collectionId;
+    private readonly string? _collectionName;
+    private readonly string _rootTitle;
     private readonly string _filter;
-    private readonly bool _hideCompleted;
-    private readonly UISearchController _searchController = new((UIViewController?)null)
-    {
-        ObscuresBackgroundDuringPresentation = false
-    };
-    private readonly UISegmentedControl _viewSelector = new(["Years", "Months", "Broadcasts"]);
+    private readonly bool _supportsViewModes;
+    private readonly LibraryControlsHeaderView _header;
     private IReadOnlyList<MobileBroadcastItem> _broadcasts = [];
     private IReadOnlyList<WebClientLibraryArchivePeriodSummary> _periods = [];
-    private ArchiveViewMode _mode;
+    private ArchiveLevel _level;
     private int? _year;
     private int? _month;
+    private string? _searchText;
+    private bool _isGridView;
+    private bool _hideCompleted;
     private bool _loading;
+    private int _loadGeneration;
 
     public ShowLibraryViewController(
         MobileClientSession session,
@@ -34,11 +38,18 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
         : base(session)
     {
         _collectionId = collectionId;
+        _collectionName = collectionId.HasValue ? title : null;
+        _rootTitle = title;
         _filter = filter;
+        _supportsViewModes = filter.Equals("All", StringComparison.OrdinalIgnoreCase);
+        _isGridView = _supportsViewModes && PreferredGridMode();
+        _header = new LibraryControlsHeaderView(
+            includesPageHeading: false,
+            includesViewModes: _supportsViewModes);
         _hideCompleted = hideCompleted && !filter.Equals("Completed", StringComparison.OrdinalIgnoreCase);
-        _mode = filter.Equals("All", StringComparison.OrdinalIgnoreCase)
-            ? ArchiveViewMode.Years
-            : ArchiveViewMode.Broadcasts;
+        _level = _isGridView
+            ? ArchiveLevel.Years
+            : ArchiveLevel.Broadcasts;
         Title = title;
     }
 
@@ -46,75 +57,64 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
     {
         base.ViewDidLoad();
         NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
-        _searchController.SearchBar.Placeholder = $"Search {Title}";
-        _searchController.SearchBar.Delegate = this;
-        NavigationItem.SearchController = _searchController;
-        NavigationItem.HidesSearchBarWhenScrolling = false;
-        DefinesPresentationContext = true;
-
-        if (_filter.Equals("All", StringComparison.OrdinalIgnoreCase))
-        {
-            _viewSelector.SelectedSegment = (nint)_mode;
-            _viewSelector.SelectedSegmentTintColor = RadioVaultTheme.Accent;
-            _viewSelector.SetTitleTextAttributes(
-                new UIStringAttributes { ForegroundColor = RadioVaultTheme.Background },
-                UIControlState.Selected);
-            _viewSelector.SetTitleTextAttributes(
-                new UIStringAttributes { ForegroundColor = RadioVaultTheme.MutedText },
-                UIControlState.Normal);
-            _viewSelector.ValueChanged += ViewSelectorChanged;
-            var header = new UIView(new CoreGraphics.CGRect(0, 0, 1, 54))
-            {
-                BackgroundColor = RadioVaultTheme.Background
-            };
-            _viewSelector.TranslatesAutoresizingMaskIntoConstraints = false;
-            header.AddSubview(_viewSelector);
-            NSLayoutConstraint.ActivateConstraints([
-                _viewSelector.LeadingAnchor.ConstraintEqualTo(header.LeadingAnchor, 16),
-                _viewSelector.TrailingAnchor.ConstraintEqualTo(header.TrailingAnchor, -16),
-                _viewSelector.TopAnchor.ConstraintEqualTo(header.TopAnchor, 9),
-                _viewSelector.HeightAnchor.ConstraintEqualTo(36)
-            ]);
-            TableView.TableHeaderView = header;
-        }
+        TableView.RowHeight = UITableView.AutomaticDimension;
+        TableView.EstimatedRowHeight = 96;
+        _header.SearchBar.Placeholder = $"Search {_rootTitle}";
+        _header.SearchBar.Delegate = this;
+        _header.CompletedButton.TouchUpInside += CompletedButtonTapped;
+        _header.GridButton.TouchUpInside += GridButtonTapped;
+        _header.ListButton.TouchUpInside += ListButtonTapped;
+        _header.SetMode(_isGridView);
+        TableView.TableHeaderView = _header;
+        UpdateHideCompletedButton();
 
         RefreshControl = new UIRefreshControl();
-        RefreshControl.ValueChanged += (_, _) => _ = LoadAsync(_searchController.SearchBar.Text);
+        RefreshControl.ValueChanged += (_, _) => _ = LoadAsync(_searchText);
+        UpdateNavigation();
         _ = LoadAsync();
     }
 
     public override nint NumberOfSections(UITableView tableView) => 1;
-    public override nint RowsInSection(UITableView tableView, nint section)
-        => Math.Max(1, _mode == ArchiveViewMode.Broadcasts ? _broadcasts.Count : _periods.Count);
 
-    public override string? TitleForHeader(UITableView tableView, nint section) => _mode switch
+    public override nint RowsInSection(UITableView tableView, nint section)
     {
-        ArchiveViewMode.Years => _hideCompleted ? "Years · completed hidden" : "Years",
-        ArchiveViewMode.Months => $"Months in {_year}",
+        if (_level == ArchiveLevel.Broadcasts) return Math.Max(1, _broadcasts.Count);
+        return Math.Max(1, (int)Math.Ceiling(_periods.Count / 2d));
+    }
+
+    public override string? TitleForHeader(UITableView tableView, nint section) => _level switch
+    {
+        ArchiveLevel.Years => _hideCompleted ? "Browse by year · completed hidden" : "Browse by year",
+        ArchiveLevel.Months => $"{_year} · choose a month",
         _ when _year.HasValue && _month.HasValue =>
-            $"Broadcasts · {new DateTime(_year.Value, _month.Value, 1):MMMM yyyy}",
+            $"{new DateTime(_year.Value, _month.Value, 1):MMMM yyyy} · broadcasts",
         _ => _hideCompleted ? "Broadcasts · completed hidden" : "Broadcasts"
     };
 
+    public override string? TitleForFooter(UITableView tableView, nint section)
+        => _level == ArchiveLevel.Years
+            ? "Choose a year, then a month, to reach its broadcasts. Press and hold any broadcast for playback, queue, favourite and download actions."
+            : null;
+
     public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
     {
-        if (_mode != ArchiveViewMode.Broadcasts)
+        if (_level != ArchiveLevel.Broadcasts)
         {
             if (_periods.Count == 0)
                 return DetailCell("empty-period", _loading ? "Loading archive…" : "No archive periods found", Session.StatusText);
-            var period = _periods[indexPath.Row];
-            var cell = DetailCell(
-                "archive-period",
-                period.Title,
-                $"{period.BroadcastCount:N0} broadcasts · {period.ProgressText} · {period.FavouriteCount:N0} favourites");
-            cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+            var start = (int)indexPath.Row * 2;
+            var leading = _periods[start];
+            var trailing = start + 1 < _periods.Count ? _periods[start + 1] : null;
+            var cell = new ArchiveGridRowCell();
+            cell.Configure(leading, trailing, OpenPeriod);
             return cell;
         }
 
         if (_broadcasts.Count == 0)
             return DetailCell("empty-show", _loading ? "Loading broadcasts…" : "No broadcasts found", Session.StatusText);
         var item = _broadcasts[indexPath.Row];
-        var broadcastCell = DetailCell("show-broadcast", item.Title, $"{item.Subtitle} · {item.Status}");
+        var broadcastCell = new BroadcastProgressCell("show-broadcast");
+        broadcastCell.Configure(Session, item);
         broadcastCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
         return broadcastCell;
     }
@@ -122,93 +122,220 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
-        if (_mode == ArchiveViewMode.Years && indexPath.Row < _periods.Count)
-        {
-            _year = _periods[indexPath.Row].Value;
-            _month = null;
-            SelectMode(ArchiveViewMode.Months);
-            return;
-        }
-        if (_mode == ArchiveViewMode.Months && indexPath.Row < _periods.Count)
-        {
-            _month = _periods[indexPath.Row].Value;
-            SelectMode(ArchiveViewMode.Broadcasts);
-            return;
-        }
-        if (indexPath.Row < _broadcasts.Count)
+        if (_level == ArchiveLevel.Broadcasts && indexPath.Row < _broadcasts.Count)
             NavigationController?.PushViewController(
                 new BroadcastDetailsViewController(Session, _broadcasts[indexPath.Row]), true);
     }
+
+    protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
+        => _level == ArchiveLevel.Broadcasts && indexPath.Row < _broadcasts.Count
+            ? _broadcasts[indexPath.Row]
+            : null;
 
     [Export("searchBarSearchButtonClicked:")]
     public void SearchButtonClicked(UISearchBar searchBar)
     {
         searchBar.ResignFirstResponder();
-        SelectMode(ArchiveViewMode.Broadcasts, searchBar.Text);
+        _searchText = searchBar.Text?.Trim();
+        if (string.IsNullOrWhiteSpace(_searchText)) return;
+        _isGridView = false;
+        _year = null;
+        _month = null;
+        _level = ArchiveLevel.Broadcasts;
+        UpdateNavigation();
+        _ = LoadAsync(_searchText);
+    }
+
+    [Export("searchBar:textDidChange:")]
+    public void TextChanged(UISearchBar searchBar, string searchText)
+    {
+        if (!string.IsNullOrWhiteSpace(searchText) || string.IsNullOrWhiteSpace(_searchText)) return;
+        _searchText = null;
+        _year = null;
+        _month = null;
+        _isGridView = _supportsViewModes && PreferredGridMode();
+        _level = _isGridView ? ArchiveLevel.Years : ArchiveLevel.Broadcasts;
+        UpdateNavigation();
+        _ = LoadAsync();
     }
 
     [Export("searchBarCancelButtonClicked:")]
-    public void CancelButtonClicked(UISearchBar searchBar) => _ = LoadAsync();
-
-    private void ViewSelectorChanged(object? sender, EventArgs eventArgs)
+    public void CancelButtonClicked(UISearchBar searchBar)
     {
-        var requested = (ArchiveViewMode)_viewSelector.SelectedSegment;
-        if (requested == ArchiveViewMode.Months && !_year.HasValue)
-            _year = _mode == ArchiveViewMode.Years ? _periods.FirstOrDefault()?.Value : null;
-        if (requested == ArchiveViewMode.Years)
+        _searchText = null;
+        _year = null;
+        _month = null;
+        _isGridView = _supportsViewModes && PreferredGridMode();
+        _level = _isGridView
+            ? ArchiveLevel.Years
+            : ArchiveLevel.Broadcasts;
+        UpdateNavigation();
+        _ = LoadAsync();
+    }
+
+    private void OpenPeriod(WebClientLibraryArchivePeriodSummary period)
+    {
+        _isGridView = true;
+        if (_level == ArchiveLevel.Years)
+        {
+            _year = period.Value;
+            _month = null;
+            _level = ArchiveLevel.Months;
+        }
+        else if (_level == ArchiveLevel.Months)
+        {
+            _month = period.Value;
+            _level = ArchiveLevel.Broadcasts;
+        }
+        UpdateNavigation();
+        _ = LoadAsync();
+    }
+
+    private void NavigateUp()
+    {
+        _header.SearchBar.Text = string.Empty;
+        _searchText = null;
+        if (_level == ArchiveLevel.Broadcasts && _year.HasValue)
+        {
+            _month = null;
+            _level = ArchiveLevel.Months;
+        }
+        else
         {
             _year = null;
             _month = null;
+            _level = ArchiveLevel.Years;
         }
-        else if (requested == ArchiveViewMode.Months)
-        {
-            _month = null;
-        }
-        SelectMode(requested);
+        UpdateNavigation();
+        _ = LoadAsync();
     }
 
-    private void SelectMode(ArchiveViewMode mode, string? searchText = null)
+    private void UpdateNavigation()
     {
-        _mode = mode;
-        _viewSelector.SelectedSegment = (nint)mode;
-        _ = LoadAsync(searchText);
+        Title = _level switch
+        {
+            ArchiveLevel.Months when _year.HasValue => _year.Value.ToString(),
+            ArchiveLevel.Broadcasts when _year.HasValue && _month.HasValue =>
+                new DateTime(_year.Value, _month.Value, 1).ToString("MMMM yyyy"),
+            _ => _rootTitle
+        };
+        NavigationItem.Title = string.Empty;
+        _header.SetMode(_isGridView);
+        NavigationItem.LeftBarButtonItem = _level switch
+        {
+            ArchiveLevel.Months => CreateBackButton("Years"),
+            ArchiveLevel.Broadcasts when _year.HasValue =>
+                CreateBackButton("Months"),
+            _ => null
+        };
+    }
+
+    private void ToggleHideCompleted()
+    {
+        if (_filter.Equals("Completed", StringComparison.OrdinalIgnoreCase)) return;
+        _hideCompleted = !_hideCompleted;
+        UpdateHideCompletedButton();
+        _ = LoadAsync(_searchText);
+    }
+
+    private void CompletedButtonTapped(object? sender, EventArgs eventArgs) => ToggleHideCompleted();
+
+    private void GridButtonTapped(object? sender, EventArgs eventArgs)
+    {
+        if (!_filter.Equals("All", StringComparison.OrdinalIgnoreCase)) return;
+        _header.SearchBar.Text = string.Empty;
+        _searchText = null;
+        _isGridView = true;
+        NSUserDefaults.StandardUserDefaults.SetBool(true, GridPreferenceKey);
+        NSUserDefaults.StandardUserDefaults.SetBool(true, GridPreferenceSetKey);
+        _year = null;
+        _month = null;
+        _level = ArchiveLevel.Years;
+        UpdateNavigation();
+        _ = LoadAsync();
+    }
+
+    private void ListButtonTapped(object? sender, EventArgs eventArgs)
+    {
+        _isGridView = false;
+        NSUserDefaults.StandardUserDefaults.SetBool(false, GridPreferenceKey);
+        NSUserDefaults.StandardUserDefaults.SetBool(true, GridPreferenceSetKey);
+        _year = null;
+        _month = null;
+        _level = ArchiveLevel.Broadcasts;
+        UpdateNavigation();
+        _ = LoadAsync(_header.SearchBar.Text);
+    }
+
+    private void UpdateHideCompletedButton()
+    {
+        _header.CompletedButton.Enabled = !_filter.Equals("Completed", StringComparison.OrdinalIgnoreCase);
+        _header.SetHideCompleted(_hideCompleted);
+    }
+
+    private static bool PreferredGridMode()
+    {
+        var defaults = NSUserDefaults.StandardUserDefaults;
+        return !defaults.BoolForKey(GridPreferenceSetKey) || defaults.BoolForKey(GridPreferenceKey);
+    }
+
+    private UIBarButtonItem CreateBackButton(string title)
+    {
+        var button = UIButton.FromType(UIButtonType.System);
+        button.SetImage(RadioVaultIcons.Image(RadioVaultIcon.Back, RadioVaultTheme.Accent, 18), UIControlState.Normal);
+        button.SetTitle($" {title}", UIControlState.Normal);
+        button.SetTitleColor(RadioVaultTheme.Accent, UIControlState.Normal);
+        button.TitleLabel!.Font = UIFont.SystemFontOfSize(16, UIFontWeight.Medium)!;
+        button.AccessibilityLabel = $"Back to {title}";
+        button.TouchUpInside += (_, _) => NavigateUp();
+        button.SizeToFit();
+        return new UIBarButtonItem(button);
     }
 
     private async Task LoadAsync(string? searchText = null)
     {
-        if (_loading) return;
+        var generation = ++_loadGeneration;
+        var requestedLevel = _level;
+        var requestedYear = _year;
+        var requestedMonth = _month;
+        var requestedHideCompleted = _hideCompleted;
         _loading = true;
         BeginInvokeOnMainThread(() => TableView.ReloadData());
-        if (_mode == ArchiveViewMode.Broadcasts)
+        if (requestedLevel == ArchiveLevel.Broadcasts)
         {
             var values = await Session.BrowseCollectionAsync(
                 _collectionId,
                 searchText,
                 _filter,
-                _year,
-                _month,
-                _hideCompleted).ConfigureAwait(false);
+                requestedYear,
+                requestedMonth,
+                requestedHideCompleted,
+                _collectionName).ConfigureAwait(false);
             BeginInvokeOnMainThread(() =>
             {
+                if (generation != _loadGeneration) return;
                 _broadcasts = values;
-                FinishLoad();
+                FinishLoad(generation);
             });
             return;
         }
 
         var periods = await Session.LoadArchivePeriodsAsync(
             _collectionId,
-            _mode == ArchiveViewMode.Months ? _year : null,
-            _hideCompleted).ConfigureAwait(false);
+            requestedLevel == ArchiveLevel.Months ? requestedYear : null,
+            requestedHideCompleted,
+            _collectionName).ConfigureAwait(false);
         BeginInvokeOnMainThread(() =>
         {
+            if (generation != _loadGeneration) return;
             _periods = periods;
-            FinishLoad();
+            FinishLoad(generation);
         });
     }
 
-    private void FinishLoad()
+    private void FinishLoad(int generation)
     {
+        if (generation != _loadGeneration) return;
         _loading = false;
         RefreshControl?.EndRefreshing();
         TableView.ReloadData();
@@ -218,8 +345,10 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
     {
         if (disposing)
         {
-            _viewSelector.ValueChanged -= ViewSelectorChanged;
-            _searchController.Dispose();
+            _header.CompletedButton.TouchUpInside -= CompletedButtonTapped;
+            _header.GridButton.TouchUpInside -= GridButtonTapped;
+            _header.ListButton.TouchUpInside -= ListButtonTapped;
+            _header.Dispose();
         }
         base.Dispose(disposing);
     }

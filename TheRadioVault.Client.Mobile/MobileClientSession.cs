@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Web.Contracts;
@@ -9,33 +10,57 @@ public sealed class MobileClientSession : IDisposable
 {
     private static readonly double[] PlaybackSpeeds = [0.75d, 1d, 1.25d, 1.5d, 1.75d, 2d];
     private static readonly TimeSpan DurableProgressInterval = TimeSpan.FromSeconds(5);
+    // Matches the server commit tolerance. A running source continues to move
+    // while this decoder is prepared, so a narrower local window can prevent a
+    // valid transfer from ever reaching the commit and source-stop stages.
+    private const long PlaybackTransferAlignmentToleranceMs = 3_000;
     private readonly MobileServerClient _server;
     private readonly MobileDownloadService _downloads;
+    private readonly MobileOfflineMutationStore _offlineMutations;
     private readonly IMobilePlaybackEngine _playback;
     private readonly IMobileNowPlayingService _nowPlaying;
     private readonly IMobileDownloadPolicy _downloadPolicy;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
+    private readonly SemaphoreSlim _metadataSyncGate = new(1, 1);
+    private readonly SemaphoreSlim _offlineMutationSyncGate = new(1, 1);
+    private readonly SemaphoreSlim _exploreSyncGate = new(1, 1);
     private readonly Timer _syncTimer;
+    private readonly Timer _metadataSyncTimer;
+    private readonly MobileMetadataCache _metadataCache;
+    private readonly ConcurrentDictionary<long, Task<byte[]?>> _artworkRequests = new();
+    private readonly ConcurrentDictionary<long, WebClientBroadcastDetails> _broadcastDetails = new();
+    private readonly ConcurrentDictionary<long, byte> _pendingPlayCountEpisodes = new();
     private MobileMediaProxy? _mediaProxy;
     private MobileDownloadRecord? _activeDownload;
     private CancellationTokenSource? _downloadCancellation;
     private MobileBroadcastItem? _pendingDownload;
     private MobileBroadcastItem? _remotePlaybackBroadcast;
+    private byte[]? _nowPlayingArtwork;
+    private long _nowPlayingArtworkEpisodeId;
     private string _remotePlaybackOwner = string.Empty;
+    private string _foreignOwnerCandidate = string.Empty;
+    private long _foreignOwnerCandidateGeneration = -1;
+    private int _foreignOwnerCandidateSamples;
     private IReadOnlyList<WebCanonicalMediaPart> _parts = Array.Empty<WebCanonicalMediaPart>();
+    private IReadOnlyList<WebClientLibraryCollectionSummary> _incompleteLibraryCollections = [];
     private int _partIndex;
     private double _speed = 1d;
     private long _playbackGeneration;
     private long _logicalPositionMs;
     private long _logicalDurationMs;
+    private long? _completedPlaybackEpisodeId;
+    private long? _pendingDecoderLogicalPositionMs;
+    private DateTimeOffset _pendingDecoderPositionUntil;
     private DateTimeOffset _lastDurableSave = DateTimeOffset.MinValue;
     private DateTimeOffset _lastOfflineSave = DateTimeOffset.MinValue;
     private bool _explicitSeekPending;
-    private bool _incrementPlayCountPending;
     private bool _ownsPlayback;
     private bool _offlinePlayback;
     private bool _downloadPauseRequested;
     private bool _downloadCancelRequested;
+    private int _metadataSyncActivity;
+    private MobileSyncDiagnostics _syncDiagnostics = new(0, null, null, string.Empty);
+    private DateTimeOffset? _lastMetadataSyncAt;
     private bool _disposed;
 
     public MobileClientSession(
@@ -51,13 +76,29 @@ public sealed class MobileClientSession : IDisposable
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "TheRadioVault",
                 "Downloads"));
+        _offlineMutations = new MobileOfflineMutationStore(
+            Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                "TheRadioVault",
+                "PendingChanges"));
         _playback = playback ?? throw new ArgumentNullException(nameof(playback));
         _nowPlaying = nowPlaying ?? throw new ArgumentNullException(nameof(nowPlaying));
         _downloadPolicy = downloadPolicy ?? throw new ArgumentNullException(nameof(downloadPolicy));
+        var metadataRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "TheRadioVault",
+            "MetadataCache");
+        _metadataCache = new MobileMetadataCache(metadataRoot, _server.Connection?.ServerInstanceId ?? string.Empty);
         _playback.StateChanged += PlaybackOnStateChanged;
         _playback.MediaEnded += PlaybackOnMediaEnded;
         _nowPlaying.CommandReceived += NowPlayingOnCommandReceived;
+        _server.ConnectivityChanged += ServerOnConnectivityChanged;
         _syncTimer = new Timer(_ => _ = SynchronizePlaybackAsync(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
+        _metadataSyncTimer = new Timer(
+            _ => _ = SynchronizeMetadataCacheAsync(),
+            null,
+            TimeSpan.FromSeconds(15),
+            TimeSpan.FromSeconds(15));
         IsPaired = _server.IsPaired;
     }
 
@@ -67,7 +108,18 @@ public sealed class MobileClientSession : IDisposable
 
     public bool IsBusy { get; private set; }
     public bool IsPaired { get; private set; }
+    public bool IsLiveConnected => _server.IsReachable;
+    public bool IsMetadataSyncing => Volatile.Read(ref _metadataSyncActivity) > 0;
+    public bool ShowsOfflineIndicator => IsPaired && !IsLiveConnected;
+    public bool ShowsSyncIndicator => IsPaired && IsLiveConnected && IsMetadataSyncing;
+    public int PendingSyncChanges => _syncDiagnostics.PendingChanges;
+    public DateTimeOffset? LastSyncAttemptAt => _syncDiagnostics.LastAttemptAt;
+    public DateTimeOffset? LastSuccessfulSyncAt => _syncDiagnostics.LastSuccessfulSyncAt ?? _lastMetadataSyncAt;
+    public string LastSyncError => _syncDiagnostics.LastError;
+    public int CachedBroadcastCount => _metadataCache.Snapshot.Broadcasts.Count;
+    public int CachedExplorePageCount => _metadataCache.Snapshot.ExplorePages.Count;
     public string StatusText { get; private set; } = "Pair this iPhone with your Radio Vault Server.";
+    public string KnowledgeStatusText { get; private set; } = "Knowledge has not been loaded yet.";
     public string ServerName => _server.Connection?.ServerDisplayName ?? "No server paired";
     public string ServerAddress => _server.Connection is { } connection
         ? $"https://{connection.ServerAddress}:{connection.SecurePort}"
@@ -83,6 +135,8 @@ public sealed class MobileClientSession : IDisposable
     public IReadOnlyList<MobileBroadcastItem> UnheardBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> LibraryBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> DownloadedBroadcasts { get; private set; } = [];
+    public IReadOnlyList<WebMomentSummary> SavedMoments { get; private set; } = [];
+    public MobileKnowledgeSnapshot? Knowledge { get; private set; }
     public IReadOnlyList<WebQueueItem> QueueItems { get; private set; } = [];
     public IReadOnlyList<DiscoveredRadioVaultServer> Servers { get; private set; } = [];
     public MobileBroadcastItem? SelectedBroadcast { get; private set; }
@@ -91,6 +145,9 @@ public sealed class MobileClientSession : IDisposable
     public string PlaybackStatus { get; private set; } = "Ready";
     public bool IsPlaying => _playback.Current.IsPlaying;
     public bool CanControlPlayback => _playback.Current.IsOpen && _ownsPlayback;
+    public long? LocalPlaybackEpisodeId => SelectedBroadcast?.EpisodeId;
+    public long? PreparingPlaybackEpisodeId { get; private set; }
+    public bool IsPreparingPlayback => PreparingPlaybackEpisodeId is > 0;
     public double PlaybackProgress { get; private set; }
     public string PlaybackTime { get; private set; } = "0:00 / 0:00";
     public string SpeedText => $"{_speed:0.##}×";
@@ -111,6 +168,40 @@ public sealed class MobileClientSession : IDisposable
             Notify();
         }
     }
+    public bool AutoDownloadNewBroadcasts
+    {
+        get => _downloadPolicy.AutoDownloadNewBroadcasts;
+        set
+        {
+            var wasEnabled = _downloadPolicy.AutoDownloadNewBroadcasts;
+            _downloadPolicy.AutoDownloadNewBroadcasts = value;
+            if (value && !wasEnabled) _downloadPolicy.AutoDownloadSince = DateTimeOffset.UtcNow;
+            Notify();
+        }
+    }
+    public bool DeleteCompletedDownloads
+    {
+        get => _downloadPolicy.DeleteCompletedDownloads;
+        set
+        {
+            _downloadPolicy.DeleteCompletedDownloads = value;
+            Notify();
+            if (value) _ = CleanupCompletedDownloadsAsync();
+        }
+    }
+    public long DownloadStorageLimitBytes
+    {
+        get => _downloadPolicy.StorageLimitBytes;
+        set
+        {
+            _downloadPolicy.StorageLimitBytes = Math.Max(0, value);
+            Notify();
+            if (value > 0) _ = EnforceDownloadStorageLimitAsync();
+        }
+    }
+    public string DownloadStorageLimitText => DownloadStorageLimitBytes <= 0
+        ? "No storage limit"
+        : $"Up to {FormatBytes(DownloadStorageLimitBytes)}";
     public bool HasMiniPlayer => SelectedBroadcast is not null || _remotePlaybackBroadcast is not null;
     public bool MiniPlayerShowsHandoff => _remotePlaybackBroadcast is not null && !_ownsPlayback;
     public string MiniPlayerTitle => _remotePlaybackBroadcast?.Title ?? NowPlayingTitle;
@@ -120,17 +211,61 @@ public sealed class MobileClientSession : IDisposable
     public double MiniPlayerProgress => _remotePlaybackBroadcast is not null
         ? _remotePlaybackBroadcast.Progress / 100d
         : PlaybackProgress;
+    public string MiniPlayerTime => _remotePlaybackBroadcast is { } remote
+        ? $"{FormatTime(TimeSpan.FromMilliseconds(remote.Source.PositionMs))} / " +
+          FormatTime(TimeSpan.FromMilliseconds(remote.Source.DurationMs))
+        : PlaybackTime;
+    public string MiniPlayerElapsedTime => FormatTime(TimeSpan.FromMilliseconds(MiniPlayerPositionMs));
+    public string MiniPlayerRemainingTime => $"-{FormatTime(TimeSpan.FromMilliseconds(
+        Math.Max(0, MiniPlayerDurationMs - MiniPlayerPositionMs)))}";
+    public string MiniPlayerTotalTime => FormatTime(TimeSpan.FromMilliseconds(MiniPlayerDurationMs));
     public bool MiniPlayerCanAct => MiniPlayerShowsHandoff || CanControlPlayback;
+    public MobileBroadcastItem? CurrentBroadcast => _remotePlaybackBroadcast ?? SelectedBroadcast;
+
+    public bool CanToggleBroadcast(long episodeId)
+        => CanControlPlayback && SelectedBroadcast?.EpisodeId == episodeId;
+
+    public bool IsPlayingBroadcast(long episodeId)
+        => CanToggleBroadcast(episodeId) && IsPlaying;
+
+    public async Task<byte[]?> LoadArtworkAsync(MobileBroadcastItem broadcast)
+    {
+        ArgumentNullException.ThrowIfNull(broadcast);
+        if (string.IsNullOrWhiteSpace(broadcast.Source.ArtworkPath)) return null;
+        var task = _artworkRequests.GetOrAdd(
+            broadcast.EpisodeId,
+            episodeId => LoadArtworkCoreAsync(episodeId));
+        var content = await task.ConfigureAwait(false);
+        if (content is null) _artworkRequests.TryRemove(broadcast.EpisodeId, out _);
+        return content;
+    }
+
+    public async Task<byte[]?> LoadArtworkAsync(long episodeId)
+    {
+        if (episodeId <= 0) return null;
+        var task = _artworkRequests.GetOrAdd(episodeId, LoadArtworkCoreAsync);
+        var content = await task.ConfigureAwait(false);
+        if (content is null) _artworkRequests.TryRemove(episodeId, out _);
+        return content;
+    }
 
     public async Task InitializeAsync()
     {
+        await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
         DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
         await RefreshDownloadStorageAsync().ConfigureAwait(false);
         IsPaired = _server.IsPaired;
+        if (IsPaired)
+        {
+            await _metadataCache.LoadAsync(_server.Connection?.ServerInstanceId ?? string.Empty).ConfigureAwait(false);
+            await _downloads.ReconcileSummariesAsync(_metadataCache.Snapshot.Broadcasts).ConfigureAwait(false);
+            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+            ApplyMetadataSnapshot();
+        }
         Notify();
         if (!IsPaired)
         {
-            TabRequested?.Invoke(4);
+            TabRequested?.Invoke(0);
             return;
         }
 
@@ -138,44 +273,119 @@ public sealed class MobileClientSession : IDisposable
         await RefreshAsync().ConfigureAwait(false);
     }
 
+    public async Task<MobileDiagnosticSnapshot> GetDiagnosticSnapshotAsync()
+    {
+        var pending = await _offlineMutations
+            .GetPendingAsync(CurrentServerInstanceId())
+            .ConfigureAwait(false);
+        var storage = await _downloads.GetStorageAsync().ConfigureAwait(false);
+        var cache = _metadataCache.Snapshot;
+        var cachedImages = cache.ExploreDocuments
+            .SelectMany(value => value.Images)
+            .Select(value => value.ImageId)
+            .Distinct()
+            .Count(_metadataCache.HasImage);
+
+        return new MobileDiagnosticSnapshot(
+            DateTimeOffset.UtcNow,
+            IsPaired,
+            IsLiveConnected,
+            IsMetadataSyncing,
+            IsBusy,
+            ServerName,
+            ServerAddress,
+            StatusText,
+            pending.Count,
+            pending.Count(value => value.Kind == MobileOfflineMutationKind.Favourite),
+            pending.Count(value => value.Kind == MobileOfflineMutationKind.ListeningStatus),
+            pending.Count(value => value.Kind == MobileOfflineMutationKind.Moment),
+            LastSyncAttemptAt,
+            LastSuccessfulSyncAt,
+            LastSyncError,
+            cache.UpdatedAt,
+            cache.SyncSequence,
+            cache.SyncRevision,
+            cache.Broadcasts.Count,
+            cache.Broadcasts.Select(value => value.CollectionId).Distinct().Count(),
+            cache.ExplorePages.Count,
+            cache.ExploreDocuments.Count,
+            cachedImages,
+            cache.Moments?.Count ?? 0,
+            cache.Knowledge is not null,
+            storage.DownloadCount,
+            storage.CompletedBytes,
+            storage.PendingBytes,
+            IsDownloading,
+            IsDownloadPaused,
+            ActiveDownloadEpisodeId,
+            DownloadStatus,
+            HasMiniPlayer,
+            CurrentBroadcast?.EpisodeId,
+            IsPlaying,
+            CanControlPlayback,
+            MiniPlayerShowsHandoff,
+            PlaybackStatus,
+            MiniPlayerTime,
+            WifiOnlyDownloads,
+            AutoDownloadNewBroadcasts,
+            DeleteCompletedDownloads,
+            DownloadStorageLimitBytes);
+    }
+
     public async Task RefreshAsync()
     {
         if (!IsPaired || IsBusy) return;
         SetBusy(true, $"Connecting to {ServerName}…");
+        BeginMetadataSync();
         try
         {
             var bootstrap = await _server.TestConnectionAsync().ConfigureAwait(false);
             var overview = await _server.GetOverviewAsync().ConfigureAwait(false);
-            TotalBroadcasts = overview.TotalBroadcasts;
-            CompletedBroadcasts = overview.CompletedBroadcasts;
-            InProgressBroadcasts = overview.InProgressBroadcasts;
-            FavouriteBroadcasts = overview.FavouriteBroadcasts;
-            LibraryCollections = overview.Collections;
-            ContinueListening = Convert(overview.ContinueListening);
-            RecentBroadcasts = Convert(overview.RecentBroadcasts);
-            OnThisDay = Convert(overview.OnThisDay);
-            UnheardBroadcasts = Convert((await _server.BrowseAsync(
-                string.Empty, limit: 5, filter: "Unplayed").ConfigureAwait(false)).Broadcasts);
-            if (LibraryBroadcasts.Count == 0)
-                LibraryBroadcasts = Convert((await _server.BrowseAsync(string.Empty).ConfigureAwait(false)).Broadcasts);
+            ApplyOnlineOverview(overview);
+            await SynchronizeMetadataCacheAsync(forceExploreRefresh: true).ConfigureAwait(false);
+            if (_metadataCache.Snapshot.Broadcasts.Count == 0)
+            {
+                var completeLibrary = await FetchCompleteLibraryAsync().ConfigureAwait(false);
+                _metadataCache.ReplaceCompleteLibrary(bootstrap.Server.InstanceId, completeLibrary, overview);
+                await _metadataCache.SaveAsync().ConfigureAwait(false);
+                ApplyMetadataSnapshot();
+            }
+            if (_metadataCache.Snapshot.ExploreOverview is null)
+                await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
             DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
             await RefreshDownloadStorageAsync().ConfigureAwait(false);
             QueueItems = await _server.GetQueueAsync().ConfigureAwait(false);
-            await ObserveSharedPlaybackAsync(await _server.GetPlaybackSessionAsync().ConfigureAwait(false)).ConfigureAwait(false);
-            StatusText = $"Connected to {bootstrap.Server.DisplayName} · {overview.TotalBroadcasts:N0} broadcasts";
+            _metadataCache.SetQueue(QueueItems);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            await ObserveSharedPlaybackSafelyAsync(
+                await _server.GetPlaybackSessionAsync().ConfigureAwait(false)).ConfigureAwait(false);
+            StatusText = $"Connected to {bootstrap.Server.DisplayName} · {TotalBroadcasts:N0} broadcasts";
         }
         catch (Exception exception)
         {
-            StatusText = "Could not reach the paired server: " + exception.Message;
-            TabRequested?.Invoke(4);
+            StatusText = _metadataCache.Snapshot.Broadcasts.Count > 0
+                ? "Offline · showing the latest saved Radio Vault library"
+                : "Could not reach the paired server: " + exception.Message;
+            ApplyMetadataSnapshot();
         }
-        finally { SetBusy(false); }
+        finally
+        {
+            EndMetadataSync();
+            SetBusy(false);
+        }
     }
 
     public async Task SearchAsync(string searchText, bool hideCompleted = false)
     {
-        if (!IsPaired || IsBusy) return;
         var search = searchText?.Trim() ?? string.Empty;
+        if (_metadataCache.Snapshot.Broadcasts.Count > 0)
+        {
+            LibraryBroadcasts = QueryCachedBroadcasts(null, search, "All", null, null, hideCompleted);
+            StatusText = $"{LibraryBroadcasts.Count:N0} broadcast{(LibraryBroadcasts.Count == 1 ? string.Empty : "s")} shown";
+            Notify();
+            return;
+        }
+        if (!IsPaired || IsBusy) return;
         SetBusy(true, search.Length == 0 ? "Loading the Library…" : $"Searching for “{search}”…");
         try
         {
@@ -193,21 +403,32 @@ public sealed class MobileClientSession : IDisposable
         string filter = "All",
         int? year = null,
         int? month = null,
-        bool hideCompleted = false)
+        bool hideCompleted = false,
+        string? collectionName = null)
     {
-        if (!IsPaired || IsBusy) return [];
         var search = searchText?.Trim() ?? string.Empty;
+        if (_metadataCache.Snapshot.Broadcasts.Count > 0)
+        {
+            var cached = QueryCachedBroadcasts(collectionId, search, filter, year, month, hideCompleted, collectionName);
+            StatusText = $"{cached.Count:N0} broadcast{(cached.Count == 1 ? string.Empty : "s")} shown";
+            return cached;
+        }
+        if (!IsPaired || IsBusy) return [];
         SetBusy(true, search.Length == 0 ? "Loading broadcasts…" : $"Searching for “{search}”…");
         try
         {
-            var result = await _server.BrowseAsync(
+            var collectionIds = ResolveCollectionIds(collectionId, collectionName);
+            var results = await Task.WhenAll(collectionIds.Select(id => _server.BrowseAsync(
                 search,
-                collectionId: collectionId,
+                collectionId: id,
                 filter: filter,
                 year: year,
                 month: month,
-                hideCompleted: hideCompleted).ConfigureAwait(false);
-            var broadcasts = Convert(result.Broadcasts);
+                hideCompleted: hideCompleted))).ConfigureAwait(false);
+            var broadcasts = Convert(results
+                .SelectMany(value => value.Broadcasts)
+                .GroupBy(value => value.RepresentativeEpisodeId)
+                .Select(group => group.OrderByDescending(value => value.LastPlayedAt).First()));
             StatusText = $"{broadcasts.Count:N0} broadcast{(broadcasts.Count == 1 ? string.Empty : "s")} shown";
             return broadcasts;
         }
@@ -222,14 +443,22 @@ public sealed class MobileClientSession : IDisposable
     public async Task<IReadOnlyList<WebClientLibraryArchivePeriodSummary>> LoadArchivePeriodsAsync(
         int? collectionId,
         int? year = null,
-        bool hideCompleted = false)
+        bool hideCompleted = false,
+        string? collectionName = null)
     {
+        if (_metadataCache.Snapshot.Broadcasts.Count > 0)
+        {
+            var cached = BuildCachedArchivePeriods(collectionId, year, hideCompleted, collectionName);
+            StatusText = $"{cached.Count:N0} archive period{(cached.Count == 1 ? string.Empty : "s")} shown";
+            return cached;
+        }
         if (!IsPaired || IsBusy) return [];
         SetBusy(true, year.HasValue ? "Loading months…" : "Loading years…");
         try
         {
-            var periods = await _server.GetArchivePeriodsAsync(
-                collectionId, year, hideCompleted).ConfigureAwait(false);
+            var results = await Task.WhenAll(ResolveCollectionIds(collectionId, collectionName)
+                .Select(id => _server.GetArchivePeriodsAsync(id, year, hideCompleted))).ConfigureAwait(false);
+            var periods = CombineArchivePeriods(results.SelectMany(value => value));
             StatusText = $"{periods.Count:N0} archive period{(periods.Count == 1 ? string.Empty : "s")} shown";
             return periods;
         }
@@ -289,51 +518,34 @@ public sealed class MobileClientSession : IDisposable
 
     public async Task<MobileExploreDashboard?> LoadExploreDashboardAsync()
     {
+        var cached = BuildExploreDashboard();
+        if (cached is not null)
+        {
+            if (IsLiveConnected) _ = RefreshExploreCacheAsync(warmEntireCache: false);
+            return cached;
+        }
         if (!IsPaired || IsBusy) return null;
-        SetBusy(true, "Loading Explore…");
-        try
-        {
-            var overview = await _server.GetWikiOverviewAsync().ConfigureAwait(false);
-            var all = await _server.BrowseWikiAsync(limit: 5000).ConfigureAwait(false);
-            var today = DateTime.Today;
-            var highlights = await _server.GetWikiDashboardHighlightsAsync(today.Month, today.Day)
-                .ConfigureAwait(false);
-            var dashboard = new MobileExploreDashboard(
-                overview,
-                all,
-                all.OrderByDescending(x => string.Equals(x.Status, "Published", StringComparison.OrdinalIgnoreCase))
-                    .ThenByDescending(x => x.CitationCount + x.ImageCount + x.TimelineEventCount)
-                    .ThenByDescending(x => x.UpdatedAt).Take(6).ToArray(),
-                all.OrderByDescending(x => x.UpdatedAt).Take(8).ToArray(),
-                all.Where(x => x.PageType.Equals("Show", StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(x => x.TimelineEventCount).ThenBy(x => x.Title).Take(10).ToArray(),
-                all.Where(x => x.PageType.Equals("Person", StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(x => x.CitationCount).ThenBy(x => x.Title).Take(10).ToArray(),
-                all.Where(x => x.PageType.Equals("Topic", StringComparison.OrdinalIgnoreCase))
-                    .OrderByDescending(x => x.CitationCount).ThenBy(x => x.Title).Take(10).ToArray(),
-                all.Where(x => x.TimelineEventCount > 0)
-                    .OrderByDescending(x => x.TimelineEventCount).ThenBy(x => x.Title).Take(8).ToArray(),
-                highlights);
-            StatusText = overview.PageCount == 1
-                ? "Explore contains 1 article."
-                : $"Explore contains {overview.PageCount:N0} articles.";
-            return dashboard;
-        }
-        catch (Exception exception)
-        {
-            StatusText = "Explore failed: " + exception.Message;
-            return null;
-        }
-        finally { SetBusy(false); }
+        await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
+        return BuildExploreDashboard();
     }
 
     public async Task<MobileWikiPageDocument?> LoadExplorePageAsync(Guid pageId)
     {
+        var cached = _metadataCache.FindExploreDocument(pageId);
+        if (cached is not null)
+        {
+            if (IsLiveConnected) _ = RefreshExplorePageAsync(pageId);
+            return cached;
+        }
         if (!IsPaired || IsBusy) return null;
-        SetBusy(true, "Opening Explore article…");
         try
         {
             var page = await _server.GetWikiPageAsync(pageId).ConfigureAwait(false);
+            if (page is not null)
+            {
+                _metadataCache.UpsertExploreDocuments([page]);
+                await _metadataCache.SaveAsync().ConfigureAwait(false);
+            }
             StatusText = page is null ? "That Explore article could not be found." : $"Loaded {page.Title}.";
             return page;
         }
@@ -342,26 +554,73 @@ public sealed class MobileClientSession : IDisposable
             StatusText = "Explore article failed: " + exception.Message;
             return null;
         }
-        finally { SetBusy(false); }
     }
 
-    public async Task<WebClientBroadcastDetails?> LoadBroadcastDetailsAsync(MobileBroadcastItem broadcast)
+    public IReadOnlyList<WebClientLibraryCollectionSummary> LibraryCollectionsFor(bool hideCompleted)
+    {
+        return CombineCollections(hideCompleted ? _incompleteLibraryCollections : LibraryCollections);
+    }
+
+    public async Task<IReadOnlyList<MobileExploreImage>> LoadExploreImagesAsync(
+        MobileWikiPageDocument document)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        var images = new List<MobileExploreImage>();
+        foreach (var link in document.Images.OrderBy(value => value.SortOrder))
+        {
+            var bytes = _metadataCache.ReadImage(link.ImageId);
+            if ((bytes is null || bytes.Length == 0) && IsLiveConnected)
+            {
+                try
+                {
+                    var downloaded = await _server.GetWikiImageAsync(link.ImageId).ConfigureAwait(false);
+                    if (downloaded is not null)
+                    {
+                        await _metadataCache.SaveImageAsync(downloaded).ConfigureAwait(false);
+                        bytes = downloaded.Content;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    System.Diagnostics.Trace.WriteLine($"[iOS Explore image] {exception}");
+                }
+            }
+            if (bytes is null || bytes.Length == 0) continue;
+            images.Add(ToExploreImage(document, link, bytes));
+        }
+        return images;
+    }
+
+    public Task RefreshMetadataAsync() => SynchronizeMetadataCacheAsync(forceExploreRefresh: false);
+
+    public async Task RetrySyncAsync()
+    {
+        if (!IsPaired) return;
+        if (IsLiveConnected) await FlushOfflineMutationsAsync().ConfigureAwait(false);
+        await SynchronizeMetadataCacheAsync(forceExploreRefresh: false).ConfigureAwait(false);
+    }
+
+    public async Task<WebClientBroadcastDetails?> LoadBroadcastDetailsAsync(
+        MobileBroadcastItem broadcast,
+        bool announce = true)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (!IsPaired || IsBusy) return null;
-        SetBusy(true, "Loading broadcast information…");
+        if (_broadcastDetails.TryGetValue(broadcast.EpisodeId, out var cached)) return cached;
+        if (!IsPaired || !IsLiveConnected || announce && IsBusy) return null;
+        if (announce) SetBusy(true, "Loading broadcast information…");
         try
         {
             var details = await _server.GetBroadcastDetailsAsync(broadcast.EpisodeId).ConfigureAwait(false);
-            StatusText = $"Broadcast information loaded from {ServerName}.";
+            _broadcastDetails[broadcast.EpisodeId] = details;
+            if (announce) StatusText = $"Broadcast information loaded from {ServerName}.";
             return details;
         }
         catch (Exception exception)
         {
-            StatusText = "Broadcast information failed: " + exception.Message;
+            if (announce) StatusText = "Broadcast information failed: " + exception.Message;
             return null;
         }
-        finally { SetBusy(false); }
+        finally { if (announce) SetBusy(false); }
     }
 
     public async Task<MobileBroadcastItem?> SetFavouriteAsync(MobileBroadcastItem broadcast, bool favourite)
@@ -371,18 +630,261 @@ public sealed class MobileClientSession : IDisposable
         SetBusy(true, favourite ? "Adding to Favourites…" : "Removing from Favourites…");
         try
         {
-            var result = await _server.SetFavouriteAsync(broadcast.EpisodeId, favourite).ConfigureAwait(false);
-            if (!result.Changed) throw new InvalidOperationException(result.Message);
-            var replacement = new MobileBroadcastItem(
-                await _server.GetBroadcastSummaryAsync(broadcast.EpisodeId).ConfigureAwait(false));
-            ReplaceBroadcast(broadcast.EpisodeId, replacement);
-            FavouriteBroadcasts = Math.Max(0, FavouriteBroadcasts + (favourite ? 1 : -1));
-            StatusText = favourite ? "Added to Favourites." : "Removed from Favourites.";
+            var summary = broadcast.Source with { Favourite = favourite };
+            var replacement = ApplyLocalBroadcastSummary(summary);
+            await _offlineMutations.EnqueueFavouriteAsync(
+                CurrentServerInstanceId(), broadcast.EpisodeId, favourite).ConfigureAwait(false);
+            await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
+            if (IsLiveConnected) await FlushOfflineMutationsAsync().ConfigureAwait(false);
+            StatusText = PendingSyncChanges > 0
+                ? favourite ? "Added to Favourites · waiting to sync." : "Removed from Favourites · waiting to sync."
+                : favourite ? "Added to Favourites." : "Removed from Favourites.";
             return replacement;
         }
         catch (Exception exception)
         {
             StatusText = "Favourite update failed: " + exception.Message;
+            return null;
+        }
+        finally { SetBusy(false); }
+    }
+
+    public async Task<bool> AddMomentAsync(string title, string notes)
+    {
+        if (SelectedBroadcast is not { } broadcast || !IsPaired || IsBusy) return false;
+        SetBusy(true, "Saving Moment…");
+        try
+        {
+            var position = CaptureLogicalPosition();
+            var momentTitle = string.IsNullOrWhiteSpace(title)
+                ? $"Moment at {FormatTime(TimeSpan.FromMilliseconds(position))}"
+                : title.Trim();
+            var mutationId = Guid.NewGuid().ToString("N");
+            await _offlineMutations.EnqueueMomentAsync(
+                CurrentServerInstanceId(), broadcast.EpisodeId, position,
+                momentTitle, notes?.Trim() ?? string.Empty, mutationId).ConfigureAwait(false);
+            var savedMoment = new WebMomentSummary(
+                -DateTime.UtcNow.Ticks,
+                broadcast.EpisodeId,
+                broadcast.Source.CollectionName,
+                broadcast.Title,
+                broadcast.Source.AirDate?.ToDateTime(TimeOnly.MinValue),
+                position,
+                momentTitle,
+                notes?.Trim() ?? string.Empty,
+                DateTime.UtcNow);
+            SavedMoments = new[] { savedMoment }
+                .Concat(SavedMoments.Where(value => value.Id >= 0 || value.EpisodeId != broadcast.EpisodeId || value.PositionMs != position))
+                .ToArray();
+            _metadataCache.SetMoments(SavedMoments);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
+            if (IsLiveConnected) await FlushOfflineMutationsAsync().ConfigureAwait(false);
+            StatusText = PendingSyncChanges > 0 ? "Moment saved on this iPhone · waiting to sync." : "Moment saved.";
+            return true;
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Moment could not be saved: " + exception.Message;
+            return false;
+        }
+        finally { SetBusy(false); }
+    }
+
+    public async Task LoadSavedAsync()
+    {
+        SavedMoments = _metadataCache.Snapshot.Moments ?? [];
+        Notify();
+        if (!IsPaired || !IsLiveConnected) return;
+        try
+        {
+            SavedMoments = await _server.GetMomentsAsync().ConfigureAwait(false);
+            _metadataCache.SetMoments(SavedMoments);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            StatusText = $"{FavouriteBroadcasts:N0} favourite{(FavouriteBroadcasts == 1 ? string.Empty : "s")} · {SavedMoments.Count:N0} moment{(SavedMoments.Count == 1 ? string.Empty : "s")}";
+        }
+        catch (Exception exception)
+        {
+            StatusText = SavedMoments.Count > 0
+                ? "Offline · showing saved Favourites and Moments"
+                : "Saved items could not be loaded: " + exception.Message;
+        }
+        finally { Notify(); }
+    }
+
+    public async Task PlayMomentAsync(WebMomentSummary moment)
+    {
+        var broadcast = FindCachedBroadcast(moment.EpisodeId);
+        if (broadcast is null && IsLiveConnected)
+        {
+            try
+            {
+                broadcast = new MobileBroadcastItem(
+                    await _server.GetBroadcastSummaryAsync(moment.EpisodeId).ConfigureAwait(false));
+            }
+            catch (Exception exception)
+            {
+                PlaybackStatus = "Moment could not be opened: " + exception.Message;
+                NotifyPlayback();
+                return;
+            }
+        }
+        if (broadcast is null)
+        {
+            PlaybackStatus = "This Moment's broadcast is not in the saved catalogue.";
+            NotifyPlayback();
+            return;
+        }
+        await PlayAsync(new MobileBroadcastItem(broadcast.Source with
+        {
+            PositionMs = Math.Clamp(moment.PositionMs, 0, Math.Max(moment.PositionMs, broadcast.Source.DurationMs)),
+            Completed = false
+        })).ConfigureAwait(false);
+    }
+
+    public async Task<MobileKnowledgeSnapshot?> LoadKnowledgeAsync()
+    {
+        Knowledge = _metadataCache.Snapshot.Knowledge ?? BuildLibraryKnowledgeSnapshot();
+        if (Knowledge is not null)
+            KnowledgeStatusText = Knowledge.IsLibraryFallback
+                ? $"Library coverage ready · {Knowledge.Overview.TotalRecords:N0} broadcasts"
+                : $"Saved Knowledge snapshot · {Knowledge.Overview.TotalRecords:N0} records";
+        Notify();
+        if (!IsPaired)
+        {
+            KnowledgeStatusText = "Pair this iPhone with a Radio Vault Server to load Knowledge.";
+            Notify();
+            return Knowledge;
+        }
+        if (!IsLiveConnected)
+        {
+            KnowledgeStatusText = Knowledge is null
+                ? "Knowledge has not been saved on this iPhone yet. Reconnect to the server and try again."
+                : Knowledge.IsLibraryFallback
+                    ? "Offline · showing coverage from the saved Library catalogue."
+                    : "Offline · showing the latest saved Knowledge snapshot.";
+            Notify();
+            return Knowledge;
+        }
+        try
+        {
+            var overviewTask = _server.GetKnowledgeOverviewAsync();
+            var collectionsTask = _server.GetKnowledgeCollectionsAsync();
+            var reviewsTask = _server.GetKnowledgeDateReviewsAsync();
+            await Task.WhenAll(overviewTask, collectionsTask, reviewsTask).ConfigureAwait(false);
+            Knowledge = new MobileKnowledgeSnapshot(
+                await overviewTask.ConfigureAwait(false),
+                await collectionsTask.ConfigureAwait(false),
+                await reviewsTask.ConfigureAwait(false),
+                DateTimeOffset.UtcNow);
+            _metadataCache.SetKnowledge(Knowledge);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            KnowledgeStatusText = $"Knowledge is up to date · {Knowledge.Overview.TotalRecords:N0} records";
+            StatusText = KnowledgeStatusText;
+        }
+        catch (Exception exception)
+        {
+            KnowledgeStatusText = Knowledge is not null
+                ? Knowledge.IsLibraryFallback
+                    ? "Library coverage is ready. Update Radio Vault Server for research evidence and triage."
+                    : "The live Knowledge update failed · showing the latest saved snapshot."
+                : exception is HttpRequestException { StatusCode: System.Net.HttpStatusCode.NotFound or System.Net.HttpStatusCode.MethodNotAllowed }
+                    ? "The paired server does not expose the Knowledge service. Update Radio Vault Server, then pull down to retry."
+                    : "Knowledge could not be loaded: " + exception.Message;
+            StatusText = KnowledgeStatusText;
+        }
+        finally { Notify(); }
+        return Knowledge;
+    }
+
+    public async Task<MobileKnowledgeCoverage?> LoadKnowledgeCoverageAsync(int collectionId)
+    {
+        if (!IsPaired || !IsLiveConnected)
+        {
+            var saved = BuildLibraryKnowledgeCoverage(collectionId);
+            StatusText = saved is null ? "No saved coverage is available for that show." : $"Saved Library coverage loaded for {saved.ShowName}.";
+            Notify();
+            return saved;
+        }
+        try
+        {
+            StatusText = "Building Knowledge coverage…";
+            Notify();
+            var coverage = await _server.GetKnowledgeCoverageAsync(collectionId).ConfigureAwait(false);
+            StatusText = coverage is null ? "No dated coverage is available for that show." : $"Coverage loaded for {coverage.ShowName}.";
+            return coverage;
+        }
+        catch (Exception exception)
+        {
+            var saved = BuildLibraryKnowledgeCoverage(collectionId);
+            StatusText = saved is null
+                ? "Coverage could not be loaded: " + exception.Message
+                : $"Live Knowledge is unavailable · showing saved Library coverage for {saved.ShowName}.";
+            return saved;
+        }
+        finally { Notify(); }
+    }
+
+    public async Task<bool> ResolveKnowledgeDateReviewAsync(MobileKnowledgeDateReview review, int action)
+    {
+        if (!IsPaired || !IsLiveConnected) return false;
+        try
+        {
+            StatusText = action switch
+            {
+                0 => "Accepting the suggested date…",
+                1 => "Keeping the current Library date…",
+                2 => "Ignoring this suggestion…",
+                6 => "Reopening the date suggestion…",
+                _ => "Saving the Knowledge decision…"
+            };
+            Notify();
+            await _server.ResolveKnowledgeDateReviewAsync(
+                review.ResearchId,
+                action,
+                action == 0 ? review.ProposedDate : null).ConfigureAwait(false);
+            await LoadKnowledgeAsync().ConfigureAwait(false);
+            return true;
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Knowledge decision failed: " + exception.Message;
+            Notify();
+            return false;
+        }
+    }
+
+    public async Task<MobileBroadcastItem?> SetListeningStatusAsync(MobileBroadcastItem broadcast, bool played)
+    {
+        ArgumentNullException.ThrowIfNull(broadcast);
+        if (!IsPaired || IsBusy) return null;
+        SetBusy(true, played ? "Marking as listened…" : "Marking as unlistened…");
+        try
+        {
+            var duration = Math.Max(0, broadcast.Source.DurationMs);
+            var summary = broadcast.Source with
+            {
+                PositionMs = played ? duration : 0,
+                Completed = played,
+                InProgress = false,
+                LastPlayedAt = DateTimeOffset.UtcNow
+            };
+            var replacement = ApplyLocalBroadcastSummary(summary);
+            await _downloads.UpdateProgressAsync(
+                broadcast.EpisodeId, summary.PositionMs, played,
+                summary.LastPlayedAt.Value).ConfigureAwait(false);
+            await _offlineMutations.EnqueueListeningStatusAsync(
+                CurrentServerInstanceId(), broadcast.EpisodeId, played).ConfigureAwait(false);
+            await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
+            if (IsLiveConnected) await FlushOfflineMutationsAsync().ConfigureAwait(false);
+            StatusText = PendingSyncChanges > 0
+                ? played ? "Marked as listened · waiting to sync." : "Marked as unlistened · waiting to sync."
+                : played ? "Marked as listened." : "Marked as unlistened.";
+            return replacement;
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Listening status update failed: " + exception.Message;
             return null;
         }
         finally { SetBusy(false); }
@@ -398,6 +900,7 @@ public sealed class MobileClientSession : IDisposable
             var result = await _server.AddToQueueAsync(broadcast.EpisodeId, playNext).ConfigureAwait(false);
             if (!result.Changed) throw new InvalidOperationException(result.Message);
             QueueItems = result.Queue;
+            CacheQueue();
             StatusText = string.IsNullOrWhiteSpace(result.Message)
                 ? playNext ? "Added to Up Next." : "Added to the end of the shared queue."
                 : result.Message;
@@ -418,6 +921,7 @@ public sealed class MobileClientSession : IDisposable
         try
         {
             QueueItems = await _server.GetQueueAsync().ConfigureAwait(false);
+            CacheQueue();
             StatusText = QueueItems.Count == 0 ? "Up Next is empty." : $"{QueueItems.Count:N0} broadcast{(QueueItems.Count == 1 ? string.Empty : "s")} in Up Next.";
         }
         catch (Exception exception) { StatusText = "Queue refresh failed: " + exception.Message; }
@@ -433,6 +937,7 @@ public sealed class MobileClientSession : IDisposable
         {
             var result = await _server.RemoveQueueItemAsync(item.QueueId).ConfigureAwait(false);
             QueueItems = result.Queue;
+            CacheQueue();
             StatusText = result.Message;
         }
         catch (Exception exception) { StatusText = "Queue update failed: " + exception.Message; }
@@ -447,6 +952,7 @@ public sealed class MobileClientSession : IDisposable
         {
             var result = await _server.ClearQueueAsync().ConfigureAwait(false);
             QueueItems = result.Queue;
+            CacheQueue();
             StatusText = result.Message;
         }
         catch (Exception exception) { StatusText = "Queue clear failed: " + exception.Message; }
@@ -474,6 +980,7 @@ public sealed class MobileClientSession : IDisposable
                 if (currentIndex < 0) break;
             }
             QueueItems = queue;
+            CacheQueue();
             StatusText = "Up Next reordered.";
         }
         catch (Exception exception) { StatusText = "Queue reorder failed: " + exception.Message; }
@@ -536,6 +1043,11 @@ public sealed class MobileClientSession : IDisposable
             });
             var record = await _downloads.DownloadAsync(
                 broadcast, progress, cancellation.Token).ConfigureAwait(false);
+            _ = await LoadArtworkAsync(broadcast).ConfigureAwait(false);
+            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+            if (DownloadStorageLimitBytes > 0)
+                await _downloads.TrimToLimitAsync(
+                    DownloadStorageLimitBytes, broadcast.EpisodeId).ConfigureAwait(false);
             DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
             _pendingDownload = null;
             DownloadProgressPercent = 100;
@@ -617,6 +1129,43 @@ public sealed class MobileClientSession : IDisposable
         PendingDownloadBytes = storage.PendingBytes;
     }
 
+    public async Task CleanupCompletedDownloadsAsync()
+    {
+        if (IsDownloading) return;
+        var removed = await _downloads.RemoveCompletedAsync(
+            _activeDownload?.EpisodeId).ConfigureAwait(false);
+        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+        await RefreshDownloadStorageAsync().ConfigureAwait(false);
+        DownloadStatus = removed == 0
+            ? "No completed downloads needed removing."
+            : $"Removed {removed:N0} completed download{(removed == 1 ? string.Empty : "s")}.";
+        Notify();
+    }
+
+    public async Task RepairDownloadsAsync()
+    {
+        if (IsDownloading) return;
+        var removed = await _downloads.RepairAsync().ConfigureAwait(false);
+        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+        await RefreshDownloadStorageAsync().ConfigureAwait(false);
+        DownloadStatus = removed == 0
+            ? "All downloaded broadcasts passed their storage check."
+            : $"Removed {removed:N0} damaged download{(removed == 1 ? string.Empty : "s")}; download them again when convenient.";
+        Notify();
+    }
+
+    private async Task EnforceDownloadStorageLimitAsync()
+    {
+        if (IsDownloading || DownloadStorageLimitBytes <= 0) return;
+        var removed = await _downloads.TrimToLimitAsync(
+            DownloadStorageLimitBytes, _activeDownload?.EpisodeId).ConfigureAwait(false);
+        if (removed == 0) return;
+        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+        await RefreshDownloadStorageAsync().ConfigureAwait(false);
+        DownloadStatus = $"Removed {removed:N0} older download{(removed == 1 ? string.Empty : "s")} to stay within the storage limit.";
+        Notify();
+    }
+
     public async Task RemoveDownloadAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
@@ -637,12 +1186,25 @@ public sealed class MobileClientSession : IDisposable
     public async Task PlayDownloadedAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (IsBusy) return;
-        IsBusy = true;
+        if (IsPreparingPlayback) return;
+        PreparingPlaybackEpisodeId = broadcast.EpisodeId;
+        PlaybackStatus = IsBusy ? "Finishing the startup sync…" : "Preparing downloaded broadcast…";
         Notify();
+        var startupDeadline = DateTimeOffset.UtcNow.AddSeconds(12);
+        while (IsBusy && DateTimeOffset.UtcNow < startupDeadline)
+            await Task.Delay(100).ConfigureAwait(false);
+        if (IsBusy)
+        {
+            PreparingPlaybackEpisodeId = null;
+            PlaybackStatus = "Playback is waiting for the Library startup sync. Try again in a moment.";
+            Notify();
+            return;
+        }
+        IsBusy = true;
         try
         {
-            if (!_offlinePlayback)
+            if (SelectedBroadcast is not null && _playback.Current.IsOpen &&
+                (_offlinePlayback || CanControlPlayback))
             {
                 if (CanControlPlayback && _playback.Current.IsPlaying) _playback.Pause();
                 await FlushPlaybackAsync().ConfigureAwait(false);
@@ -671,6 +1233,8 @@ public sealed class MobileClientSession : IDisposable
             SelectedBroadcast = new MobileBroadcastItem(record.Summary);
             NowPlayingTitle = SelectedBroadcast.Title;
             NowPlayingSubtitle = SelectedBroadcast.Subtitle + " · Downloaded";
+            _pendingPlayCountEpisodes.TryAdd(SelectedBroadcast.EpisodeId, 0);
+            _lastOfflineSave = DateTimeOffset.MinValue;
             var position = Math.Clamp(record.Summary.PositionMs, 0, _logicalDurationMs);
             OpenLogicalPosition(position, play: true, muted: false);
             PlaybackStatus = "Playing download on this iPhone";
@@ -684,6 +1248,7 @@ public sealed class MobileClientSession : IDisposable
         }
         finally
         {
+            PreparingPlaybackEpisodeId = null;
             IsBusy = false;
             Notify();
             NotifyPlayback();
@@ -769,6 +1334,9 @@ public sealed class MobileClientSession : IDisposable
         _ownsPlayback = false;
         _nowPlaying.Clear();
         _server.Forget();
+        _metadataCache.Clear();
+        _ = _offlineMutations.ClearAsync();
+        _artworkRequests.Clear();
         _mediaProxy?.Dispose();
         _mediaProxy = null;
         IsPaired = false;
@@ -779,32 +1347,102 @@ public sealed class MobileClientSession : IDisposable
         UnheardBroadcasts = [];
         LibraryBroadcasts = [];
         LibraryCollections = [];
+        _incompleteLibraryCollections = [];
         QueueItems = [];
+        SavedMoments = [];
+        Knowledge = null;
         TotalBroadcasts = 0;
         CompletedBroadcasts = 0;
         InProgressBroadcasts = 0;
         FavouriteBroadcasts = 0;
         StatusText = "Pairing removed from this iPhone.";
         Notify();
-        TabRequested?.Invoke(4);
+        TabRequested?.Invoke(0);
+    }
+
+    public MobileBroadcastItem? FindCachedBroadcast(long episodeId)
+        => CurrentBroadcast?.EpisodeId == episodeId
+            ? CurrentBroadcast
+            : LibraryBroadcasts.FirstOrDefault(value => value.EpisodeId == episodeId)
+              ?? DownloadedBroadcasts.FirstOrDefault(value => value.EpisodeId == episodeId)
+              ?? _metadataCache.Snapshot.Broadcasts
+                  .Where(value => value.RepresentativeEpisodeId == episodeId)
+                  .Select(value => new MobileBroadcastItem(value))
+                  .FirstOrDefault();
+
+    public async Task PlayTimelineLinkAsync(MobileWikiTimelineBroadcastLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        var broadcast = FindCachedBroadcast(link.EpisodeId);
+        if (broadcast is null && IsLiveConnected)
+        {
+            try
+            {
+                broadcast = new MobileBroadcastItem(
+                    await _server.GetBroadcastSummaryAsync(link.EpisodeId).ConfigureAwait(false));
+            }
+            catch (Exception exception)
+            {
+                PlaybackStatus = "Timeline playback failed: " + exception.Message;
+                NotifyPlayback();
+                return;
+            }
+        }
+        if (broadcast is null)
+        {
+            PlaybackStatus = "That timeline broadcast is not available in the saved catalogue.";
+            NotifyPlayback();
+            return;
+        }
+        if (link.StartMs is { } startMs)
+            broadcast = new MobileBroadcastItem(broadcast.Source with
+            {
+                PositionMs = Math.Max(0, startMs),
+                Completed = false
+            });
+        await PlayAsync(broadcast).ConfigureAwait(false);
     }
 
     public async Task PlayAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (!IsPaired || IsBusy) return;
-        IsBusy = true;
-        PlaybackStatus = "Preparing secure stream…";
+        TracePlayback($"Play requested: episode={broadcast.EpisodeId}; title={broadcast.Title}; paired={IsPaired}; preparing={IsPreparingPlayback}; busy={IsBusy}");
+        if (!IsPaired || IsPreparingPlayback)
+        {
+            TracePlayback("Play request ignored by the paired/preparing guard.");
+            return;
+        }
+        NowPlayingTitle = broadcast.Title;
+        NowPlayingSubtitle = broadcast.Subtitle;
+        _remotePlaybackBroadcast = null;
+        _remotePlaybackOwner = string.Empty;
+        PreparingPlaybackEpisodeId = broadcast.EpisodeId;
+        PlaybackStatus = IsBusy
+            ? "Preparing playback while the Library continues syncing…"
+            : "Preparing secure stream…";
         Notify();
         WebPlaybackTransferTicket? transfer = null;
         var transferCommitted = false;
         try
         {
+            TracePlayback("Flushing previous playback state.");
             await FlushPlaybackAsync().ConfigureAwait(false);
+            SelectedBroadcast = broadcast;
+            try
+            {
+                broadcast = new MobileBroadcastItem(
+                    await _server.GetBroadcastSummaryAsync(broadcast.EpisodeId).ConfigureAwait(false));
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Trace.WriteLine($"[iOS playback summary refresh] {exception}");
+            }
             _offlinePlayback = false;
             _activeDownload = null;
             _ownsPlayback = false;
+            TracePlayback($"Requesting media manifest for episode {broadcast.EpisodeId}.");
             var manifest = await _server.GetMediaManifestAsync(broadcast.EpisodeId).ConfigureAwait(false);
+            TracePlayback($"Media manifest received: parts={manifest.Parts.Count}; durationMs={manifest.DurationMs}.");
             if (manifest.Parts.Count == 0)
                 throw new InvalidOperationException("This broadcast has no playable media parts.");
 
@@ -813,7 +1451,9 @@ public sealed class MobileClientSession : IDisposable
                 Math.Max(0, manifest.DurationMs),
                 _parts.Max(part => Math.Max(0, part.LogicalEndMs)));
             var logicalPosition = Math.Clamp(broadcast.Source.PositionMs, 0, _logicalDurationMs);
+            TracePlayback($"Requesting shared playback session at position {logicalPosition}.");
             var shared = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
+            TracePlayback($"Shared playback received: generation={shared.Generation}; owner={shared.OwnerClientId}; active={HasActivePlayback(shared)}.");
             _playbackGeneration = Math.Max(0, shared.Generation);
             var anotherDeviceOwnsPlayback = HasActivePlayback(shared) && !IsOwnedByThisDevice(shared);
             var desiredPlaying = true;
@@ -843,10 +1483,18 @@ public sealed class MobileClientSession : IDisposable
                 desiredPlaying = transfer.DesiredPlaying;
             }
 
-            SelectedBroadcast = broadcast;
+            SelectedBroadcast = ApplyPlaybackProgress(
+                broadcast.Source,
+                logicalPosition,
+                _logicalDurationMs,
+                completed: false,
+                anotherDeviceOwnsPlayback && shared.Player.UpdatedAt is { } sharedUpdatedAt
+                    ? sharedUpdatedAt
+                    : DateTimeOffset.UtcNow);
             NowPlayingTitle = broadcast.Title;
             NowPlayingSubtitle = broadcast.Subtitle;
-            _incrementPlayCountPending = true;
+            _pendingPlayCountEpisodes.TryAdd(broadcast.EpisodeId, 0);
+            TracePlayback($"Opening episode {broadcast.EpisodeId} at {logicalPosition} ms; transfer={transfer is not null}.");
             OpenLogicalPosition(logicalPosition, desiredPlaying, muted: transfer is not null);
 
             if (transfer is not null)
@@ -885,9 +1533,11 @@ public sealed class MobileClientSession : IDisposable
             _remotePlaybackBroadcast = null;
             _remotePlaybackOwner = string.Empty;
             await SaveDurableProgressAsync().ConfigureAwait(false);
+            TracePlayback($"Play preparation completed: episode={SelectedBroadcast?.EpisodeId}; playing={IsPlaying}; owns={_ownsPlayback}.");
         }
         catch (Exception exception)
         {
+            TracePlayback("Play preparation failed: " + exception);
             if (transfer is not null && !transferCommitted)
             {
                 try
@@ -904,7 +1554,8 @@ public sealed class MobileClientSession : IDisposable
         }
         finally
         {
-            IsBusy = false;
+            TracePlayback($"Play request finished: selected={SelectedBroadcast?.EpisodeId}; status={PlaybackStatus}.");
+            PreparingPlaybackEpisodeId = null;
             Notify();
             NotifyPlayback();
         }
@@ -965,7 +1616,8 @@ public sealed class MobileClientSession : IDisposable
             _playback.SetRate(_speed);
             if (desiredPlaying && !_playback.Current.IsPlaying) _playback.Play();
             if (!desiredPlaying && _playback.Current.IsPlaying) _playback.Pause();
-            if (Math.Abs(CaptureLogicalPosition() - transfer.CommitPositionMs) <= 750) return transfer;
+            if (Math.Abs(CaptureLogicalPosition() - transfer.CommitPositionMs) <= PlaybackTransferAlignmentToleranceMs)
+                return transfer;
             PlaybackStatus = "Aligning with the latest shared playhead…";
             OpenLogicalPosition(transfer.CommitPositionMs, desiredPlaying, muted: true);
         }
@@ -993,6 +1645,9 @@ public sealed class MobileClientSession : IDisposable
     {
         if (_parts.Count == 0 || SelectedBroadcast is null) return;
         logicalPositionMs = Math.Clamp(logicalPositionMs, 0, Math.Max(0, _logicalDurationMs));
+        if (_completedPlaybackEpisodeId == SelectedBroadcast.EpisodeId &&
+            logicalPositionMs < Math.Max(0, _logicalDurationMs - 5_000))
+            _completedPlaybackEpisodeId = null;
         var index = Array.FindIndex(_parts.ToArray(), part =>
             logicalPositionMs >= part.LogicalStartMs && logicalPositionMs < part.LogicalEndMs);
         _partIndex = index >= 0 ? index : _parts.Count - 1;
@@ -1003,20 +1658,43 @@ public sealed class MobileClientSession : IDisposable
             var localPart = download.Parts.FirstOrDefault(value => value.MediaFileId == part.MediaFileId)
                 ?? throw new FileNotFoundException("A downloaded media part is missing from its index.");
             url = _downloads.GetPartUri(download, localPart);
+            TracePlayback($"Opening downloaded part {part.MediaFileId} from {url}.");
         }
         else
         {
-            _mediaProxy ??= new MobileMediaProxy(_server);
-            url = _mediaProxy.Register(WebApiRoutes.MediaPart(SelectedBroadcast.EpisodeId, part.MediaFileId));
+            var serverPath = WebApiRoutes.MediaPart(SelectedBroadcast.EpisodeId, part.MediaFileId);
+            if (_playback is IMobileStreamingPlaybackEngine nativeStreaming)
+            {
+                TracePlayback($"Opening native streamed part {part.MediaFileId} from {serverPath}.");
+                nativeStreaming.Open(new MobilePlaybackSource(
+                    serverPath,
+                    (range, cancellationToken) => _server.OpenResponseAsync(
+                        serverPath, range, cancellationToken)));
+                url = string.Empty;
+            }
+            else
+            {
+                TracePlayback($"Opening proxy streamed part {part.MediaFileId} from {serverPath}.");
+                _mediaProxy ??= new MobileMediaProxy(_server);
+                url = _mediaProxy.Register(serverPath);
+            }
         }
         _playback.SetMuted(muted);
-        _playback.Open(url);
+        if (url.Length > 0) _playback.Open(url);
         _playback.SetRate(_speed);
         var localPosition = TimeSpan.FromMilliseconds(Math.Max(0, logicalPositionMs - part.LogicalStartMs));
+        _pendingDecoderLogicalPositionMs = logicalPositionMs;
+        _pendingDecoderPositionUntil = DateTimeOffset.UtcNow.AddSeconds(8);
         if (localPosition > TimeSpan.Zero) _playback.Seek(localPosition);
         if (play) _playback.Play(); else _playback.Pause();
         _logicalPositionMs = logicalPositionMs;
         PlaybackStatus = _parts.Count > 1 ? $"Playing part {_partIndex + 1} of {_parts.Count}" : "Playing";
+    }
+
+    private void TracePlayback(string message)
+    {
+        if (_playback is IMobilePlaybackDiagnostics diagnostics)
+            diagnostics.WritePlaybackDiagnostic($"[RadioVault iOS session] {message}");
     }
 
     private void SeekRelative(TimeSpan amount)
@@ -1026,6 +1704,9 @@ public sealed class MobileClientSession : IDisposable
     {
         if (!CanControlPlayback || SelectedBroadcast is null) return;
         logicalPositionMs = Math.Clamp(logicalPositionMs, 0, Math.Max(0, _logicalDurationMs));
+        if (_completedPlaybackEpisodeId == SelectedBroadcast.EpisodeId &&
+            logicalPositionMs < Math.Max(0, _logicalDurationMs - 5_000))
+            _completedPlaybackEpisodeId = null;
         var targetPart = Array.FindIndex(_parts.ToArray(), part =>
             logicalPositionMs >= part.LogicalStartMs && logicalPositionMs < part.LogicalEndMs);
         if (targetPart < 0) targetPart = _parts.Count - 1;
@@ -1053,35 +1734,104 @@ public sealed class MobileClientSession : IDisposable
         {
             if (_offlinePlayback)
             {
+                if (IsPaired && IsLiveConnected && SelectedBroadcast is not null && _playback.Current.IsOpen)
+                {
+                    var shared = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
+                    if (!await StopForCommittedTransferAsync(shared).ConfigureAwait(false))
+                    {
+                        if (HasActivePlayback(shared) && !IsOwnedByThisDevice(shared))
+                        {
+                            if (ConfirmForeignOwner(shared))
+                            {
+                                if (_playback.Current.IsPlaying) _playback.Pause();
+                                _ownsPlayback = false;
+                                _playbackGeneration = Math.Max(0, shared.Generation);
+                                await ObserveSharedPlaybackAsync(shared).ConfigureAwait(false);
+                                PlaybackStatus = $"Playback moved to {OwnerName(shared)}";
+                                NotifyPlayback();
+                            }
+                        }
+                        else
+                        {
+                            ResetForeignOwnerCandidate();
+                            _playbackGeneration = Math.Max(0, shared.Generation);
+                            if (_ownsPlayback)
+                            {
+                                var downloadedLive = await ReportLivePlaybackAsync(
+                                    force: !HasActivePlayback(shared)).ConfigureAwait(false);
+                                if (downloadedLive.Conflict)
+                                {
+                                    _playback.Pause();
+                                    _ownsPlayback = false;
+                                    PlaybackStatus = downloadedLive.Message;
+                                    NotifyPlayback();
+                                }
+                            }
+                        }
+                    }
+                }
+
                 if (SelectedBroadcast is not null && _playback.Current.IsOpen &&
                     (forceDurable || DateTimeOffset.UtcNow - _lastOfflineSave >= DurableProgressInterval))
                 {
-                    await _downloads.UpdateProgressAsync(
-                        SelectedBroadcast.EpisodeId,
-                        CaptureLogicalPosition(),
-                        IsCompleted()).ConfigureAwait(false);
-                    DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+                    var snapshot = CaptureDownloadedProgress();
+                    var changed = await _downloads.UpdateProgressAsync(
+                        snapshot.EpisodeId,
+                        snapshot.PositionMs,
+                        snapshot.Completed,
+                        snapshot.CapturedAt).ConfigureAwait(false);
+                    if (changed)
+                        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
                     _lastOfflineSave = DateTimeOffset.UtcNow;
-                    Notify();
+                    if (IsPaired && IsLiveConnected && (changed || snapshot.IncrementPlayCount))
+                        await SynchronizeDownloadedProgressWithServerAsync(snapshot).ConfigureAwait(false);
+                    if (changed) Notify();
                 }
                 return;
             }
             if (!IsPaired) return;
             var session = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
-            await ObserveSharedPlaybackAsync(session).ConfigureAwait(false);
-            if (SelectedBroadcast is null || !_playback.Current.IsOpen) return;
-            _playbackGeneration = Math.Max(0, session.Generation);
+            if (SelectedBroadcast is null || !_playback.Current.IsOpen)
+            {
+                ResetForeignOwnerCandidate();
+                await ObserveSharedPlaybackAsync(session).ConfigureAwait(false);
+                return;
+            }
             if (await StopForCommittedTransferAsync(session).ConfigureAwait(false)) return;
             if (IsBusy && !allowWhileBusy) return;
+            if (!_ownsPlayback)
+            {
+                // An open decoder is not authority to reclaim an idle shared
+                // session. This is especially important after a transfer away:
+                // the old phone output can remain prepared, but only a fresh user
+                // play/handoff action may make it owner again.
+                if (IsOwnedByThisDevice(session))
+                {
+                    _ownsPlayback = true;
+                }
+                else
+                {
+                    if (_playback.Current.IsPlaying) _playback.Pause();
+                    await ObserveSharedPlaybackAsync(session).ConfigureAwait(false);
+                    NotifyPlayback();
+                    return;
+                }
+            }
             if (HasActivePlayback(session) && !IsOwnedByThisDevice(session))
             {
+                if (!ConfirmForeignOwner(session)) return;
+                _playbackGeneration = Math.Max(0, session.Generation);
                 _ownsPlayback = false;
                 if (_playback.Current.IsPlaying) _playback.Pause();
+                await ObserveSharedPlaybackAsync(session).ConfigureAwait(false);
                 PlaybackStatus = $"Playback moved to {OwnerName(session)}";
                 NotifyPlayback();
                 return;
             }
 
+            ResetForeignOwnerCandidate();
+            _playbackGeneration = Math.Max(0, session.Generation);
+            await ObserveSharedPlaybackAsync(session).ConfigureAwait(false);
             var live = await ReportLivePlaybackAsync(force: !HasActivePlayback(session)).ConfigureAwait(false);
             if (live.Conflict)
             {
@@ -1091,6 +1841,19 @@ public sealed class MobileClientSession : IDisposable
                 return;
             }
             _ownsPlayback = true;
+            if (SelectedBroadcast is { } selected)
+            {
+                var position = CaptureLogicalPosition();
+                var completed = _logicalDurationMs > 0 &&
+                                position >= Math.Max(0, _logicalDurationMs - 5_000);
+                ApplyPlaybackProgress(
+                    selected.Source,
+                    position,
+                    _logicalDurationMs,
+                    completed,
+                    DateTimeOffset.UtcNow);
+                Notify();
+            }
 
             var now = DateTimeOffset.UtcNow;
             if (forceDurable || now - _lastDurableSave >= DurableProgressInterval)
@@ -1134,21 +1897,34 @@ public sealed class MobileClientSession : IDisposable
         {
             var projectedPosition = ProjectPosition(session.Player);
             var projectedDuration = Math.Max(remote.Source.DurationMs, session.Player.DurationMs);
-            if (remote.Source.PositionMs != projectedPosition || remote.Source.DurationMs != projectedDuration)
-            {
-                var completed = string.Equals(session.Player.Status, "Completed", StringComparison.OrdinalIgnoreCase);
-                _remotePlaybackBroadcast = new MobileBroadcastItem(remote.Source with
-                {
-                    PositionMs = projectedPosition,
-                    DurationMs = projectedDuration,
-                    InProgress = projectedPosition > 0 && !completed,
-                    Completed = completed
-                });
-                changed = true;
-            }
+            var completed = string.Equals(session.Player.Status, "Completed", StringComparison.OrdinalIgnoreCase);
+            changed |= remote.Source.PositionMs != projectedPosition ||
+                       remote.Source.DurationMs != projectedDuration ||
+                       remote.Source.Completed != completed;
+            _remotePlaybackBroadcast = ApplyPlaybackProgress(
+                remote.Source,
+                projectedPosition,
+                projectedDuration,
+                completed,
+                session.Player.UpdatedAt ?? DateTimeOffset.UtcNow);
         }
         _remotePlaybackOwner = owner;
         if (changed) Notify();
+    }
+
+    private Task ObserveSharedPlaybackSafelyAsync(WebPlaybackSession session)
+    {
+        if (SelectedBroadcast is not null && _playback.Current.IsOpen && _ownsPlayback &&
+            HasActivePlayback(session) && !IsOwnedByThisDevice(session))
+        {
+            var receipt = session.CommittedTransfer;
+            var committedAway = receipt is not null && receipt.Generation == session.Generation &&
+                string.Equals(receipt.SourceClientId, _server.ClientId, StringComparison.Ordinal) &&
+                !string.Equals(receipt.TargetClientId, _server.ClientId, StringComparison.Ordinal);
+            if (!committedAway) return Task.CompletedTask;
+        }
+
+        return ObserveSharedPlaybackAsync(session);
     }
 
     private async Task<bool> StopForCommittedTransferAsync(WebPlaybackSession session)
@@ -1167,6 +1943,44 @@ public sealed class MobileClientSession : IDisposable
         PlaybackStatus = $"Playback moved to {receipt.TargetDeviceName}";
         NotifyPlayback();
         return true;
+    }
+
+    private bool ConfirmForeignOwner(WebPlaybackSession session)
+    {
+        var receipt = session.CommittedTransfer;
+        if (receipt is not null && receipt.Generation == session.Generation &&
+            string.Equals(receipt.SourceClientId, _server.ClientId, StringComparison.Ordinal) &&
+            !string.Equals(receipt.TargetClientId, _server.ClientId, StringComparison.Ordinal))
+            return true;
+
+        // A paused foreign snapshot can briefly appear when a server expires an
+        // old browser-style lease. It must never silence an already-running native
+        // decoder. Real device moves use the committed receipt above; legacy active
+        // owners must remain stable across consecutive polls before being trusted.
+        if (!session.Player.IsPlaying)
+        {
+            ResetForeignOwnerCandidate();
+            return false;
+        }
+
+        if (session.Generation != _foreignOwnerCandidateGeneration ||
+            !string.Equals(session.OwnerClientId, _foreignOwnerCandidate, StringComparison.Ordinal))
+        {
+            _foreignOwnerCandidate = session.OwnerClientId;
+            _foreignOwnerCandidateGeneration = session.Generation;
+            _foreignOwnerCandidateSamples = 1;
+            return false;
+        }
+
+        _foreignOwnerCandidateSamples++;
+        return _foreignOwnerCandidateSamples >= 2;
+    }
+
+    private void ResetForeignOwnerCandidate()
+    {
+        _foreignOwnerCandidate = string.Empty;
+        _foreignOwnerCandidateGeneration = -1;
+        _foreignOwnerCandidateSamples = 0;
     }
 
     private async Task<WebClientPlaybackResult> ReportLivePlaybackAsync(bool force)
@@ -1192,13 +2006,17 @@ public sealed class MobileClientSession : IDisposable
         var broadcast = SelectedBroadcast;
         if (broadcast is null) return;
         var explicitSeek = _explicitSeekPending;
-        var incrementPlayCount = _incrementPlayCountPending;
+        var incrementPlayCount = _pendingPlayCountEpisodes.ContainsKey(broadcast.EpisodeId);
+        var position = CaptureLogicalPosition();
+        var completed = _completedPlaybackEpisodeId == broadcast.EpisodeId ||
+                        (_logicalDurationMs > 0 && position >= Math.Max(0, _logicalDurationMs - 5_000));
+        if (completed && _logicalDurationMs > 0) position = _logicalDurationMs;
         var result = await _server.SaveProgressAsync(new WebOfflineProgressUpdate(
             _server.ClientId,
             broadcast.EpisodeId,
-            CaptureLogicalPosition(),
+            position,
             _logicalDurationMs,
-            Completed: IsCompleted(),
+            Completed: completed,
             Speed: _speed,
             CapturedAt: DateTimeOffset.UtcNow,
             AllowRewind: true,
@@ -1207,14 +2025,52 @@ public sealed class MobileClientSession : IDisposable
             IncrementPlayCount: incrementPlayCount)).ConfigureAwait(false);
         if (result.Conflict) throw new InvalidOperationException(result.Message);
         _explicitSeekPending = false;
-        _incrementPlayCountPending = incrementPlayCount && !result.Changed;
+        if (incrementPlayCount && result.Changed)
+            _pendingPlayCountEpisodes.TryRemove(broadcast.EpisodeId, out _);
         _lastDurableSave = DateTimeOffset.UtcNow;
+        if (!result.Changed && result.Episode is { PositionMs: > 0 } canonicalEpisode &&
+            canonicalEpisode.PositionMs > position)
+        {
+            var canonical = await _server.GetBroadcastSummaryAsync(broadcast.EpisodeId).ConfigureAwait(false);
+            ApplyPlaybackProgress(
+                canonical,
+                canonical.PositionMs,
+                canonical.DurationMs,
+                canonical.Completed,
+                canonical.LastPlayedAt ?? _lastDurableSave);
+        }
+        else
+        {
+            ApplyPlaybackProgress(
+                broadcast.Source,
+                position,
+                _logicalDurationMs,
+                completed,
+                _lastDurableSave);
+        }
+        await _metadataCache.SaveAsync().ConfigureAwait(false);
     }
 
     private long CaptureLogicalPosition()
     {
         if (_partIndex < 0 || _partIndex >= _parts.Count) return Math.Max(0, _logicalPositionMs);
         var observed = _parts[_partIndex].LogicalStartMs + (long)_playback.Current.Position.TotalMilliseconds;
+        if (_pendingDecoderLogicalPositionMs is { } pending)
+        {
+            if (Math.Abs(observed - pending) <= 1_500)
+            {
+                _pendingDecoderLogicalPositionMs = null;
+            }
+            else if (DateTimeOffset.UtcNow <= _pendingDecoderPositionUntil)
+            {
+                _logicalPositionMs = Math.Clamp(pending, 0, Math.Max(0, _logicalDurationMs));
+                return _logicalPositionMs;
+            }
+            else
+            {
+                _pendingDecoderLogicalPositionMs = null;
+            }
+        }
         _logicalPositionMs = Math.Clamp(observed, 0, Math.Max(0, _logicalDurationMs));
         return _logicalPositionMs;
     }
@@ -1230,6 +2086,12 @@ public sealed class MobileClientSession : IDisposable
 
     private static string OwnerName(WebPlaybackSession session)
         => string.IsNullOrWhiteSpace(session.Player.Device) ? session.OwnerDevice : session.Player.Device;
+
+    private long MiniPlayerPositionMs => _remotePlaybackBroadcast?.Source.PositionMs
+        ?? Math.Clamp(_logicalPositionMs, 0, Math.Max(0, _logicalDurationMs));
+
+    private long MiniPlayerDurationMs => _remotePlaybackBroadcast?.Source.DurationMs
+        ?? Math.Max(0, _logicalDurationMs);
 
     private static long ProjectPosition(WebPlaybackState state)
     {
@@ -1265,7 +2127,10 @@ public sealed class MobileClientSession : IDisposable
             OpenLogicalPosition(_parts[_partIndex].LogicalStartMs, play: true, muted: false);
             return;
         }
+        _completedPlaybackEpisodeId = SelectedBroadcast?.EpisodeId;
         _logicalPositionMs = _logicalDurationMs;
+        _pendingDecoderLogicalPositionMs = _logicalDurationMs;
+        _pendingDecoderPositionUntil = DateTimeOffset.UtcNow.AddSeconds(15);
         PlaybackStatus = "Finished";
         NotifyPlayback();
         _ = FlushPlaybackAsync();
@@ -1307,6 +2172,843 @@ public sealed class MobileClientSession : IDisposable
         }
     }
 
+    private async Task SynchronizeMetadataCacheAsync(bool forceExploreRefresh = false)
+    {
+        if (_disposed || !IsPaired) return;
+        await _metadataSyncGate.WaitAsync().ConfigureAwait(false);
+        BeginMetadataSync();
+        var warmExplore = false;
+        try
+        {
+            if (IsLiveConnected) await FlushOfflineMutationsAsync().ConfigureAwait(false);
+            var snapshot = _metadataCache.Snapshot;
+            var sync = await _server.GetLibrarySyncAsync(
+                snapshot.SyncSessionId,
+                snapshot.SyncSequence,
+                snapshot.SyncRevision).ConfigureAwait(false);
+            IReadOnlyList<WebClientLibraryBroadcastSummary>? completeLibrary = null;
+            var changed = new List<WebClientLibraryBroadcastSummary>();
+            var deleted = new HashSet<long>();
+            var episodeIds = sync.Changes
+                .Where(value => value.EpisodeId is > 0)
+                .Select(value => value.EpisodeId!.Value)
+                .Distinct()
+                .ToArray();
+
+            if (sync.ResetRequired || snapshot.Broadcasts.Count == 0)
+            {
+                completeLibrary = await FetchCompleteLibraryAsync().ConfigureAwait(false);
+            }
+            else if (!sync.NoChanges)
+            {
+                foreach (var episodeId in episodeIds)
+                {
+                    try
+                    {
+                        changed.Add(await _server.GetBroadcastSummaryAsync(episodeId).ConfigureAwait(false));
+                    }
+                    catch
+                    {
+                        deleted.Add(episodeId);
+                    }
+                }
+            }
+
+            var libraryChanged = sync.ResetRequired || snapshot.Overview is null || !sync.NoChanges;
+            var overview = libraryChanged
+                ? await _server.GetOverviewAsync().ConfigureAwait(false)
+                : null;
+            _metadataCache.ApplyLibrarySync(sync, completeLibrary, changed, deleted, overview);
+            await SynchronizeStoredDownloadedProgressWithServerAsync().ConfigureAwait(false);
+            await _downloads.ReconcileSummariesAsync(_metadataCache.Snapshot.Broadcasts).ConfigureAwait(false);
+            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+            ApplyMetadataSnapshot();
+
+            var exploreChanged = forceExploreRefresh || snapshot.ExploreOverview is null ||
+                                 sync.Changes.Any(value =>
+                                     value.Kind.Equals("wiki", StringComparison.OrdinalIgnoreCase) ||
+                                     value.Kind.Equals("research", StringComparison.OrdinalIgnoreCase));
+            if (exploreChanged)
+            {
+                await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
+                warmExplore = true;
+            }
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            _lastMetadataSyncAt = DateTimeOffset.UtcNow;
+            await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.WriteLine($"[iOS metadata sync] {exception}");
+            if (_metadataCache.Snapshot.Broadcasts.Count > 0)
+            {
+                StatusText = "Offline · showing the latest saved Radio Vault library";
+                ApplyMetadataSnapshot();
+            }
+        }
+        finally
+        {
+            EndMetadataSync();
+            _metadataSyncGate.Release();
+        }
+        if (warmExplore) _ = RefreshExploreCacheAsync(warmEntireCache: true);
+        if (DeleteCompletedDownloads) _ = CleanupCompletedDownloadsAsync();
+        if (AutoDownloadNewBroadcasts) _ = TryAutomaticDownloadAsync();
+    }
+
+    private async Task TryAutomaticDownloadAsync()
+    {
+        if (_disposed || !AutoDownloadNewBroadcasts || !IsLiveConnected || IsDownloading) return;
+        if (_downloadPolicy.WifiOnly && !_downloadPolicy.IsUsingWifi) return;
+        var downloadedIds = DownloadedBroadcasts.Select(value => value.EpisodeId).ToHashSet();
+        var since = _downloadPolicy.AutoDownloadSince;
+        var candidate = _metadataCache.Snapshot.Broadcasts
+            .Where(value => !value.Completed && !downloadedIds.Contains(value.RepresentativeEpisodeId) &&
+                            value.DateAdded >= since)
+            .OrderBy(value => value.DateAdded)
+            .FirstOrDefault();
+        if (candidate is null) return;
+        await DownloadAsync(new MobileBroadcastItem(candidate)).ConfigureAwait(false);
+    }
+
+    private async Task FlushOfflineMutationsAsync()
+    {
+        if (!IsLiveConnected) return;
+        await _offlineMutationSyncGate.WaitAsync().ConfigureAwait(false);
+        try
+        {
+            if (!IsLiveConnected) return;
+            var serverInstanceId = CurrentServerInstanceId();
+            var pending = await _offlineMutations.GetPendingAsync(serverInstanceId).ConfigureAwait(false);
+            foreach (var mutation in pending)
+            {
+                try
+                {
+                    switch (mutation.Kind)
+                    {
+                        case MobileOfflineMutationKind.Favourite:
+                            await _server.SetFavouriteAsync(
+                                mutation.EpisodeId, mutation.BooleanValue == true).ConfigureAwait(false);
+                            await ReconcileMutationBroadcastAsync(mutation.EpisodeId).ConfigureAwait(false);
+                            break;
+                        case MobileOfflineMutationKind.ListeningStatus:
+                            await _server.SetListeningStatusAsync(
+                                mutation.EpisodeId, mutation.BooleanValue == true).ConfigureAwait(false);
+                            await ReconcileMutationBroadcastAsync(mutation.EpisodeId).ConfigureAwait(false);
+                            break;
+                        case MobileOfflineMutationKind.Moment:
+                            var momentResult = await _server.AddMomentAsync(
+                                mutation.EpisodeId,
+                                new WebMomentMutation(
+                                    mutation.PositionMs, mutation.Title,
+                                    mutation.Notes, mutation.MutationId)).ConfigureAwait(false);
+                            if (!momentResult.Changed && !momentResult.Duplicate)
+                                throw new InvalidOperationException(momentResult.Message);
+                            break;
+                    }
+                    await _offlineMutations.MarkSucceededAsync(mutation.Id).ConfigureAwait(false);
+                }
+                catch (Exception exception)
+                {
+                    if (await MutationAlreadyAppliedAsync(mutation).ConfigureAwait(false))
+                    {
+                        await _offlineMutations.MarkSucceededAsync(mutation.Id).ConfigureAwait(false);
+                        continue;
+                    }
+                    await _offlineMutations.MarkFailedAsync(mutation.Id, exception.Message).ConfigureAwait(false);
+                    break;
+                }
+            }
+            await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
+        }
+        finally
+        {
+            _offlineMutationSyncGate.Release();
+        }
+    }
+
+    private async Task<bool> MutationAlreadyAppliedAsync(MobileOfflineMutation mutation)
+    {
+        if (mutation.Kind == MobileOfflineMutationKind.Moment) return false;
+        try
+        {
+            var summary = await _server.GetBroadcastSummaryAsync(mutation.EpisodeId).ConfigureAwait(false);
+            var applied = mutation.Kind switch
+            {
+                MobileOfflineMutationKind.Favourite => summary.Favourite == (mutation.BooleanValue == true),
+                MobileOfflineMutationKind.ListeningStatus => summary.Completed == (mutation.BooleanValue == true) &&
+                    ((mutation.BooleanValue == true) || summary.PositionMs == 0),
+                _ => false
+            };
+            if (applied) ApplyLocalBroadcastSummary(summary);
+            return applied;
+        }
+        catch { return false; }
+    }
+
+    private async Task ReconcileMutationBroadcastAsync(long episodeId)
+    {
+        var summary = await _server.GetBroadcastSummaryAsync(episodeId).ConfigureAwait(false);
+        ApplyLocalBroadcastSummary(summary);
+        await _downloads.ReconcileSummariesAsync([summary]).ConfigureAwait(false);
+        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+    }
+
+    private MobileBroadcastItem ApplyLocalBroadcastSummary(WebClientLibraryBroadcastSummary summary)
+    {
+        var replacement = new MobileBroadcastItem(summary);
+        _metadataCache.UpsertBroadcast(summary);
+        _ = _metadataCache.SaveAsync();
+        ReplaceBroadcast(summary.RepresentativeEpisodeId, replacement);
+        ApplyMetadataSnapshot();
+        return replacement;
+    }
+
+    private async Task RefreshSyncDiagnosticsAsync()
+    {
+        _syncDiagnostics = await _offlineMutations.GetDiagnosticsAsync().ConfigureAwait(false);
+        Notify();
+    }
+
+    private string CurrentServerInstanceId()
+        => _server.Connection?.ServerInstanceId ?? string.Empty;
+
+    private async Task SynchronizeDownloadedProgressWithServerAsync(DownloadedProgressSnapshot snapshot)
+    {
+        try
+        {
+            var result = await _server.SaveProgressAsync(new WebOfflineProgressUpdate(
+                _server.ClientId,
+                snapshot.EpisodeId,
+                snapshot.PositionMs,
+                snapshot.DurationMs,
+                Completed: snapshot.Completed,
+                Speed: snapshot.Speed,
+                CapturedAt: snapshot.CapturedAt,
+                AllowRewind: false,
+                ExpectedGeneration: 0,
+                ExplicitSeek: false,
+                IncrementPlayCount: snapshot.IncrementPlayCount)).ConfigureAwait(false);
+            if (result.Conflict) return;
+            if (snapshot.IncrementPlayCount && result.Changed)
+                _pendingPlayCountEpisodes.TryRemove(snapshot.EpisodeId, out _);
+            var canonical = await _server.GetBroadcastSummaryAsync(snapshot.EpisodeId).ConfigureAwait(false);
+            _metadataCache.UpsertBroadcast(canonical);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            await _downloads.ReconcileSummariesAsync([canonical]).ConfigureAwait(false);
+            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+            ApplyMetadataSnapshot();
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.WriteLine($"[iOS downloaded progress sync] {exception}");
+        }
+    }
+
+    private async Task SynchronizeStoredDownloadedProgressWithServerAsync()
+    {
+        if (!IsLiveConnected) return;
+        var serverByEpisode = _metadataCache.Snapshot.Broadcasts
+            .GroupBy(value => value.RepresentativeEpisodeId)
+            .ToDictionary(group => group.Key, group => group.Last());
+        var localDownloads = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+        foreach (var local in localDownloads)
+        {
+            if (!serverByEpisode.TryGetValue(local.EpisodeId, out var server)) continue;
+            var localPlayedAt = local.Source.LastPlayedAt ?? DateTimeOffset.MinValue;
+            var serverPlayedAt = server.LastPlayedAt ?? DateTimeOffset.MinValue;
+            var hasNewerOfflineProgress = localPlayedAt > serverPlayedAt ||
+                                          (serverPlayedAt == DateTimeOffset.MinValue &&
+                                           (local.Source.PositionMs > server.PositionMs ||
+                                            (local.Source.Completed && !server.Completed)));
+            if (!hasNewerOfflineProgress) continue;
+            try
+            {
+                var result = await _server.SaveProgressAsync(new WebOfflineProgressUpdate(
+                    _server.ClientId,
+                    local.EpisodeId,
+                    local.Source.PositionMs,
+                    Math.Max(local.Source.DurationMs, server.DurationMs),
+                    Completed: local.Source.Completed,
+                    Speed: _speed,
+                    CapturedAt: local.Source.LastPlayedAt,
+                    AllowRewind: false,
+                    ExpectedGeneration: 0,
+                    IncrementPlayCount: _pendingPlayCountEpisodes.ContainsKey(local.EpisodeId))).ConfigureAwait(false);
+                if (result.Conflict) continue;
+                if (result.Changed)
+                    _pendingPlayCountEpisodes.TryRemove(local.EpisodeId, out _);
+                var canonical = await _server.GetBroadcastSummaryAsync(local.EpisodeId).ConfigureAwait(false);
+                _metadataCache.UpsertBroadcast(canonical);
+            }
+            catch (Exception exception)
+            {
+                System.Diagnostics.Trace.WriteLine($"[iOS stored downloaded progress sync] {exception}");
+            }
+        }
+    }
+
+    private DownloadedProgressSnapshot CaptureDownloadedProgress()
+    {
+        var broadcast = SelectedBroadcast ?? throw new InvalidOperationException("No downloaded broadcast is loaded.");
+        var episodeId = broadcast.EpisodeId;
+        var durationMs = Math.Max(0, _logicalDurationMs);
+        var positionMs = CaptureLogicalPosition();
+        var completed = _completedPlaybackEpisodeId == episodeId ||
+                        (durationMs > 0 && positionMs >= Math.Max(0, durationMs - 5_000));
+        if (completed && durationMs > 0) positionMs = durationMs;
+        return new DownloadedProgressSnapshot(
+            episodeId,
+            positionMs,
+            durationMs,
+            completed,
+            _speed,
+            DateTimeOffset.UtcNow,
+            _pendingPlayCountEpisodes.ContainsKey(episodeId));
+    }
+
+    private async Task<IReadOnlyList<WebClientLibraryBroadcastSummary>> FetchCompleteLibraryAsync()
+    {
+        const int pageSize = 10000;
+        var values = new List<WebClientLibraryBroadcastSummary>();
+        var offset = 0;
+        while (true)
+        {
+            var page = await _server.BrowseAsync(
+                string.Empty,
+                limit: pageSize,
+                offset: offset).ConfigureAwait(false);
+            values.AddRange(page.Broadcasts);
+            offset += page.Broadcasts.Count;
+            if (page.Broadcasts.Count == 0 || offset >= page.TotalMatching) break;
+        }
+        return values;
+    }
+
+    private async Task<byte[]?> LoadArtworkCoreAsync(long episodeId)
+    {
+        var cached = _metadataCache.ReadArtwork(episodeId);
+        if (cached is { Length: > 0 }) return cached;
+        if (!IsPaired || !IsLiveConnected) return null;
+        try
+        {
+            var content = await _server.GetArtworkAsync(episodeId).ConfigureAwait(false);
+            if (content.Length == 0) return null;
+            await _metadataCache.SaveArtworkAsync(episodeId, content).ConfigureAwait(false);
+            return content;
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.WriteLine($"[iOS artwork load] {exception}");
+            return null;
+        }
+    }
+
+    private MobileBroadcastItem ApplyPlaybackProgress(
+        WebClientLibraryBroadcastSummary source,
+        long positionMs,
+        long durationMs,
+        bool completed,
+        DateTimeOffset playedAt)
+    {
+        var duration = Math.Max(source.DurationMs, Math.Max(0, durationMs));
+        var position = duration > 0
+            ? Math.Clamp(positionMs, 0, duration)
+            : Math.Max(0, positionMs);
+        var updated = source with
+        {
+            PositionMs = position,
+            DurationMs = duration,
+            Completed = completed,
+            InProgress = position > 0 && !completed,
+            LastPlayedAt = playedAt
+        };
+        var item = new MobileBroadcastItem(updated);
+        try { _metadataCache.UpsertBroadcast(updated); }
+        catch (Exception exception)
+        {
+            TracePlayback("Metadata progress cache repair failed without stopping playback: " + exception);
+            System.Diagnostics.Trace.WriteLine($"[iOS playback metadata cache] {exception}");
+        }
+        if (SelectedBroadcast?.EpisodeId == item.EpisodeId) SelectedBroadcast = item;
+        if (_remotePlaybackBroadcast?.EpisodeId == item.EpisodeId) _remotePlaybackBroadcast = item;
+        LibraryBroadcasts = ReplaceBroadcast(LibraryBroadcasts, item);
+        RecentBroadcasts = ReplaceBroadcast(RecentBroadcasts, item);
+        OnThisDay = ReplaceBroadcast(OnThisDay, item);
+        UnheardBroadcasts = position > 0 || completed
+            ? UnheardBroadcasts.Where(value => value.EpisodeId != item.EpisodeId).ToArray()
+            : ReplaceBroadcast(UnheardBroadcasts, item);
+        ContinueListening = completed || position <= 0
+            ? ContinueListening.Where(value => value.EpisodeId != item.EpisodeId).ToArray()
+            : new[] { item }
+                .Concat(ContinueListening.Where(value => value.EpisodeId != item.EpisodeId))
+                .Take(50)
+                .ToArray();
+        return item;
+    }
+
+    private static IReadOnlyList<MobileBroadcastItem> ReplaceBroadcast(
+        IReadOnlyList<MobileBroadcastItem> values,
+        MobileBroadcastItem replacement)
+        => values.Select(value => value.EpisodeId == replacement.EpisodeId ? replacement : value).ToArray();
+
+    private void ApplyMetadataSnapshot()
+    {
+        var snapshot = _metadataCache.Snapshot;
+        var broadcasts = snapshot.Broadcasts;
+        if (broadcasts.Count > 0)
+        {
+            TotalBroadcasts = broadcasts.Count;
+            CompletedBroadcasts = broadcasts.Count(value => value.Completed);
+            InProgressBroadcasts = broadcasts.Count(value => value.InProgress && !value.Completed);
+            FavouriteBroadcasts = broadcasts.Count(value => value.Favourite);
+            LibraryCollections = broadcasts
+                .GroupBy(value => new { value.CollectionId, value.CollectionName })
+                .Select(group => new WebClientLibraryCollectionSummary(
+                    group.Key.CollectionId,
+                    group.Key.CollectionName,
+                    group.Count()))
+                .OrderBy(value => value.CollectionName, StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+            _incompleteLibraryCollections = broadcasts
+                .Where(value => !value.Completed)
+                .GroupBy(value => new { value.CollectionId, value.CollectionName })
+                .Select(group => new WebClientLibraryCollectionSummary(
+                    group.Key.CollectionId,
+                    group.Key.CollectionName,
+                    group.Count()))
+                .OrderBy(value => value.CollectionName, StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+            ContinueListening = Convert(broadcasts
+                .Where(value => value.InProgress && !value.Completed)
+                .OrderByDescending(value => value.LastPlayedAt)
+                .Take(50));
+            RecentBroadcasts = Convert(broadcasts
+                .OrderByDescending(value => value.DateAdded)
+                .Take(50));
+            var today = DateTime.Today;
+            OnThisDay = Convert(broadcasts
+                .Where(value => value.AirDate is { } date && date.Month == today.Month && date.Day == today.Day)
+                .OrderByDescending(value => value.AirDate)
+                .Take(50));
+            UnheardBroadcasts = Convert(broadcasts
+                .Where(value => !value.Completed && !value.InProgress)
+                .OrderByDescending(value => value.AirDate)
+                .Take(50));
+            if (LibraryBroadcasts.Count == 0)
+                LibraryBroadcasts = Convert(broadcasts.OrderByDescending(value => value.AirDate).Take(250));
+        }
+        else if (snapshot.Overview is { } overview)
+        {
+            TotalBroadcasts = overview.TotalBroadcasts;
+            CompletedBroadcasts = overview.CompletedBroadcasts;
+            InProgressBroadcasts = overview.InProgressBroadcasts;
+            FavouriteBroadcasts = overview.FavouriteBroadcasts;
+            LibraryCollections = overview.Collections;
+            _incompleteLibraryCollections = overview.Collections;
+            ContinueListening = Convert(overview.ContinueListening);
+            RecentBroadcasts = Convert(overview.RecentBroadcasts);
+            OnThisDay = Convert(overview.OnThisDay);
+        }
+        QueueItems = snapshot.Queue;
+        SavedMoments = snapshot.Moments ?? [];
+        Knowledge = snapshot.Knowledge;
+        Notify();
+    }
+
+    private void ApplyOnlineOverview(WebClientLibraryOverview overview)
+    {
+        foreach (var broadcast in overview.ContinueListening
+                     .Concat(overview.RecentBroadcasts)
+                     .Concat(overview.OnThisDay)
+                     .GroupBy(value => value.RepresentativeEpisodeId)
+                     .Select(group => group.OrderByDescending(value => value.LastPlayedAt).First()))
+            _metadataCache.UpsertBroadcast(broadcast);
+        TotalBroadcasts = overview.TotalBroadcasts;
+        CompletedBroadcasts = overview.CompletedBroadcasts;
+        InProgressBroadcasts = overview.InProgressBroadcasts;
+        FavouriteBroadcasts = overview.FavouriteBroadcasts;
+        LibraryCollections = overview.Collections;
+        _incompleteLibraryCollections = overview.Collections;
+        ContinueListening = Convert(overview.ContinueListening);
+        RecentBroadcasts = Convert(overview.RecentBroadcasts);
+        OnThisDay = Convert(overview.OnThisDay);
+        Notify();
+    }
+
+    private void BeginMetadataSync()
+    {
+        if (Interlocked.Increment(ref _metadataSyncActivity) == 1) Notify();
+    }
+
+    private void EndMetadataSync()
+    {
+        if (Interlocked.Decrement(ref _metadataSyncActivity) == 0) Notify();
+    }
+
+    private IReadOnlyList<MobileBroadcastItem> QueryCachedBroadcasts(
+        int? collectionId,
+        string searchText,
+        string filter,
+        int? year,
+        int? month,
+        bool hideCompleted,
+        string? collectionName = null)
+    {
+        IEnumerable<WebClientLibraryBroadcastSummary> values = _metadataCache.Snapshot.Broadcasts;
+        if (!string.IsNullOrWhiteSpace(collectionName))
+        {
+            var collectionKey = NormalizeCollectionName(collectionName);
+            values = values.Where(value => NormalizeCollectionName(value.CollectionName) == collectionKey);
+        }
+        else if (collectionId is > 0) values = values.Where(value => value.CollectionId == collectionId.Value);
+        if (year is > 0) values = values.Where(value => value.AirDate?.Year == year.Value);
+        if (month is > 0) values = values.Where(value => value.AirDate?.Month == month.Value);
+        if (hideCompleted) values = values.Where(value => !value.Completed);
+        values = filter.Trim().ToLowerInvariant() switch
+        {
+            "favourites" or "favorites" => values.Where(value => value.Favourite),
+            "continuelistening" or "continue" => values.Where(value => value.InProgress && !value.Completed),
+            "unplayed" => values.Where(value => !value.Completed && !value.InProgress),
+            "completed" => values.Where(value => value.Completed),
+            _ => values
+        };
+        if (!string.IsNullOrWhiteSpace(searchText))
+        {
+            var query = searchText.Trim();
+            values = values.Where(value =>
+                Contains(value.Title, query) ||
+                Contains(value.Description, query) ||
+                Contains(value.CollectionName, query) ||
+                Contains(value.BroadcastId, query) ||
+                Contains(value.SearchContext, query));
+        }
+        values = filter.Equals("RecentlyAdded", StringComparison.OrdinalIgnoreCase)
+            ? values.OrderByDescending(value => value.DateAdded)
+            : values.OrderByDescending(value => value.AirDate).ThenByDescending(value => value.DateAdded);
+        return Convert(values);
+    }
+
+    private IReadOnlyList<WebClientLibraryArchivePeriodSummary> BuildCachedArchivePeriods(
+        int? collectionId,
+        int? year,
+        bool hideCompleted,
+        string? collectionName = null)
+    {
+        IEnumerable<WebClientLibraryBroadcastSummary> source = _metadataCache.Snapshot.Broadcasts;
+        if (!string.IsNullOrWhiteSpace(collectionName))
+        {
+            var collectionKey = NormalizeCollectionName(collectionName);
+            source = source.Where(value => NormalizeCollectionName(value.CollectionName) == collectionKey);
+        }
+        else if (collectionId is > 0) source = source.Where(value => value.CollectionId == collectionId.Value);
+        if (hideCompleted) source = source.Where(value => !value.Completed);
+        if (year is > 0) source = source.Where(value => value.AirDate?.Year == year.Value);
+        var groups = year.HasValue
+            ? source.Where(value => value.AirDate.HasValue).GroupBy(value => value.AirDate!.Value.Month)
+            : source.Where(value => value.AirDate.HasValue).GroupBy(value => value.AirDate!.Value.Year);
+        return groups
+            .OrderByDescending(group => group.Key)
+            .Select(group =>
+            {
+                var items = group.ToArray();
+                var progress = items.Length == 0 ? 0 : (int)Math.Round(items.Average(value =>
+                    value.Completed ? 100d : value.DurationMs <= 0 ? 0d :
+                    Math.Clamp(value.PositionMs * 100d / value.DurationMs, 0d, 100d)));
+                var title = year.HasValue
+                    ? new DateTime(2000, group.Key, 1).ToString("MMMM")
+                    : group.Key.ToString();
+                return new WebClientLibraryArchivePeriodSummary(
+                    group.Key,
+                    title,
+                    items.Length,
+                    items.Count(value => value.Completed),
+                    items.Count(value => value.Favourite),
+                    progress,
+                    $"{progress:N0}% listened",
+                    $"{items.Select(value => value.CollectionName).Distinct(StringComparer.OrdinalIgnoreCase).Count():N0} show(s)",
+                    items.Select(value => value.ArtworkPath).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
+            })
+            .ToArray();
+    }
+
+    private IReadOnlyList<int?> ResolveCollectionIds(int? collectionId, string? collectionName)
+    {
+        if (string.IsNullOrWhiteSpace(collectionName)) return [collectionId];
+        var key = NormalizeCollectionName(collectionName);
+        var ids = LibraryCollections
+            .Where(value => NormalizeCollectionName(value.CollectionName) == key)
+            .Select(value => (int?)value.CollectionId)
+            .Distinct()
+            .ToArray();
+        return ids.Length > 0 ? ids : [collectionId];
+    }
+
+    private static IReadOnlyList<WebClientLibraryCollectionSummary> CombineCollections(
+        IEnumerable<WebClientLibraryCollectionSummary> values)
+        => values
+            .GroupBy(value => NormalizeCollectionName(value.CollectionName))
+            .Where(group => group.Key.Length > 0)
+            .Select(group =>
+            {
+                var distinct = group.GroupBy(value => value.CollectionId).Select(value => value.First()).ToArray();
+                var display = distinct.OrderByDescending(value => value.BroadcastCount)
+                    .ThenBy(value => value.CollectionName, StringComparer.CurrentCultureIgnoreCase)
+                    .First();
+                return new WebClientLibraryCollectionSummary(
+                    display.CollectionId,
+                    display.CollectionName.Trim(),
+                    distinct.Sum(value => value.BroadcastCount));
+            })
+            .OrderBy(value => value.CollectionName, StringComparer.CurrentCultureIgnoreCase)
+            .ToArray();
+
+    private static IReadOnlyList<WebClientLibraryArchivePeriodSummary> CombineArchivePeriods(
+        IEnumerable<WebClientLibraryArchivePeriodSummary> values)
+        => values
+            .GroupBy(value => value.Value)
+            .OrderByDescending(group => group.Key)
+            .Select(group =>
+            {
+                var periods = group.ToArray();
+                var broadcasts = periods.Sum(value => value.BroadcastCount);
+                var progress = broadcasts == 0 ? 0 : (int)Math.Round(periods.Sum(value => value.ProgressPercent * value.BroadcastCount) / (double)broadcasts);
+                return new WebClientLibraryArchivePeriodSummary(
+                    group.Key,
+                    periods[0].Title,
+                    broadcasts,
+                    periods.Sum(value => value.CompletedCount),
+                    periods.Sum(value => value.FavouriteCount),
+                    progress,
+                    $"{progress:N0}% listened",
+                    periods[0].ShowsText,
+                    periods.Select(value => value.ArtworkPath).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
+            })
+            .ToArray();
+
+    private MobileKnowledgeSnapshot? BuildLibraryKnowledgeSnapshot()
+    {
+        var broadcasts = _metadataCache.Snapshot.Broadcasts;
+        if (broadcasts.Count == 0) return null;
+        var dated = broadcasts.Where(value => value.AirDate.HasValue).ToArray();
+        var collections = CombineCollections(broadcasts
+                .GroupBy(value => new { value.CollectionId, value.CollectionName })
+                .Select(group => new WebClientLibraryCollectionSummary(group.Key.CollectionId, group.Key.CollectionName, group.Count())))
+            .Select(value => new MobileKnowledgeCollection(value.CollectionId, value.CollectionName, value.BroadcastCount))
+            .ToArray();
+        var overview = new MobileKnowledgeOverview(
+            broadcasts.Count,
+            broadcasts.Count,
+            0,
+            broadcasts.Count(value => value.NeedsAttention),
+            0,
+            0,
+            broadcasts.Count(value => !string.IsNullOrWhiteSpace(value.Description)),
+            0,
+            0,
+            0,
+            null,
+            dated.Select(value => value.AirDate).Min(),
+            dated.Select(value => value.AirDate).Max());
+        return new MobileKnowledgeSnapshot(overview, collections, [], _metadataCache.Snapshot.UpdatedAt, true);
+    }
+
+    private MobileKnowledgeCoverage? BuildLibraryKnowledgeCoverage(int collectionId)
+    {
+        var collection = Knowledge?.Collections.FirstOrDefault(value => value.CollectionId == collectionId);
+        var collectionName = collection?.Name ?? LibraryCollections.FirstOrDefault(value => value.CollectionId == collectionId)?.CollectionName;
+        if (string.IsNullOrWhiteSpace(collectionName)) return null;
+        var key = NormalizeCollectionName(collectionName);
+        var broadcasts = _metadataCache.Snapshot.Broadcasts
+            .Where(value => value.AirDate.HasValue && NormalizeCollectionName(value.CollectionName) == key)
+            .ToArray();
+        if (broadcasts.Length == 0) return null;
+        var first = broadcasts.Min(value => value.AirDate!.Value);
+        var last = broadcasts.Max(value => value.AirDate!.Value);
+        var byDate = broadcasts.GroupBy(value => value.AirDate!.Value).ToDictionary(group => group.Key, group => group.ToArray());
+        var days = new List<MobileKnowledgeCoverageDay>();
+        for (var date = first; date <= last; date = date.AddDays(1))
+        {
+            byDate.TryGetValue(date, out var dated);
+            dated ??= [];
+            var score = dated.Length == 0 ? 0 : (int)Math.Round(dated.Average(MetadataScore));
+            days.Add(new MobileKnowledgeCoverageDay(
+                date,
+                date.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday,
+                dated.Length > 0,
+                false,
+                false,
+                dated.Length,
+                score,
+                dated.Length == 0 ? "No saved broadcast" : score >= 75 ? string.Empty : "More metadata can be added",
+                dated.FirstOrDefault()?.RepresentativeEpisodeId,
+                null));
+        }
+        return new MobileKnowledgeCoverage(collectionId, collectionName, first, last, days);
+    }
+
+    private static double MetadataScore(WebClientLibraryBroadcastSummary value)
+    {
+        var score = 25d;
+        if (!string.IsNullOrWhiteSpace(value.Title)) score += 15;
+        if (!string.IsNullOrWhiteSpace(value.Description)) score += 25;
+        if (!string.IsNullOrWhiteSpace(value.ArtworkPath)) score += 15;
+        if (value.RecordingCount > 0) score += 10;
+        if (value.SegmentCount > 0) score += 10;
+        return Math.Min(100, score);
+    }
+
+    private static string NormalizeCollectionName(string? value)
+        => new((value ?? string.Empty).Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+
+    private async Task RefreshExploreCacheAsync(bool warmEntireCache)
+    {
+        if (!IsPaired || !IsLiveConnected) return;
+        await _exploreSyncGate.WaitAsync().ConfigureAwait(false);
+        BeginMetadataSync();
+        try
+        {
+            var overview = await _server.GetWikiOverviewAsync().ConfigureAwait(false);
+            var pages = await _server.BrowseWikiAsync(limit: 5000).ConfigureAwait(false);
+            var today = DateTime.Today;
+            var highlights = await _server.GetWikiDashboardHighlightsAsync(today.Month, today.Day).ConfigureAwait(false);
+            _metadataCache.SetExplore(overview, pages, highlights);
+
+            var existing = _metadataCache.Snapshot.ExploreDocuments.ToDictionary(value => value.PageId);
+            var candidates = warmEntireCache
+                ? pages
+                : pages.Where(value => value.ImageCount > 0)
+                    .OrderByDescending(value => value.Status.Equals("Published", StringComparison.OrdinalIgnoreCase))
+                    .ThenByDescending(value => value.ImageCount)
+                    .Take(8)
+                    .ToArray();
+            var refreshed = new List<MobileWikiPageDocument>();
+            foreach (var page in candidates)
+            {
+                if (existing.TryGetValue(page.PageId, out var document) && document.Revision == page.Revision)
+                {
+                    refreshed.Add(document);
+                    continue;
+                }
+                var loaded = await _server.GetWikiPageAsync(page.PageId).ConfigureAwait(false);
+                if (loaded is not null) refreshed.Add(loaded);
+            }
+            _metadataCache.UpsertExploreDocuments(refreshed);
+
+            foreach (var imageId in refreshed
+                         .SelectMany(value => value.Images)
+                         .Select(value => value.ImageId)
+                         .Distinct())
+            {
+                if (_metadataCache.HasImage(imageId)) continue;
+                var image = await _server.GetWikiImageAsync(imageId).ConfigureAwait(false);
+                if (image is not null) await _metadataCache.SaveImageAsync(image).ConfigureAwait(false);
+            }
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            Notify();
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.WriteLine($"[iOS Explore cache] {exception}");
+        }
+        finally
+        {
+            EndMetadataSync();
+            _exploreSyncGate.Release();
+        }
+    }
+
+    private async Task RefreshExplorePageAsync(Guid pageId)
+    {
+        try
+        {
+            var page = await _server.GetWikiPageAsync(pageId).ConfigureAwait(false);
+            if (page is null) return;
+            _metadataCache.UpsertExploreDocuments([page]);
+            await LoadExploreImagesAsync(page).ConfigureAwait(false);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.WriteLine($"[iOS Explore page refresh] {exception}");
+        }
+    }
+
+    private MobileExploreDashboard? BuildExploreDashboard()
+    {
+        var snapshot = _metadataCache.Snapshot;
+        if (snapshot.ExploreOverview is not { } overview ||
+            snapshot.ExploreHighlights is not { } highlights) return null;
+        var all = snapshot.ExplorePages;
+        var featured = all
+            .OrderByDescending(value => value.Status.Equals("Published", StringComparison.OrdinalIgnoreCase))
+            .ThenByDescending(value => value.CitationCount + value.ImageCount + value.TimelineEventCount)
+            .ThenByDescending(value => value.UpdatedAt)
+            .Take(6)
+            .ToArray();
+        var order = featured.Select((value, index) => (value.PageId, index)).ToDictionary(value => value.PageId, value => value.index);
+        var gallery = snapshot.ExploreDocuments
+            .Where(value => value.Images.Count > 0)
+            .OrderBy(value => order.GetValueOrDefault(value.PageId, int.MaxValue))
+            .ThenBy(value => value.Title)
+            .SelectMany(document => document.Images.OrderBy(link => link.SortOrder).Take(1)
+                .Select(link => (document, link, bytes: _metadataCache.ReadImage(link.ImageId))))
+            .Where(value => value.bytes is { Length: > 0 })
+            .Take(8)
+            .Select(value => ToExploreImage(value.document, value.link, value.bytes!))
+            .ToArray();
+        return new MobileExploreDashboard(
+            overview,
+            all,
+            featured,
+            all.OrderByDescending(value => value.UpdatedAt).Take(8).ToArray(),
+            all.Where(value => value.PageType.Equals("Show", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(value => value.TimelineEventCount).ThenBy(value => value.Title).Take(10).ToArray(),
+            all.Where(value => value.PageType.Equals("Person", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(value => value.CitationCount).ThenBy(value => value.Title).Take(10).ToArray(),
+            all.Where(value => value.PageType.Equals("Topic", StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(value => value.CitationCount).ThenBy(value => value.Title).Take(10).ToArray(),
+            all.Where(value => value.PageType.Equals("Show", StringComparison.OrdinalIgnoreCase) &&
+                               value.TimelineEventCount > 0)
+                .OrderBy(value => value.Title, StringComparer.CurrentCultureIgnoreCase).ToArray(),
+            highlights,
+            gallery);
+    }
+
+    private static MobileExploreImage ToExploreImage(
+        MobileWikiPageDocument document,
+        MobileWikiPageImageLink link,
+        byte[] bytes)
+        => new(
+            link.ImageId,
+            document.PageId,
+            document.Title,
+            string.IsNullOrWhiteSpace(link.Image?.Caption) ? document.Title : link.Image.Caption,
+            string.IsNullOrWhiteSpace(link.Image?.AltText) ? document.Title : link.Image.AltText,
+            link.Image?.MediaType ?? "image/jpeg",
+            bytes);
+
+    private static bool Contains(string? value, string query)
+        => value?.Contains(query, StringComparison.CurrentCultureIgnoreCase) == true;
+
+    private void ServerOnConnectivityChanged(object? sender, EventArgs eventArgs)
+    {
+        if (ShowsOfflineIndicator && _metadataCache.Snapshot.Broadcasts.Count > 0)
+            StatusText = "Offline · showing saved Radio Vault data";
+        else if (IsLiveConnected &&
+                 (StatusText.StartsWith("Offline", StringComparison.OrdinalIgnoreCase) ||
+                  StatusText.StartsWith("Could not reach", StringComparison.OrdinalIgnoreCase)))
+            StatusText = $"Connected to {ServerName} · checking for updates";
+        Notify();
+        if (IsLiveConnected) _ = RetrySyncAsync();
+    }
+
+    private void CacheQueue()
+    {
+        _metadataCache.SetQueue(QueueItems);
+        _ = _metadataCache.SaveAsync();
+    }
+
     private void SetBusy(bool busy, string? status = null)
     {
         IsBusy = busy;
@@ -1319,6 +3021,7 @@ public sealed class MobileClientSession : IDisposable
     private void NotifyPlayback()
     {
         PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
+        EnsureNowPlayingArtwork();
         _nowPlaying.Update(new MobileNowPlayingSnapshot(
             NowPlayingTitle,
             NowPlayingSubtitle,
@@ -1326,7 +3029,31 @@ public sealed class MobileClientSession : IDisposable
             TimeSpan.FromMilliseconds(Math.Max(0, _logicalDurationMs)),
             _speed,
             _playback.Current.IsPlaying,
-            SelectedBroadcast is not null && _playback.Current.IsOpen && _ownsPlayback));
+            SelectedBroadcast is not null && _playback.Current.IsOpen && _ownsPlayback,
+            _nowPlayingArtwork));
+    }
+
+    private void EnsureNowPlayingArtwork()
+    {
+        var broadcast = SelectedBroadcast;
+        if (broadcast is null)
+        {
+            _nowPlayingArtworkEpisodeId = 0;
+            _nowPlayingArtwork = null;
+            return;
+        }
+        if (_nowPlayingArtworkEpisodeId == broadcast.EpisodeId) return;
+        _nowPlayingArtworkEpisodeId = broadcast.EpisodeId;
+        _nowPlayingArtwork = null;
+        _ = LoadNowPlayingArtworkAsync(broadcast);
+    }
+
+    private async Task LoadNowPlayingArtworkAsync(MobileBroadcastItem broadcast)
+    {
+        var artwork = await LoadArtworkAsync(broadcast).ConfigureAwait(false);
+        if (_disposed || SelectedBroadcast?.EpisodeId != broadcast.EpisodeId) return;
+        _nowPlayingArtwork = artwork;
+        NotifyPlayback();
     }
 
     private void ReplaceBroadcast(long episodeId, MobileBroadcastItem replacement)
@@ -1358,6 +3085,15 @@ public sealed class MobileClientSession : IDisposable
             : value >= 1024L * 1024L ? $"{value / (1024d * 1024d):0.0} MB"
             : $"{Math.Max(0, value) / 1024d:0} KB";
 
+    private readonly record struct DownloadedProgressSnapshot(
+        long EpisodeId,
+        long PositionMs,
+        long DurationMs,
+        bool Completed,
+        double Speed,
+        DateTimeOffset CapturedAt,
+        bool IncrementPlayCount);
+
     public void Dispose()
     {
         if (_disposed) return;
@@ -1365,13 +3101,18 @@ public sealed class MobileClientSession : IDisposable
         _downloadCancelRequested = true;
         _downloadCancellation?.Cancel();
         _syncTimer.Dispose();
+        _metadataSyncTimer.Dispose();
         _playback.StateChanged -= PlaybackOnStateChanged;
         _playback.MediaEnded -= PlaybackOnMediaEnded;
         _nowPlaying.CommandReceived -= NowPlayingOnCommandReceived;
+        _server.ConnectivityChanged -= ServerOnConnectivityChanged;
         _mediaProxy?.Dispose();
         _nowPlaying.Dispose();
         _playback.Dispose();
         _server.Dispose();
         _syncGate.Dispose();
+        _metadataSyncGate.Dispose();
+        _offlineMutationSyncGate.Dispose();
+        _exploreSyncGate.Dispose();
     }
 }

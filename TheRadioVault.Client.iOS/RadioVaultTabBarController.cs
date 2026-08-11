@@ -17,9 +17,9 @@ public sealed class RadioVaultTabBarController : UITabBarController
         [
             Wrap(new HomeViewController(session), "Dashboard", RadioVaultIcon.Home, 0),
             Wrap(new LibraryViewController(session), "Library", RadioVaultIcon.Library, 1),
-            Wrap(new ExploreViewController(session), "Explore", RadioVaultIcon.Knowledge, 2),
-            Wrap(new DownloadsViewController(session), "Downloads", RadioVaultIcon.Download, 3),
-            Wrap(new ServerViewController(session), "Settings", RadioVaultIcon.Settings, 4)
+            Wrap(new ExploreViewController(session), "Explore", RadioVaultIcon.Explore, 2),
+            Wrap(new SavedViewController(session), "Saved", RadioVaultIcon.Moment, 3),
+            Wrap(new KnowledgeViewController(session), "Knowledge", RadioVaultIcon.Knowledge, 4)
         ];
         _session.TabRequested += SessionOnTabRequested;
         _session.StateChanged += SessionOnStateChanged;
@@ -51,15 +51,47 @@ public sealed class RadioVaultTabBarController : UITabBarController
     private static UINavigationController Wrap(UIViewController controller, string title, RadioVaultIcon icon, nint tag)
     {
         controller.Title = title;
-        controller.NavigationItem.Title = title;
+        var tabColor = RadioVaultIcons.ColorFor(icon);
+        var tabItem = new UITabBarItem(title, RadioVaultIcons.Image(icon), tag);
+        tabItem.SetTitleTextAttributes(
+            new UIStringAttributes { ForegroundColor = tabColor },
+            UIControlState.Normal);
+        tabItem.SetTitleTextAttributes(
+            new UIStringAttributes { ForegroundColor = tabColor },
+            UIControlState.Selected);
+        var tabAppearance = CreateTabAppearance(tabColor);
+        tabItem.StandardAppearance = tabAppearance;
+        tabItem.ScrollEdgeAppearance = tabAppearance;
         var navigation = new UINavigationController(controller)
         {
-            TabBarItem = new UITabBarItem(title, RadioVaultIcons.Image(icon), tag)
+            TabBarItem = tabItem
         };
-        navigation.NavigationBar.PrefersLargeTitles = true;
+        navigation.NavigationBar.PrefersLargeTitles = false;
+        navigation.NavigationBar.Translucent = true;
         navigation.NavigationBar.Hidden = false;
         if (navigation.View is { } view) view.BackgroundColor = RadioVaultTheme.Background;
         return navigation;
+    }
+
+    private static UITabBarAppearance CreateTabAppearance(UIColor color)
+    {
+        var appearance = new UITabBarAppearance();
+        appearance.ConfigureWithOpaqueBackground();
+        appearance.BackgroundColor = RadioVaultTheme.Shell;
+        appearance.ShadowColor = RadioVaultTheme.Border;
+        ConfigureItemAppearance(appearance.StackedLayoutAppearance, color);
+        ConfigureItemAppearance(appearance.InlineLayoutAppearance, color);
+        ConfigureItemAppearance(appearance.CompactInlineLayoutAppearance, color);
+        return appearance;
+    }
+
+    private static void ConfigureItemAppearance(UITabBarItemAppearance appearance, UIColor color)
+    {
+        var attributes = new UIStringAttributes { ForegroundColor = color };
+        appearance.Normal.IconColor = color;
+        appearance.Normal.TitleTextAttributes = attributes;
+        appearance.Selected.IconColor = color;
+        appearance.Selected.TitleTextAttributes = attributes;
     }
 
     private void SessionOnTabRequested(int index)
@@ -81,11 +113,18 @@ public sealed class RadioVaultTabBarController : UITabBarController
         var nowPlaying = new NowPlayingViewController(_session);
         var navigation = new UINavigationController(nowPlaying)
         {
-            ModalPresentationStyle = UIModalPresentationStyle.FullScreen
+            ModalPresentationStyle = UIModalPresentationStyle.PageSheet
         };
+        if (navigation.SheetPresentationController is { } sheet)
+        {
+            sheet.Detents = [UISheetPresentationControllerDetent.CreateLargeDetent()];
+            sheet.PrefersGrabberVisible = true;
+        }
         nowPlaying.NavigationItem.RightBarButtonItem = new UIBarButtonItem(
-            UIBarButtonSystemItem.Close,
+            RadioVaultIcons.Image(RadioVaultIcon.Close, RadioVaultTheme.MutedText),
+            UIBarButtonItemStyle.Plain,
             (_, _) => navigation.DismissViewController(true, null));
+        nowPlaying.NavigationItem.RightBarButtonItem.AccessibilityLabel = "Close Now Playing";
         PresentViewController(navigation, true, null);
     }
 

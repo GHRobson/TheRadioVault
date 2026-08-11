@@ -1,5 +1,6 @@
 using Foundation;
 using TheRadioVault.Client.Mobile;
+using TheRadioVault.Client.Mobile.Models;
 using UIKit;
 
 namespace TheRadioVault.Client.iOS;
@@ -7,11 +8,15 @@ namespace TheRadioVault.Client.iOS;
 public sealed class DownloadsViewController : SessionTableViewController
 {
     public DownloadsViewController(MobileClientSession session) : base(session) => Title = "Downloads";
+    protected override string? PageHeading => "Downloads";
+    protected override string PageDescription => "Saved for offline listening.";
 
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
-        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Always;
+        NavigationItem.LargeTitleDisplayMode = UINavigationItemLargeTitleDisplayMode.Never;
+        TableView.RowHeight = UITableView.AutomaticDimension;
+        TableView.EstimatedRowHeight = 74;
         NavigationItem.RightBarButtonItem = EditButtonItem;
     }
 
@@ -59,7 +64,8 @@ public sealed class DownloadsViewController : SessionTableViewController
         if (Session.DownloadedBroadcasts.Count == 0)
             return DetailCell("empty-downloads", "No downloads yet", "Open a broadcast in Library and choose Download to this iPhone.");
         var item = Session.DownloadedBroadcasts[indexPath.Row];
-        var cell = DetailCell("download", item.Title, $"{item.Subtitle} · {item.Status}");
+        var cell = new BroadcastProgressCell("download");
+        cell.Configure(Session, item, $"{item.Subtitle} · downloaded");
         cell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
         return cell;
     }
@@ -93,4 +99,9 @@ public sealed class DownloadsViewController : SessionTableViewController
         if (indexPath.Section == 1 && indexPath.Row < Session.DownloadedBroadcasts.Count)
             _ = Session.PlayDownloadedAsync(Session.DownloadedBroadcasts[indexPath.Row]);
     }
+
+    protected override MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath)
+        => indexPath.Section == 1 && indexPath.Row < Session.DownloadedBroadcasts.Count
+            ? Session.DownloadedBroadcasts[indexPath.Row]
+            : null;
 }

@@ -6,9 +6,11 @@ from PIL import Image, ImageDraw, ImageFilter
 ROOT = Path(__file__).resolve().parents[2]
 MASTER = Path(__file__).with_name("RadioVault-logo-refined.png")
 SERVER_MASTER = Path(__file__).with_name("RadioVault-server-logo-v3-source.png")
+IOS_MASTER = Path(__file__).with_name("RadioVault-logo-ios-source.png")
 DESKTOP_ASSETS = ROOT / "TheRadioVault.Desktop.Avalonia" / "Assets"
 SERVER_ASSETS = ROOT / "TheRadioVault.Server" / "Assets"
 WEB_ASSETS = ROOT / "TheRadioVault.Web" / "Assets"
+IOS_APPICON = ROOT / "TheRadioVault.Client.iOS" / "Assets.xcassets" / "AppIcon.appiconset" / "AppIcon-1024.png"
 
 ACCENT = (249, 198, 50, 255)
 DARK = (27, 32, 40, 255)
@@ -91,6 +93,12 @@ def main() -> None:
     save_png(standard_192, WEB_ASSETS / "app-icon-192.png")
     save_png(apple_180, WEB_ASSETS / "app-icon-180.png")
     save_png(maskable_512, WEB_ASSETS / "app-icon-maskable-512.png")
+
+    # iOS applies its own rounded-square mask. This dedicated full-bleed master
+    # follows Apple's optical safe area and intentionally omits the old dial ticks.
+    if IOS_MASTER.exists():
+        ios_icon = Image.open(IOS_MASTER).convert("RGB").resize((1024, 1024), Image.Resampling.LANCZOS)
+        save_png(ios_icon, IOS_APPICON)
 
     ico_base = contain(mark, 256, 0.035)
     ico_base.save(

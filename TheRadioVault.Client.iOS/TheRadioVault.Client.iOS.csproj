@@ -9,8 +9,8 @@
     <AssemblyName>TheRadioVault.Client.iOS</AssemblyName>
     <ApplicationTitle>The Radio Vault</ApplicationTitle>
     <ApplicationId>com.ghrobson.theradiovault</ApplicationId>
-    <ApplicationDisplayVersion>0.35.0</ApplicationDisplayVersion>
-    <ApplicationVersion>35</ApplicationVersion>
+    <ApplicationDisplayVersion>0.41.0</ApplicationDisplayVersion>
+    <ApplicationVersion>47</ApplicationVersion>
     <AppIcon>AppIcon</AppIcon>
     <CodesignEntitlements Condition="'$(RuntimeIdentifier)' == 'ios-arm64' and '$(Configuration)' != 'DeviceTest'">Entitlements.device.plist</CodesignEntitlements>
   </PropertyGroup>

@@ -8,4 +8,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TheRadioVault.Protocol\TheRadioVault.Protocol.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TheRadioVault.Client.Mobile.Tests" />
+  </ItemGroup>
 </Project>

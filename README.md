@@ -93,12 +93,12 @@ The project is already suitable for hands-on testing with a real collection, but
 
 New test builds are created automatically whenever Radio Vault is updated. Use the links below, open the newest run with a green tick, then scroll to **Artifacts** and choose the download for your device.
 
-- [Windows client and server](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `windows-client-and-server`.
-- [Mac client and server for Apple Silicon](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `macos-client-and-server-osx-arm64-unsigned`.
-- [Linux client and server for x64 computers](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `linux-client-and-server-x64`.
+- [Windows client and server](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `windows-client-and-server` for the Client and Server setup programs, plus portable copies.
+- [Mac client and server for Apple Silicon](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `macos-client-and-server-osx-arm64-unsigned` for the Client and Server disk images, plus ZIP copies.
+- [Linux client and server for x64 computers](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `linux-client-and-server-x64` for the Client and Server Debian packages, plus portable archives.
 - [iPhone and iPad simulator build](https://github.com/GHRobson/TheRadioVault/actions/workflows/ci.yml?query=branch%3Amain) — choose `ios-client-simulator-arm64-unsigned`.
 
-These are alpha test builds rather than finished public installers. Because the repository is currently private, GitHub will ask you to sign in before downloading them. The iPhone and iPad download is for Apple's simulator; installing Radio Vault on a physical device still requires signing through Xcode.
+These are alpha test builds. The Windows downloads include normal setup programs, the Mac downloads include drag-to-Applications disk images, and the Linux downloads include Debian packages. Mac builds are not yet notarized by Apple, so macOS may ask you to confirm that you want to open them. The iPhone and iPad download is for Apple's simulator; installing Radio Vault on a physical device still requires signing through Xcode.
 
 ## Getting started
 
@@ -115,7 +115,7 @@ Radio Vault grew from a simple idea: old radio recordings should feel like a liv
 
 The Windows, Mac and Linux servers and clients, iPhone and iPad app, and browser experience are maintained together in this repository so that the library and listening experience can stay consistent across every device.
 
-For contributors, [DEVELOPMENT.md](DEVELOPMENT.md) explains the shared development workflow. Earlier release and acceptance notes are preserved in the [historical release archive](docs/history/release-notes/README.md).
+For contributors, [DEVELOPMENT.md](DEVELOPMENT.md) explains the shared development workflow. The [release roadmap](docs/roadmap/RADIOVAULT_ROADMAP.md) and [cross-platform source audit](docs/architecture/SOURCE_AUDIT_2026-08-11.md) describe what comes next and where the codebase needs attention. Earlier release and acceptance notes are preserved in the [historical release archive](docs/history/release-notes/README.md).
 
 ## AI disclosure
 

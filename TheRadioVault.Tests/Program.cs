@@ -149,6 +149,7 @@ var tests = new (string Name, Action Run)[]
     }),
     ("Avalonia Settings events return to the UI dispatcher", AvaloniaSettingsEventsUseUiDispatcher),
     ("Avalonia Settings explains server ownership", AvaloniaSettingsExplainsServerOwnership),
+    ("Desktop Saved and transport controls match native icon parity", DesktopSavedAndTransportControlsMatchNativeParity),
     ("Mac client remains usable before server pairing", MacClientRemainsUsableBeforeServerPairing),
     ("Alpha 12 completes server ownership and status UX", Alpha12CompletesServerOwnershipAndStatusUx),
     ("Alpha 13 completes remote client monitoring and server installer", Alpha13CompletesRemoteClientMonitoringAndServerInstaller),
@@ -166,6 +167,7 @@ var tests = new (string Name, Action Run)[]
     ("Native handoff preserves the Windows volume session", NativeHandoffPreservesWindowsVolumeSession),
     ("Mac Client uses native AVFoundation and existing server contracts", MacClientUsesNativeAvFoundationAndExistingServerContracts),
     ("macOS and Linux packages preserve the shared client-server boundary", MacAndLinuxPackagesPreserveSharedClientServerBoundary),
+    ("Product versions remain consistent", ProductVersionsRemainConsistent),
     ("iOS Client preserves native platform and server boundaries", IosClientPreservesNativePlatformAndServerBoundaries),
     ("Canonical audio ranges are cache-combinable", CanonicalAudioRangesAreCacheCombinable),
     ("Positioned web audio is stable across Safari ranges", PositionedWebAudioIsStableAcrossSafariRanges),
@@ -366,6 +368,7 @@ var tests = new (string Name, Action Run)[]
     ("Web API manages queue", WebApiManagesQueue),
     ("Web API preserves Moment identity while editing", WebApiEditsMomentInPlace),
     ("Web API synchronises offline progress", WebApiSynchronisesOfflineProgress),
+    ("Offline progress ordering preserves newer manual changes", OfflineProgressOrderingPreservesNewerManualChanges),
     ("Web API permits explicit LAN progress rewind", WebApiPermitsExplicitLanProgressRewind),
     ("Web client includes manual offline downloads", WebClientIncludesManualOfflineDownloads),
     ("Anywhere exposes the server transcription workspace", AnywhereExposesServerTranscriptionWorkspace),
@@ -645,6 +648,56 @@ static void AvaloniaSidebarHidesEmptyShowSections()
     True(source.Contains("CollectionIdentityResolver.Canonicalize", StringComparison.Ordinal));
 }
 
+static void DesktopSavedAndTransportControlsMatchNativeParity()
+{
+    var navigation = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "MainWindowViewModel.cs"));
+    True(navigation.Contains("new ShellNavigationItemViewModel(\"saved\", \"Saved\"", StringComparison.Ordinal));
+    True(!navigation.Contains("new ShellNavigationItemViewModel(\"favourites\", \"Favourites\"", StringComparison.Ordinal));
+    True(!navigation.Contains("new ShellNavigationItemViewModel(\"moments\", \"Moments\"", StringComparison.Ordinal));
+    True(navigation.Contains("Saved.SelectSectionAsync", StringComparison.Ordinal));
+
+    var savedView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "SavedView.axaml"));
+    True(savedView.Contains("ShowFavouritesCommand", StringComparison.Ordinal));
+    True(savedView.Contains("ShowMomentsCommand", StringComparison.Ordinal));
+    True(savedView.Contains("RvStatFavouriteBrush", StringComparison.Ordinal));
+    True(savedView.Contains("RvMomentBrush", StringComparison.Ordinal));
+
+    var theme = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "App.axaml"));
+    True(theme.Contains("SkipBackIconTemplate", StringComparison.Ordinal));
+    True(theme.Contains("SkipForwardIconTemplate", StringComparison.Ordinal));
+    True(theme.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
+    True(theme.Contains("M8,1 L4,4 L8,7", StringComparison.Ordinal));
+    True(theme.Contains("M16,1 L20,4 L16,7", StringComparison.Ordinal));
+    True(theme.Contains("ShowPlayIcon", StringComparison.Ordinal));
+    True(theme.Contains("ShowPauseIcon", StringComparison.Ordinal));
+
+    var shell = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml"));
+    True(shell.Contains("SkipBackIconTemplate", StringComparison.Ordinal));
+    True(shell.Contains("SkipForwardIconTemplate", StringComparison.Ordinal));
+    True(shell.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
+    True(!shell.Contains("Text=\"{Binding Playback.PlayPauseGlyph}\"", StringComparison.Ordinal));
+
+    var playback = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "PlaybackViewModel.cs"));
+    True(playback.Contains("PlaybackTransferAlignmentToleranceMs = 3_000", StringComparison.Ordinal));
+    True(playback.Contains("<= PlaybackTransferAlignmentToleranceMs", StringComparison.Ordinal));
+    True(playback.Contains("AlignPreparedDecoderAsync", StringComparison.Ordinal));
+    True(playback.Contains("canSeekPreparedDecoder", StringComparison.Ordinal));
+    True(playback.Contains("WaitForPreparedDecoderAsync", StringComparison.Ordinal));
+    True(playback.Contains("PlaybackTransferDecoderReadyTimeout", StringComparison.Ordinal));
+    True(playback.Contains("second stable sample", StringComparison.Ordinal));
+    True(playback.Contains("handoffStage = \"commit-transfer\"", StringComparison.Ordinal));
+    True(playback.Contains("[\"stage\"] = handoffStage", StringComparison.Ordinal));
+
+    var transferCoordinator = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Web", "Services", "PlaybackTransferCoordinator.cs"));
+    True(transferCoordinator.Contains("CommitToleranceMs = 3_000", StringComparison.Ordinal));
+}
+
 static void ParserAcceptsCatalogueStyleInterviewFilenames()
 {
     var parser = new FilenameParserService();
@@ -779,6 +832,10 @@ static void MacClientRemainsUsableBeforeServerPairing()
     True(mainWindow.Contains("Fill=\"#FF5F57\"", StringComparison.Ordinal));
     True(mainWindow.Contains("Fill=\"#FEBC2E\"", StringComparison.Ordinal));
     True(mainWindow.Contains("Fill=\"#28C840\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("ContentTemplate=\"{StaticResource SkipBackIconTemplate}\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("ContentTemplate=\"{StaticResource SkipForwardIconTemplate}\"", StringComparison.Ordinal));
+    True(!mainWindow.Contains("Content=\"−15\"", StringComparison.Ordinal));
+    True(!mainWindow.Contains("Content=\"+30\"", StringComparison.Ordinal));
     var macControls = mainWindow[mainWindow.IndexOf("x:Name=\"MacWindowControls\"", StringComparison.Ordinal)..];
     var closeButton = macControls.IndexOf("Click=\"CloseButton_OnClick\"", StringComparison.Ordinal);
     var minimizeButton = macControls.IndexOf("Click=\"MinimizeButton_OnClick\"", StringComparison.Ordinal);
@@ -1001,9 +1058,12 @@ static void Alpha16ImprovesRemoteResponsivenessAndPlaybackOwnership()
 
     var mainWindow = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml"));
-    True(mainWindow.Contains("Playback.ShowMoveToThisDevice", StringComparison.Ordinal));
-    True(mainWindow.Contains("Move playback to this PC", StringComparison.Ordinal));
-    True(mainWindow.Contains("M2,11 L13,11", StringComparison.Ordinal));
+    var desktopTheme = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "App.axaml"));
+    True(mainWindow.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
+    True(desktopTheme.Contains("ShowMoveToThisDevice", StringComparison.Ordinal));
+    True(desktopTheme.Contains("Move playback to this PC", StringComparison.Ordinal));
+    True(desktopTheme.Contains("M2,11 L13,11", StringComparison.Ordinal));
 
     True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA16-REMOTE-RESPONSIVENESS-OWNERSHIP.md")));
 }
@@ -1100,6 +1160,8 @@ static void Alpha18HardensConnectedClientReliability()
         SourceRoot(), "TheRadioVault.Infrastructure", "Services", "WebArchiveProvider.cs"));
     True(provider.Contains("anotherOutputIsActive", StringComparison.Ordinal));
     True(provider.Contains("Move playback transactionally", StringComparison.Ordinal));
+    True(provider.Contains("RetainsPlaybackOwnershipWhileOffline", StringComparison.Ordinal));
+    True(provider.Contains("\"iOSClient\"", StringComparison.Ordinal));
 
     var playback = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "PlaybackViewModel.cs"));
@@ -1387,12 +1449,29 @@ static void MacAndLinuxPackagesPreserveSharedClientServerBoundary()
     True(linuxPackage.Contains("--self-contained true", StringComparison.Ordinal));
     True(linuxPackage.Contains("RadioVault.Client-$VERSION-$RID.tar.gz", StringComparison.Ordinal));
     True(linuxPackage.Contains("RadioVault.Server-$VERSION-$RID.tar.gz", StringComparison.Ordinal));
+    True(linuxPackage.Contains("dpkg-deb --build --root-owner-group", StringComparison.Ordinal));
+    True(linuxPackage.Contains("RadioVault.Client-$VERSION-$DEB_ARCH.deb", StringComparison.Ordinal));
+    True(linuxPackage.Contains("radiovault.desktop", StringComparison.Ordinal));
+
+    var macInstallerPackage = File.ReadAllText(Path.Combine(SourceRoot(), "package-macos-installers.sh"));
+    True(macInstallerPackage.Contains("hdiutil create", StringComparison.Ordinal));
+    True(macInstallerPackage.Contains("codesign --force --deep --sign -", StringComparison.Ordinal));
+    True(macInstallerPackage.Contains("ln -s /Applications", StringComparison.Ordinal));
+
+    var windowsInstallerPackage = File.ReadAllText(Path.Combine(SourceRoot(), "package-windows-ci-installers.ps1"));
+    True(windowsInstallerPackage.Contains("RadioVault.Client.iss", StringComparison.Ordinal));
+    True(windowsInstallerPackage.Contains("RadioVault.Server.iss", StringComparison.Ordinal));
+    True(windowsInstallerPackage.Contains("windows-installers", StringComparison.Ordinal));
 
     var workflow = File.ReadAllText(Path.Combine(SourceRoot(), ".github", "workflows", "ci.yml"));
     True(workflow.Contains("name: macOS client and server", StringComparison.Ordinal));
     True(workflow.Contains("name: Linux client and server", StringComparison.Ordinal));
     True(workflow.Contains("macos-client-and-server-osx-arm64-unsigned", StringComparison.Ordinal));
     True(workflow.Contains("linux-client-and-server-x64", StringComparison.Ordinal));
+    True(workflow.Contains("package-windows-ci-installers.ps1", StringComparison.Ordinal));
+    True(workflow.Contains("package-macos-installers.sh", StringComparison.Ordinal));
+    True(workflow.Contains("*.dmg", StringComparison.Ordinal));
+    True(workflow.Contains("*.deb", StringComparison.Ordinal));
 
     var linuxGuide = File.ReadAllText(Path.Combine(SourceRoot(), "LINUX.md"));
     True(linuxGuide.Contains("mpv", StringComparison.Ordinal));
@@ -1430,27 +1509,55 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(tabs.Contains("HomeViewController", StringComparison.Ordinal));
     True(tabs.Contains("LibraryViewController", StringComparison.Ordinal));
     True(tabs.Contains("ExploreViewController", StringComparison.Ordinal));
-    True(!tabs.Contains("Wrap(new KnowledgeViewController", StringComparison.Ordinal));
-    True(tabs.Contains("DownloadsViewController", StringComparison.Ordinal));
+    True(tabs.Contains("SavedViewController", StringComparison.Ordinal));
+    True(tabs.Contains("KnowledgeViewController", StringComparison.Ordinal));
+    True(!tabs.Contains("Wrap(new DownloadsViewController", StringComparison.Ordinal));
     True(tabs.Contains("RadioVaultMiniPlayerView", StringComparison.Ordinal));
     True(!tabs.Contains("Wrap(new NowPlayingViewController", StringComparison.Ordinal));
-    True(tabs.Contains("ServerViewController", StringComparison.Ordinal));
+    True(!tabs.Contains("Wrap(new ServerViewController", StringComparison.Ordinal));
     True(tabs.Contains("RadioVaultIcons.Image", StringComparison.Ordinal));
+    True(tabs.Contains("SetTitleTextAttributes", StringComparison.Ordinal));
+    True(tabs.Contains("CreateTabAppearance", StringComparison.Ordinal));
+    True(tabs.Contains("appearance.Selected.TitleTextAttributes", StringComparison.Ordinal));
+    True(tabs.Contains("UIModalPresentationStyle.PageSheet", StringComparison.Ordinal));
+    True(tabs.Contains("PrefersGrabberVisible = true", StringComparison.Ordinal));
     True(tabs.Contains("\"Dashboard\"", StringComparison.Ordinal));
-    True(tabs.Contains("\"Settings\"", StringComparison.Ordinal));
+    True(tabs.Contains("\"Saved\"", StringComparison.Ordinal));
+    True(tabs.Contains("\"Knowledge\"", StringComparison.Ordinal));
+    True(!tabs.Contains("controller.NavigationItem.Title = title", StringComparison.Ordinal));
 
     var dashboard = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "HomeViewController.cs"));
     True(dashboard.Contains("Title = \"Dashboard\"", StringComparison.Ordinal));
     True(dashboard.Contains("Continue listening", StringComparison.Ordinal));
-    True(dashboard.Contains("Surprise me", StringComparison.Ordinal));
+    True(dashboard.Contains("DashboardOverviewCell", StringComparison.Ordinal));
     True(dashboard.Contains("On this day", StringComparison.Ordinal));
     True(dashboard.Contains("Recently added", StringComparison.Ordinal));
     True(dashboard.Contains("Unheard broadcasts", StringComparison.Ordinal));
+    True(dashboard.Contains("Session.UnheardBroadcasts", StringComparison.Ordinal));
+    True(dashboard.Contains("OpenLibrarySection", StringComparison.Ordinal));
+    True(dashboard.Contains("IsPlayingBroadcast", StringComparison.Ordinal));
+    True(dashboard.Contains("PreparingPlaybackEpisodeId", StringComparison.Ordinal));
+    True(dashboard.Contains("HandleFeaturedPlayback", StringComparison.Ordinal));
+    True(dashboard.Contains("Session.CurrentBroadcast", StringComparison.Ordinal));
+    True(dashboard.Contains("value.EpisodeId != featuredId", StringComparison.Ordinal));
+    True(dashboard.Contains("ServerViewController", StringComparison.Ordinal));
+    True(dashboard.Contains("header.SetAccessory(settings)", StringComparison.Ordinal));
+    True(dashboard.Contains("DashboardOnThisDayCarouselCell", StringComparison.Ordinal));
+    True(dashboard.Contains("announce: false", StringComparison.Ordinal));
+    True(dashboard.Contains("CaptureSectionFingerprints", StringComparison.Ordinal));
+    True(dashboard.Contains("BroadcastIdentityFingerprint(RecentlyAdded)", StringComparison.Ordinal));
+    True(dashboard.Contains("BroadcastIdentityFingerprint(Unheard)", StringComparison.Ordinal));
+    True(dashboard.Contains("RefreshVisibleBroadcasts", StringComparison.Ordinal));
+    True(dashboard.Contains("Session.RecentBroadcasts.Take(5)", StringComparison.Ordinal));
+    True(dashboard.Contains("Session.UnheardBroadcasts.Take(5)", StringComparison.Ordinal));
+    True(dashboard.Contains("new NSMutableIndexSet", StringComparison.Ordinal));
+    True(dashboard.Contains("changedSections.Add", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
-    True(library.Contains("UISearchController", StringComparison.Ordinal));
+    True(!library.Contains("UISearchController", StringComparison.Ordinal));
+    True(library.Contains("LibraryControlsHeaderView", StringComparison.Ordinal));
     True(library.Contains("UITableView", StringComparison.Ordinal));
     True(library.Contains("LibraryCollections", StringComparison.Ordinal));
     True(library.Contains("ShowLibraryViewController", StringComparison.Ordinal));
@@ -1458,15 +1565,64 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(library.Contains("ContinueListening", StringComparison.Ordinal));
     True(library.Contains("UpNextViewController", StringComparison.Ordinal));
     True(library.Contains("ToggleHideCompleted", StringComparison.Ordinal));
-    True(library.Contains("RadioVaultIcon.Completed", StringComparison.Ordinal));
+    True(library.Contains("SetHideCompleted", StringComparison.Ordinal));
+    True(library.Contains("LibraryCollectionsFor", StringComparison.Ordinal));
+    True(library.Contains("DownloadsViewController", StringComparison.Ordinal));
+    True(library.Contains("LibraryQuickAccessCell", StringComparison.Ordinal));
+    True(library.Contains("RadioVaultIcon.Radio", StringComparison.Ordinal));
 
     var showLibrary = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ShowLibraryViewController.cs"));
-    True(showLibrary.Contains("UISegmentedControl", StringComparison.Ordinal));
-    True(showLibrary.Contains("ArchiveViewMode.Years", StringComparison.Ordinal));
-    True(showLibrary.Contains("ArchiveViewMode.Months", StringComparison.Ordinal));
-    True(showLibrary.Contains("ArchiveViewMode.Broadcasts", StringComparison.Ordinal));
+    True(!showLibrary.Contains("UISegmentedControl", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveLevel.Years", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveLevel.Months", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveLevel.Broadcasts", StringComparison.Ordinal));
+    True(showLibrary.Contains("ArchiveGridRowCell", StringComparison.Ordinal));
+    True(showLibrary.Contains("GridButtonTapped", StringComparison.Ordinal));
+    True(showLibrary.Contains("ListButtonTapped", StringComparison.Ordinal));
+    True(showLibrary.Contains("includesViewModes", StringComparison.Ordinal));
+    True(showLibrary.Contains("ToggleHideCompleted", StringComparison.Ordinal));
     True(showLibrary.Contains("LoadArchivePeriodsAsync", StringComparison.Ordinal));
+
+    var iosCells = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultCells.cs"));
+    True(iosCells.Contains("PageHeaderView", StringComparison.Ordinal));
+    True(iosCells.Contains("LibraryControlsHeaderView", StringComparison.Ordinal));
+    True(iosCells.Contains("CompletedButton", StringComparison.Ordinal));
+    True(iosCells.Contains("UITapGestureRecognizer", StringComparison.Ordinal));
+    True(iosCells.Contains("DashboardStatsCell", StringComparison.Ordinal));
+    True(iosCells.Contains("DashboardOverviewCell", StringComparison.Ordinal));
+    True(iosCells.Contains("DashboardContinueCell", StringComparison.Ordinal));
+    True(iosCells.Contains("LibraryQuickAccessCell", StringComparison.Ordinal));
+    True(iosCells.Contains("UserInteractionEnabled = false", StringComparison.Ordinal));
+    True(iosCells.Contains("BroadcastProgressCell", StringComparison.Ordinal));
+    True(iosCells.Contains("BroadcastHeroCell", StringComparison.Ordinal));
+    True(iosCells.Contains("ExploreImageGalleryCell", StringComparison.Ordinal));
+    True(iosCells.Contains("ExploreArticleImageCell", StringComparison.Ordinal));
+    True(iosCells.Contains("UIActivityIndicatorView", StringComparison.Ordinal));
+    True(iosCells.Contains("isPlaying ? \"Pause\" : \"Resume\"", StringComparison.Ordinal));
+    True(iosCells.Contains("Loading…", StringComparison.Ordinal));
+    True(iosCells.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
+
+    var iosArtwork = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultArtwork.cs"));
+    True(iosArtwork.Contains("session.LoadArtworkAsync", StringComparison.Ordinal));
+    True(iosArtwork.Contains("UIViewContentMode.ScaleAspectFill", StringComparison.Ordinal));
+
+    var iosTableBase = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "SessionTableViewController.cs"));
+    True(iosTableBase.Contains("GetContextMenuConfiguration", StringComparison.Ordinal));
+    True(iosTableBase.Contains("Download to this iPhone", StringComparison.Ordinal));
+    True(iosTableBase.Contains("ShowsOfflineIndicator", StringComparison.Ordinal));
+    True(iosTableBase.Contains("ShowsSyncIndicator", StringComparison.Ordinal));
+    True(iosTableBase.Contains("UsesInlinePageHeading", StringComparison.Ordinal));
+    True(iosTableBase.Contains("RadioVaultIcon.Sync", StringComparison.Ordinal));
+    True(iosTableBase.Contains("Mark as Listened", StringComparison.Ordinal));
+    True(iosTableBase.Contains("Mark as Unlistened", StringComparison.Ordinal));
+    True(iosTableBase.Contains("new UIBarButtonItem(image)", StringComparison.Ordinal));
+    True(iosTableBase.Contains("NavigationItem.Title = string.Empty", StringComparison.Ordinal));
+    True(iosTableBase.Contains("UINavigationItemBackButtonDisplayMode.Minimal", StringComparison.Ordinal));
+    True(!iosTableBase.Contains("UIImage.GetSystemImage", StringComparison.Ordinal));
 
     var upNext = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "UpNextViewController.cs"));
@@ -1480,29 +1636,66 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
 
     var explore = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreViewController.cs"));
-    True(explore.Contains("Explore the stories behind the archive", StringComparison.Ordinal));
-    True(explore.Contains("Featured starting points", StringComparison.Ordinal));
+    True(explore.Contains("Featured articles", StringComparison.Ordinal));
     True(explore.Contains("Recently updated", StringComparison.Ordinal));
     True(explore.Contains("Explore by era", StringComparison.Ordinal));
-    True(explore.Contains("Travel through the timelines", StringComparison.Ordinal));
+    True(explore.Contains("Show timelines", StringComparison.Ordinal));
+    True(explore.Contains("ExploreDashboardSection.OnThisDate", StringComparison.Ordinal));
     True(explore.Contains("ShowPages", StringComparison.Ordinal));
     True(explore.Contains("PeoplePages", StringComparison.Ordinal));
     True(explore.Contains("TopicPages", StringComparison.Ordinal));
     True(explore.Contains("LoadExploreDashboardAsync", StringComparison.Ordinal));
+    True(explore.Contains("PageHeading => \"Explore\"", StringComparison.Ordinal));
+    True(explore.Contains("ExploreTimelinePromoCell", StringComparison.Ordinal));
+    True(explore.Contains("Images from the archive", StringComparison.Ordinal));
+    True(explore.Contains("ExploreImageGalleryCell", StringComparison.Ordinal));
 
     var exploreArticle = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreArticleViewController.cs"));
     True(exploreArticle.Contains("LoadExplorePageAsync", StringComparison.Ordinal));
-    True(exploreArticle.Contains("FormatMarkdown", StringComparison.Ordinal));
+    True(exploreArticle.Contains("ExploreArticleBodyCell", StringComparison.Ordinal));
     True(exploreArticle.Contains("Timeline", StringComparison.Ordinal));
+    True(exploreArticle.Contains("LoadExploreImagesAsync", StringComparison.Ordinal));
+    True(exploreArticle.Contains("InlineLinkTargets", StringComparison.Ordinal));
+    True(exploreArticle.Contains("ShowLibraryViewController", StringComparison.Ordinal));
+
+    var exploreCells = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "ExploreCells.cs"));
+    True(exploreCells.Contains("ExploreDashboardHeroCell", StringComparison.Ordinal));
+    True(exploreCells.Contains("NewYork-Regular", StringComparison.Ordinal));
+    True(exploreCells.Contains("ExploreTimelineEventCell", StringComparison.Ordinal));
+    True(exploreCells.Contains("RADIO VAULT ENCYCLOPEDIA", StringComparison.Ordinal));
+    True(exploreCells.Contains("radiovault://link/", StringComparison.Ordinal));
+    True(exploreCells.Contains("ShouldInteractWithUrl", StringComparison.Ordinal));
+
+    var exploreTimeline = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "ExploreTimelineViewController.cs"));
+    True(exploreTimeline.Contains("Show Timelines", StringComparison.Ordinal));
+    True(exploreTimeline.Contains("PlayTimelineLinkAsync", StringComparison.Ordinal));
+    True(exploreTimeline.Contains("PresentShowPicker", StringComparison.Ordinal));
 
     var theme = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultTheme.cs"));
     True(theme.Contains("0x11, 0x13, 0x17", StringComparison.Ordinal));
     True(theme.Contains("0xF2, 0xC9, 0x4C", StringComparison.Ordinal));
+    True(theme.Contains("public static UIColor Progress { get; } = Accent", StringComparison.Ordinal));
     True(theme.Contains("UIGraphicsImageRenderer", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Knowledge", StringComparison.Ordinal));
     True(theme.Contains("RadioVaultIcon.Handoff", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.SkipBack", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.Moment", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.Offline", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.Sync", StringComparison.Ordinal));
+    True(theme.Contains("RadioVaultIcon.InProgress", StringComparison.Ordinal));
+    True(theme.Contains("DrawSkip", StringComparison.Ordinal));
+    True(theme.Contains("DrawSync", StringComparison.Ordinal));
+    True(theme.Contains("Lines(context, (8, 17), (4, 20), (8, 23))", StringComparison.Ordinal));
+    True(theme.Contains("ConfigureWithTransparentBackground", StringComparison.Ordinal));
+    True(!theme.Contains("ArrowHead", StringComparison.Ordinal));
+    True(theme.Contains("context.AddCurveToPoint(5.3f, 20, 4, 18.7f, 4, 17)", StringComparison.Ordinal));
+    True(theme.Contains("Lines(context, (16, 1), (20, 4), (16, 7))", StringComparison.Ordinal));
+    True(!theme.Contains("(14.5, 4.5), (18, 6), (16.5, 9.5)", StringComparison.Ordinal));
+    True(!theme.Contains("(16, 7), (20, 8), (18.5, 11.8)", StringComparison.Ordinal));
     True(theme.Contains("(3, 10.5), (13, 10.5)", StringComparison.Ordinal));
 
     var miniPlayer = File.ReadAllText(Path.Combine(
@@ -1510,13 +1703,116 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(miniPlayer.Contains("MiniPlayerShowsHandoff", StringComparison.Ordinal));
     True(miniPlayer.Contains("RadioVaultIcon.Handoff", StringComparison.Ordinal));
     True(miniPlayer.Contains("Move playback to this iPhone", StringComparison.Ordinal));
+    True(miniPlayer.Contains("Layer.CornerRadius = 24", StringComparison.Ordinal));
+    True(miniPlayer.Contains("IsPreparingPlayback", StringComparison.Ordinal));
+    True(miniPlayer.Contains("UIActivityIndicatorView", StringComparison.Ordinal));
+    True(miniPlayer.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
+    True(miniPlayer.Contains("UIVisualEffectView", StringComparison.Ordinal));
+    True(miniPlayer.Contains("SystemChromeMaterialDark", StringComparison.Ordinal));
 
     var nowPlayingView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingViewController.cs"));
-    True(nowPlayingView.Contains("content.CenterYAnchor.ConstraintEqualTo", StringComparison.Ordinal));
-    True(nowPlayingView.Contains("SetPreferredSymbolConfiguration", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("UIScrollView", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("ContentLayoutGuide", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("contentHost.WidthAnchor.ConstraintEqualTo(scrollView.FrameLayoutGuide.WidthAnchor)", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("content.LeadingAnchor.ConstraintEqualTo(contentHost.LeadingAnchor, 20)", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("AdjustsFontForContentSizeCategory", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultIcon.SkipBack", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultIcon.SkipForward", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("PresentMomentEditor", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("OpenBroadcastInformation", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("ToggleFavourite", StringComparison.Ordinal));
+    True(!nowPlayingView.Contains("UIImage.GetSystemImage", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_playButton.WidthAnchor.ConstraintEqualTo(96)", StringComparison.Ordinal));
     True(nowPlayingView.Contains("SeekToProgress", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultIcon.SkipBack, RadioVaultTheme.Accent", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("IsPreparingPlayback", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_playActivity.StartAnimating", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_artworkPanel.HeightAnchor.ConstraintEqualTo(_artworkPanel.WidthAnchor)", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultArtwork.Load", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_session.MiniPlayerProgress", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_session.MiniPlayerTime", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_totalLabel.CenterXAnchor.ConstraintEqualTo(times.CenterXAnchor)", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_elapsedLabel.Text = _session.MiniPlayerElapsedTime", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("NowPlayingUpNextView", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("playerContent.HeightAnchor.ConstraintGreaterThanOrEqualTo", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_favouriteSaving", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("_momentSavedFeedback", StringComparison.Ordinal));
+
+    var savedView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "SavedViewController.cs"));
+    True(savedView.Contains("SavedControlsHeaderView", StringComparison.Ordinal));
+    True(savedView.Contains("FavouritesButtonTapped", StringComparison.Ordinal));
+    True(savedView.Contains("MomentsButtonTapped", StringComparison.Ordinal));
+
+    var knowledgeView = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "KnowledgeViewController.cs"));
+    True(knowledgeView.Contains("LoadKnowledgeAsync", StringComparison.Ordinal));
+    True(knowledgeView.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
+    True(knowledgeView.Contains("KnowledgeStatusText", StringComparison.Ordinal));
+    True(knowledgeView.Contains("IsLibraryFallback", StringComparison.Ordinal));
+
+    var metadataPills = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "MetadataPillsCell.cs"));
+    True(metadataPills.Contains("Layer.CornerRadius = 16", StringComparison.Ordinal));
+    True(metadataPills.Contains("Open related broadcasts and Explore articles", StringComparison.Ordinal));
+
+    var nowPlayingQueue = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "NowPlayingUpNextView.cs"));
+    True(nowPlayingQueue.Contains("SHARED QUEUE", StringComparison.Ordinal));
+    True(nowPlayingQueue.Contains("PlayQueueItemAsync", StringComparison.Ordinal));
+    True(nowPlayingQueue.Contains("RemoveQueueItemAsync", StringComparison.Ordinal));
+    True(nowPlayingQueue.Contains("RadioVaultTheme.Accent", StringComparison.Ordinal));
+
+    var downloadService = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
+    True(downloadService.Contains("ReconcileSummariesAsync", StringComparison.Ordinal));
+    True(downloadService.Contains("serverPlayedAt >= localPlayedAt", StringComparison.Ordinal));
+    True(downloadService.Contains("record with { Summary = summary }", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultIcon.Handoff, RadioVaultTheme.Accent", StringComparison.Ordinal));
+
+    var metadataCache = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileMetadataCache.cs"));
+    True(metadataCache.Contains("MobileMetadataCacheSnapshot", StringComparison.Ordinal));
+    True(metadataCache.Contains("ApplyLibrarySync", StringComparison.Ordinal));
+    True(metadataCache.Contains("ReplaceCompleteLibrary", StringComparison.Ordinal));
+    True(metadataCache.Contains("SaveImageAsync", StringComparison.Ordinal));
+    True(metadataCache.Contains("SaveArtworkAsync", StringComparison.Ordinal));
+    True(metadataCache.Contains("BroadcastArtwork", StringComparison.Ordinal));
+
+    var mobileCacheSessionSource = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    True(mobileCacheSessionSource.Contains("SynchronizeMetadataCacheAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("BuildCachedArchivePeriods", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("RefreshExploreCacheAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("IsMetadataSyncing", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("ApplyOnlineOverview", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("_metadataSyncGate.WaitAsync()", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("ConfirmForeignOwner", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("ObserveSharedPlaybackSafelyAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("if (!session.Player.IsPlaying)", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("SynchronizeDownloadedProgressWithServerAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("SynchronizeStoredDownloadedProgressWithServerAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("hasNewerOfflineProgress", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("AllowRewind: false", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("ExpectedGeneration: 0", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("_downloads.ReconcileSummariesAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("ApplyPlaybackProgress", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("LoadArtworkAsync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("overview.ContinueListening", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("_pendingDecoderLogicalPositionMs", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("Finishing the startup sync", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("public string MiniPlayerTime", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("CombineCollections", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("NormalizeCollectionName", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("BuildLibraryKnowledgeSnapshot", StringComparison.Ordinal));
+    True(mobileCacheSessionSource.Contains("BuildLibraryKnowledgeCoverage", StringComparison.Ordinal));
+
+    var iconGenerator = File.ReadAllText(Path.Combine(SourceRoot(), "design", "logo", "generate-brand-assets.py"));
+    True(iconGenerator.Contains("RadioVault-logo-ios-source.png", StringComparison.Ordinal));
+    True(File.Exists(Path.Combine(SourceRoot(), "TheRadioVault.Client.iOS", "Assets.xcassets", "AppIcon.appiconset", "AppIcon-1024.png")));
 
     var downloads = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
@@ -1529,6 +1825,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(downloads.Contains("FileMode.Append", StringComparison.Ordinal));
     True(downloads.Contains("DiscardPendingAsync", StringComparison.Ordinal));
     True(downloads.Contains("GetStorageAsync", StringComparison.Ordinal));
+    True(downloads.Contains("RemoveCompletedAsync", StringComparison.Ordinal));
+    True(downloads.Contains("TrimToLimitAsync", StringComparison.Ordinal));
+    True(downloads.Contains("RepairAsync", StringComparison.Ordinal));
 
     var downloadsView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "DownloadsViewController.cs"));
@@ -1543,6 +1842,10 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(settingsView.Contains("Download Settings", StringComparison.Ordinal));
     True(settingsView.Contains("WifiOnlyDownloads", StringComparison.Ordinal));
     True(settingsView.Contains("DownloadStorageText", StringComparison.Ordinal));
+    True(settingsView.Contains("AutoDownloadNewBroadcasts", StringComparison.Ordinal));
+    True(settingsView.Contains("DeleteCompletedDownloads", StringComparison.Ordinal));
+    True(settingsView.Contains("PresentStorageLimitPicker", StringComparison.Ordinal));
+    True(settingsView.Contains("SyncDiagnosticsViewController", StringComparison.Ordinal));
     True(settingsView.Contains("Pair using entered address", StringComparison.Ordinal));
     True(settingsView.Contains("PairManuallyAsync", StringComparison.Ordinal));
 
@@ -1551,6 +1854,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(downloadPolicy.Contains("NWPathMonitor", StringComparison.Ordinal));
     True(downloadPolicy.Contains("NWInterfaceType.Wifi", StringComparison.Ordinal));
     True(downloadPolicy.Contains("NSUserDefaults", StringComparison.Ordinal));
+    True(downloadPolicy.Contains("AutoDownloadSince", StringComparison.Ordinal));
+    True(downloadPolicy.Contains("StorageLimitBytes", StringComparison.Ordinal));
 
     var scene = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SceneDelegate.cs"));
@@ -1567,6 +1872,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(engine.Contains("AVPlayer", StringComparison.Ordinal));
     True(engine.Contains("AVAudioSessionCategory.Playback", StringComparison.Ordinal));
     True(engine.Contains("SetMuted", StringComparison.Ordinal));
+    True(engine.Contains("ObserveInterruption", StringComparison.Ordinal));
+    True(engine.Contains("ObserveRouteChange", StringComparison.Ordinal));
+    True(engine.Contains("OldDeviceUnavailable", StringComparison.Ordinal));
 
     var nowPlaying = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosNowPlayingService.cs"));
@@ -1574,6 +1882,11 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(nowPlaying.Contains("MPRemoteCommandCenter", StringComparison.Ordinal));
     True(nowPlaying.Contains("ChangePlaybackPositionCommand", StringComparison.Ordinal));
     True(nowPlaying.Contains("SkipBackwardCommand", StringComparison.Ordinal));
+    True(nowPlaying.Contains("MPMediaItemArtwork", StringComparison.Ordinal));
+    True(nowPlaying.Contains("QueueUpdate", StringComparison.Ordinal));
+    True(nowPlaying.Contains("BeginInvokeOnMainThread(ApplyPendingUpdate)", StringComparison.Ordinal));
+    True(nowPlaying.Contains("SetCommandsEnabled(available: false", StringComparison.Ordinal));
+    True(nowPlaying.Contains("SequenceEqual", StringComparison.Ordinal));
 
     var mobileSession = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
@@ -1592,6 +1905,30 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("LoadExploreDashboardAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("LoadExplorePageAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("PairManuallyAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("FlushOfflineMutationsAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("SetListeningStatusAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("TryAutomaticDownloadAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("LoadKnowledgeAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
+
+    var pendingChanges = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileOfflineMutationStore.cs"));
+    True(pendingChanges.Contains("pending-changes.json", StringComparison.Ordinal));
+    True(pendingChanges.Contains("EnqueueFavouriteAsync", StringComparison.Ordinal));
+    True(pendingChanges.Contains("EnqueueListeningStatusAsync", StringComparison.Ordinal));
+    True(pendingChanges.Contains("EnqueueMomentAsync", StringComparison.Ordinal));
+    True(pendingChanges.Contains("FileOptions.WriteThrough", StringComparison.Ordinal));
+
+    var syncDiagnostics = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "SyncDiagnosticsViewController.cs"));
+    True(syncDiagnostics.Contains("Pending Changes", StringComparison.Ordinal));
+    True(syncDiagnostics.Contains("RetrySyncAsync", StringComparison.Ordinal));
+
+    var testFlight = File.ReadAllText(Path.Combine(
+        SourceRoot(), "tools", "Build-iOS-TestFlight.command"));
+    True(testFlight.Contains("ArchiveOnBuild=true", StringComparison.Ordinal));
+    True(testFlight.Contains("BuildIpa=true", StringComparison.Ordinal));
+    True(testFlight.Contains("never upload", StringComparison.OrdinalIgnoreCase));
 
     var keychain = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "IosKeychainConnectionStore.cs"));
@@ -1617,6 +1954,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(client.Contains("ClientWikiOperation(\"browse\")", StringComparison.Ordinal));
     True(client.Contains("ClientWikiOperation(\"dashboard-highlights\")", StringComparison.Ordinal));
     True(client.Contains("ClientWikiOperation(\"page\")", StringComparison.Ordinal));
+    True(client.Contains("ClientResearchOperation(\"overview\")", StringComparison.Ordinal));
+    True(client.Contains("ClientResearchOperation(\"coverage\")", StringComparison.Ordinal));
     True(client.Contains("PairManuallyAsync", StringComparison.Ordinal));
     True(client.Contains("observedThumbprint", StringComparison.Ordinal));
 
@@ -1933,7 +2272,10 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
 
     var shell = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml"));
-    True(shell.Contains("Move playback to this PC", StringComparison.Ordinal));
+    var desktopTheme = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "App.axaml"));
+    True(shell.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
+    True(desktopTheme.Contains("Move playback to this PC", StringComparison.Ordinal));
     True(!shell.Contains("Content=\"⇥\"", StringComparison.Ordinal));
 
     True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-RC1-BUILDFIX4-CLIENT-UI-DOWNLOADS.md")));
@@ -1941,7 +2283,7 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
 
 static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 {
-    Equal("0.35.0-alpha9-buildfix3", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
+    Equal("0.41.0", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
 
     foreach (var projectPath in new[]
              {
@@ -1950,8 +2292,8 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
              })
     {
         var project = File.ReadAllText(Path.Combine(SourceRoot(), projectPath));
-        True(project.Contains("<Version>0.35.0-alpha9-buildfix3</Version>", StringComparison.Ordinal));
-        True(project.Contains("<InformationalVersion>0.35.0-alpha9-buildfix3</InformationalVersion>", StringComparison.Ordinal));
+        True(project.Contains("<Version>0.41.0</Version>", StringComparison.Ordinal));
+        True(project.Contains("<InformationalVersion>0.41.0</InformationalVersion>", StringComparison.Ordinal));
     }
 
     var readme = File.ReadAllText(Path.Combine(SourceRoot(), "README.md"));
@@ -1972,9 +2314,10 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
     True(readme.Contains("## AI disclosure", StringComparison.Ordinal));
     True(readme.Contains("does not contain a generative-AI assistant", StringComparison.Ordinal));
     True(readme.Contains("speech-recognition models installed and run locally", StringComparison.Ordinal));
+    True(!readme.Contains("repository is currently private", StringComparison.OrdinalIgnoreCase));
 
     var building = File.ReadAllText(Path.Combine(SourceRoot(), "BUILDING.md"));
-    True(building.StartsWith("# Building Radio Vault 0.35.0 Alpha 9 Buildfix 3", StringComparison.Ordinal));
+    True(building.StartsWith("# Building Radio Vault 0.41.0", StringComparison.Ordinal));
     True(building.Contains("package-server-installer.ps1", StringComparison.Ordinal));
     True(building.Contains("package-client-installer.ps1", StringComparison.Ordinal));
     True(!building.Contains("subsequent 0.34 phases", StringComparison.Ordinal));
@@ -2014,7 +2357,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 
     using var sourceManifest = System.Text.Json.JsonDocument.Parse(
         File.ReadAllText(Path.Combine(SourceRoot(), "SOURCE_MANIFEST.sha256.json")));
-    Equal("0.35.0-alpha9-buildfix3", sourceManifest.RootElement.GetProperty("version").GetString());
+    Equal("0.41.0", sourceManifest.RootElement.GetProperty("version").GetString());
 
     foreach (var projectPath in new[]
              {
@@ -5021,7 +5364,7 @@ static void WebPlayerIsRadioVaultBranded()
 {
     WithWebServer(async (port, token) =>
     {
-        using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
         var html = await client.GetStringAsync($"http://127.0.0.1:{port}/?token={Uri.EscapeDataString(token)}");
         True(html.Contains("rvMiniPlayer", StringComparison.Ordinal));
         True(html.Contains("data-section=\"dashboard\"", StringComparison.Ordinal));
@@ -5037,6 +5380,11 @@ static void WebPlayerIsRadioVaultBranded()
         True(html.Contains("transferPhone", StringComparison.Ordinal));
         True(html.Contains("playerSeek.disabled = !has || inactive || phoneTransferInProgress", StringComparison.Ordinal));
         True(html.Contains("playerSpeed.disabled = !has || inactive || phoneTransferInProgress", StringComparison.Ordinal));
+        True(html.Contains("class=\"rvSkipIcon\"", StringComparison.Ordinal));
+        True(html.Contains("M8 1L4 4L8 7", StringComparison.Ordinal));
+        True(html.Contains("M16 1L20 4L16 7", StringComparison.Ordinal));
+        True(html.Contains("M4 10V7Q4 4 7 4H20M16 1L20 4L16 7M20 14V17Q20 20 17 20H4M8 17L4 20L8 23", StringComparison.Ordinal));
+        True(html.Contains("$(\"playerBack\").addEventListener(\"click\", () => skip(-15))", StringComparison.Ordinal));
         True(!html.Contains("Pause playback on PC", StringComparison.Ordinal));
         True(!html.Contains("sendDesktop(\"seek\"", StringComparison.Ordinal));
         True(!html.Contains("sendDesktop(\"speed\"", StringComparison.Ordinal));
@@ -5398,7 +5746,7 @@ static void WebApiSynchronisesOfflineProgress()
 {
     WithWebServer(async (port, token) =>
     {
-        using var client = new HttpClient(new HttpClientHandler { UseProxy = false }) { Timeout = TimeSpan.FromSeconds(5) };
+        using var client = new HttpClient(new HttpClientHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
         using var response = await client.PostAsJsonAsync(
             $"http://127.0.0.1:{port}/api/v1/broadcasts/9/offline-progress?token={Uri.EscapeDataString(token)}",
             new
@@ -5431,6 +5779,49 @@ static void WebApiSynchronisesOfflineProgress()
         True(!staleBody.GetProperty("result").GetProperty("changed").GetBoolean());
         Equal(240_000L, staleBody.GetProperty("result").GetProperty("episode").GetProperty("positionMs").GetInt64());
     });
+}
+
+static void OfflineProgressOrderingPreservesNewerManualChanges()
+{
+    var receivedAt = new DateTimeOffset(2026, 8, 10, 10, 0, 0, TimeSpan.Zero);
+    var offlineListening = new DateTimeOffset(2026, 8, 10, 8, 0, 0, TimeSpan.Zero);
+    var olderCanonical = new DateTime(2026, 8, 10, 7, 0, 0, DateTimeKind.Utc);
+    var laterManualChange = new DateTime(2026, 8, 10, 9, 0, 0, DateTimeKind.Utc);
+
+    True(!OfflineProgressOrderingPolicy.IsStale(offlineListening, olderCanonical, receivedAt));
+    True(OfflineProgressOrderingPolicy.IsStale(offlineListening, laterManualChange, receivedAt));
+    True(OfflineProgressOrderingPolicy.IsStale(receivedAt.AddMinutes(6), null, receivedAt));
+    Equal(offlineListening, OfflineProgressOrderingPolicy.EffectivePlayedAt(offlineListening, receivedAt));
+
+    var mobileSession = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    True(mobileSession.Contains("DownloadedProgressSnapshot", StringComparison.Ordinal));
+    True(mobileSession.Contains("CaptureDownloadedProgress", StringComparison.Ordinal));
+    True(mobileSession.Contains("_completedPlaybackEpisodeId", StringComparison.Ordinal));
+    True(mobileSession.Contains("changed || snapshot.IncrementPlayCount", StringComparison.Ordinal));
+    var playAsync = mobileSession.IndexOf("public async Task PlayAsync", StringComparison.Ordinal);
+    var flushPrevious = mobileSession.IndexOf("await FlushPlaybackAsync().ConfigureAwait(false);", playAsync, StringComparison.Ordinal);
+    var selectNext = mobileSession.IndexOf("SelectedBroadcast = broadcast;", flushPrevious, StringComparison.Ordinal);
+    True(flushPrevious >= 0 && selectNext > flushPrevious);
+
+    var downloads = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileDownloadService.cs"));
+    True(downloads.Contains("public async Task<bool> UpdateProgressAsync", StringComparison.Ordinal));
+    True(downloads.Contains("record.Summary.PositionMs == normalizedPosition", StringComparison.Ordinal));
+
+    var iosEngine = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "IosAvPlayerEngine.cs"));
+    True(iosEngine.Contains("ReferenceEquals(_player?.CurrentItem, endedItem)", StringComparison.Ordinal));
+
+    var archiveProvider = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Infrastructure", "Services", "WebArchiveProvider.cs"));
+    True(archiveProvider.Contains("OfflineProgressOrderingPolicy.IsStale", StringComparison.Ordinal));
+    True(archiveProvider.Contains("playedAt: OfflineProgressOrderingPolicy.EffectivePlayedAt", StringComparison.Ordinal));
+
+    var database = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Infrastructure", "Services", "DatabaseService.cs"));
+    True(database.Contains("var receivedAt = DateTimeOffset.UtcNow", StringComparison.Ordinal));
+    True(database.Contains("var playedAtValue = (playedAt ?? DateTimeOffset.UtcNow)", StringComparison.Ordinal));
 }
 
 
@@ -6154,7 +6545,7 @@ static void KnowledgeSurfacesUseArticleFirstDashboardsAndSummaries()
 
 static void Alpha9HardensDocumentedKnowledgePortability()
 {
-    Equal("0.35.0-alpha9-buildfix3", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
+    Equal("0.41.0", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
 
     var shell = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "MainWindowViewModel.cs"));
     True(shell.Contains("\"wiki\", \"Explore\"", StringComparison.Ordinal));
@@ -8301,6 +8692,48 @@ static void WebEpisodeExposesCanonicalIdentity()
 static WebEpisode Episode(long id, string show, bool favourite, string people = "", long positionMs = 0, long durationMs = 3_600_000)
     => new(id, show, $"Episode {id}", new DateTime(2020, 1, (int)id), "Specific summary", people, "Comedy", durationMs, positionMs,
         positionMs > 0 ? "In Progress" : "Unplayed", favourite, null, new DateTime(2026, 7, 16).AddMinutes(-id), $"C:\\Audio\\{id}.mp3", "");
+
+static void ProductVersionsRemainConsistent()
+{
+    var root = SourceRoot();
+    var version = File.ReadAllText(Path.Combine(root, "VERSION.txt")).Trim();
+    var desktopVersion = ProjectValue(
+        Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "TheRadioVault.Desktop.Avalonia.csproj"),
+        "Version");
+    var serverVersion = ProjectValue(
+        Path.Combine(root, "TheRadioVault.Server", "TheRadioVault.Server.csproj"),
+        "Version");
+    var assemblyVersion = version + ".0";
+    var desktopProject = Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "TheRadioVault.Desktop.Avalonia.csproj");
+    var serverProject = Path.Combine(root, "TheRadioVault.Server", "TheRadioVault.Server.csproj");
+    var iosProject = Path.Combine(root, "TheRadioVault.Client.iOS", "TheRadioVault.Client.iOS.csproj");
+    var iosVersion = ProjectValue(iosProject, "ApplicationDisplayVersion");
+    var iosBuild = ProjectValue(iosProject, "ApplicationVersion");
+    var plist = System.Xml.Linq.XDocument.Load(Path.Combine(root, "TheRadioVault.Client.iOS", "Info.plist"));
+
+    Equal(version, desktopVersion);
+    Equal(version, serverVersion);
+    Equal(assemblyVersion, ProjectValue(desktopProject, "AssemblyVersion"));
+    Equal(assemblyVersion, ProjectValue(desktopProject, "FileVersion"));
+    Equal(assemblyVersion, ProjectValue(serverProject, "AssemblyVersion"));
+    Equal(assemblyVersion, ProjectValue(serverProject, "FileVersion"));
+    Equal(version, iosVersion);
+    Equal(version, PlistValue(plist, "CFBundleShortVersionString"));
+    Equal(iosBuild, PlistValue(plist, "CFBundleVersion"));
+}
+
+static string ProjectValue(string path, string name)
+    => System.Xml.Linq.XDocument.Load(path)
+           .Descendants()
+           .First(element => element.Name.LocalName == name)
+           .Value
+           .Trim();
+
+static string PlistValue(System.Xml.Linq.XDocument document, string key)
+{
+    var keyElement = document.Descendants("key").First(element => element.Value == key);
+    return keyElement.ElementsAfterSelf().First().Value.Trim();
+}
 
 static string SourceRoot()
 {
