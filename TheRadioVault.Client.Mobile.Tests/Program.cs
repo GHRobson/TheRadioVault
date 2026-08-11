@@ -1,5 +1,6 @@
 using System.Text.Json;
 using TheRadioVault.Client.Mobile;
+using TheRadioVault.Client.Mobile.Downloads;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Client.Mobile.Playback;
@@ -27,6 +28,11 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Offline mutation sync recognizes an already-applied decision", OfflineMutationSyncRecognizesAppliedDecisionAsync),
     ("Offline mutation sync retains the first failure", OfflineMutationSyncRetainsFirstFailureAsync),
     ("Offline mutation sync serializes concurrent flushes", OfflineMutationSyncSerializesFlushesAsync),
+    ("Download coordinator enforces network policy and selects new broadcasts", DownloadCoordinatorEnforcesPolicyAsync),
+    ("Download coordinator preserves pause and resume state", DownloadCoordinatorPreservesPauseResumeAsync),
+    ("Download coordinator protects active media and reconciles summaries", DownloadCoordinatorProtectsAndReconcilesAsync),
+    ("Downloaded progress synchronization adopts the canonical result", DownloadedProgressSynchronizationAdoptsCanonicalAsync),
+    ("Downloaded progress synchronization preserves conflicts and newer offline state", DownloadedProgressSynchronizationPreservesAuthorityAsync),
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
     ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync)
@@ -608,6 +614,176 @@ static async Task OfflineMutationSyncSerializesFlushesAsync()
     finally { DeleteTemporaryDirectory(root); }
 }
 
+static async Task DownloadCoordinatorEnforcesPolicyAsync()
+{
+    var existing = Summary(101, "Downloaded", 0, false, null);
+    var candidate = Summary(202, "New Broadcast", 0, false, null);
+    var store = new FakeDownloadStore(DownloadRecord(existing));
+    var policy = new FakeDownloadPolicy
+    {
+        WifiOnly = true,
+        IsUsingWifi = false,
+        AutoDownloadNewBroadcasts = true,
+        AutoDownloadSince = new DateTimeOffset(2026, 8, 1, 0, 0, 0, TimeSpan.Zero)
+    };
+    using var coordinator = new MobileDownloadCoordinator(store, policy);
+    await coordinator.InitializeAsync();
+
+    await coordinator.DownloadAsync(new MobileBroadcastItem(candidate));
+
+    Equal(0, store.DownloadCalls, "Downloads attempted away from Wi-Fi");
+    Contains(coordinator.Status, "Connect to Wi-Fi", "Wi-Fi policy status");
+    Ensure(coordinator.SelectAutomaticDownload([existing, candidate]) is null,
+        "Automatic download ignored the Wi-Fi policy.");
+
+    coordinator.WifiOnly = false;
+    var selected = coordinator.SelectAutomaticDownload([existing, candidate]);
+    Equal(202L, selected?.EpisodeId ?? 0, "Automatic download candidate");
+}
+
+static async Task DownloadCoordinatorPreservesPauseResumeAsync()
+{
+    var summary = Summary(303, "Resumable Broadcast", 0, false, null);
+    var store = new FakeDownloadStore { BlockFirstDownload = true };
+    var policy = new FakeDownloadPolicy { StorageLimitBytes = 1_024 };
+    using var coordinator = new MobileDownloadCoordinator(store, policy);
+    var artworkLoads = 0;
+
+    var firstAttempt = coordinator.DownloadAsync(
+        new MobileBroadcastItem(summary),
+        _ =>
+        {
+            artworkLoads++;
+            return Task.CompletedTask;
+        });
+    await store.DownloadStarted.Task.WaitAsync(TimeSpan.FromSeconds(2));
+    coordinator.Pause();
+    await firstAttempt;
+
+    Ensure(coordinator.IsPaused, "Paused download state was not retained.");
+    Equal(303L, coordinator.ActiveEpisodeId ?? 0, "Paused download episode");
+
+    await coordinator.ResumeAsync(_ =>
+    {
+        artworkLoads++;
+        return Task.CompletedTask;
+    });
+
+    Ensure(!coordinator.IsDownloading && !coordinator.IsPaused, "Resumed download did not finish cleanly.");
+    Equal(100, coordinator.ProgressPercent, "Resumed download progress");
+    Equal(1, coordinator.Broadcasts.Count, "Completed downloads after resume");
+    Equal(1, artworkLoads, "Artwork caching after resumed download");
+    Equal(303L, store.LastTrimProtectedEpisodeId ?? 0, "Storage-limit protected episode");
+}
+
+static async Task DownloadCoordinatorProtectsAndReconcilesAsync()
+{
+    var completed = Summary(101, "Completed Download", 100_000, true, DateTimeOffset.UtcNow);
+    var active = Summary(202, "Active Download", 0, false, null);
+    var store = new FakeDownloadStore(DownloadRecord(completed), DownloadRecord(active));
+    using var coordinator = new MobileDownloadCoordinator(store, new FakeDownloadPolicy());
+    await coordinator.InitializeAsync();
+
+    Equal(0, await coordinator.CleanupCompletedAsync(101), "Protected completed removals");
+    Equal(2, coordinator.Broadcasts.Count, "Downloads after protected cleanup");
+    Ensure(!await coordinator.RemoveAsync(new MobileBroadcastItem(active), 202),
+        "The active download was removed.");
+
+    var canonical = active with
+    {
+        PositionMs = 55_000,
+        InProgress = true,
+        LastPlayedAt = DateTimeOffset.UtcNow
+    };
+    await coordinator.ReconcileSummariesAsync([canonical]);
+    Equal(55_000L, coordinator.Broadcasts.Single(value => value.EpisodeId == 202).Source.PositionMs,
+        "Reconciled downloaded progress");
+
+    Equal(1, await coordinator.CleanupCompletedAsync(), "Unprotected completed removals");
+    Ensure(await coordinator.RemoveAsync(new MobileBroadcastItem(canonical)),
+        "The inactive download was not removed.");
+    Equal(0, coordinator.Broadcasts.Count, "Downloads after removal");
+}
+
+static async Task DownloadedProgressSynchronizationAdoptsCanonicalAsync()
+{
+    var local = Summary(404, "Offline Broadcast", 40_000, false, DateTimeOffset.UtcNow.AddMinutes(-1));
+    var canonical = local with { PositionMs = 45_000, LastPlayedAt = DateTimeOffset.UtcNow };
+    var store = new FakeDownloadStore(DownloadRecord(local));
+    using var downloads = new MobileDownloadCoordinator(store, new FakeDownloadPolicy());
+    await downloads.InitializeAsync();
+    var transport = new FakeDownloadedProgressTransport(canonical);
+    var synchronization = new MobileDownloadedProgressSynchronizationCoordinator(transport, downloads);
+    var acknowledgements = new List<long>();
+    var adopted = new List<long>();
+
+    var synchronized = await synchronization.SynchronizeCurrentAsync(
+        new MobileDownloadedProgressSnapshot(
+            404, 42_000, 100_000, false, 1.25d, DateTimeOffset.UtcNow, true),
+        acknowledgements.Add,
+        (summary, _) =>
+        {
+            adopted.Add(summary.RepresentativeEpisodeId);
+            return Task.CompletedTask;
+        });
+
+    Ensure(synchronized, "Current downloaded progress was not synchronized.");
+    Equal(1, transport.Updates.Count, "Current progress writes");
+    Ensure(transport.Updates[0].IncrementPlayCount, "Pending play count was omitted.");
+    Ensure(acknowledgements.SequenceEqual([404L]), "Accepted play count was not acknowledged.");
+    Ensure(adopted.SequenceEqual([404L]), "Canonical progress was not adopted.");
+    Equal(45_000L, downloads.Broadcasts.Single().Source.PositionMs,
+        "Canonical downloaded progress");
+}
+
+static async Task DownloadedProgressSynchronizationPreservesAuthorityAsync()
+{
+    var capturedAt = DateTimeOffset.UtcNow;
+    var newerOffline = Summary(505, "Newer Offline", 70_000, false, capturedAt);
+    var staleServer = newerOffline with
+    {
+        PositionMs = 20_000,
+        LastPlayedAt = capturedAt.AddMinutes(-10)
+    };
+    var unchangedLocal = Summary(606, "Server Is Newer", 10_000, false, capturedAt.AddMinutes(-20));
+    var newerServer = unchangedLocal with
+    {
+        PositionMs = 30_000,
+        LastPlayedAt = capturedAt.AddMinutes(-5)
+    };
+    var store = new FakeDownloadStore(DownloadRecord(newerOffline), DownloadRecord(unchangedLocal));
+    using var downloads = new MobileDownloadCoordinator(store, new FakeDownloadPolicy());
+    await downloads.InitializeAsync();
+    var transport = new FakeDownloadedProgressTransport(newerOffline, newerServer);
+    var synchronization = new MobileDownloadedProgressSynchronizationCoordinator(transport, downloads);
+    var staged = new List<long>();
+
+    var synchronized = await synchronization.SynchronizeStoredAsync(
+        [staleServer, newerServer],
+        1d,
+        episodeId => episodeId == 505,
+        _ => { },
+        summary => staged.Add(summary.RepresentativeEpisodeId));
+
+    Equal(1, synchronized, "Stored progress synchronizations");
+    Ensure(transport.Updates.Select(value => value.EpisodeId).SequenceEqual([505L]),
+        "A newer server position was overwritten by an older download.");
+    Ensure(staged.SequenceEqual([505L]), "The accepted offline canonical result was not staged.");
+
+    transport.ConflictEpisodeIds.Add(505);
+    var conflictAdopted = false;
+    var currentResult = await synchronization.SynchronizeCurrentAsync(
+        new MobileDownloadedProgressSnapshot(
+            505, 75_000, 100_000, false, 1d, capturedAt.AddMinutes(1), true),
+        _ => throw new InvalidOperationException("A conflicted play count was acknowledged."),
+        (_, _) =>
+        {
+            conflictAdopted = true;
+            return Task.CompletedTask;
+        });
+    Ensure(!currentResult && !conflictAdopted, "A conflicted progress write displaced server authority.");
+}
+
 static WebPlaybackSession PlaybackSession(
     string ownerClientId,
     long generation,
@@ -779,6 +955,24 @@ static async Task<MobileDownloadRecord> CreateRecordAsync(string root, long epis
         relativeDirectory,
         [new MobileDownloadPart(1, 1, 0, 100_000, episodeId, content.Length, fileName, "audio/mpeg")]);
 }
+
+static MobileDownloadRecord DownloadRecord(WebClientLibraryBroadcastSummary summary)
+    => new(
+        summary,
+        $"canonical-{summary.RepresentativeEpisodeId}",
+        $"broadcast-{summary.RepresentativeEpisodeId}",
+        Math.Max(100_000, summary.DurationMs),
+        DateTimeOffset.UtcNow,
+        Path.Combine("media", summary.RepresentativeEpisodeId.ToString(), "test"),
+        [new MobileDownloadPart(
+            1,
+            1,
+            0,
+            Math.Max(100_000, summary.DurationMs),
+            summary.RepresentativeEpisodeId,
+            1_024,
+            "part.mp3",
+            "audio/mpeg")]);
 
 static WebClientLibraryBroadcastSummary Summary(
     long episodeId,
@@ -1061,6 +1255,201 @@ file sealed class FakeOfflineMutationTransport(
             Duplicate: duplicate,
             duplicate ? "Moment already exists." : "Moment saved.",
             Moment: null));
+    }
+
+    public Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(_summaries.TryGetValue(episodeId, out var summary)
+            ? summary
+            : throw new KeyNotFoundException($"Episode {episodeId} is unavailable."));
+}
+
+file sealed class FakeDownloadPolicy : IMobileDownloadPolicy
+{
+    public bool WifiOnly { get; set; }
+    public bool IsUsingWifi { get; set; } = true;
+    public bool AutoDownloadNewBroadcasts { get; set; }
+    public DateTimeOffset AutoDownloadSince { get; set; } = DateTimeOffset.MinValue;
+    public bool DeleteCompletedDownloads { get; set; }
+    public long StorageLimitBytes { get; set; }
+}
+
+file sealed class FakeDownloadStore(params MobileDownloadRecord[] records) : IMobileDownloadStore
+{
+    private readonly Dictionary<long, MobileDownloadRecord> _records =
+        records.ToDictionary(value => value.EpisodeId);
+
+    public bool BlockFirstDownload { get; init; }
+    public TaskCompletionSource<bool> DownloadStarted { get; } =
+        new(TaskCreationOptions.RunContinuationsAsynchronously);
+    public int DownloadCalls { get; private set; }
+    public long? LastTrimProtectedEpisodeId { get; private set; }
+    public long PendingBytes { get; set; }
+
+    public Task<IReadOnlyList<MobileBroadcastItem>> GetBroadcastsAsync(
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<MobileBroadcastItem>>(_records.Values
+            .OrderByDescending(value => value.DownloadedAt)
+            .Select(value => new MobileBroadcastItem(value.Summary))
+            .ToArray());
+
+    public Task<bool> IsDownloadedAsync(long episodeId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_records.ContainsKey(episodeId));
+
+    public Task<MobileDownloadRecord?> GetAsync(long episodeId, CancellationToken cancellationToken = default)
+        => Task.FromResult(_records.GetValueOrDefault(episodeId));
+
+    public async Task<MobileDownloadRecord> DownloadAsync(
+        MobileBroadcastItem broadcast,
+        IProgress<MobileDownloadProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        DownloadCalls++;
+        DownloadStarted.TrySetResult(true);
+        if (BlockFirstDownload && DownloadCalls == 1)
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken);
+        var record = CreateDownloadRecord(broadcast.Source);
+        progress?.Report(new MobileDownloadProgress(
+            broadcast.EpisodeId,
+            broadcast.Title,
+            1,
+            1,
+            record.SizeBytes,
+            record.SizeBytes));
+        _records[record.EpisodeId] = record;
+        return record;
+    }
+
+    public Task RemoveAsync(long episodeId, CancellationToken cancellationToken = default)
+    {
+        _records.Remove(episodeId);
+        return Task.CompletedTask;
+    }
+
+    public Task<int> RemoveCompletedAsync(
+        long? protectedEpisodeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var removals = _records.Values
+            .Where(value => value.Summary.Completed && value.EpisodeId != protectedEpisodeId)
+            .Select(value => value.EpisodeId)
+            .ToArray();
+        foreach (var episodeId in removals) _records.Remove(episodeId);
+        return Task.FromResult(removals.Length);
+    }
+
+    public Task<int> TrimToLimitAsync(
+        long limitBytes,
+        long? protectedEpisodeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        LastTrimProtectedEpisodeId = protectedEpisodeId;
+        var total = _records.Values.Sum(value => value.SizeBytes);
+        var removals = _records.Values
+            .Where(value => value.EpisodeId != protectedEpisodeId)
+            .OrderBy(value => value.DownloadedAt)
+            .TakeWhile(value =>
+            {
+                if (total <= limitBytes) return false;
+                total -= value.SizeBytes;
+                return true;
+            })
+            .Select(value => value.EpisodeId)
+            .ToArray();
+        foreach (var episodeId in removals) _records.Remove(episodeId);
+        return Task.FromResult(removals.Length);
+    }
+
+    public Task<int> RepairAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(0);
+
+    public Task DiscardPendingAsync(long episodeId, CancellationToken cancellationToken = default)
+    {
+        PendingBytes = 0;
+        return Task.CompletedTask;
+    }
+
+    public Task<MobileDownloadStorage> GetStorageAsync(CancellationToken cancellationToken = default)
+        => Task.FromResult(new MobileDownloadStorage(
+            _records.Count,
+            _records.Values.Sum(value => value.SizeBytes),
+            PendingBytes));
+
+    public string GetPartUri(MobileDownloadRecord record, MobileDownloadPart part)
+        => $"file:///downloads/{record.EpisodeId}/{part.FileName}";
+
+    public Task<bool> UpdateProgressAsync(
+        long episodeId,
+        long positionMs,
+        bool completed,
+        DateTimeOffset capturedAt,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_records.TryGetValue(episodeId, out var record)) return Task.FromResult(false);
+        var updated = record.Summary with
+        {
+            PositionMs = positionMs,
+            Completed = completed,
+            InProgress = positionMs > 0 && !completed,
+            LastPlayedAt = capturedAt
+        };
+        _records[episodeId] = record with { Summary = updated };
+        return Task.FromResult(true);
+    }
+
+    public Task ReconcileSummariesAsync(
+        IEnumerable<WebClientLibraryBroadcastSummary> summaries,
+        CancellationToken cancellationToken = default)
+    {
+        foreach (var summary in summaries)
+        {
+            if (_records.TryGetValue(summary.RepresentativeEpisodeId, out var record))
+                _records[record.EpisodeId] = record with { Summary = summary };
+        }
+        return Task.CompletedTask;
+    }
+
+    private static MobileDownloadRecord CreateDownloadRecord(WebClientLibraryBroadcastSummary summary)
+        => new(
+            summary,
+            $"canonical-{summary.RepresentativeEpisodeId}",
+            $"broadcast-{summary.RepresentativeEpisodeId}",
+            Math.Max(100_000, summary.DurationMs),
+            DateTimeOffset.UtcNow,
+            Path.Combine("media", summary.RepresentativeEpisodeId.ToString(), "test"),
+            [new MobileDownloadPart(
+                1,
+                1,
+                0,
+                Math.Max(100_000, summary.DurationMs),
+                summary.RepresentativeEpisodeId,
+                1_024,
+                "part.mp3",
+                "audio/mpeg")]);
+}
+
+file sealed class FakeDownloadedProgressTransport(
+    params WebClientLibraryBroadcastSummary[] summaries) : IMobileDownloadedProgressTransport
+{
+    private readonly Dictionary<long, WebClientLibraryBroadcastSummary> _summaries =
+        summaries.ToDictionary(value => value.RepresentativeEpisodeId);
+
+    public string ClientId => "iphone-test";
+    public List<WebOfflineProgressUpdate> Updates { get; } = [];
+    public HashSet<long> ConflictEpisodeIds { get; } = [];
+
+    public Task<WebOfflineProgressResult> SaveProgressAsync(
+        WebOfflineProgressUpdate update,
+        CancellationToken cancellationToken = default)
+    {
+        Updates.Add(update);
+        var conflict = ConflictEpisodeIds.Contains(update.EpisodeId);
+        return Task.FromResult(new WebOfflineProgressResult(
+            Changed: !conflict,
+            conflict ? "Server authority retained." : "Progress synchronized.",
+            Episode: null,
+            Conflict: conflict));
     }
 
     public Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(

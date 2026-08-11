@@ -1861,6 +1861,21 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(downloads.Contains("TrimToLimitAsync", StringComparison.Ordinal));
     True(downloads.Contains("RepairAsync", StringComparison.Ordinal));
 
+    var downloadCoordinator = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Downloads", "MobileDownloadCoordinator.cs"));
+    True(downloadCoordinator.Contains("SelectAutomaticDownload", StringComparison.Ordinal));
+    True(downloadCoordinator.Contains("ResumeAsync", StringComparison.Ordinal));
+    True(downloadCoordinator.Contains("CleanupCompletedAsync", StringComparison.Ordinal));
+    True(downloadCoordinator.Contains("protectedEpisodeId", StringComparison.Ordinal));
+    True(downloadCoordinator.Contains("ReconcileSummariesAsync", StringComparison.Ordinal));
+
+    var downloadedProgressSynchronization = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Synchronization",
+        "MobileDownloadedProgressSynchronizationCoordinator.cs"));
+    True(downloadedProgressSynchronization.Contains("HasNewerOfflineProgress", StringComparison.Ordinal));
+    True(downloadedProgressSynchronization.Contains("if (result.Conflict)", StringComparison.Ordinal));
+    True(downloadedProgressSynchronization.Contains("IncrementPlayCount", StringComparison.Ordinal));
+
     var downloadsView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "DownloadsViewController.cs"));
     True(downloadsView.Contains("PauseDownload", StringComparison.Ordinal));
@@ -1942,6 +1957,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("TryAutomaticDownloadAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("LoadKnowledgeAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("new MobileDownloadCoordinator", StringComparison.Ordinal));
+    True(!mobileSession.Contains("_downloadCancellation", StringComparison.Ordinal));
 
     var pendingChanges = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileOfflineMutationStore.cs"));

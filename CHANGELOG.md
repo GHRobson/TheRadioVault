@@ -5,6 +5,7 @@
 - Extracted remote playback observation, deterministic playhead projection and committed handoff source-stop acknowledgement behind fakeable transport and decoder boundaries.
 - Extracted serialized mobile library metadata synchronization—including change-feed cursors, reset paging, delta/deletion application, durable cache adoption and activity state—behind a fakeable transport with focused behavioural tests.
 - Extracted durable mobile offline-mutation synchronization for favourites, listened state and Moments, including ordered single-flight replay, duplicate acceptance, already-applied recovery and first-failure retention.
+- Extracted mobile download lifecycle, Wi-Fi/retention policy, pause/resume/cancel state, storage maintenance and durable-index projection behind a focused coordinator, plus isolated downloaded-progress authority reconciliation from the session façade.
 
 # 0.41.0
 

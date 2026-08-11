@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using TheRadioVault.Client.Mobile.Downloads;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Client.Mobile.Playback;
@@ -17,14 +18,14 @@ public sealed class MobileClientSession : IDisposable
     // valid transfer from ever reaching the commit and source-stop stages.
     private const long PlaybackTransferAlignmentToleranceMs = 3_000;
     private readonly MobileServerClient _server;
-    private readonly MobileDownloadService _downloads;
+    private readonly MobileDownloadCoordinator _downloads;
+    private readonly MobileDownloadedProgressSynchronizationCoordinator _downloadProgressSynchronization;
     private readonly MobileOfflineMutationSynchronizationCoordinator _offlineMutationSynchronization;
     private readonly IMobilePlaybackEngine _playback;
     private readonly MobilePlaybackOwnershipCoordinator _playbackOwnership;
     private readonly MobilePlaybackSynchronizationCoordinator _playbackSynchronization;
     private readonly MobilePlaybackTimeline _playbackTimeline = new();
     private readonly IMobileNowPlayingService _nowPlaying;
-    private readonly IMobileDownloadPolicy _downloadPolicy;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private readonly SemaphoreSlim _exploreSyncGate = new(1, 1);
     private readonly Timer _syncTimer;
@@ -36,8 +37,6 @@ public sealed class MobileClientSession : IDisposable
     private readonly ConcurrentDictionary<long, byte> _pendingPlayCountEpisodes = new();
     private MobileMediaProxy? _mediaProxy;
     private MobileDownloadRecord? _activeDownload;
-    private CancellationTokenSource? _downloadCancellation;
-    private MobileBroadcastItem? _pendingDownload;
     private byte[]? _nowPlayingArtwork;
     private long _nowPlayingArtworkEpisodeId;
     private IReadOnlyList<WebClientLibraryCollectionSummary> _incompleteLibraryCollections = [];
@@ -48,8 +47,6 @@ public sealed class MobileClientSession : IDisposable
     private bool _explicitSeekPending;
     private bool _ownsPlayback;
     private bool _offlinePlayback;
-    private bool _downloadPauseRequested;
-    private bool _downloadCancelRequested;
     private MobileSyncDiagnostics _syncDiagnostics = new(0, null, null, string.Empty);
     private bool _disposed;
 
@@ -60,12 +57,19 @@ public sealed class MobileClientSession : IDisposable
         IMobileDownloadPolicy downloadPolicy)
     {
         _server = server ?? throw new ArgumentNullException(nameof(server));
-        _downloads = new MobileDownloadService(
+        var downloadService = new MobileDownloadService(
             _server,
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "TheRadioVault",
                 "Downloads"));
+        _downloads = new MobileDownloadCoordinator(
+            new MobileDownloadStore(downloadService),
+            downloadPolicy ?? throw new ArgumentNullException(nameof(downloadPolicy)));
+        _downloads.StateChanged += DownloadsOnStateChanged;
+        _downloadProgressSynchronization = new MobileDownloadedProgressSynchronizationCoordinator(
+            new MobileDownloadedProgressTransport(_server),
+            _downloads);
         var offlineMutationStore = new MobileOfflineMutationStore(
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
@@ -83,7 +87,6 @@ public sealed class MobileClientSession : IDisposable
             _playback,
             _playbackOwnership);
         _nowPlaying = nowPlaying ?? throw new ArgumentNullException(nameof(nowPlaying));
-        _downloadPolicy = downloadPolicy ?? throw new ArgumentNullException(nameof(downloadPolicy));
         var metadataRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "TheRadioVault",
@@ -139,7 +142,7 @@ public sealed class MobileClientSession : IDisposable
     public IReadOnlyList<MobileBroadcastItem> OnThisDay { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> UnheardBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> LibraryBroadcasts { get; private set; } = [];
-    public IReadOnlyList<MobileBroadcastItem> DownloadedBroadcasts { get; private set; } = [];
+    public IReadOnlyList<MobileBroadcastItem> DownloadedBroadcasts => _downloads.Broadcasts;
     public IReadOnlyList<WebMomentSummary> SavedMoments { get; private set; } = [];
     public MobileKnowledgeSnapshot? Knowledge { get; private set; }
     public IReadOnlyList<WebQueueItem> QueueItems { get; private set; } = [];
@@ -156,57 +159,43 @@ public sealed class MobileClientSession : IDisposable
     public double PlaybackProgress { get; private set; }
     public string PlaybackTime { get; private set; } = "0:00 / 0:00";
     public string SpeedText => $"{_speed:0.##}×";
-    public bool IsDownloading { get; private set; }
-    public bool IsDownloadPaused { get; private set; }
-    public long? ActiveDownloadEpisodeId { get; private set; }
-    public string DownloadStatus { get; private set; } = "Downloads are stored on this iPhone.";
-    public int DownloadProgressPercent { get; private set; }
-    public long DownloadStorageBytes { get; private set; }
-    public long PendingDownloadBytes { get; private set; }
-    public string DownloadStorageText => $"{DownloadedBroadcasts.Count:N0} download{(DownloadedBroadcasts.Count == 1 ? string.Empty : "s")} · {FormatBytes(DownloadStorageBytes)} stored";
+    public bool IsDownloading => _downloads.IsDownloading;
+    public bool IsDownloadPaused => _downloads.IsPaused;
+    public long? ActiveDownloadEpisodeId => _downloads.ActiveEpisodeId;
+    public string DownloadStatus => _downloads.Status;
+    public int DownloadProgressPercent => _downloads.ProgressPercent;
+    public long DownloadStorageBytes => _downloads.Storage.TotalBytes;
+    public long PendingDownloadBytes => _downloads.Storage.PendingBytes;
+    public string DownloadStorageText => _downloads.StorageText;
     public bool WifiOnlyDownloads
     {
-        get => _downloadPolicy.WifiOnly;
-        set
-        {
-            _downloadPolicy.WifiOnly = value;
-            Notify();
-        }
+        get => _downloads.WifiOnly;
+        set => _downloads.WifiOnly = value;
     }
     public bool AutoDownloadNewBroadcasts
     {
-        get => _downloadPolicy.AutoDownloadNewBroadcasts;
-        set
-        {
-            var wasEnabled = _downloadPolicy.AutoDownloadNewBroadcasts;
-            _downloadPolicy.AutoDownloadNewBroadcasts = value;
-            if (value && !wasEnabled) _downloadPolicy.AutoDownloadSince = DateTimeOffset.UtcNow;
-            Notify();
-        }
+        get => _downloads.AutoDownloadNewBroadcasts;
+        set => _downloads.AutoDownloadNewBroadcasts = value;
     }
     public bool DeleteCompletedDownloads
     {
-        get => _downloadPolicy.DeleteCompletedDownloads;
+        get => _downloads.DeleteCompletedDownloads;
         set
         {
-            _downloadPolicy.DeleteCompletedDownloads = value;
-            Notify();
+            _downloads.DeleteCompletedDownloads = value;
             if (value) _ = CleanupCompletedDownloadsAsync();
         }
     }
     public long DownloadStorageLimitBytes
     {
-        get => _downloadPolicy.StorageLimitBytes;
+        get => _downloads.StorageLimitBytes;
         set
         {
-            _downloadPolicy.StorageLimitBytes = Math.Max(0, value);
-            Notify();
+            _downloads.StorageLimitBytes = value;
             if (value > 0) _ = EnforceDownloadStorageLimitAsync();
         }
     }
-    public string DownloadStorageLimitText => DownloadStorageLimitBytes <= 0
-        ? "No storage limit"
-        : $"Up to {FormatBytes(DownloadStorageLimitBytes)}";
+    public string DownloadStorageLimitText => _downloads.StorageLimitText;
     public bool HasMiniPlayer => SelectedBroadcast is not null || _playbackSynchronization.RemoteBroadcast is not null;
     public bool MiniPlayerShowsHandoff => _playbackSynchronization.RemoteBroadcast is not null && !_ownsPlayback;
     public string MiniPlayerTitle => _playbackSynchronization.RemoteBroadcast?.Title ?? NowPlayingTitle;
@@ -257,8 +246,7 @@ public sealed class MobileClientSession : IDisposable
     public async Task InitializeAsync()
     {
         await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
-        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-        await RefreshDownloadStorageAsync().ConfigureAwait(false);
+        await _downloads.InitializeAsync().ConfigureAwait(false);
         IsPaired = _server.IsPaired;
         if (IsPaired)
         {
@@ -266,7 +254,6 @@ public sealed class MobileClientSession : IDisposable
                 .LoadAsync(_server.Connection?.ServerInstanceId ?? string.Empty)
                 .ConfigureAwait(false);
             await _downloads.ReconcileSummariesAsync(_metadataCache.Snapshot.Broadcasts).ConfigureAwait(false);
-            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
             ApplyMetadataSnapshot();
         }
         Notify();
@@ -359,8 +346,7 @@ public sealed class MobileClientSession : IDisposable
             }
             if (_metadataCache.Snapshot.ExploreOverview is null)
                 await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
-            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-            await RefreshDownloadStorageAsync().ConfigureAwait(false);
+            await _downloads.RefreshAsync().ConfigureAwait(false);
             QueueItems = await _server.GetQueueAsync().ConfigureAwait(false);
             _metadataCache.SetQueue(QueueItems);
             await _metadataCache.SaveAsync().ConfigureAwait(false);
@@ -1019,175 +1005,41 @@ public sealed class MobileClientSession : IDisposable
     public async Task DownloadAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (!IsPaired || IsDownloading) return;
-        if (_downloadPolicy.WifiOnly && !_downloadPolicy.IsUsingWifi)
-        {
-            DownloadStatus = "Connect to Wi-Fi or turn off Wi-Fi Only before downloading.";
-            Notify();
-            return;
-        }
-        _pendingDownload = broadcast;
-        _downloadPauseRequested = false;
-        _downloadCancelRequested = false;
-        IsDownloadPaused = false;
-        IsDownloading = true;
-        ActiveDownloadEpisodeId = broadcast.EpisodeId;
-        DownloadProgressPercent = 0;
-        DownloadStatus = $"Preparing {broadcast.Title}…";
-        var cancellation = new CancellationTokenSource();
-        _downloadCancellation?.Dispose();
-        _downloadCancellation = cancellation;
-        Notify();
-        try
-        {
-            var progress = new Progress<MobileDownloadProgress>(value =>
-            {
-                DownloadProgressPercent = value.Percent;
-                DownloadStatus = value.TotalBytes > 0
-                    ? $"Downloading {value.Title} · part {value.PartNumber} of {value.PartCount} · {value.Percent}%"
-                    : $"Downloading {value.Title} · part {value.PartNumber} of {value.PartCount}";
-                Notify();
-            });
-            var record = await _downloads.DownloadAsync(
-                broadcast, progress, cancellation.Token).ConfigureAwait(false);
-            _ = await LoadArtworkAsync(broadcast).ConfigureAwait(false);
-            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-            if (DownloadStorageLimitBytes > 0)
-                await _downloads.TrimToLimitAsync(
-                    DownloadStorageLimitBytes, broadcast.EpisodeId).ConfigureAwait(false);
-            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-            _pendingDownload = null;
-            DownloadProgressPercent = 100;
-            DownloadStatus = $"Downloaded {broadcast.Title} · {FormatBytes(record.SizeBytes)}";
-        }
-        catch (OperationCanceledException) when (_downloadPauseRequested)
-        {
-            IsDownloadPaused = true;
-            DownloadStatus = $"Paused {broadcast.Title} at {DownloadProgressPercent}%";
-        }
-        catch (OperationCanceledException) when (_downloadCancelRequested)
-        {
-            await _downloads.DiscardPendingAsync(broadcast.EpisodeId).ConfigureAwait(false);
-            _pendingDownload = null;
-            DownloadProgressPercent = 0;
-            DownloadStatus = $"Cancelled {broadcast.Title}.";
-        }
-        catch (Exception exception)
-        {
-            IsDownloadPaused = true;
-            DownloadStatus = "Download interrupted. Tap Resume to continue: " + exception.Message;
-        }
-        finally
-        {
-            IsDownloading = false;
-            if (!IsDownloadPaused) ActiveDownloadEpisodeId = null;
-            if (ReferenceEquals(_downloadCancellation, cancellation))
-            {
-                _downloadCancellation = null;
-                cancellation.Dispose();
-            }
-            await RefreshDownloadStorageAsync().ConfigureAwait(false);
-            Notify();
-        }
+        if (!IsPaired) return;
+        await _downloads.DownloadAsync(
+            broadcast,
+            async value => _ = await LoadArtworkAsync(value).ConfigureAwait(false)).ConfigureAwait(false);
     }
 
-    public void PauseDownload()
-    {
-        if (!IsDownloading || _downloadCancellation is null) return;
-        _downloadPauseRequested = true;
-        DownloadStatus = "Pausing after the current data write…";
-        _downloadCancellation.Cancel();
-        Notify();
-    }
+    public void PauseDownload() => _downloads.Pause();
 
     public async Task ResumeDownloadAsync()
     {
-        if (!IsDownloadPaused || _pendingDownload is null || IsDownloading) return;
-        await DownloadAsync(_pendingDownload).ConfigureAwait(false);
+        if (!IsPaired) return;
+        await _downloads.ResumeAsync(
+            async value => _ = await LoadArtworkAsync(value).ConfigureAwait(false)).ConfigureAwait(false);
     }
 
-    public void CancelDownload()
-    {
-        if (_pendingDownload is null) return;
-        _downloadPauseRequested = false;
-        _downloadCancelRequested = true;
-        IsDownloadPaused = false;
-        DownloadStatus = "Cancelling download…";
-        if (_downloadCancellation is not null) _downloadCancellation.Cancel();
-        else _ = CancelPausedDownloadAsync(_pendingDownload);
-        Notify();
-    }
-
-    private async Task CancelPausedDownloadAsync(MobileBroadcastItem broadcast)
-    {
-        await _downloads.DiscardPendingAsync(broadcast.EpisodeId).ConfigureAwait(false);
-        _pendingDownload = null;
-        ActiveDownloadEpisodeId = null;
-        DownloadProgressPercent = 0;
-        DownloadStatus = $"Cancelled {broadcast.Title}.";
-        await RefreshDownloadStorageAsync().ConfigureAwait(false);
-        Notify();
-    }
-
-    private async Task RefreshDownloadStorageAsync()
-    {
-        var storage = await _downloads.GetStorageAsync().ConfigureAwait(false);
-        DownloadStorageBytes = storage.TotalBytes;
-        PendingDownloadBytes = storage.PendingBytes;
-    }
+    public void CancelDownload() => _downloads.Cancel();
 
     public async Task CleanupCompletedDownloadsAsync()
-    {
-        if (IsDownloading) return;
-        var removed = await _downloads.RemoveCompletedAsync(
-            _activeDownload?.EpisodeId).ConfigureAwait(false);
-        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-        await RefreshDownloadStorageAsync().ConfigureAwait(false);
-        DownloadStatus = removed == 0
-            ? "No completed downloads needed removing."
-            : $"Removed {removed:N0} completed download{(removed == 1 ? string.Empty : "s")}.";
-        Notify();
-    }
+        => _ = await _downloads
+            .CleanupCompletedAsync(_activeDownload?.EpisodeId)
+            .ConfigureAwait(false);
 
     public async Task RepairDownloadsAsync()
-    {
-        if (IsDownloading) return;
-        var removed = await _downloads.RepairAsync().ConfigureAwait(false);
-        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-        await RefreshDownloadStorageAsync().ConfigureAwait(false);
-        DownloadStatus = removed == 0
-            ? "All downloaded broadcasts passed their storage check."
-            : $"Removed {removed:N0} damaged download{(removed == 1 ? string.Empty : "s")}; download them again when convenient.";
-        Notify();
-    }
+        => _ = await _downloads.RepairAsync().ConfigureAwait(false);
 
     private async Task EnforceDownloadStorageLimitAsync()
-    {
-        if (IsDownloading || DownloadStorageLimitBytes <= 0) return;
-        var removed = await _downloads.TrimToLimitAsync(
-            DownloadStorageLimitBytes, _activeDownload?.EpisodeId).ConfigureAwait(false);
-        if (removed == 0) return;
-        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-        await RefreshDownloadStorageAsync().ConfigureAwait(false);
-        DownloadStatus = $"Removed {removed:N0} older download{(removed == 1 ? string.Empty : "s")} to stay within the storage limit.";
-        Notify();
-    }
+        => _ = await _downloads
+            .EnforceStorageLimitAsync(_activeDownload?.EpisodeId)
+            .ConfigureAwait(false);
 
     public async Task RemoveDownloadAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (IsDownloading) return;
-        if (_activeDownload?.EpisodeId == broadcast.EpisodeId && _playback.Current.IsOpen)
-        {
-            DownloadStatus = "This download is currently playing. Start another broadcast before removing it.";
-            Notify();
-            return;
-        }
-        await _downloads.RemoveAsync(broadcast.EpisodeId).ConfigureAwait(false);
-        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-        await RefreshDownloadStorageAsync().ConfigureAwait(false);
-        DownloadStatus = $"Removed {broadcast.Title} from this iPhone.";
-        Notify();
+        var protectedEpisodeId = _playback.Current.IsOpen ? _activeDownload?.EpisodeId : null;
+        _ = await _downloads.RemoveAsync(broadcast, protectedEpisodeId).ConfigureAwait(false);
     }
 
     public async Task PlayDownloadedAsync(MobileBroadcastItem broadcast)
@@ -1770,8 +1622,6 @@ public sealed class MobileClientSession : IDisposable
                         snapshot.PositionMs,
                         snapshot.Completed,
                         snapshot.CapturedAt).ConfigureAwait(false);
-                    if (changed)
-                        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
                     _lastOfflineSave = DateTimeOffset.UtcNow;
                     if (IsPaired && IsLiveConnected && (changed || snapshot.IncrementPlayCount))
                         await SynchronizeDownloadedProgressWithServerAsync(snapshot).ConfigureAwait(false);
@@ -2061,7 +1911,6 @@ public sealed class MobileClientSession : IDisposable
                 {
                     await SynchronizeStoredDownloadedProgressWithServerAsync().ConfigureAwait(false);
                     await _downloads.ReconcileSummariesAsync(_metadataCache.Snapshot.Broadcasts).ConfigureAwait(false);
-                    DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
                     ApplyMetadataSnapshot();
 
                     if (synchronization.ExploreRefreshRequired)
@@ -2090,16 +1939,9 @@ public sealed class MobileClientSession : IDisposable
     private async Task TryAutomaticDownloadAsync()
     {
         if (_disposed || !AutoDownloadNewBroadcasts || !IsLiveConnected || IsDownloading) return;
-        if (_downloadPolicy.WifiOnly && !_downloadPolicy.IsUsingWifi) return;
-        var downloadedIds = DownloadedBroadcasts.Select(value => value.EpisodeId).ToHashSet();
-        var since = _downloadPolicy.AutoDownloadSince;
-        var candidate = _metadataCache.Snapshot.Broadcasts
-            .Where(value => !value.Completed && !downloadedIds.Contains(value.RepresentativeEpisodeId) &&
-                            value.DateAdded >= since)
-            .OrderBy(value => value.DateAdded)
-            .FirstOrDefault();
+        var candidate = _downloads.SelectAutomaticDownload(_metadataCache.Snapshot.Broadcasts);
         if (candidate is null) return;
-        await DownloadAsync(new MobileBroadcastItem(candidate)).ConfigureAwait(false);
+        await DownloadAsync(candidate).ConfigureAwait(false);
     }
 
     private async Task FlushOfflineMutationsAsync()
@@ -2116,7 +1958,6 @@ public sealed class MobileClientSession : IDisposable
     {
         ApplyLocalBroadcastSummary(summary);
         await _downloads.ReconcileSummariesAsync([summary]).ConfigureAwait(false);
-        DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
     }
 
     private MobileBroadcastItem ApplyLocalBroadcastSummary(WebClientLibraryBroadcastSummary summary)
@@ -2138,82 +1979,31 @@ public sealed class MobileClientSession : IDisposable
     private string CurrentServerInstanceId()
         => _server.Connection?.ServerInstanceId ?? string.Empty;
 
-    private async Task SynchronizeDownloadedProgressWithServerAsync(DownloadedProgressSnapshot snapshot)
+    private async Task SynchronizeDownloadedProgressWithServerAsync(MobileDownloadedProgressSnapshot snapshot)
     {
-        try
-        {
-            var result = await _server.SaveProgressAsync(new WebOfflineProgressUpdate(
-                _server.ClientId,
-                snapshot.EpisodeId,
-                snapshot.PositionMs,
-                snapshot.DurationMs,
-                Completed: snapshot.Completed,
-                Speed: snapshot.Speed,
-                CapturedAt: snapshot.CapturedAt,
-                AllowRewind: false,
-                ExpectedGeneration: 0,
-                ExplicitSeek: false,
-                IncrementPlayCount: snapshot.IncrementPlayCount)).ConfigureAwait(false);
-            if (result.Conflict) return;
-            if (snapshot.IncrementPlayCount && result.Changed)
-                _pendingPlayCountEpisodes.TryRemove(snapshot.EpisodeId, out _);
-            var canonical = await _server.GetBroadcastSummaryAsync(snapshot.EpisodeId).ConfigureAwait(false);
-            _metadataCache.UpsertBroadcast(canonical);
-            await _metadataCache.SaveAsync().ConfigureAwait(false);
-            await _downloads.ReconcileSummariesAsync([canonical]).ConfigureAwait(false);
-            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-            ApplyMetadataSnapshot();
-        }
-        catch (Exception exception)
-        {
-            System.Diagnostics.Trace.WriteLine($"[iOS downloaded progress sync] {exception}");
-        }
+        var synchronized = await _downloadProgressSynchronization.SynchronizeCurrentAsync(
+            snapshot,
+            episodeId => _pendingPlayCountEpisodes.TryRemove(episodeId, out _),
+            async (canonical, _) =>
+            {
+                _metadataCache.UpsertBroadcast(canonical);
+                await _metadataCache.SaveAsync().ConfigureAwait(false);
+            }).ConfigureAwait(false);
+        if (synchronized) ApplyMetadataSnapshot();
     }
 
     private async Task SynchronizeStoredDownloadedProgressWithServerAsync()
     {
         if (!IsLiveConnected) return;
-        var serverByEpisode = _metadataCache.Snapshot.Broadcasts
-            .GroupBy(value => value.RepresentativeEpisodeId)
-            .ToDictionary(group => group.Key, group => group.Last());
-        var localDownloads = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-        foreach (var local in localDownloads)
-        {
-            if (!serverByEpisode.TryGetValue(local.EpisodeId, out var server)) continue;
-            var localPlayedAt = local.Source.LastPlayedAt ?? DateTimeOffset.MinValue;
-            var serverPlayedAt = server.LastPlayedAt ?? DateTimeOffset.MinValue;
-            var hasNewerOfflineProgress = localPlayedAt > serverPlayedAt ||
-                                          (serverPlayedAt == DateTimeOffset.MinValue &&
-                                           (local.Source.PositionMs > server.PositionMs ||
-                                            (local.Source.Completed && !server.Completed)));
-            if (!hasNewerOfflineProgress) continue;
-            try
-            {
-                var result = await _server.SaveProgressAsync(new WebOfflineProgressUpdate(
-                    _server.ClientId,
-                    local.EpisodeId,
-                    local.Source.PositionMs,
-                    Math.Max(local.Source.DurationMs, server.DurationMs),
-                    Completed: local.Source.Completed,
-                    Speed: _speed,
-                    CapturedAt: local.Source.LastPlayedAt,
-                    AllowRewind: false,
-                    ExpectedGeneration: 0,
-                    IncrementPlayCount: _pendingPlayCountEpisodes.ContainsKey(local.EpisodeId))).ConfigureAwait(false);
-                if (result.Conflict) continue;
-                if (result.Changed)
-                    _pendingPlayCountEpisodes.TryRemove(local.EpisodeId, out _);
-                var canonical = await _server.GetBroadcastSummaryAsync(local.EpisodeId).ConfigureAwait(false);
-                _metadataCache.UpsertBroadcast(canonical);
-            }
-            catch (Exception exception)
-            {
-                System.Diagnostics.Trace.WriteLine($"[iOS stored downloaded progress sync] {exception}");
-            }
-        }
+        _ = await _downloadProgressSynchronization.SynchronizeStoredAsync(
+            _metadataCache.Snapshot.Broadcasts,
+            _speed,
+            episodeId => _pendingPlayCountEpisodes.ContainsKey(episodeId),
+            episodeId => _pendingPlayCountEpisodes.TryRemove(episodeId, out _),
+            canonical => _metadataCache.UpsertBroadcast(canonical)).ConfigureAwait(false);
     }
 
-    private DownloadedProgressSnapshot CaptureDownloadedProgress()
+    private MobileDownloadedProgressSnapshot CaptureDownloadedProgress()
     {
         var broadcast = SelectedBroadcast ?? throw new InvalidOperationException("No downloaded broadcast is loaded.");
         var episodeId = broadcast.EpisodeId;
@@ -2221,7 +2011,7 @@ public sealed class MobileClientSession : IDisposable
         var positionMs = CaptureLogicalPosition();
         var completed = _playbackTimeline.IsCompleted();
         if (completed && durationMs > 0) positionMs = durationMs;
-        return new DownloadedProgressSnapshot(
+        return new MobileDownloadedProgressSnapshot(
             episodeId,
             positionMs,
             durationMs,
@@ -2752,6 +2542,8 @@ public sealed class MobileClientSession : IDisposable
         Notify();
     }
 
+    private void DownloadsOnStateChanged(object? sender, EventArgs eventArgs) => Notify();
+
     private void Notify() => StateChanged?.Invoke(this, EventArgs.Empty);
 
     private void NotifyPlayback()
@@ -2799,7 +2591,7 @@ public sealed class MobileClientSession : IDisposable
         OnThisDay = Replace(OnThisDay, episodeId, replacement);
         UnheardBroadcasts = Replace(UnheardBroadcasts, episodeId, replacement);
         LibraryBroadcasts = Replace(LibraryBroadcasts, episodeId, replacement);
-        DownloadedBroadcasts = Replace(DownloadedBroadcasts, episodeId, replacement);
+        _downloads.ReplaceBroadcast(episodeId, replacement);
         if (SelectedBroadcast?.EpisodeId == episodeId) SelectedBroadcast = replacement;
         _playbackSynchronization.ReplaceRemoteBroadcast(episodeId, replacement);
     }
@@ -2816,26 +2608,12 @@ public sealed class MobileClientSession : IDisposable
     private static string FormatTime(TimeSpan value)
         => value.TotalHours >= 1 ? value.ToString(@"h\:mm\:ss") : value.ToString(@"m\:ss");
 
-    private static string FormatBytes(long value)
-        => value >= 1024L * 1024L * 1024L ? $"{value / (1024d * 1024d * 1024d):0.0} GB"
-            : value >= 1024L * 1024L ? $"{value / (1024d * 1024d):0.0} MB"
-            : $"{Math.Max(0, value) / 1024d:0} KB";
-
-    private readonly record struct DownloadedProgressSnapshot(
-        long EpisodeId,
-        long PositionMs,
-        long DurationMs,
-        bool Completed,
-        double Speed,
-        DateTimeOffset CapturedAt,
-        bool IncrementPlayCount);
-
     public void Dispose()
     {
         if (_disposed) return;
         _disposed = true;
-        _downloadCancelRequested = true;
-        _downloadCancellation?.Cancel();
+        _downloads.StateChanged -= DownloadsOnStateChanged;
+        _downloads.Dispose();
         _syncTimer.Dispose();
         _metadataSyncTimer.Dispose();
         _metadataSynchronization.Dispose();
