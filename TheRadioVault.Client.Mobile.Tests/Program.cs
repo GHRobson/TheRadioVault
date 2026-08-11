@@ -3,6 +3,7 @@ using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Client.Mobile.Playback;
+using TheRadioVault.Client.Mobile.Synchronization;
 using TheRadioVault.Web.Models;
 
 var tests = new (string Name, Func<Task> Run)[]
@@ -18,6 +19,10 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Remote playback observation projects the shared playhead", RemotePlaybackObservationProjectsPlayheadAsync),
     ("Uncommitted remote observations cannot steal local playback", UncommittedObservationCannotStealLocalPlaybackAsync),
     ("Committed handoff stops and acknowledges the source", CommittedHandoffStopsAndAcknowledgesSourceAsync),
+    ("Metadata synchronization persists a complete cache", MetadataSynchronizationPersistsCompleteCacheAsync),
+    ("Metadata synchronization applies changed and deleted broadcasts", MetadataSynchronizationAppliesDeltaAsync),
+    ("Metadata synchronization serializes concurrent refreshes", MetadataSynchronizationSerializesRefreshesAsync),
+    ("Metadata synchronization failure preserves the cache", MetadataSynchronizationFailurePreservesCacheAsync),
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
     ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync)
@@ -315,6 +320,154 @@ static async Task CommittedHandoffStopsAndAcknowledgesSourceAsync()
     Equal(12L, transport.Acknowledgements[0].Generation, "Acknowledged generation");
 }
 
+static async Task MetadataSynchronizationPersistsCompleteCacheAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var now = new DateTimeOffset(2026, 8, 11, 12, 0, 0, TimeSpan.Zero);
+        var first = Summary(101, "First Cached Broadcast", 0, false, null);
+        var second = Summary(202, "Second Cached Broadcast", 0, false, null);
+        var transport = new FakeMetadataSynchronizationTransport(
+            LibrarySync(resetRequired: false, noChanges: true, sequence: 8),
+            Overview(first, second),
+            [first, second]);
+        var cache = new MobileMetadataCache(root, "server-a");
+        var activityChanges = 0;
+        using (var coordinator = new MobileMetadataSynchronizationCoordinator(
+                   transport,
+                   cache,
+                   () => activityChanges++,
+                   () => now))
+        {
+            var result = await coordinator.SynchronizeLibraryAsync();
+
+            Ensure(result.CompleteLibraryReloaded, "An empty cache did not request the complete library.");
+            Ensure(result.ExploreRefreshRequired, "An empty Explore cache did not request refresh.");
+            Equal(2, result.Snapshot.Broadcasts.Count, "Synchronized broadcast count");
+            Equal(8L, result.Snapshot.SyncSequence, "Synchronized sequence");
+            Equal(now, coordinator.LastSuccessfulSynchronizationAt ?? DateTimeOffset.MinValue,
+                "Last successful metadata synchronization");
+            Ensure(!coordinator.IsSynchronizing, "The coordinator remained busy after synchronization.");
+            Equal(2, activityChanges, "Metadata activity transitions");
+        }
+
+        var reopened = new MobileMetadataCache(root, "server-a");
+        using var loader = new MobileMetadataSynchronizationCoordinator(
+            transport,
+            reopened,
+            () => { });
+        await loader.LoadAsync("server-a");
+        Equal(2, reopened.Snapshot.Broadcasts.Count, "Persisted metadata cache count");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task MetadataSynchronizationAppliesDeltaAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var first = Summary(101, "Old Title", 0, false, null);
+        var removed = Summary(202, "Removed Broadcast", 0, false, null);
+        var cache = new MobileMetadataCache(root, "server-a");
+        cache.ReplaceCompleteLibrary("server-a", [first, removed], Overview(first, removed));
+        var updated = Summary(101, "Updated Title", 25_000, false, DateTimeOffset.UtcNow);
+        var changes = new[]
+        {
+            new WebChangeEvent(9, "broadcast", 101, "updated", DateTimeOffset.UtcNow),
+            new WebChangeEvent(10, "broadcast", 202, "deleted", DateTimeOffset.UtcNow)
+        };
+        var transport = new FakeMetadataSynchronizationTransport(
+            LibrarySync(resetRequired: false, noChanges: false, sequence: 10, changes: changes),
+            Overview(updated),
+            [],
+            new Dictionary<long, WebClientLibraryBroadcastSummary> { [101] = updated });
+        using var coordinator = new MobileMetadataSynchronizationCoordinator(transport, cache, () => { });
+
+        var result = await coordinator.SynchronizeLibraryAsync();
+
+        Equal(1, result.Snapshot.Broadcasts.Count, "Delta broadcast count");
+        Equal("Updated Title", result.Snapshot.Broadcasts.Single().Title ?? string.Empty, "Updated broadcast title");
+        Equal(10L, result.Snapshot.SyncSequence, "Delta sequence");
+        Ensure(!result.CompleteLibraryReloaded, "A normal delta unexpectedly reloaded the full library.");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task MetadataSynchronizationSerializesRefreshesAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var first = Summary(101, "Serialized Broadcast", 0, false, null);
+        var transport = new FakeMetadataSynchronizationTransport(
+            LibrarySync(resetRequired: false, noChanges: true, sequence: 3),
+            Overview(first),
+            [first]);
+        var cache = new MobileMetadataCache(root, "server-a");
+        using var coordinator = new MobileMetadataSynchronizationCoordinator(transport, cache, () => { });
+        var callbackEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        var firstRefresh = coordinator.SynchronizeLibraryAsync(
+            afterCacheApplied: async (_, _) =>
+            {
+                callbackEntered.TrySetResult(true);
+                await releaseCallback.Task;
+            });
+        await callbackEntered.Task;
+        var secondRefresh = coordinator.SynchronizeLibraryAsync();
+        await Task.Delay(30);
+        var requestsBeforeRelease = transport.LibrarySyncRequests;
+        releaseCallback.TrySetResult(true);
+        await Task.WhenAll(firstRefresh, secondRefresh);
+
+        Equal(1, requestsBeforeRelease, "Refreshes admitted while post-cache reconciliation was running");
+        Equal(1, transport.MaximumConcurrentRequests, "Concurrent metadata transport requests");
+        Equal(2, transport.LibrarySyncRequests, "Serialized metadata refresh count");
+        Ensure(!coordinator.IsSynchronizing, "The coordinator remained busy after concurrent refreshes.");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task MetadataSynchronizationFailurePreservesCacheAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var cached = Summary(101, "Offline Cache", 0, false, null);
+        var cache = new MobileMetadataCache(root, "server-a");
+        cache.ReplaceCompleteLibrary("server-a", [cached], Overview(cached));
+        var transport = new FakeMetadataSynchronizationTransport(
+            LibrarySync(resetRequired: false, noChanges: true, sequence: 4),
+            Overview(cached),
+            [cached])
+        {
+            FailLibrarySync = true
+        };
+        using var coordinator = new MobileMetadataSynchronizationCoordinator(transport, cache, () => { });
+
+        try
+        {
+            await coordinator.SynchronizeLibraryAsync();
+            throw new InvalidOperationException("The simulated metadata failure was swallowed.");
+        }
+        catch (HttpRequestException)
+        {
+            // Expected: the session façade decides how cached state is presented.
+        }
+
+        Equal(1, cache.Snapshot.Broadcasts.Count, "Cached broadcasts after failed refresh");
+        Equal("Offline Cache", cache.Snapshot.Broadcasts.Single().Title ?? string.Empty,
+            "Cached title after failed refresh");
+        Ensure(coordinator.LastSuccessfulSynchronizationAt is null,
+            "A failed refresh was recorded as successful.");
+        Ensure(!coordinator.IsSynchronizing, "The coordinator remained busy after a failed refresh.");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
 static WebPlaybackSession PlaybackSession(
     string ownerClientId,
     long generation,
@@ -407,6 +560,40 @@ static WebCanonicalMediaPart MediaPart(int partNumber, long logicalStartMs, long
         1_024,
         "Available",
         string.Empty);
+
+static MobileLibrarySync LibrarySync(
+    bool resetRequired,
+    bool noChanges,
+    long sequence,
+    IReadOnlyList<WebChangeEvent>? changes = null)
+    => new(
+        "server-a",
+        "sync-a",
+        sequence,
+        $"revision-{sequence}",
+        resetRequired,
+        noChanges,
+        changes ?? [],
+        DateTimeOffset.UtcNow);
+
+static WebClientLibraryOverview Overview(params WebClientLibraryBroadcastSummary[] broadcasts)
+    => new(
+        broadcasts.Length,
+        broadcasts.Count(value => value.Completed),
+        broadcasts.Count(value => value.InProgress && !value.Completed),
+        broadcasts.Count(value => value.Favourite),
+        broadcasts.Count(value => value.NeedsAttention),
+        UsesCanonicalLibrary: true,
+        broadcasts
+            .GroupBy(value => new { value.CollectionId, value.CollectionName })
+            .Select(group => new WebClientLibraryCollectionSummary(
+                group.Key.CollectionId,
+                group.Key.CollectionName,
+                group.Count()))
+            .ToArray(),
+        broadcasts.Where(value => value.InProgress && !value.Completed).ToArray(),
+        broadcasts,
+        []);
 
 static async Task WithSeededDownloadsAsync(Func<MobileDownloadService, Task> action)
 {
@@ -594,4 +781,88 @@ file sealed class FakePlaybackEngine : IMobilePlaybackEngine
     public void SetRate(double rate) { }
     public void SetMuted(bool muted) => IsMuted = muted;
     public void Dispose() { }
+}
+
+file sealed class FakeMetadataSynchronizationTransport(
+    MobileLibrarySync librarySync,
+    WebClientLibraryOverview overview,
+    IReadOnlyList<WebClientLibraryBroadcastSummary> completeLibrary,
+    IReadOnlyDictionary<long, WebClientLibraryBroadcastSummary>? summaries = null)
+    : IMobileMetadataSynchronizationTransport
+{
+    private readonly IReadOnlyDictionary<long, WebClientLibraryBroadcastSummary> _summaries =
+        summaries ?? completeLibrary.ToDictionary(value => value.RepresentativeEpisodeId);
+    private int _activeRequests;
+    private int _maximumConcurrentRequests;
+
+    public bool FailLibrarySync { get; init; }
+    public TimeSpan RequestDelay { get; init; }
+    public int LibrarySyncRequests { get; private set; }
+    public int MaximumConcurrentRequests => Volatile.Read(ref _maximumConcurrentRequests);
+
+    public async Task<MobileLibrarySync> GetLibrarySyncAsync(
+        string sessionId,
+        long sequence,
+        string revision,
+        CancellationToken cancellationToken = default)
+    {
+        LibrarySyncRequests++;
+        await TrackRequestAsync(cancellationToken);
+        if (FailLibrarySync) throw new HttpRequestException("Simulated metadata sync failure.");
+        return librarySync;
+    }
+
+    public async Task<WebClientLibraryBrowseResult> BrowseAsync(
+        int limit,
+        int offset,
+        CancellationToken cancellationToken = default)
+    {
+        await TrackRequestAsync(cancellationToken);
+        return new WebClientLibraryBrowseResult(
+            completeLibrary.Skip(offset).Take(limit).ToArray(),
+            completeLibrary.Count,
+            UsesCanonicalLibrary: true);
+    }
+
+    public async Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        await TrackRequestAsync(cancellationToken);
+        return _summaries.TryGetValue(episodeId, out var summary)
+            ? summary
+            : throw new KeyNotFoundException($"Episode {episodeId} was deleted.");
+    }
+
+    public async Task<WebClientLibraryOverview> GetOverviewAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await TrackRequestAsync(cancellationToken);
+        return overview;
+    }
+
+    private async Task TrackRequestAsync(CancellationToken cancellationToken)
+    {
+        var active = Interlocked.Increment(ref _activeRequests);
+        UpdateMaximum(active);
+        try
+        {
+            if (RequestDelay > TimeSpan.Zero)
+                await Task.Delay(RequestDelay, cancellationToken);
+        }
+        finally
+        {
+            Interlocked.Decrement(ref _activeRequests);
+        }
+    }
+
+    private void UpdateMaximum(int candidate)
+    {
+        while (true)
+        {
+            var current = Volatile.Read(ref _maximumConcurrentRequests);
+            if (candidate <= current) return;
+            if (Interlocked.CompareExchange(ref _maximumConcurrentRequests, candidate, current) == current) return;
+        }
+    }
 }

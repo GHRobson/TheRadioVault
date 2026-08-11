@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Client.Mobile.Playback;
+using TheRadioVault.Client.Mobile.Synchronization;
 using TheRadioVault.Web.Contracts;
 using TheRadioVault.Web.Models;
 
@@ -25,12 +26,12 @@ public sealed class MobileClientSession : IDisposable
     private readonly IMobileNowPlayingService _nowPlaying;
     private readonly IMobileDownloadPolicy _downloadPolicy;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
-    private readonly SemaphoreSlim _metadataSyncGate = new(1, 1);
     private readonly SemaphoreSlim _offlineMutationSyncGate = new(1, 1);
     private readonly SemaphoreSlim _exploreSyncGate = new(1, 1);
     private readonly Timer _syncTimer;
     private readonly Timer _metadataSyncTimer;
     private readonly MobileMetadataCache _metadataCache;
+    private readonly MobileMetadataSynchronizationCoordinator _metadataSynchronization;
     private readonly ConcurrentDictionary<long, Task<byte[]?>> _artworkRequests = new();
     private readonly ConcurrentDictionary<long, WebClientBroadcastDetails> _broadcastDetails = new();
     private readonly ConcurrentDictionary<long, byte> _pendingPlayCountEpisodes = new();
@@ -50,9 +51,7 @@ public sealed class MobileClientSession : IDisposable
     private bool _offlinePlayback;
     private bool _downloadPauseRequested;
     private bool _downloadCancelRequested;
-    private int _metadataSyncActivity;
     private MobileSyncDiagnostics _syncDiagnostics = new(0, null, null, string.Empty);
-    private DateTimeOffset? _lastMetadataSyncAt;
     private bool _disposed;
 
     public MobileClientSession(
@@ -86,6 +85,10 @@ public sealed class MobileClientSession : IDisposable
             "TheRadioVault",
             "MetadataCache");
         _metadataCache = new MobileMetadataCache(metadataRoot, _server.Connection?.ServerInstanceId ?? string.Empty);
+        _metadataSynchronization = new MobileMetadataSynchronizationCoordinator(
+            new MobileMetadataSynchronizationTransport(_server),
+            _metadataCache,
+            Notify);
         _playback.StateChanged += PlaybackOnStateChanged;
         _playback.MediaEnded += PlaybackOnMediaEnded;
         _nowPlaying.CommandReceived += NowPlayingOnCommandReceived;
@@ -106,12 +109,13 @@ public sealed class MobileClientSession : IDisposable
     public bool IsBusy { get; private set; }
     public bool IsPaired { get; private set; }
     public bool IsLiveConnected => _server.IsReachable;
-    public bool IsMetadataSyncing => Volatile.Read(ref _metadataSyncActivity) > 0;
+    public bool IsMetadataSyncing => _metadataSynchronization.IsSynchronizing;
     public bool ShowsOfflineIndicator => IsPaired && !IsLiveConnected;
     public bool ShowsSyncIndicator => IsPaired && IsLiveConnected && IsMetadataSyncing;
     public int PendingSyncChanges => _syncDiagnostics.PendingChanges;
     public DateTimeOffset? LastSyncAttemptAt => _syncDiagnostics.LastAttemptAt;
-    public DateTimeOffset? LastSuccessfulSyncAt => _syncDiagnostics.LastSuccessfulSyncAt ?? _lastMetadataSyncAt;
+    public DateTimeOffset? LastSuccessfulSyncAt =>
+        _syncDiagnostics.LastSuccessfulSyncAt ?? _metadataSynchronization.LastSuccessfulSynchronizationAt;
     public string LastSyncError => _syncDiagnostics.LastError;
     public int CachedBroadcastCount => _metadataCache.Snapshot.Broadcasts.Count;
     public int CachedExplorePageCount => _metadataCache.Snapshot.ExplorePages.Count;
@@ -254,7 +258,9 @@ public sealed class MobileClientSession : IDisposable
         IsPaired = _server.IsPaired;
         if (IsPaired)
         {
-            await _metadataCache.LoadAsync(_server.Connection?.ServerInstanceId ?? string.Empty).ConfigureAwait(false);
+            await _metadataSynchronization
+                .LoadAsync(_server.Connection?.ServerInstanceId ?? string.Empty)
+                .ConfigureAwait(false);
             await _downloads.ReconcileSummariesAsync(_metadataCache.Snapshot.Broadcasts).ConfigureAwait(false);
             DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
             ApplyMetadataSnapshot();
@@ -333,7 +339,7 @@ public sealed class MobileClientSession : IDisposable
     {
         if (!IsPaired || IsBusy) return;
         SetBusy(true, $"Connecting to {ServerName}…");
-        BeginMetadataSync();
+        var metadataActivity = _metadataSynchronization.BeginActivity();
         try
         {
             var bootstrap = await _server.TestConnectionAsync().ConfigureAwait(false);
@@ -342,9 +348,9 @@ public sealed class MobileClientSession : IDisposable
             await SynchronizeMetadataCacheAsync(forceExploreRefresh: true).ConfigureAwait(false);
             if (_metadataCache.Snapshot.Broadcasts.Count == 0)
             {
-                var completeLibrary = await FetchCompleteLibraryAsync().ConfigureAwait(false);
-                _metadataCache.ReplaceCompleteLibrary(bootstrap.Server.InstanceId, completeLibrary, overview);
-                await _metadataCache.SaveAsync().ConfigureAwait(false);
+                await _metadataSynchronization
+                    .BootstrapEmptyCacheAsync(bootstrap.Server.InstanceId, overview)
+                    .ConfigureAwait(false);
                 ApplyMetadataSnapshot();
             }
             if (_metadataCache.Snapshot.ExploreOverview is null)
@@ -367,7 +373,7 @@ public sealed class MobileClientSession : IDisposable
         }
         finally
         {
-            EndMetadataSync();
+            metadataActivity.Dispose();
             SetBusy(false);
         }
     }
@@ -2041,67 +2047,27 @@ public sealed class MobileClientSession : IDisposable
     private async Task SynchronizeMetadataCacheAsync(bool forceExploreRefresh = false)
     {
         if (_disposed || !IsPaired) return;
-        await _metadataSyncGate.WaitAsync().ConfigureAwait(false);
-        BeginMetadataSync();
         var warmExplore = false;
         try
         {
             if (IsLiveConnected) await FlushOfflineMutationsAsync().ConfigureAwait(false);
-            var snapshot = _metadataCache.Snapshot;
-            var sync = await _server.GetLibrarySyncAsync(
-                snapshot.SyncSessionId,
-                snapshot.SyncSequence,
-                snapshot.SyncRevision).ConfigureAwait(false);
-            IReadOnlyList<WebClientLibraryBroadcastSummary>? completeLibrary = null;
-            var changed = new List<WebClientLibraryBroadcastSummary>();
-            var deleted = new HashSet<long>();
-            var episodeIds = sync.Changes
-                .Where(value => value.EpisodeId is > 0)
-                .Select(value => value.EpisodeId!.Value)
-                .Distinct()
-                .ToArray();
-
-            if (sync.ResetRequired || snapshot.Broadcasts.Count == 0)
-            {
-                completeLibrary = await FetchCompleteLibraryAsync().ConfigureAwait(false);
-            }
-            else if (!sync.NoChanges)
-            {
-                foreach (var episodeId in episodeIds)
+            await _metadataSynchronization.SynchronizeLibraryAsync(
+                forceExploreRefresh,
+                async (synchronization, _) =>
                 {
-                    try
-                    {
-                        changed.Add(await _server.GetBroadcastSummaryAsync(episodeId).ConfigureAwait(false));
-                    }
-                    catch
-                    {
-                        deleted.Add(episodeId);
-                    }
-                }
-            }
+                    await SynchronizeStoredDownloadedProgressWithServerAsync().ConfigureAwait(false);
+                    await _downloads.ReconcileSummariesAsync(_metadataCache.Snapshot.Broadcasts).ConfigureAwait(false);
+                    DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
+                    ApplyMetadataSnapshot();
 
-            var libraryChanged = sync.ResetRequired || snapshot.Overview is null || !sync.NoChanges;
-            var overview = libraryChanged
-                ? await _server.GetOverviewAsync().ConfigureAwait(false)
-                : null;
-            _metadataCache.ApplyLibrarySync(sync, completeLibrary, changed, deleted, overview);
-            await SynchronizeStoredDownloadedProgressWithServerAsync().ConfigureAwait(false);
-            await _downloads.ReconcileSummariesAsync(_metadataCache.Snapshot.Broadcasts).ConfigureAwait(false);
-            DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
-            ApplyMetadataSnapshot();
-
-            var exploreChanged = forceExploreRefresh || snapshot.ExploreOverview is null ||
-                                 sync.Changes.Any(value =>
-                                     value.Kind.Equals("wiki", StringComparison.OrdinalIgnoreCase) ||
-                                     value.Kind.Equals("research", StringComparison.OrdinalIgnoreCase));
-            if (exploreChanged)
-            {
-                await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
-                warmExplore = true;
-            }
-            await _metadataCache.SaveAsync().ConfigureAwait(false);
-            _lastMetadataSyncAt = DateTimeOffset.UtcNow;
-            await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
+                    if (synchronization.ExploreRefreshRequired)
+                    {
+                        await RefreshExploreCacheAsync(warmEntireCache: false).ConfigureAwait(false);
+                        warmExplore = true;
+                    }
+                    await _metadataCache.SaveAsync().ConfigureAwait(false);
+                    await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
+                }).ConfigureAwait(false);
         }
         catch (Exception exception)
         {
@@ -2111,11 +2077,6 @@ public sealed class MobileClientSession : IDisposable
                 StatusText = "Offline · showing the latest saved Radio Vault library";
                 ApplyMetadataSnapshot();
             }
-        }
-        finally
-        {
-            EndMetadataSync();
-            _metadataSyncGate.Release();
         }
         if (warmExplore) _ = RefreshExploreCacheAsync(warmEntireCache: true);
         if (DeleteCompletedDownloads) _ = CleanupCompletedDownloadsAsync();
@@ -2332,24 +2293,6 @@ public sealed class MobileClientSession : IDisposable
             _pendingPlayCountEpisodes.ContainsKey(episodeId));
     }
 
-    private async Task<IReadOnlyList<WebClientLibraryBroadcastSummary>> FetchCompleteLibraryAsync()
-    {
-        const int pageSize = 10000;
-        var values = new List<WebClientLibraryBroadcastSummary>();
-        var offset = 0;
-        while (true)
-        {
-            var page = await _server.BrowseAsync(
-                string.Empty,
-                limit: pageSize,
-                offset: offset).ConfigureAwait(false);
-            values.AddRange(page.Broadcasts);
-            offset += page.Broadcasts.Count;
-            if (page.Broadcasts.Count == 0 || offset >= page.TotalMatching) break;
-        }
-        return values;
-    }
-
     private async Task<byte[]?> LoadArtworkCoreAsync(long episodeId)
     {
         var cached = _metadataCache.ReadArtwork(episodeId);
@@ -2499,16 +2442,6 @@ public sealed class MobileClientSession : IDisposable
         RecentBroadcasts = Convert(overview.RecentBroadcasts);
         OnThisDay = Convert(overview.OnThisDay);
         Notify();
-    }
-
-    private void BeginMetadataSync()
-    {
-        if (Interlocked.Increment(ref _metadataSyncActivity) == 1) Notify();
-    }
-
-    private void EndMetadataSync()
-    {
-        if (Interlocked.Decrement(ref _metadataSyncActivity) == 0) Notify();
     }
 
     private IReadOnlyList<MobileBroadcastItem> QueryCachedBroadcasts(
@@ -2730,7 +2663,7 @@ public sealed class MobileClientSession : IDisposable
     {
         if (!IsPaired || !IsLiveConnected) return;
         await _exploreSyncGate.WaitAsync().ConfigureAwait(false);
-        BeginMetadataSync();
+        var metadataActivity = _metadataSynchronization.BeginActivity();
         try
         {
             var overview = await _server.GetWikiOverviewAsync().ConfigureAwait(false);
@@ -2778,7 +2711,7 @@ public sealed class MobileClientSession : IDisposable
         }
         finally
         {
-            EndMetadataSync();
+            metadataActivity.Dispose();
             _exploreSyncGate.Release();
         }
     }
@@ -2967,6 +2900,7 @@ public sealed class MobileClientSession : IDisposable
         _downloadCancellation?.Cancel();
         _syncTimer.Dispose();
         _metadataSyncTimer.Dispose();
+        _metadataSynchronization.Dispose();
         _playback.StateChanged -= PlaybackOnStateChanged;
         _playback.MediaEnded -= PlaybackOnMediaEnded;
         _nowPlaying.CommandReceived -= NowPlayingOnCommandReceived;
@@ -2976,7 +2910,6 @@ public sealed class MobileClientSession : IDisposable
         _playback.Dispose();
         _server.Dispose();
         _syncGate.Dispose();
-        _metadataSyncGate.Dispose();
         _offlineMutationSyncGate.Dispose();
         _exploreSyncGate.Dispose();
     }

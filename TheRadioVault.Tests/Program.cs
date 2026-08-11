@@ -1797,14 +1797,22 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         "TheRadioVault.Client.Mobile",
         "Playback",
         "MobilePlaybackSynchronizationCoordinator.cs"));
+    var mobileMetadataSynchronizationSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Synchronization",
+        "MobileMetadataSynchronizationCoordinator.cs"));
     True(mobileCacheSessionSource.Contains("SynchronizeMetadataCacheAsync", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("SynchronizeLibraryAsync", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("BootstrapEmptyCacheAsync", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("afterCacheApplied", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("BuildCachedArchivePeriods", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("RefreshExploreCacheAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("IsMetadataSyncing", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ApplyOnlineOverview", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("_metadataSyncGate.WaitAsync()", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("_gate.WaitAsync", StringComparison.Ordinal));
     True(mobilePlaybackOwnershipSource.Contains("ConfirmForeignOwner", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ObserveSharedPlaybackSafelyAsync", StringComparison.Ordinal));
     True(mobilePlaybackSynchronizationSource.Contains("ObserveSafelyAsync", StringComparison.Ordinal));

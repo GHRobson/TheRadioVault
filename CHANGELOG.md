@@ -3,6 +3,7 @@
 - Began splitting the mobile session façade by extracting shared playback-ownership and handoff-evidence rules into a focused coordinator with behavioural regression tests.
 - Extracted multipart logical-position mapping, decoder-settling protection, seeking and completion state into a side-effect-free mobile playback timeline with focused regression coverage.
 - Extracted remote playback observation, deterministic playhead projection and committed handoff source-stop acknowledgement behind fakeable transport and decoder boundaries.
+- Extracted serialized mobile library metadata synchronization—including change-feed cursors, reset paging, delta/deletion application, durable cache adoption and activity state—behind a fakeable transport with focused behavioural tests.
 
 # 0.41.0
 
