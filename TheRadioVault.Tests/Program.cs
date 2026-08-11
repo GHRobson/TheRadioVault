@@ -2272,7 +2272,10 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
 
     var shell = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml"));
-    True(shell.Contains("Move playback to this PC", StringComparison.Ordinal));
+    var desktopTheme = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "App.axaml"));
+    True(shell.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
+    True(desktopTheme.Contains("Move playback to this PC", StringComparison.Ordinal));
     True(!shell.Contains("Content=\"⇥\"", StringComparison.Ordinal));
 
     True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-RC1-BUILDFIX4-CLIENT-UI-DOWNLOADS.md")));
