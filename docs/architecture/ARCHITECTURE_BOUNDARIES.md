@@ -91,3 +91,9 @@ Route order and observable protocol behaviour are compatibility boundaries. Movi
 `LocalWebServer.FederationAdministration.cs` owns the authenticated federation status/bootstrap, Library synchronization and scanning, parity, settings, playback preferences, Research workspace/coverage/date review, Research-pack administration and Wiki-pack administration route family. The main dispatcher reaches this ordered family through exactly one `TryHandleFederationAdministrationRouteAsync` call.
 
 Desktop pairing remains before authorization in the main dispatcher, because it establishes the credential used by the federation family. The normal client bootstrap and client-operation APIs remain after the federation boundary. Moving or extending this route family must preserve that security order, every HTTP method rule, status code and handler contract.
+
+## 0.44 desktop playback state boundary
+
+`DesktopPlaybackStateMachine` is the platform-neutral owner of loaded, playing, busy, remote-owner, pending-transport, desired-playback and user-intent transitions for desktop playback. `PlaybackViewModel` projects that state into Avalonia bindings and remains responsible for decoder, persistence, dispatcher and handoff-service side effects; it must not recreate parallel transport flags.
+
+`RemotePlaybackProgressInterpolator` owns the monotonic projection rule between authoritative remote heartbeats. Corrections of up to three seconds within the same broadcast, owner and ownership generation are treated as network lag; a larger backwards correction, a new owner, a new generation or a new broadcast establishes a fresh baseline so real seeks remain visible.

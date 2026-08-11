@@ -10,6 +10,7 @@
 - Extracted mobile discovery/pairing transitions and cache-first Library projection, filtering, archive grouping and search contracts behind focused coordinators, including normalized duplicate-show handling.
 - Extracted the versioned player handoff, playback command and queue HTTP routes from the 10,000-line web-server dispatcher into one focused partial boundary while preserving route order, method rules and handler bodies.
 - Extracted authenticated federation status, Library synchronization, remote administration, Research-pack and Wiki-pack routing from the main web dispatcher into a single ordered boundary while leaving pairing before authorization and normal client APIs after it.
+- Introduced a platform-neutral desktop playback state machine for local transport, pending intent and remote handoff state, plus a remote-progress interpolator that removes small heartbeat corrections without hiding deliberate seeks or ownership changes.
 
 # 0.41.0
 

@@ -29,6 +29,8 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     private readonly string _playbackSourceText;
     private readonly PlaybackProgressCoordinator _progress = new();
     private readonly PlaybackCompletionCoordinator _completion = new();
+    private readonly DesktopPlaybackStateMachine _stateMachine = new();
+    private readonly RemotePlaybackProgressInterpolator _remoteProgressInterpolator = new();
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     private readonly Timer _saveTimer;
     private readonly Timer _handoffTimer;
@@ -43,9 +45,6 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     private long _logicalPositionMs;
     private long _latestObservedPositionMs;
     private long _logicalDurationMs;
-    private bool _isLoaded;
-    private bool _isPlaying;
-    private bool _isBusy;
     private bool _isSeeking;
     private bool _playCountPending;
     private bool _completed;
@@ -62,14 +61,10 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     private int _skipBackSeconds = 15;
     private int _skipForwardSeconds = 30;
     private int _completionThresholdSeconds = 30;
-    private bool _isPlaybackElsewhere;
     private string _activeDeviceText = "Playback on this device";
     private string _activeDeviceDetail = string.Empty;
     private PlaybackHandoffSnapshot? _handoffSnapshot;
     private PlaybackLiveProgress? _liveProgress;
-    private bool _transportPending;
-    private bool _desiredPlaying;
-    private bool _transportIntentChanged;
     private int _primaryTransportActionActive;
     private int _sourceStopAcknowledgementActive;
     private int _loadingGlyphFrame;
@@ -78,10 +73,6 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     private long _lastResolveDurationMs;
     private long _lastDecoderOpenDurationMs;
     private long _lastStartupDurationMs;
-    private long? _remoteProjectionEpisodeId;
-    private long _remoteProjectionGeneration = -1;
-    private string _remoteProjectionOwnerId = string.Empty;
-    private long _remoteProjectionPositionMs;
     private bool _disposed;
 
     public PlaybackViewModel(
@@ -144,31 +135,33 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
 
     public bool IsLoaded
     {
-        get => _isLoaded;
+        get => _stateMachine.IsLoaded;
         private set
         {
-            if (!SetProperty(ref _isLoaded, value)) return;
+            if (!_stateMachine.SetLoaded(value)) return;
+            RaisePropertyChanged();
             RaiseCommandState();
             PublishLiveProgress();
         }
     }
     public bool IsPlaying
     {
-        get => _isPlaying;
+        get => _stateMachine.IsPlaying;
         private set
         {
-            if (!SetProperty(ref _isPlaying, value)) return;
-            if (!_transportPending) _desiredPlaying = value;
+            if (!_stateMachine.ObserveLocalPlayback(value)) return;
+            RaisePropertyChanged();
             RaisePrimaryTransportState();
             PublishLiveProgress();
         }
     }
     public bool IsBusy
     {
-        get => _isBusy;
+        get => _stateMachine.IsBusy;
         private set
         {
-            if (!SetProperty(ref _isBusy, value)) return;
+            if (!_stateMachine.SetBusy(value)) return;
+            RaisePropertyChanged();
             RaiseCommandState();
             RaisePrimaryTransportState();
         }
@@ -185,14 +178,14 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     public bool HasStartupTiming => LastStartupDurationMs > 0;
     public string? ArtworkPath { get => _artworkPath; private set { if (SetProperty(ref _artworkPath, value)) RaisePropertyChanged(nameof(HasArtwork)); } }
     public bool HasArtwork => !string.IsNullOrWhiteSpace(ArtworkPath) && File.Exists(ArtworkPath);
-    public bool IsPrimaryTransportLoading => _transportPending || Volatile.Read(ref _primaryTransportActionActive) != 0;
+    public bool IsPrimaryTransportLoading => _stateMachine.TransportPending || Volatile.Read(ref _primaryTransportActionActive) != 0;
     public double PrimaryTransportSpinnerAngle => (_loadingGlyphFrame % 12) * 30d;
     public bool ShowMoveToThisDevice => _handoff.IsAvailable && IsPlaybackElsewhere && !IsPrimaryTransportLoading;
     public bool ShowLocalPlayPause => !IsPrimaryTransportLoading && !ShowMoveToThisDevice;
-    public bool ShowPlayIcon => ShowLocalPlayPause && !(_transportPending ? _desiredPlaying : IsPlaying);
-    public bool ShowPauseIcon => ShowLocalPlayPause && (_transportPending ? _desiredPlaying : IsPlaying);
+    public bool ShowPlayIcon => ShowLocalPlayPause && !(_stateMachine.TransportPending ? _stateMachine.DesiredPlaying : IsPlaying);
+    public bool ShowPauseIcon => ShowLocalPlayPause && (_stateMachine.TransportPending ? _stateMachine.DesiredPlaying : IsPlaying);
     public bool CanControlLocalTransport => IsLoaded && !IsBusy && !IsPlaybackElsewhere;
-    public string PlayPauseGlyph => (_transportPending ? _desiredPlaying : IsPlaying) ? "Ⅱ" : "▶";
+    public string PlayPauseGlyph => (_stateMachine.TransportPending ? _stateMachine.DesiredPlaying : IsPlaying) ? "Ⅱ" : "▶";
     public string PrimaryTransportToolTip => IsPrimaryTransportLoading
         ? IsPlaybackElsewhere ? "Moving playback to this device…" : "Preparing playback…"
         : ShowMoveToThisDevice
@@ -217,10 +210,11 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     public string FavouriteToolTip => IsFavourite ? "Remove from favourites" : "Add to favourites";
     public bool IsPlaybackElsewhere
     {
-        get => _isPlaybackElsewhere;
+        get => _stateMachine.IsPlaybackElsewhere;
         private set
         {
-            if (!SetProperty(ref _isPlaybackElsewhere, value)) return;
+            if (!_stateMachine.SetPlaybackElsewhere(value)) return;
+            RaisePropertyChanged();
             RaisePropertyChanged(nameof(ShowContinueOnThisDevice));
             RaisePrimaryTransportState();
             RaiseCommandState();
@@ -375,9 +369,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             (_handoff.IsAvailable &&
              _handoffSnapshot?.HasActivePlayback == true &&
              _handoffSnapshot.IsOwnedByCurrentDevice == false);
-        _transportPending = true;
-        _desiredPlaying = initialPlay;
-        _transportIntentChanged = false;
+        _stateMachine.BeginTransport(initialPlay);
         RaisePrimaryTransportState();
         IsBusy = true;
         var replacingPlayback = false;
@@ -435,8 +427,8 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                     // the source device's play/pause state.
                     logicalPositionMs = latest.ProjectedPositionMs(DateTimeOffset.UtcNow);
                     sharedSpeed = latest.Speed;
-                    if (forceTransactionalTransfer && !_transportIntentChanged)
-                        _desiredPlaying = latest.IsPlaying;
+                    if (forceTransactionalTransfer)
+                        _stateMachine.AdoptObservedDesiredPlayback(latest.IsPlaying);
                 }
                 _handoffSnapshot = latestSnapshot;
 
@@ -455,11 +447,11 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                         logicalPositionMs ?? descriptor.ResumePositionMs,
                         descriptor.DurationMs,
                         sharedSpeed ?? descriptor.PlaybackSpeed,
-                        _desiredPlaying,
+                        _stateMachine.DesiredPlaying,
                         cancellationToken).ConfigureAwait(true);
                     logicalPositionMs = transfer.ProtectedPositionMs;
                     sharedSpeed = transfer.Speed;
-                    _desiredPlaying = transfer.DesiredPlaying;
+                    _stateMachine.AdoptTransferDesiredPlayback(transfer.DesiredPlaying);
                 }
             }
 
@@ -487,7 +479,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             _completion.BeginSession(PositionMs);
             _session.SelectBroadcast(descriptor.RepresentativeEpisodeId);
             RaiseCurrentBroadcastState();
-            var openedWithPlayback = _desiredPlaying;
+            var openedWithPlayback = _stateMachine.DesiredPlaying;
             transferPrimedMuted = transfer is not null && openedWithPlayback;
             handoffStage = transfer is null ? "open-decoder" : "open-muted-target";
             await OpenLogicalPositionAsync(
@@ -497,13 +489,13 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                 expectedGeneration: generation,
                 keepMutedAfterOpen: transferPrimedMuted,
                 registerPlay: transfer is null).ConfigureAwait(true);
-            if (_desiredPlaying && !_session.IsPlaying)
+            if (_stateMachine.DesiredPlaying && !_session.IsPlaying)
             {
                 if (transferPrimedMuted) _session.SetVolume(0d);
                 _session.Play();
                 if (transfer is null) _ = RegisterPlayAsync();
             }
-            else if (!_desiredPlaying && _session.IsPlaying)
+            else if (!_stateMachine.DesiredPlaying && _session.IsPlaying)
             {
                 _session.Pause();
             }
@@ -531,11 +523,11 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                         preparedPosition,
                         DurationMs,
                         decoderReady: true,
-                        desiredPlaying: _desiredPlaying,
-                        overrideDesiredPlaying: _transportIntentChanged,
+                        desiredPlaying: _stateMachine.DesiredPlaying,
+                        overrideDesiredPlaying: _stateMachine.TransportIntentChanged,
                         speed: Speed,
                         cancellationToken: cancellationToken).ConfigureAwait(true);
-                    _desiredPlaying = transfer.DesiredPlaying;
+                    _stateMachine.AdoptTransferDesiredPlayback(transfer.DesiredPlaying);
                     if (Math.Abs(Speed - transfer.Speed) >= 0.001d) Speed = transfer.Speed;
                     if (transfer.DesiredPlaying && !_session.IsPlaying)
                     {
@@ -666,7 +658,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             RuntimeDiagnosticRecorder.Record(
                 "playback",
                 forceTransactionalTransfer ? "move-to-device" : "ordinary-start",
-                IsPlaying || !_desiredPlaying ? "passed" : "warning",
+                IsPlaying || !_stateMachine.DesiredPlaying ? "passed" : "warning",
                 playbackStartWatch.ElapsedMilliseconds,
                 IsPlaying ? "Decoder entered Playing." : "Decoder opened in Paused state.",
                 new Dictionary<string, string>
@@ -676,7 +668,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                     ["transactionalMove"] = forceTransactionalTransfer.ToString(),
                     ["positionMs"] = CaptureCurrentLogicalPosition(descriptor).ToString()
                 });
-            StatusText = postCommitWarning ?? (_desiredPlaying
+            StatusText = postCommitWarning ?? (_stateMachine.DesiredPlaying
                 ? (descriptor.IsMultipart ? SegmentText : $"Playing from the {_playbackSourceText}")
                 : "Paused");
             RaisePropertyChanged(nameof(IsMultipart));
@@ -745,9 +737,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
         finally
         {
             if (transferPrimedMuted) _session.SetVolume(targetAudibleVolume);
-            _transportPending = false;
-            _desiredPlaying = IsPlaying;
-            _transportIntentChanged = false;
+            _stateMachine.CompleteTransport();
             IsBusy = false;
             RaisePrimaryTransportState();
         }
@@ -845,7 +835,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     private bool CanExecutePrimaryTransport()
     {
         if (Volatile.Read(ref _primaryTransportActionActive) != 0) return false;
-        return ShowMoveToThisDevice || _transportPending || IsLoaded;
+        return ShowMoveToThisDevice || _stateMachine.TransportPending || IsLoaded;
     }
 
     private void ExecutePrimaryTransport()
@@ -858,11 +848,10 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             return;
         }
 
-        if (_transportPending)
+        if (_stateMachine.TransportPending)
         {
-            _transportIntentChanged = true;
-            _desiredPlaying = !_desiredPlaying;
-            if (_desiredPlaying)
+            _stateMachine.TogglePendingTransportIntent();
+            if (_stateMachine.DesiredPlaying)
             {
                 StatusText = "Playback will begin as soon as the audio is ready…";
             }
@@ -900,8 +889,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     {
         var wasPlaying = _session.IsPlaying || IsPlaying;
         var previousPosition = PositionMs;
-        _desiredPlaying = false;
-        if (_transportPending) _transportIntentChanged = true;
+        _stateMachine.ReleaseForRemoteHandoff();
         if (_session.IsPlaying) _session.Pause();
         IsPlaying = false;
 
@@ -919,13 +907,13 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
         if (!IsLoaded) return;
         if (_session.IsPlaying)
         {
-            _desiredPlaying = false;
+            _stateMachine.SetLocalTransportIntent(false);
             _session.Pause();
             _ = SaveProgressAsync(false);
         }
         else
         {
-            _desiredPlaying = true;
+            _stateMachine.SetLocalTransportIntent(true);
             _session.Play();
             _ = RegisterPlayAsync();
         }
@@ -1776,8 +1764,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
         {
             await _dispatcher.InvokeAsync(() =>
             {
-                _desiredPlaying = false;
-                _transportIntentChanged = false;
+                _stateMachine.AcknowledgeRemoteSourceStop();
                 if (_session.IsPlaying) _session.Pause();
                 IsPlaying = false;
                 IsPlaybackElsewhere = true;
@@ -1976,26 +1963,13 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
 
     private void ApplyProjectedRemoteState(PlaybackDeviceState active)
     {
-        var projectedPosition = active.ProjectedPositionMs(DateTimeOffset.UtcNow);
         var snapshot = _handoffSnapshot;
-        var sameRemoteRun = active.IsPlaying &&
-            active.RepresentativeEpisodeId == _remoteProjectionEpisodeId &&
-            snapshot?.Generation == _remoteProjectionGeneration &&
-            string.Equals(snapshot.OwnerDeviceId, _remoteProjectionOwnerId, StringComparison.Ordinal);
-
-        // Network heartbeats arrive around once a second and may be a few hundred
-        // milliseconds behind the locally projected sample. Keep the remote Mac
-        // playhead monotonic within one ownership generation so it does not visibly
-        // twitch backwards while an iPhone is playing. A larger backwards movement
-        // is treated as an intentional remote seek; a new handoff or broadcast also
-        // establishes a fresh projection baseline.
-        if (sameRemoteRun && projectedPosition >= _remoteProjectionPositionMs - 3_000)
-            projectedPosition = Math.Max(projectedPosition, _remoteProjectionPositionMs);
-
-        _remoteProjectionEpisodeId = active.RepresentativeEpisodeId;
-        _remoteProjectionGeneration = snapshot?.Generation ?? -1;
-        _remoteProjectionOwnerId = snapshot?.OwnerDeviceId ?? string.Empty;
-        _remoteProjectionPositionMs = projectedPosition;
+        var projectedPosition = _remoteProgressInterpolator.Project(
+            active.RepresentativeEpisodeId,
+            snapshot?.Generation ?? -1,
+            snapshot?.OwnerDeviceId,
+            active.IsPlaying,
+            active.ProjectedPositionMs(DateTimeOffset.UtcNow));
         PositionMs = projectedPosition;
         if (active.DurationMs > 0) DurationMs = active.DurationMs;
         if (Math.Abs(Speed - active.Speed) >= 0.001d) Speed = active.Speed;

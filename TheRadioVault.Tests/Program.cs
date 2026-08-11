@@ -210,6 +210,8 @@ var tests = new (string Name, Action Run)[]
         True(live.Matches(item));
         Equal(50, live.ProgressPercent);
     }),
+    ("Desktop playback state machine preserves pending transport intent", DesktopPlaybackStateMachinePreservesPendingIntent),
+    ("Desktop remote progress interpolation removes heartbeat wiggle", DesktopRemoteProgressInterpolationRemovesHeartbeatWiggle),
     ("Transactional handoff keeps source authoritative until commit", TransactionalHandoffKeepsSourceUntilCommit),
     ("Unowned playback permits a gesture-authorized audible decoder", UnownedPlaybackPermitsAudibleDecoder),
     ("Transactional handoff rejects startup zero", TransactionalHandoffRejectsStartupZero),
@@ -554,6 +556,49 @@ static void FederationAdministrationRoutesStayBehindOneServerBoundary()
     }
 }
 
+static void DesktopPlaybackStateMachinePreservesPendingIntent()
+{
+    var state = new DesktopPlaybackStateMachine();
+    True(state.SetLoaded(true));
+    state.BeginTransport(desiredPlaying: true);
+    True(state.TransportPending);
+    True(state.DesiredPlaying);
+    True(!state.TransportIntentChanged);
+
+    True(state.TogglePendingTransportIntent());
+    True(!state.DesiredPlaying);
+    True(state.TransportIntentChanged);
+    state.AdoptObservedDesiredPlayback(desiredPlaying: true);
+    True(!state.DesiredPlaying);
+
+    True(state.ObserveLocalPlayback(true));
+    True(state.IsPlaying);
+    True(!state.DesiredPlaying);
+    state.CompleteTransport();
+    True(!state.TransportPending);
+    True(state.DesiredPlaying);
+    True(!state.TransportIntentChanged);
+
+    state.ReleaseForRemoteHandoff();
+    True(!state.DesiredPlaying);
+    True(!state.TransportIntentChanged);
+}
+
+static void DesktopRemoteProgressInterpolationRemovesHeartbeatWiggle()
+{
+    var interpolator = new RemotePlaybackProgressInterpolator();
+    Equal(10_000L, interpolator.Project(42, 7, "iphone", true, 10_000));
+    Equal(10_000L, interpolator.Project(42, 7, "iphone", true, 9_500));
+    Equal(11_000L, interpolator.Project(42, 7, "iphone", true, 11_000));
+
+    // A large backwards correction is an intentional remote seek.
+    Equal(6_000L, interpolator.Project(42, 7, "iphone", true, 6_000));
+
+    // Ownership and broadcast changes establish fresh baselines immediately.
+    Equal(4_000L, interpolator.Project(42, 8, "mac", true, 4_000));
+    Equal(1_000L, interpolator.Project(99, 8, "mac", true, 1_000));
+}
+
 
 static void NewShowAliasesNormalize()
 {
@@ -782,6 +827,22 @@ static void DesktopSavedAndTransportControlsMatchNativeParity()
     True(playback.Contains("second stable sample", StringComparison.Ordinal));
     True(playback.Contains("handoffStage = \"commit-transfer\"", StringComparison.Ordinal));
     True(playback.Contains("[\"stage\"] = handoffStage", StringComparison.Ordinal));
+    True(playback.Contains("DesktopPlaybackStateMachine _stateMachine", StringComparison.Ordinal));
+    True(playback.Contains("RemotePlaybackProgressInterpolator _remoteProgressInterpolator", StringComparison.Ordinal));
+    True(!playback.Contains("private bool _transportPending", StringComparison.Ordinal));
+    True(!playback.Contains("private long _remoteProjectionPositionMs", StringComparison.Ordinal));
+
+    var stateMachine = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Application", "Services", "DesktopPlaybackStateMachine.cs"));
+    True(stateMachine.Contains("public sealed class DesktopPlaybackStateMachine", StringComparison.Ordinal));
+    True(stateMachine.Contains("public void BeginTransport", StringComparison.Ordinal));
+    True(stateMachine.Contains("public void CompleteTransport", StringComparison.Ordinal));
+
+    var interpolator = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Application", "Services", "RemotePlaybackProgressInterpolator.cs"));
+    True(interpolator.Contains("BackwardsSeekThresholdMs = 3_000", StringComparison.Ordinal));
+    True(interpolator.Contains("generation == _generation", StringComparison.Ordinal));
+    True(interpolator.Contains("projectedPositionMs = Math.Max", StringComparison.Ordinal));
 
     var transferCoordinator = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Web", "Services", "PlaybackTransferCoordinator.cs"));
