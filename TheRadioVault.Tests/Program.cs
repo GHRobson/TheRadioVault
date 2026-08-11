@@ -293,6 +293,7 @@ var tests = new (string Name, Action Run)[]
         Equal("/api/v1/player/transfer/source-stopped", WebApiRoutes.PlayerTransferSourceStopped);
     }),
     ("Web playback and queue routes stay behind one server boundary", WebPlaybackAndQueueRoutesStayBehindOneServerBoundary),
+    ("Federation administration routes stay behind one server boundary", FederationAdministrationRoutesStayBehindOneServerBoundary),
     ("Alpha 6 remote administration routes are versioned", () =>
     {
         Equal("/api/v1/federation/settings", WebApiRoutes.FederationSettings);
@@ -498,6 +499,58 @@ static void WebPlaybackAndQueueRoutesStayBehindOneServerBoundary()
         var index = playbackQueue.IndexOf(marker, StringComparison.Ordinal);
         True(index > priorIndex, $"Playback/queue route order changed at {marker}.");
         priorIndex = index;
+    }
+}
+
+static void FederationAdministrationRoutesStayBehindOneServerBoundary()
+{
+    var services = Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services");
+    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var federationAdministration = File.ReadAllText(Path.Combine(services, "LocalWebServer.FederationAdministration.cs"));
+
+    const string boundaryCall = "TryHandleFederationAdministrationRouteAsync(";
+    var pairingIndex = dispatcher.IndexOf("WebApiRoutes.FederationPair", StringComparison.Ordinal);
+    var boundaryIndex = dispatcher.IndexOf(boundaryCall, StringComparison.Ordinal);
+    var clientBootstrapIndex = dispatcher.IndexOf("WebApiRoutes.Bootstrap", boundaryIndex, StringComparison.Ordinal);
+
+    True(pairingIndex >= 0);
+    True(boundaryIndex > pairingIndex);
+    True(clientBootstrapIndex > boundaryIndex);
+    Equal(1, dispatcher.Split(boundaryCall, StringSplitOptions.None).Length - 1);
+    True(federationAdministration.Contains("private async Task<bool> TryHandleFederationAdministrationRouteAsync(", StringComparison.Ordinal));
+
+    var routeMarkers = new[]
+    {
+        "WebApiRoutes.FederationStatus",
+        "WebApiRoutes.FederationBootstrap",
+        "WebApiRoutes.FederationLibrarySync",
+        "WebApiRoutes.FederationLibraryScan",
+        "WebApiRoutes.FederationParity",
+        "WebApiRoutes.FederationSettings",
+        "WebApiRoutes.FederationPlaybackPreferences",
+        "WebApiRoutes.FederationResearchWorkspace",
+        "WebApiRoutes.FederationResearchUndated",
+        "TryMatchFederationResearchCoverageByShow(path",
+        "TryMatchFederationResearchCoverage(path",
+        "TryMatchFederationResearchUndatedDate(path",
+        "TryMatchFederationResearchWorkspaceRecord(path",
+        "WebApiRoutes.FederationResearchImportPreview",
+        "WebApiRoutes.FederationResearchImportApply",
+        "WebApiRoutes.FederationResearchImportStatus",
+        "WebApiRoutes.FederationResearchImportCancel",
+        "WebApiRoutes.FederationResearchExport",
+        "WebApiRoutes.FederationWikiImportPreview",
+        "WebApiRoutes.FederationWikiImportApply",
+        "WebApiRoutes.FederationWikiExport"
+    };
+
+    var priorIndex = -1;
+    foreach (var marker in routeMarkers)
+    {
+        True(!dispatcher.Contains(marker, StringComparison.Ordinal));
+        var markerIndex = federationAdministration.IndexOf(marker, StringComparison.Ordinal);
+        True(markerIndex > priorIndex);
+        priorIndex = markerIndex;
     }
 }
 

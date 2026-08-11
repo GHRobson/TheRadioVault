@@ -50,10 +50,10 @@ Exit criteria: conflict suites pass, a backup restores onto a clean server, and 
 
 Goal: reduce the cost and risk of every later feature without rewriting working behaviour.
 
-Status: in progress on `refactor/mobile-session-coordinators`. Mobile playback ownership, handoff evidence, multipart timeline mapping, remote-playhead observation, committed source-stop acknowledgement, library metadata synchronization, offline mutation replay, download lifecycle, downloaded-progress reconciliation, Explore, Knowledge, pairing and Library query/projection rules have been extracted from `MobileClientSession` into focused, behaviour-tested components while retaining the session as the public façade. The web-server split has also begun: player handoff, playback command and queue routes now live behind one focused partial boundary instead of remaining inline in the main dispatcher.
+Status: in progress. Mobile playback ownership, handoff evidence, multipart timeline mapping, remote-playhead observation, committed source-stop acknowledgement, library metadata synchronization, offline mutation replay, download lifecycle, downloaded-progress reconciliation, Explore, Knowledge, pairing and Library query/projection rules have been extracted from `MobileClientSession` into focused, behaviour-tested components while retaining the session as the public façade. The web-server split now has focused player/playback/queue and authenticated federation/administration route boundaries instead of keeping those families inline in the main dispatcher.
 
 - Keep `MobileClientSession` as the public high-level orchestrator; pairing, Library, sync, playback, download, Explore and Knowledge policy boundaries are now extracted.
-- Continue splitting `LocalWebServer`; the playback/queue route group is extracted, while static assets and the remaining route families still need focused boundaries.
+- Continue splitting `LocalWebServer`; the playback/queue and federation/administration route groups are extracted, while static assets and the remaining client/media route families still need focused boundaries.
 - Introduce an explicit desktop playback state machine and progress interpolator.
 - Move behavioural checks from the 9,000-line smoke runner into subsystem test projects.
 - Separate future SQLite migrations into numbered migration objects with fixtures.

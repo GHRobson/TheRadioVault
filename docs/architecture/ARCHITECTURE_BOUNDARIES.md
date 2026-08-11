@@ -85,3 +85,9 @@ The proof does not claim that WPF views have disappeared. Remaining windows, XAM
 `LocalWebServer` remains the HTTP listener and global dispatcher. It owns authentication, common request parsing, the ordered relationship between route families, final media/static fallbacks and shared response helpers. `LocalWebServer.PlaybackQueue.cs` owns the contiguous player-transfer, playback-command, player-state and queue route family, including its HTTP method checks, queue action matcher and response handlers. The main dispatcher reaches this family through exactly one `TryHandlePlaybackQueueRouteAsync` call.
 
 Route order and observable protocol behaviour are compatibility boundaries. Moving a handler must not rename a route, widen an allowed method, change a status code or reorder the family relative to broadcast details, archive health, Moments, artwork and audio. Playback or queue routes must not be added back inline to `LocalWebServer.cs`; extend the focused partial instead.
+
+## 0.44 federation administration route boundary
+
+`LocalWebServer.FederationAdministration.cs` owns the authenticated federation status/bootstrap, Library synchronization and scanning, parity, settings, playback preferences, Research workspace/coverage/date review, Research-pack administration and Wiki-pack administration route family. The main dispatcher reaches this ordered family through exactly one `TryHandleFederationAdministrationRouteAsync` call.
+
+Desktop pairing remains before authorization in the main dispatcher, because it establishes the credential used by the federation family. The normal client bootstrap and client-operation APIs remain after the federation boundary. Moving or extending this route family must preserve that security order, every HTTP method rule, status code and handler contract.
