@@ -167,6 +167,7 @@ var tests = new (string Name, Action Run)[]
     ("Native handoff preserves the Windows volume session", NativeHandoffPreservesWindowsVolumeSession),
     ("Mac Client uses native AVFoundation and existing server contracts", MacClientUsesNativeAvFoundationAndExistingServerContracts),
     ("macOS and Linux packages preserve the shared client-server boundary", MacAndLinuxPackagesPreserveSharedClientServerBoundary),
+    ("Product versions remain consistent", ProductVersionsRemainConsistent),
     ("iOS Client preserves native platform and server boundaries", IosClientPreservesNativePlatformAndServerBoundaries),
     ("Canonical audio ranges are cache-combinable", CanonicalAudioRangesAreCacheCombinable),
     ("Positioned web audio is stable across Safari ranges", PositionedWebAudioIsStableAcrossSafariRanges),
@@ -831,8 +832,8 @@ static void MacClientRemainsUsableBeforeServerPairing()
     True(mainWindow.Contains("Fill=\"#FF5F57\"", StringComparison.Ordinal));
     True(mainWindow.Contains("Fill=\"#FEBC2E\"", StringComparison.Ordinal));
     True(mainWindow.Contains("Fill=\"#28C840\"", StringComparison.Ordinal));
-    True(mainWindow.Contains("M8,1 L4,4 L8,7", StringComparison.Ordinal));
-    True(mainWindow.Contains("M16,1 L20,4 L16,7", StringComparison.Ordinal));
+    True(mainWindow.Contains("ContentTemplate=\"{StaticResource SkipBackIconTemplate}\"", StringComparison.Ordinal));
+    True(mainWindow.Contains("ContentTemplate=\"{StaticResource SkipForwardIconTemplate}\"", StringComparison.Ordinal));
     True(!mainWindow.Contains("Content=\"−15\"", StringComparison.Ordinal));
     True(!mainWindow.Contains("Content=\"+30\"", StringComparison.Ordinal));
     var macControls = mainWindow[mainWindow.IndexOf("x:Name=\"MacWindowControls\"", StringComparison.Ordinal)..];
@@ -1879,6 +1880,10 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(nowPlaying.Contains("ChangePlaybackPositionCommand", StringComparison.Ordinal));
     True(nowPlaying.Contains("SkipBackwardCommand", StringComparison.Ordinal));
     True(nowPlaying.Contains("MPMediaItemArtwork", StringComparison.Ordinal));
+    True(nowPlaying.Contains("QueueUpdate", StringComparison.Ordinal));
+    True(nowPlaying.Contains("BeginInvokeOnMainThread(ApplyPendingUpdate)", StringComparison.Ordinal));
+    True(nowPlaying.Contains("SetCommandsEnabled(available: false", StringComparison.Ordinal));
+    True(nowPlaying.Contains("SequenceEqual", StringComparison.Ordinal));
 
     var mobileSession = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
@@ -2272,7 +2277,7 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
 
 static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 {
-    Equal("0.35.0-alpha9-buildfix3", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
+    Equal("0.41.0", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
 
     foreach (var projectPath in new[]
              {
@@ -2281,8 +2286,8 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
              })
     {
         var project = File.ReadAllText(Path.Combine(SourceRoot(), projectPath));
-        True(project.Contains("<Version>0.35.0-alpha9-buildfix3</Version>", StringComparison.Ordinal));
-        True(project.Contains("<InformationalVersion>0.35.0-alpha9-buildfix3</InformationalVersion>", StringComparison.Ordinal));
+        True(project.Contains("<Version>0.41.0</Version>", StringComparison.Ordinal));
+        True(project.Contains("<InformationalVersion>0.41.0</InformationalVersion>", StringComparison.Ordinal));
     }
 
     var readme = File.ReadAllText(Path.Combine(SourceRoot(), "README.md"));
@@ -2303,9 +2308,10 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
     True(readme.Contains("## AI disclosure", StringComparison.Ordinal));
     True(readme.Contains("does not contain a generative-AI assistant", StringComparison.Ordinal));
     True(readme.Contains("speech-recognition models installed and run locally", StringComparison.Ordinal));
+    True(!readme.Contains("repository is currently private", StringComparison.OrdinalIgnoreCase));
 
     var building = File.ReadAllText(Path.Combine(SourceRoot(), "BUILDING.md"));
-    True(building.StartsWith("# Building Radio Vault 0.35.0 Alpha 9 Buildfix 3", StringComparison.Ordinal));
+    True(building.StartsWith("# Building Radio Vault 0.41.0", StringComparison.Ordinal));
     True(building.Contains("package-server-installer.ps1", StringComparison.Ordinal));
     True(building.Contains("package-client-installer.ps1", StringComparison.Ordinal));
     True(!building.Contains("subsequent 0.34 phases", StringComparison.Ordinal));
@@ -2345,7 +2351,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 
     using var sourceManifest = System.Text.Json.JsonDocument.Parse(
         File.ReadAllText(Path.Combine(SourceRoot(), "SOURCE_MANIFEST.sha256.json")));
-    Equal("0.35.0-alpha9-buildfix3", sourceManifest.RootElement.GetProperty("version").GetString());
+    Equal("0.41.0", sourceManifest.RootElement.GetProperty("version").GetString());
 
     foreach (var projectPath in new[]
              {
@@ -6533,7 +6539,7 @@ static void KnowledgeSurfacesUseArticleFirstDashboardsAndSummaries()
 
 static void Alpha9HardensDocumentedKnowledgePortability()
 {
-    Equal("0.35.0-alpha9-buildfix3", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
+    Equal("0.41.0", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
 
     var shell = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "MainWindowViewModel.cs"));
     True(shell.Contains("\"wiki\", \"Explore\"", StringComparison.Ordinal));
@@ -8680,6 +8686,48 @@ static void WebEpisodeExposesCanonicalIdentity()
 static WebEpisode Episode(long id, string show, bool favourite, string people = "", long positionMs = 0, long durationMs = 3_600_000)
     => new(id, show, $"Episode {id}", new DateTime(2020, 1, (int)id), "Specific summary", people, "Comedy", durationMs, positionMs,
         positionMs > 0 ? "In Progress" : "Unplayed", favourite, null, new DateTime(2026, 7, 16).AddMinutes(-id), $"C:\\Audio\\{id}.mp3", "");
+
+static void ProductVersionsRemainConsistent()
+{
+    var root = SourceRoot();
+    var version = File.ReadAllText(Path.Combine(root, "VERSION.txt")).Trim();
+    var desktopVersion = ProjectValue(
+        Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "TheRadioVault.Desktop.Avalonia.csproj"),
+        "Version");
+    var serverVersion = ProjectValue(
+        Path.Combine(root, "TheRadioVault.Server", "TheRadioVault.Server.csproj"),
+        "Version");
+    var assemblyVersion = version + ".0";
+    var desktopProject = Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "TheRadioVault.Desktop.Avalonia.csproj");
+    var serverProject = Path.Combine(root, "TheRadioVault.Server", "TheRadioVault.Server.csproj");
+    var iosProject = Path.Combine(root, "TheRadioVault.Client.iOS", "TheRadioVault.Client.iOS.csproj");
+    var iosVersion = ProjectValue(iosProject, "ApplicationDisplayVersion");
+    var iosBuild = ProjectValue(iosProject, "ApplicationVersion");
+    var plist = System.Xml.Linq.XDocument.Load(Path.Combine(root, "TheRadioVault.Client.iOS", "Info.plist"));
+
+    Equal(version, desktopVersion);
+    Equal(version, serverVersion);
+    Equal(assemblyVersion, ProjectValue(desktopProject, "AssemblyVersion"));
+    Equal(assemblyVersion, ProjectValue(desktopProject, "FileVersion"));
+    Equal(assemblyVersion, ProjectValue(serverProject, "AssemblyVersion"));
+    Equal(assemblyVersion, ProjectValue(serverProject, "FileVersion"));
+    Equal(version, iosVersion);
+    Equal(version, PlistValue(plist, "CFBundleShortVersionString"));
+    Equal(iosBuild, PlistValue(plist, "CFBundleVersion"));
+}
+
+static string ProjectValue(string path, string name)
+    => System.Xml.Linq.XDocument.Load(path)
+           .Descendants()
+           .First(element => element.Name.LocalName == name)
+           .Value
+           .Trim();
+
+static string PlistValue(System.Xml.Linq.XDocument document, string key)
+{
+    var keyElement = document.Descendants("key").First(element => element.Value == key);
+    return keyElement.ElementsAfterSelf().First().Value.Trim();
+}
 
 static string SourceRoot()
 {

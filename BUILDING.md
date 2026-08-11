@@ -1,4 +1,4 @@
-# Building Radio Vault 0.35.0 Alpha 9 Buildfix 3
+# Building Radio Vault 0.41.0
 
 ## Requirements
 
@@ -92,7 +92,17 @@ download is rejected when the active iOS path is not Wi-Fi.
 
 ## Release validation
 
-Run:
+On Apple Silicon macOS, run the complete local Mac/iOS gate without using
+GitHub Actions:
+
+```zsh
+./local-release-gate.sh
+```
+
+Add `--package` to also create local Client and Server ZIP and DMG installers.
+The validation log is retained under `artifacts/local`.
+
+On Windows, run:
 
 ```powershell
 .\release-gate.ps1
@@ -104,6 +114,13 @@ The gate performs source and XML validation, verifies the Avalonia-only architec
 
 Create the Apple Silicon Mac Client and Server bundles and unsigned transfer
 archives with:
+
+```zsh
+./package-macos-local.sh
+```
+
+This native Mac script also creates the separate drag-to-Applications disk
+images and does not require PowerShell. The equivalent scripts used by CI are:
 
 ```powershell
 .\package-macos-client.ps1
@@ -153,8 +170,14 @@ device or distribution account.
 
 Create a source archive and regenerate `SOURCE_MANIFEST.sha256.json` with:
 
+```zsh
+./tools/package-source-local.sh artifacts/RadioVault-0.41.0-source.zip
+```
+
+The equivalent PowerShell command is:
+
 ```powershell
-.\tools\Package-Source.ps1 -Destination .\artifacts\RadioVault-0.35.0-alpha9-buildfix3-source.zip
+.\tools\Package-Source.ps1 -Destination .\artifacts\RadioVault-0.41.0-source.zip
 ```
 
 ## Alpha acceptance

@@ -1,5 +1,7 @@
 # Radio Vault iOS Agent Handoff
 
+> **Historical planning record.** This document captures the original iOS handoff from 8 August 2026. Radio Vault now has a native .NET/UIKit client in `TheRadioVault.Client.iOS`; the living roadmap and source audit under `docs/` supersede the implementation plan below.
+
 **Snapshot:** 8 August 2026  
 **Radio Vault version:** `0.35.0-alpha9-buildfix3`  
 **Server API:** `v1`  

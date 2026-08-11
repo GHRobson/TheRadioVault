@@ -2,7 +2,7 @@ name: Radio Vault parity
 
 on:
   push:
-    branches: [main, "feature/**"]
+    branches: ["**"]
   pull_request:
     branches: [main]
   workflow_dispatch:
