@@ -19,6 +19,7 @@
 | `TheRadioVault.Platform.Windows` | Windows/WPF implementations of application ports | Windows-only |
 | `TheRadioVault` | Current WPF composition root and presentation | Windows-only |
 | `TheRadioVault.Tests` | Cross-platform capability/regression console suite | Neutral |
+| `TheRadioVault.SourceChecks` | Dependency-free source, route-order and packaging boundary checks | Neutral |
 
 ## Rules
 
@@ -97,3 +98,9 @@ Desktop pairing remains before authorization in the main dispatcher, because it 
 `DesktopPlaybackStateMachine` is the platform-neutral owner of loaded, playing, busy, remote-owner, pending-transport, desired-playback and user-intent transitions for desktop playback. `PlaybackViewModel` projects that state into Avalonia bindings and remains responsible for decoder, persistence, dispatcher and handoff-service side effects; it must not recreate parallel transport flags.
 
 `RemotePlaybackProgressInterpolator` owns the monotonic projection rule between authoritative remote heartbeats. Corrections of up to three seconds within the same broadcast, owner and ownership generation are treated as network lag; a larger backwards correction, a new owner, a new generation or a new broadcast establishes a fresh baseline so real seeks remain visible.
+
+## 0.44 test-runner boundary
+
+`TheRadioVault.Tests` remains the behavioral capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.SourceChecks` is the dependency-free home for deliberate source-text, route-order, packaging and presentation-marker inspections. A test that can exercise compiled behavior must not be added to SourceChecks merely because text inspection is easier.
+
+Both runners are required by the Windows release gate and the local macOS release gate. SourceChecks supports the same optional name filters as the behavioral runner so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.

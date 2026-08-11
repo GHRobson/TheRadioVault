@@ -54,6 +54,10 @@ dotnet build TheRadioVault.Server/TheRadioVault.Server.csproj \
   -c Release --no-restore -warnaserror
 dotnet build TheRadioVault.Tests/TheRadioVault.Tests.csproj \
   -c Release --no-restore -warnaserror
+dotnet build TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj \
+  -c Release --no-restore -warnaserror
+dotnet run --project TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj \
+  -c Release --no-build
 dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj \
   -c Release --no-build -- \
   "Mac client remains usable before server pairing" \
@@ -77,6 +81,10 @@ dotnet build TheRadioVault.Server/TheRadioVault.Server.csproj \
   -c Release --no-restore -warnaserror
 dotnet build TheRadioVault.Tests/TheRadioVault.Tests.csproj \
   -c Release --no-restore -warnaserror
+dotnet build TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj \
+  -c Release --no-restore -warnaserror
+dotnet run --project TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj \
+  -c Release --no-build
 dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj \
   -c Release --no-build -- \
   "macOS and Linux packages preserve the shared client-server boundary"

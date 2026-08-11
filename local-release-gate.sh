@@ -139,6 +139,11 @@ fi
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 "$DOTNET_EXE" build "$ROOT/TheRadioVault.Tests/TheRadioVault.Tests.csproj" \
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
+"$DOTNET_EXE" build "$ROOT/TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj" \
+  -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
+
+"$DOTNET_EXE" run --project "$ROOT/TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj" \
+  -c "$CONFIGURATION" --no-build
 
 "$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Tests/TheRadioVault.Tests.csproj" \
   -c "$CONFIGURATION" --no-build -- \

@@ -50,12 +50,12 @@ Exit criteria: conflict suites pass, a backup restores onto a clean server, and 
 
 Goal: reduce the cost and risk of every later feature without rewriting working behaviour.
 
-Status: in progress. Mobile playback ownership, handoff evidence, multipart timeline mapping, remote-playhead observation, committed source-stop acknowledgement, library metadata synchronization, offline mutation replay, download lifecycle, downloaded-progress reconciliation, Explore, Knowledge, pairing and Library query/projection rules have been extracted from `MobileClientSession` into focused, behaviour-tested components while retaining the session as the public façade. The web-server split now has focused player/playback/queue and authenticated federation/administration route boundaries. Desktop transport state and remote playhead smoothing now live in focused, platform-neutral Application services rather than view-model flags.
+Status: in progress. Mobile playback ownership, handoff evidence, multipart timeline mapping, remote-playhead observation, committed source-stop acknowledgement, library metadata synchronization, offline mutation replay, download lifecycle, downloaded-progress reconciliation, Explore, Knowledge, pairing and Library query/projection rules have been extracted from `MobileClientSession` into focused, behaviour-tested components while retaining the session as the public façade. The web-server split now has focused player/playback/queue and authenticated federation/administration route boundaries. Desktop transport state and remote playhead smoothing now live in focused, platform-neutral Application services. The shared test-runner split has begun with a separate dependency-free source-check project wired into release gates.
 
 - Keep `MobileClientSession` as the public high-level orchestrator; pairing, Library, sync, playback, download, Explore and Knowledge policy boundaries are now extracted.
 - Continue splitting `LocalWebServer`; the playback/queue and federation/administration route groups are extracted, while static assets and the remaining client/media route families still need focused boundaries.
 - Keep the explicit desktop playback state machine and remote-progress interpolator as the single pure-policy owners while the view model retains UI and side effects.
-- Move behavioural checks from the 9,000-line smoke runner into subsystem test projects.
+- Continue moving source inspection into `TheRadioVault.SourceChecks` and behavioral checks from the 9,000-line smoke runner into subsystem test projects.
 - Separate future SQLite migrations into numbered migration objects with fixtures.
 - Add cancellation/timeout policy at external-process, network and media boundaries.
 - Archive superseded current documents and establish a small living documentation index.
