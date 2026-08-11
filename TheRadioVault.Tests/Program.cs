@@ -292,6 +292,7 @@ var tests = new (string Name, Action Run)[]
         Equal("/api/v1/player/transfer/cancel", WebApiRoutes.PlayerTransferCancel);
         Equal("/api/v1/player/transfer/source-stopped", WebApiRoutes.PlayerTransferSourceStopped);
     }),
+    ("Web playback and queue routes stay behind one server boundary", WebPlaybackAndQueueRoutesStayBehindOneServerBoundary),
     ("Alpha 6 remote administration routes are versioned", () =>
     {
         Equal("/api/v1/federation/settings", WebApiRoutes.FederationSettings);
@@ -463,6 +464,42 @@ foreach (var test in selectedTests)
 
 Console.WriteLine($"{selectedTests.Length - failures.Count}/{selectedTests.Length} smoke tests passed.");
 return failures.Count == 0 ? 0 : 1;
+
+static void WebPlaybackAndQueueRoutesStayBehindOneServerBoundary()
+{
+    var services = Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services");
+    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var playbackQueue = File.ReadAllText(Path.Combine(services, "LocalWebServer.PlaybackQueue.cs"));
+
+    True(dispatcher.Contains("TryHandlePlaybackQueueRouteAsync(", StringComparison.Ordinal));
+    True(!dispatcher.Contains("private async Task HandlePlayerApiAsync(", StringComparison.Ordinal));
+    True(!dispatcher.Contains("private async Task HandleQueueApiAsync(", StringComparison.Ordinal));
+    True(playbackQueue.Contains("private async Task<bool> TryHandlePlaybackQueueRouteAsync(", StringComparison.Ordinal));
+
+    var routeMarkers = new[]
+    {
+        "WebApiRoutes.PlayerTransferBegin",
+        "WebApiRoutes.PlayerTransferReady",
+        "WebApiRoutes.PlayerTransferCommit",
+        "WebApiRoutes.PlayerTransferCancel",
+        "WebApiRoutes.PlayerTransferSourceStopped",
+        "WebApiRoutes.PlayerCommand",
+        "WebApiRoutes.PlayerWebProgress",
+        "WebApiRoutes.Player,",
+        "WebApiRoutes.QueueAdd",
+        "WebApiRoutes.QueueClear",
+        "TryMatchQueueAction(path, \"remove\"",
+        "TryMatchQueueAction(path, \"move\"",
+        "WebApiRoutes.Queue,"
+    };
+    var priorIndex = -1;
+    foreach (var marker in routeMarkers)
+    {
+        var index = playbackQueue.IndexOf(marker, StringComparison.Ordinal);
+        True(index > priorIndex, $"Playback/queue route order changed at {marker}.");
+        priorIndex = index;
+    }
+}
 
 
 static void NewShowAliasesNormalize()

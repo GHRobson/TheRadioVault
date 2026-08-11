@@ -79,3 +79,9 @@ The proof does not claim that WPF views have disappeared. Remaining windows, XAM
 `MobilePairingCoordinator` owns discovered-server state and the success/failure transitions for discovery, trusted pairing, manual pairing and forgetting a relationship. `MobileServerClient` remains the TLS-pinning and credential-store implementation behind the transport. The session owns global busy presentation, post-pair Library refresh, tab navigation and teardown of playback, downloads and cached UI state.
 
 `MobileLibraryQueryCoordinator` owns deterministic catalogue projection from `MobileMetadataCache`, cache-first filtering, normalized duplicate-show identities, archive-period aggregation and the equivalent live browse/facet/suggestion contracts. It returns data and status without selecting a screen or mutating UI busy state. Library controllers and the session must not recreate collection-name normalization, progress aggregation or separate cached/live query branches.
+
+## 0.44 web playback and queue route boundary
+
+`LocalWebServer` remains the HTTP listener and global dispatcher. It owns authentication, common request parsing, the ordered relationship between route families, final media/static fallbacks and shared response helpers. `LocalWebServer.PlaybackQueue.cs` owns the contiguous player-transfer, playback-command, player-state and queue route family, including its HTTP method checks, queue action matcher and response handlers. The main dispatcher reaches this family through exactly one `TryHandlePlaybackQueueRouteAsync` call.
+
+Route order and observable protocol behaviour are compatibility boundaries. Moving a handler must not rename a route, widen an allowed method, change a status code or reorder the family relative to broadcast details, archive health, Moments, artwork and audio. Playback or queue routes must not be added back inline to `LocalWebServer.cs`; extend the focused partial instead.

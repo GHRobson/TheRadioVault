@@ -1,7 +1,7 @@
 {
   "version": "0.41.0",
-  "generatedAtUtc": "2026-08-11T19:48:29.2950330Z",
-  "fileCount": 1045,
+  "generatedAtUtc": "2026-08-11T20:18:14.6938480Z",
+  "fileCount": 1046,
   "files": [
     {
       "path": ".editorconfig",
@@ -40,8 +40,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 171286,
-      "sha256": "9d72353d35cea91b0488943c5cdc66dd395a03cfe1e657d72f69815d1eb52e08"
+      "bytes": 171507,
+      "sha256": "dc318ba5e786e212832eebe6e57399b98872b241a719aaf3caadf9d2496d4d82"
     },
     {
       "path": "DEVELOPMENT.md",
@@ -2145,8 +2145,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 575777,
-      "sha256": "bcf038981b0cd0864f0d56482febd95071f0923688598d7b48a29b004c804182"
+      "bytes": 577505,
+      "sha256": "7bbedea2765dd1aea16de537e6d35f1f7f9be59f6f07d0e069f09aa75b551f20"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",
@@ -2419,6 +2419,11 @@
       "sha256": "21ecddfdf56a2894b008df2df5b063d6487de8e241918570d0a61764eda394dc"
     },
     {
+      "path": "TheRadioVault.Web/Services/LocalWebServer.PlaybackQueue.cs",
+      "bytes": 16609,
+      "sha256": "d7745630b70e04eeacf3b53148424c26b9c62b83749424eb601d51a9d1727182"
+    },
+    {
       "path": "TheRadioVault.Web/Services/LocalWebServer.RemoteAdministration.cs",
       "bytes": 13668,
       "sha256": "8a4badd2eefeb6667afe859d7c682958e5bfc48280aa684f85a9c91697ea8bc6"
@@ -2430,8 +2435,8 @@
     },
     {
       "path": "TheRadioVault.Web/Services/LocalWebServer.cs",
-      "bytes": 580933,
-      "sha256": "6679027b77934d1441f63cbe1f48b13f621142cf8f22877ebcbae73e1d71e27c"
+      "bytes": 563990,
+      "sha256": "2e40d84543d823d3d3c6a7f2f22576490631a3d8ab99349dc7846f4ba850fd0f"
     },
     {
       "path": "TheRadioVault.Web/Services/OfflineProgressOrderingPolicy.cs",
@@ -2600,8 +2605,8 @@
     },
     {
       "path": "docs/architecture/ARCHITECTURE_BOUNDARIES.md",
-      "bytes": 11008,
-      "sha256": "1a431dd454d6406cacd41e7e23b4c84a6ee5e83c44dbe409bf9464c6bfa53a82"
+      "bytes": 11959,
+      "sha256": "64392b83dc10ce7ba1035054128eb35e6fd22f12bbf1cf3dda93075c22ad1b13"
     },
     {
       "path": "docs/architecture/AVALONIA_HANDOFF.md",
@@ -2615,8 +2620,8 @@
     },
     {
       "path": "docs/architecture/SOURCE_AUDIT_2026-08-11.md",
-      "bytes": 11862,
-      "sha256": "5d0366868946dab8320b26d31763713479e27b8d14660f0cdcd3eac4f42a267c"
+      "bytes": 12028,
+      "sha256": "a735c6f767373e8cad30428c9fe3297f36a552269e54abdfa251f0fa46790d8c"
     },
     {
       "path": "docs/current/ALPHA1_BUILDFIX1_STATIC_VALIDATION.md",
@@ -5080,8 +5085,8 @@
     },
     {
       "path": "docs/roadmap/RADIOVAULT_ROADMAP.md",
-      "bytes": 7703,
-      "sha256": "cfc0138f00ff9160472402db12c845351f52e8ebf10f1682ca390c0beabcb0d2"
+      "bytes": 7983,
+      "sha256": "a0099fdd9207ff41b67bbe9e2b67050d59ecfc225c0c09e606143c704643557e"
     },
     {
       "path": "global.json",

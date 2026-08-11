@@ -8,6 +8,7 @@
 - Extracted mobile download lifecycle, Wi-Fi/retention policy, pause/resume/cancel state, storage maintenance and durable-index projection behind a focused coordinator, plus isolated downloaded-progress authority reconciliation from the session façade.
 - Extracted cache-first mobile Explore page/image hydration and Knowledge snapshot, coverage and triage queries behind fakeable transports, reducing the session façade while preserving offline Library fallbacks.
 - Extracted mobile discovery/pairing transitions and cache-first Library projection, filtering, archive grouping and search contracts behind focused coordinators, including normalized duplicate-show handling.
+- Extracted the versioned player handoff, playback command and queue HTTP routes from the 10,000-line web-server dispatcher into one focused partial boundary while preserving route order, method rules and handler bodies.
 
 # 0.41.0
 
