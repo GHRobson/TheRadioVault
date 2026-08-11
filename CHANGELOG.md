@@ -1,3 +1,7 @@
+# Unreleased — 0.44 architecture and testability
+
+- Began splitting the mobile session façade by extracting shared playback-ownership and handoff-evidence rules into a focused coordinator with behavioural regression tests.
+
 # 0.41.0
 
 - Made the source repository public so standard GitHub-hosted parity builds are no longer metered, while retaining read-only workflow permissions.

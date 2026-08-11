@@ -1782,6 +1782,11 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
 
     var mobileCacheSessionSource = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    var mobilePlaybackOwnershipSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Playback",
+        "MobilePlaybackOwnershipCoordinator.cs"));
     True(mobileCacheSessionSource.Contains("SynchronizeMetadataCacheAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
@@ -1790,9 +1795,12 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("IsMetadataSyncing", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ApplyOnlineOverview", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("_metadataSyncGate.WaitAsync()", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("ConfirmForeignOwner", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("ConfirmForeignOwner", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ObserveSharedPlaybackSafelyAsync", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("if (!session.Player.IsPlaying)", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("if (!session.Player.IsPlaying)", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("WasCommittedAwayFromThisDevice", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("NeedsSourceStopAcknowledgement", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("_foreignOwnerCandidateSamples >= 2", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("SynchronizeDownloadedProgressWithServerAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("SynchronizeStoredDownloadedProgressWithServerAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("hasNewerOfflineProgress", StringComparison.Ordinal));

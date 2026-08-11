@@ -2,6 +2,7 @@ using System.Text.Json;
 using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
+using TheRadioVault.Client.Mobile.Playback;
 using TheRadioVault.Web.Models;
 
 var tests = new (string Name, Func<Task> Run)[]
@@ -11,7 +12,9 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Reconnect preserves newer offline progress", ReconnectPreservesNewerOfflineProgressAsync),
     ("Reconnect accepts newer server progress for only its broadcast", ReconnectAcceptsNewerServerProgressAsync),
     ("Offline mutations keep one latest decision per broadcast", OfflineMutationsStayIsolatedAsync),
-    ("Handoff keeps its transactional ownership boundary", HandoffKeepsTransactionalBoundaryAsync)
+    ("Handoff keeps its transactional ownership boundary", HandoffKeepsTransactionalBoundaryAsync),
+    ("Legacy playback ownership requires stable evidence", LegacyPlaybackOwnershipRequiresStableEvidenceAsync),
+    ("Committed handoff ownership is trusted immediately", CommittedHandoffOwnershipIsTrustedImmediatelyAsync)
 };
 
 var failures = new List<string>();
@@ -139,14 +142,20 @@ static Task HandoffKeepsTransactionalBoundaryAsync()
 {
     var root = FindRepositoryRoot();
     var sessionSource = File.ReadAllText(Path.Combine(root, "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    var ownershipSource = File.ReadAllText(Path.Combine(
+        root,
+        "TheRadioVault.Client.Mobile",
+        "Playback",
+        "MobilePlaybackOwnershipCoordinator.cs"));
     Contains(sessionSource, "BeginPlaybackTransferAsync", "handoff begin request");
     Contains(sessionSource, "WaitForSourceStopAsync", "handoff source-stop wait");
     Contains(sessionSource, "CommitPlaybackTransferAsync", "handoff commit request");
     Contains(sessionSource, "CancelPlaybackTransferAsync", "handoff cancellation path");
-    Contains(sessionSource, "receipt.Generation == session.Generation", "committed handoff generation guard");
+    Contains(ownershipSource, "receipt.Generation == session.Generation", "committed handoff generation guard");
     Contains(sessionSource, "PlaybackTransferAlignmentToleranceMs = 3_000", "live-source alignment tolerance");
     Contains(sessionSource, "<= PlaybackTransferAlignmentToleranceMs", "alignment tolerance use");
-    Contains(sessionSource, "if (!committedAway) return Task.CompletedTask", "uncommitted-owner rejection");
+    Contains(sessionSource, "WasCommittedAwayFromThisDevice", "uncommitted-owner rejection");
+    Contains(ownershipSource, "_foreignOwnerCandidateSamples >= 2", "stable foreign-owner evidence");
     var downloadedBranchStart = sessionSource.IndexOf("if (_offlinePlayback)", StringComparison.Ordinal);
     var streamedBranchStart = sessionSource.IndexOf("if (!IsPaired) return;", downloadedBranchStart, StringComparison.Ordinal);
     Ensure(downloadedBranchStart >= 0 && streamedBranchStart > downloadedBranchStart,
@@ -156,6 +165,80 @@ static Task HandoffKeepsTransactionalBoundaryAsync()
     Contains(downloadedBranch, "StopForCommittedTransferAsync", "downloaded playback source-stop acknowledgement");
     Contains(downloadedBranch, "ReportLivePlaybackAsync", "downloaded playback ownership publication");
     return Task.CompletedTask;
+}
+
+static Task LegacyPlaybackOwnershipRequiresStableEvidenceAsync()
+{
+    var ownership = new MobilePlaybackOwnershipCoordinator(() => "iphone-client");
+    var first = PlaybackSession("mac-client", generation: 7, isPlaying: true);
+    Ensure(!ownership.ConfirmForeignOwner(first), "The first legacy foreign-owner sample was trusted too early.");
+    Ensure(ownership.ConfirmForeignOwner(first), "A stable second legacy foreign-owner sample was not trusted.");
+
+    var newGeneration = PlaybackSession("mac-client", generation: 8, isPlaying: true);
+    Ensure(!ownership.ConfirmForeignOwner(newGeneration), "A changed generation reused stale ownership evidence.");
+    var paused = PlaybackSession("mac-client", generation: 8, isPlaying: false);
+    Ensure(!ownership.ConfirmForeignOwner(paused), "A paused foreign snapshot was trusted.");
+    Ensure(!ownership.ConfirmForeignOwner(newGeneration), "A paused snapshot did not reset ownership evidence.");
+    return Task.CompletedTask;
+}
+
+static Task CommittedHandoffOwnershipIsTrustedImmediatelyAsync()
+{
+    var ownership = new MobilePlaybackOwnershipCoordinator(() => "iphone-client");
+    var receipt = new WebPlaybackCommittedTransfer(
+        Guid.NewGuid(),
+        "iphone-client",
+        "Graham's iPhone",
+        "mac-client",
+        "Graham's Mac",
+        12,
+        SourceWasPlaying: true,
+        SourceStopAcknowledged: false,
+        DateTimeOffset.UtcNow,
+        SourceStoppedAt: null);
+    var committed = PlaybackSession("mac-client", generation: 12, isPlaying: true, receipt);
+
+    Ensure(ownership.WasCommittedAwayFromThisDevice(committed), "The committed move away was not recognised.");
+    Ensure(ownership.ConfirmForeignOwner(committed), "A committed target was not trusted immediately.");
+    Ensure(ownership.NeedsSourceStopAcknowledgement(committed), "The playing source did not require a stop acknowledgement.");
+    Ensure(!ownership.IsOwnedByThisDevice(committed), "The old iPhone was still treated as owner after handoff.");
+    Equal("Graham's Mac", ownership.OwnerName(committed), "Committed owner name");
+
+    var acknowledged = committed with
+    {
+        CommittedTransfer = receipt with { SourceStopAcknowledged = true }
+    };
+    Ensure(!ownership.NeedsSourceStopAcknowledgement(acknowledged), "An acknowledged source stop remained pending.");
+    return Task.CompletedTask;
+}
+
+static WebPlaybackSession PlaybackSession(
+    string ownerClientId,
+    long generation,
+    bool isPlaying,
+    WebPlaybackCommittedTransfer? receipt = null)
+{
+    var player = new WebPlaybackState(
+        101,
+        "Regression Show",
+        "Ownership Test",
+        10_000,
+        100_000,
+        isPlaying ? "Playing" : "Paused",
+        LastPlayedAt: null,
+        IsPlaying: isPlaying,
+        UpdatedAt: DateTimeOffset.UtcNow,
+        Device: ownerClientId == "mac-client" ? "Graham's Mac" : "Graham's iPhone");
+    return new WebPlaybackSession(
+        player,
+        player,
+        player,
+        player.Device,
+        ownerClientId,
+        generation)
+    {
+        CommittedTransfer = receipt
+    };
 }
 
 static async Task WithSeededDownloadsAsync(Func<MobileDownloadService, Task> action)

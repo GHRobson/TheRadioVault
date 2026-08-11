@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using TheRadioVault.Client.Mobile.Models;
 using TheRadioVault.Client.Mobile.Platform;
+using TheRadioVault.Client.Mobile.Playback;
 using TheRadioVault.Web.Contracts;
 using TheRadioVault.Web.Models;
 
@@ -18,6 +19,7 @@ public sealed class MobileClientSession : IDisposable
     private readonly MobileDownloadService _downloads;
     private readonly MobileOfflineMutationStore _offlineMutations;
     private readonly IMobilePlaybackEngine _playback;
+    private readonly MobilePlaybackOwnershipCoordinator _playbackOwnership;
     private readonly IMobileNowPlayingService _nowPlaying;
     private readonly IMobileDownloadPolicy _downloadPolicy;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
@@ -38,9 +40,6 @@ public sealed class MobileClientSession : IDisposable
     private byte[]? _nowPlayingArtwork;
     private long _nowPlayingArtworkEpisodeId;
     private string _remotePlaybackOwner = string.Empty;
-    private string _foreignOwnerCandidate = string.Empty;
-    private long _foreignOwnerCandidateGeneration = -1;
-    private int _foreignOwnerCandidateSamples;
     private IReadOnlyList<WebCanonicalMediaPart> _parts = Array.Empty<WebCanonicalMediaPart>();
     private IReadOnlyList<WebClientLibraryCollectionSummary> _incompleteLibraryCollections = [];
     private int _partIndex;
@@ -82,6 +81,7 @@ public sealed class MobileClientSession : IDisposable
                 "TheRadioVault",
                 "PendingChanges"));
         _playback = playback ?? throw new ArgumentNullException(nameof(playback));
+        _playbackOwnership = new MobilePlaybackOwnershipCoordinator(() => _server.ClientId);
         _nowPlaying = nowPlaying ?? throw new ArgumentNullException(nameof(nowPlaying));
         _downloadPolicy = downloadPolicy ?? throw new ArgumentNullException(nameof(downloadPolicy));
         var metadataRoot = Path.Combine(
@@ -1453,9 +1453,10 @@ public sealed class MobileClientSession : IDisposable
             var logicalPosition = Math.Clamp(broadcast.Source.PositionMs, 0, _logicalDurationMs);
             TracePlayback($"Requesting shared playback session at position {logicalPosition}.");
             var shared = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
-            TracePlayback($"Shared playback received: generation={shared.Generation}; owner={shared.OwnerClientId}; active={HasActivePlayback(shared)}.");
+            TracePlayback($"Shared playback received: generation={shared.Generation}; owner={shared.OwnerClientId}; active={_playbackOwnership.HasActivePlayback(shared)}.");
             _playbackGeneration = Math.Max(0, shared.Generation);
-            var anotherDeviceOwnsPlayback = HasActivePlayback(shared) && !IsOwnedByThisDevice(shared);
+            var anotherDeviceOwnsPlayback = _playbackOwnership.HasActivePlayback(shared) &&
+                                            !_playbackOwnership.IsOwnedByThisDevice(shared);
             var desiredPlaying = true;
 
             if (anotherDeviceOwnsPlayback)
@@ -1466,7 +1467,7 @@ public sealed class MobileClientSession : IDisposable
                     _speed = Math.Clamp(shared.Player.Speed, 0.5d, 3d);
                     desiredPlaying = shared.Player.IsPlaying;
                 }
-                PlaybackStatus = $"Preparing while {OwnerName(shared)} keeps playing…";
+                PlaybackStatus = $"Preparing while {_playbackOwnership.OwnerName(shared)} keeps playing…";
                 NotifyPlayback();
                 var begin = await _server.BeginPlaybackTransferAsync(new WebPlaybackTransferBeginRequest(
                     _server.ClientId,
@@ -1511,7 +1512,7 @@ public sealed class MobileClientSession : IDisposable
                 _playbackGeneration = Math.Max(0, committed.Session.Generation);
                 await WaitForSourceStopAsync(committed.Session).ConfigureAwait(false);
                 var ownership = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
-                if (!IsOwnedByThisDevice(ownership))
+                if (!_playbackOwnership.IsOwnedByThisDevice(ownership))
                     throw new InvalidOperationException("Playback moved again before this iPhone became audible.");
                 _playbackGeneration = Math.Max(0, ownership.Generation);
                 _ownsPlayback = true;
@@ -1521,11 +1522,12 @@ public sealed class MobileClientSession : IDisposable
             }
             else
             {
-                var update = await ReportLivePlaybackAsync(force: !IsOwnedByThisDevice(shared)).ConfigureAwait(false);
+                var update = await ReportLivePlaybackAsync(
+                    force: !_playbackOwnership.IsOwnedByThisDevice(shared)).ConfigureAwait(false);
                 ThrowIfConflict(update.Conflict, update.Message);
                 var claimed = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
                 _playbackGeneration = Math.Max(0, claimed.Generation);
-                _ownsPlayback = IsOwnedByThisDevice(claimed);
+                _ownsPlayback = _playbackOwnership.IsOwnedByThisDevice(claimed);
                 if (!_ownsPlayback) throw new InvalidOperationException("Another device owns playback.");
             }
 
@@ -1633,7 +1635,7 @@ public sealed class MobileClientSession : IDisposable
         {
             await Task.Delay(250).ConfigureAwait(false);
             var latest = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
-            if (latest.Generation != committed.Generation || !IsOwnedByThisDevice(latest))
+            if (latest.Generation != committed.Generation || !_playbackOwnership.IsOwnedByThisDevice(latest))
                 throw new InvalidOperationException("Playback moved again during handoff.");
             if (latest.CommittedTransfer?.TransferId == receipt.TransferId &&
                 latest.CommittedTransfer.SourceStopAcknowledged) return;
@@ -1739,26 +1741,27 @@ public sealed class MobileClientSession : IDisposable
                     var shared = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
                     if (!await StopForCommittedTransferAsync(shared).ConfigureAwait(false))
                     {
-                        if (HasActivePlayback(shared) && !IsOwnedByThisDevice(shared))
+                        if (_playbackOwnership.HasActivePlayback(shared) &&
+                            !_playbackOwnership.IsOwnedByThisDevice(shared))
                         {
-                            if (ConfirmForeignOwner(shared))
+                            if (_playbackOwnership.ConfirmForeignOwner(shared))
                             {
                                 if (_playback.Current.IsPlaying) _playback.Pause();
                                 _ownsPlayback = false;
                                 _playbackGeneration = Math.Max(0, shared.Generation);
                                 await ObserveSharedPlaybackAsync(shared).ConfigureAwait(false);
-                                PlaybackStatus = $"Playback moved to {OwnerName(shared)}";
+                                PlaybackStatus = $"Playback moved to {_playbackOwnership.OwnerName(shared)}";
                                 NotifyPlayback();
                             }
                         }
                         else
                         {
-                            ResetForeignOwnerCandidate();
+                            _playbackOwnership.Reset();
                             _playbackGeneration = Math.Max(0, shared.Generation);
                             if (_ownsPlayback)
                             {
                                 var downloadedLive = await ReportLivePlaybackAsync(
-                                    force: !HasActivePlayback(shared)).ConfigureAwait(false);
+                                    force: !_playbackOwnership.HasActivePlayback(shared)).ConfigureAwait(false);
                                 if (downloadedLive.Conflict)
                                 {
                                     _playback.Pause();
@@ -1793,7 +1796,7 @@ public sealed class MobileClientSession : IDisposable
             var session = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
             if (SelectedBroadcast is null || !_playback.Current.IsOpen)
             {
-                ResetForeignOwnerCandidate();
+                _playbackOwnership.Reset();
                 await ObserveSharedPlaybackAsync(session).ConfigureAwait(false);
                 return;
             }
@@ -1805,7 +1808,7 @@ public sealed class MobileClientSession : IDisposable
                 // session. This is especially important after a transfer away:
                 // the old phone output can remain prepared, but only a fresh user
                 // play/handoff action may make it owner again.
-                if (IsOwnedByThisDevice(session))
+                if (_playbackOwnership.IsOwnedByThisDevice(session))
                 {
                     _ownsPlayback = true;
                 }
@@ -1817,22 +1820,24 @@ public sealed class MobileClientSession : IDisposable
                     return;
                 }
             }
-            if (HasActivePlayback(session) && !IsOwnedByThisDevice(session))
+            if (_playbackOwnership.HasActivePlayback(session) &&
+                !_playbackOwnership.IsOwnedByThisDevice(session))
             {
-                if (!ConfirmForeignOwner(session)) return;
+                if (!_playbackOwnership.ConfirmForeignOwner(session)) return;
                 _playbackGeneration = Math.Max(0, session.Generation);
                 _ownsPlayback = false;
                 if (_playback.Current.IsPlaying) _playback.Pause();
                 await ObserveSharedPlaybackAsync(session).ConfigureAwait(false);
-                PlaybackStatus = $"Playback moved to {OwnerName(session)}";
+                PlaybackStatus = $"Playback moved to {_playbackOwnership.OwnerName(session)}";
                 NotifyPlayback();
                 return;
             }
 
-            ResetForeignOwnerCandidate();
+            _playbackOwnership.Reset();
             _playbackGeneration = Math.Max(0, session.Generation);
             await ObserveSharedPlaybackAsync(session).ConfigureAwait(false);
-            var live = await ReportLivePlaybackAsync(force: !HasActivePlayback(session)).ConfigureAwait(false);
+            var live = await ReportLivePlaybackAsync(
+                force: !_playbackOwnership.HasActivePlayback(session)).ConfigureAwait(false);
             if (live.Conflict)
             {
                 _playback.Pause();
@@ -1868,7 +1873,8 @@ public sealed class MobileClientSession : IDisposable
 
     private async Task ObserveSharedPlaybackAsync(WebPlaybackSession session)
     {
-        if (!HasActivePlayback(session) || IsOwnedByThisDevice(session))
+        if (!_playbackOwnership.HasActivePlayback(session) ||
+            _playbackOwnership.IsOwnedByThisDevice(session))
         {
             if (_remotePlaybackBroadcast is null && string.IsNullOrEmpty(_remotePlaybackOwner)) return;
             _remotePlaybackBroadcast = null;
@@ -1877,7 +1883,7 @@ public sealed class MobileClientSession : IDisposable
             return;
         }
 
-        var owner = OwnerName(session);
+        var owner = _playbackOwnership.OwnerName(session);
         var episodeId = session.Player.EpisodeId.GetValueOrDefault();
         var changed = _remotePlaybackBroadcast?.EpisodeId != episodeId ||
                       !string.Equals(_remotePlaybackOwner, owner, StringComparison.Ordinal);
@@ -1915,13 +1921,10 @@ public sealed class MobileClientSession : IDisposable
     private Task ObserveSharedPlaybackSafelyAsync(WebPlaybackSession session)
     {
         if (SelectedBroadcast is not null && _playback.Current.IsOpen && _ownsPlayback &&
-            HasActivePlayback(session) && !IsOwnedByThisDevice(session))
+            _playbackOwnership.HasActivePlayback(session) &&
+            !_playbackOwnership.IsOwnedByThisDevice(session))
         {
-            var receipt = session.CommittedTransfer;
-            var committedAway = receipt is not null && receipt.Generation == session.Generation &&
-                string.Equals(receipt.SourceClientId, _server.ClientId, StringComparison.Ordinal) &&
-                !string.Equals(receipt.TargetClientId, _server.ClientId, StringComparison.Ordinal);
-            if (!committedAway) return Task.CompletedTask;
+            if (!_playbackOwnership.WasCommittedAwayFromThisDevice(session)) return Task.CompletedTask;
         }
 
         return ObserveSharedPlaybackAsync(session);
@@ -1929,11 +1932,9 @@ public sealed class MobileClientSession : IDisposable
 
     private async Task<bool> StopForCommittedTransferAsync(WebPlaybackSession session)
     {
-        var receipt = session.CommittedTransfer;
-        if (receipt is null || !receipt.SourceWasPlaying || receipt.SourceStopAcknowledged ||
-            !string.Equals(receipt.SourceClientId, _server.ClientId, StringComparison.Ordinal) ||
-            string.Equals(receipt.TargetClientId, _server.ClientId, StringComparison.Ordinal))
+        if (!_playbackOwnership.NeedsSourceStopAcknowledgement(session))
             return false;
+        var receipt = session.CommittedTransfer!;
 
         _playback.Pause();
         _playback.SetMuted(false);
@@ -1943,44 +1944,6 @@ public sealed class MobileClientSession : IDisposable
         PlaybackStatus = $"Playback moved to {receipt.TargetDeviceName}";
         NotifyPlayback();
         return true;
-    }
-
-    private bool ConfirmForeignOwner(WebPlaybackSession session)
-    {
-        var receipt = session.CommittedTransfer;
-        if (receipt is not null && receipt.Generation == session.Generation &&
-            string.Equals(receipt.SourceClientId, _server.ClientId, StringComparison.Ordinal) &&
-            !string.Equals(receipt.TargetClientId, _server.ClientId, StringComparison.Ordinal))
-            return true;
-
-        // A paused foreign snapshot can briefly appear when a server expires an
-        // old browser-style lease. It must never silence an already-running native
-        // decoder. Real device moves use the committed receipt above; legacy active
-        // owners must remain stable across consecutive polls before being trusted.
-        if (!session.Player.IsPlaying)
-        {
-            ResetForeignOwnerCandidate();
-            return false;
-        }
-
-        if (session.Generation != _foreignOwnerCandidateGeneration ||
-            !string.Equals(session.OwnerClientId, _foreignOwnerCandidate, StringComparison.Ordinal))
-        {
-            _foreignOwnerCandidate = session.OwnerClientId;
-            _foreignOwnerCandidateGeneration = session.Generation;
-            _foreignOwnerCandidateSamples = 1;
-            return false;
-        }
-
-        _foreignOwnerCandidateSamples++;
-        return _foreignOwnerCandidateSamples >= 2;
-    }
-
-    private void ResetForeignOwnerCandidate()
-    {
-        _foreignOwnerCandidate = string.Empty;
-        _foreignOwnerCandidateGeneration = -1;
-        _foreignOwnerCandidateSamples = 0;
     }
 
     private async Task<WebClientPlaybackResult> ReportLivePlaybackAsync(bool force)
@@ -2077,15 +2040,6 @@ public sealed class MobileClientSession : IDisposable
 
     private bool IsCompleted()
         => _logicalDurationMs > 0 && CaptureLogicalPosition() >= Math.Max(0, _logicalDurationMs - 5_000);
-
-    private static bool HasActivePlayback(WebPlaybackSession session)
-        => session.Player.EpisodeId is > 0;
-
-    private bool IsOwnedByThisDevice(WebPlaybackSession session)
-        => string.Equals(session.OwnerClientId, _server.ClientId, StringComparison.Ordinal);
-
-    private static string OwnerName(WebPlaybackSession session)
-        => string.IsNullOrWhiteSpace(session.Player.Device) ? session.OwnerDevice : session.Player.Device;
 
     private long MiniPlayerPositionMs => _remotePlaybackBroadcast?.Source.PositionMs
         ?? Math.Clamp(_logicalPositionMs, 0, Math.Max(0, _logicalDurationMs));
