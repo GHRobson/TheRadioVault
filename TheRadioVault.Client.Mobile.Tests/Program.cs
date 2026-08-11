@@ -23,6 +23,10 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Metadata synchronization applies changed and deleted broadcasts", MetadataSynchronizationAppliesDeltaAsync),
     ("Metadata synchronization serializes concurrent refreshes", MetadataSynchronizationSerializesRefreshesAsync),
     ("Metadata synchronization failure preserves the cache", MetadataSynchronizationFailurePreservesCacheAsync),
+    ("Offline mutation sync preserves order and accepts duplicate Moments", OfflineMutationSyncPreservesOrderAsync),
+    ("Offline mutation sync recognizes an already-applied decision", OfflineMutationSyncRecognizesAppliedDecisionAsync),
+    ("Offline mutation sync retains the first failure", OfflineMutationSyncRetainsFirstFailureAsync),
+    ("Offline mutation sync serializes concurrent flushes", OfflineMutationSyncSerializesFlushesAsync),
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
     ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync)
@@ -468,6 +472,142 @@ static async Task MetadataSynchronizationFailurePreservesCacheAsync()
     finally { DeleteTemporaryDirectory(root); }
 }
 
+static async Task OfflineMutationSyncPreservesOrderAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var store = new MobileOfflineMutationStore(root);
+        await store.EnqueueFavouriteAsync("server-a", 101, true);
+        await store.EnqueueListeningStatusAsync("server-a", 202, true);
+        await store.EnqueueMomentAsync("server-a", 303, 42_000, "Saved Moment", "", "moment-303");
+        var transport = new FakeOfflineMutationTransport(
+            Summary(101, "Favourite", 0, false, null),
+            Summary(202, "Listened", 0, false, null))
+        {
+            DuplicateMomentEpisodeIds = { 303 }
+        };
+        var reconciled = new List<long>();
+        using var coordinator = new MobileOfflineMutationSynchronizationCoordinator(
+            store,
+            transport,
+            (summary, _) =>
+            {
+                reconciled.Add(summary.RepresentativeEpisodeId);
+                return Task.CompletedTask;
+            },
+            _ => { });
+
+        var result = await coordinator.FlushAsync("server-a");
+
+        Equal(3, result.SynchronizedCount, "Synchronized offline mutations");
+        Ensure(result.FailedMutation is null, "An ordered mutation unexpectedly failed.");
+        Ensure(transport.MutationCalls.SequenceEqual(["Favourite:101", "Listening:202", "Moment:303"]),
+            "Offline mutations were not sent in captured order.");
+        Ensure(reconciled.SequenceEqual([101L, 202L]), "Canonical broadcasts were not reconciled in order.");
+        Equal(0, result.Diagnostics.PendingChanges, "Pending mutations after ordered flush");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task OfflineMutationSyncRecognizesAppliedDecisionAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var store = new MobileOfflineMutationStore(root);
+        await store.EnqueueFavouriteAsync("server-a", 101, true);
+        var alreadyApplied = Summary(101, "Already Favourite", 0, false, null) with { Favourite = true };
+        var transport = new FakeOfflineMutationTransport(alreadyApplied)
+        {
+            FailedFavouriteEpisodeIds = { 101 }
+        };
+        var adopted = new List<long>();
+        using var coordinator = new MobileOfflineMutationSynchronizationCoordinator(
+            store,
+            transport,
+            (_, _) => Task.CompletedTask,
+            summary => adopted.Add(summary.RepresentativeEpisodeId));
+
+        var result = await coordinator.FlushAsync("server-a");
+
+        Equal(1, result.SynchronizedCount, "Already-applied mutation count");
+        Equal(0, result.Diagnostics.PendingChanges, "Already-applied pending count");
+        Ensure(adopted.SequenceEqual([101L]), "The canonical already-applied broadcast was not adopted.");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task OfflineMutationSyncRetainsFirstFailureAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var store = new MobileOfflineMutationStore(root);
+        await store.EnqueueFavouriteAsync("server-a", 101, true);
+        await store.EnqueueFavouriteAsync("server-a", 202, true);
+        var transport = new FakeOfflineMutationTransport(
+            Summary(101, "Failed First", 0, false, null),
+            Summary(202, "Waiting Second", 0, false, null))
+        {
+            FailedFavouriteEpisodeIds = { 101 }
+        };
+        using var coordinator = new MobileOfflineMutationSynchronizationCoordinator(
+            store,
+            transport,
+            (_, _) => Task.CompletedTask,
+            _ => { });
+
+        var result = await coordinator.FlushAsync("server-a");
+        var pending = await coordinator.GetPendingAsync("server-a");
+
+        Equal(0, result.SynchronizedCount, "Synchronized count before first failure");
+        Equal(101L, result.FailedMutation?.EpisodeId ?? 0, "Failed mutation episode");
+        Equal(2, pending.Count, "Retained mutation count");
+        Equal(1, pending.Single(value => value.EpisodeId == 101).Attempts, "Failed mutation attempts");
+        Equal(0, pending.Single(value => value.EpisodeId == 202).Attempts, "Deferred mutation attempts");
+        Ensure(transport.MutationCalls.SequenceEqual(["Favourite:101"]),
+            "A later mutation ran after the first unresolved failure.");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task OfflineMutationSyncSerializesFlushesAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var store = new MobileOfflineMutationStore(root);
+        await store.EnqueueFavouriteAsync("server-a", 101, true);
+        var transport = new FakeOfflineMutationTransport(Summary(101, "Serialized Favourite", 0, false, null));
+        var callbackEntered = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var releaseCallback = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var coordinator = new MobileOfflineMutationSynchronizationCoordinator(
+            store,
+            transport,
+            async (_, _) =>
+            {
+                callbackEntered.TrySetResult(true);
+                await releaseCallback.Task;
+            },
+            _ => { });
+
+        var firstFlush = coordinator.FlushAsync("server-a");
+        await callbackEntered.Task;
+        var secondFlush = coordinator.FlushAsync("server-a");
+        await Task.Delay(30);
+        var callsBeforeRelease = transport.MutationCalls.Count;
+        releaseCallback.TrySetResult(true);
+        await Task.WhenAll(firstFlush, secondFlush);
+
+        Equal(1, callsBeforeRelease, "Flushes admitted while canonical reconciliation was running");
+        Equal(1, transport.MutationCalls.Count, "Duplicate mutation requests across serialized flushes");
+        Equal(0, (await coordinator.GetDiagnosticsAsync()).PendingChanges,
+            "Pending mutations after serialized flushes");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
 static WebPlaybackSession PlaybackSession(
     string ownerClientId,
     long generation,
@@ -865,4 +1005,68 @@ file sealed class FakeMetadataSynchronizationTransport(
             if (Interlocked.CompareExchange(ref _maximumConcurrentRequests, candidate, current) == current) return;
         }
     }
+}
+
+file sealed class FakeOfflineMutationTransport(
+    params WebClientLibraryBroadcastSummary[] summaries) : IMobileOfflineMutationTransport
+{
+    private readonly Dictionary<long, WebClientLibraryBroadcastSummary> _summaries =
+        summaries.ToDictionary(value => value.RepresentativeEpisodeId);
+
+    public HashSet<long> FailedFavouriteEpisodeIds { get; } = [];
+    public HashSet<long> FailedListeningEpisodeIds { get; } = [];
+    public HashSet<long> DuplicateMomentEpisodeIds { get; } = [];
+    public List<string> MutationCalls { get; } = [];
+
+    public Task<WebMutationResult> SetFavouriteAsync(
+        long episodeId,
+        bool favourite,
+        CancellationToken cancellationToken = default)
+    {
+        MutationCalls.Add($"Favourite:{episodeId}");
+        if (FailedFavouriteEpisodeIds.Contains(episodeId))
+            throw new HttpRequestException("Simulated favourite failure.");
+        if (_summaries.TryGetValue(episodeId, out var summary))
+            _summaries[episodeId] = summary with { Favourite = favourite };
+        return Task.FromResult(new WebMutationResult(true, "Favourite updated."));
+    }
+
+    public Task<WebMutationResult> SetListeningStatusAsync(
+        long episodeId,
+        bool played,
+        CancellationToken cancellationToken = default)
+    {
+        MutationCalls.Add($"Listening:{episodeId}");
+        if (FailedListeningEpisodeIds.Contains(episodeId))
+            throw new HttpRequestException("Simulated listening-status failure.");
+        if (_summaries.TryGetValue(episodeId, out var summary))
+            _summaries[episodeId] = summary with
+            {
+                Completed = played,
+                InProgress = false,
+                PositionMs = played ? summary.DurationMs : 0
+            };
+        return Task.FromResult(new WebMutationResult(true, "Listening status updated."));
+    }
+
+    public Task<WebMomentMutationResult> AddMomentAsync(
+        long episodeId,
+        WebMomentMutation mutation,
+        CancellationToken cancellationToken = default)
+    {
+        MutationCalls.Add($"Moment:{episodeId}");
+        var duplicate = DuplicateMomentEpisodeIds.Contains(episodeId);
+        return Task.FromResult(new WebMomentMutationResult(
+            Changed: !duplicate,
+            Duplicate: duplicate,
+            duplicate ? "Moment already exists." : "Moment saved.",
+            Moment: null));
+    }
+
+    public Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(_summaries.TryGetValue(episodeId, out var summary)
+            ? summary
+            : throw new KeyNotFoundException($"Episode {episodeId} is unavailable."));
 }

@@ -18,7 +18,7 @@ public sealed class MobileClientSession : IDisposable
     private const long PlaybackTransferAlignmentToleranceMs = 3_000;
     private readonly MobileServerClient _server;
     private readonly MobileDownloadService _downloads;
-    private readonly MobileOfflineMutationStore _offlineMutations;
+    private readonly MobileOfflineMutationSynchronizationCoordinator _offlineMutationSynchronization;
     private readonly IMobilePlaybackEngine _playback;
     private readonly MobilePlaybackOwnershipCoordinator _playbackOwnership;
     private readonly MobilePlaybackSynchronizationCoordinator _playbackSynchronization;
@@ -26,7 +26,6 @@ public sealed class MobileClientSession : IDisposable
     private readonly IMobileNowPlayingService _nowPlaying;
     private readonly IMobileDownloadPolicy _downloadPolicy;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
-    private readonly SemaphoreSlim _offlineMutationSyncGate = new(1, 1);
     private readonly SemaphoreSlim _exploreSyncGate = new(1, 1);
     private readonly Timer _syncTimer;
     private readonly Timer _metadataSyncTimer;
@@ -67,11 +66,16 @@ public sealed class MobileClientSession : IDisposable
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "TheRadioVault",
                 "Downloads"));
-        _offlineMutations = new MobileOfflineMutationStore(
+        var offlineMutationStore = new MobileOfflineMutationStore(
             Path.Combine(
                 Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
                 "TheRadioVault",
                 "PendingChanges"));
+        _offlineMutationSynchronization = new MobileOfflineMutationSynchronizationCoordinator(
+            offlineMutationStore,
+            new MobileOfflineMutationTransport(_server),
+            (summary, _) => ReconcileMutationBroadcastAsync(summary),
+            summary => ApplyLocalBroadcastSummary(summary));
         _playback = playback ?? throw new ArgumentNullException(nameof(playback));
         _playbackOwnership = new MobilePlaybackOwnershipCoordinator(() => _server.ClientId);
         _playbackSynchronization = new MobilePlaybackSynchronizationCoordinator(
@@ -278,7 +282,7 @@ public sealed class MobileClientSession : IDisposable
 
     public async Task<MobileDiagnosticSnapshot> GetDiagnosticSnapshotAsync()
     {
-        var pending = await _offlineMutations
+        var pending = await _offlineMutationSynchronization
             .GetPendingAsync(CurrentServerInstanceId())
             .ConfigureAwait(false);
         var storage = await _downloads.GetStorageAsync().ConfigureAwait(false);
@@ -635,7 +639,7 @@ public sealed class MobileClientSession : IDisposable
         {
             var summary = broadcast.Source with { Favourite = favourite };
             var replacement = ApplyLocalBroadcastSummary(summary);
-            await _offlineMutations.EnqueueFavouriteAsync(
+            await _offlineMutationSynchronization.EnqueueFavouriteAsync(
                 CurrentServerInstanceId(), broadcast.EpisodeId, favourite).ConfigureAwait(false);
             await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
             if (IsLiveConnected) await FlushOfflineMutationsAsync().ConfigureAwait(false);
@@ -663,7 +667,7 @@ public sealed class MobileClientSession : IDisposable
                 ? $"Moment at {FormatTime(TimeSpan.FromMilliseconds(position))}"
                 : title.Trim();
             var mutationId = Guid.NewGuid().ToString("N");
-            await _offlineMutations.EnqueueMomentAsync(
+            await _offlineMutationSynchronization.EnqueueMomentAsync(
                 CurrentServerInstanceId(), broadcast.EpisodeId, position,
                 momentTitle, notes?.Trim() ?? string.Empty, mutationId).ConfigureAwait(false);
             var savedMoment = new WebMomentSummary(
@@ -876,7 +880,7 @@ public sealed class MobileClientSession : IDisposable
             await _downloads.UpdateProgressAsync(
                 broadcast.EpisodeId, summary.PositionMs, played,
                 summary.LastPlayedAt.Value).ConfigureAwait(false);
-            await _offlineMutations.EnqueueListeningStatusAsync(
+            await _offlineMutationSynchronization.EnqueueListeningStatusAsync(
                 CurrentServerInstanceId(), broadcast.EpisodeId, played).ConfigureAwait(false);
             await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
             if (IsLiveConnected) await FlushOfflineMutationsAsync().ConfigureAwait(false);
@@ -1335,7 +1339,7 @@ public sealed class MobileClientSession : IDisposable
         _nowPlaying.Clear();
         _server.Forget();
         _metadataCache.Clear();
-        _ = _offlineMutations.ClearAsync();
+        _ = _offlineMutationSynchronization.ClearAsync();
         _artworkRequests.Clear();
         _mediaProxy?.Dispose();
         _mediaProxy = null;
@@ -2101,81 +2105,15 @@ public sealed class MobileClientSession : IDisposable
     private async Task FlushOfflineMutationsAsync()
     {
         if (!IsLiveConnected) return;
-        await _offlineMutationSyncGate.WaitAsync().ConfigureAwait(false);
-        try
-        {
-            if (!IsLiveConnected) return;
-            var serverInstanceId = CurrentServerInstanceId();
-            var pending = await _offlineMutations.GetPendingAsync(serverInstanceId).ConfigureAwait(false);
-            foreach (var mutation in pending)
-            {
-                try
-                {
-                    switch (mutation.Kind)
-                    {
-                        case MobileOfflineMutationKind.Favourite:
-                            await _server.SetFavouriteAsync(
-                                mutation.EpisodeId, mutation.BooleanValue == true).ConfigureAwait(false);
-                            await ReconcileMutationBroadcastAsync(mutation.EpisodeId).ConfigureAwait(false);
-                            break;
-                        case MobileOfflineMutationKind.ListeningStatus:
-                            await _server.SetListeningStatusAsync(
-                                mutation.EpisodeId, mutation.BooleanValue == true).ConfigureAwait(false);
-                            await ReconcileMutationBroadcastAsync(mutation.EpisodeId).ConfigureAwait(false);
-                            break;
-                        case MobileOfflineMutationKind.Moment:
-                            var momentResult = await _server.AddMomentAsync(
-                                mutation.EpisodeId,
-                                new WebMomentMutation(
-                                    mutation.PositionMs, mutation.Title,
-                                    mutation.Notes, mutation.MutationId)).ConfigureAwait(false);
-                            if (!momentResult.Changed && !momentResult.Duplicate)
-                                throw new InvalidOperationException(momentResult.Message);
-                            break;
-                    }
-                    await _offlineMutations.MarkSucceededAsync(mutation.Id).ConfigureAwait(false);
-                }
-                catch (Exception exception)
-                {
-                    if (await MutationAlreadyAppliedAsync(mutation).ConfigureAwait(false))
-                    {
-                        await _offlineMutations.MarkSucceededAsync(mutation.Id).ConfigureAwait(false);
-                        continue;
-                    }
-                    await _offlineMutations.MarkFailedAsync(mutation.Id, exception.Message).ConfigureAwait(false);
-                    break;
-                }
-            }
-            await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
-        }
-        finally
-        {
-            _offlineMutationSyncGate.Release();
-        }
+        var result = await _offlineMutationSynchronization
+            .FlushAsync(CurrentServerInstanceId())
+            .ConfigureAwait(false);
+        _syncDiagnostics = result.Diagnostics;
+        Notify();
     }
 
-    private async Task<bool> MutationAlreadyAppliedAsync(MobileOfflineMutation mutation)
+    private async Task ReconcileMutationBroadcastAsync(WebClientLibraryBroadcastSummary summary)
     {
-        if (mutation.Kind == MobileOfflineMutationKind.Moment) return false;
-        try
-        {
-            var summary = await _server.GetBroadcastSummaryAsync(mutation.EpisodeId).ConfigureAwait(false);
-            var applied = mutation.Kind switch
-            {
-                MobileOfflineMutationKind.Favourite => summary.Favourite == (mutation.BooleanValue == true),
-                MobileOfflineMutationKind.ListeningStatus => summary.Completed == (mutation.BooleanValue == true) &&
-                    ((mutation.BooleanValue == true) || summary.PositionMs == 0),
-                _ => false
-            };
-            if (applied) ApplyLocalBroadcastSummary(summary);
-            return applied;
-        }
-        catch { return false; }
-    }
-
-    private async Task ReconcileMutationBroadcastAsync(long episodeId)
-    {
-        var summary = await _server.GetBroadcastSummaryAsync(episodeId).ConfigureAwait(false);
         ApplyLocalBroadcastSummary(summary);
         await _downloads.ReconcileSummariesAsync([summary]).ConfigureAwait(false);
         DownloadedBroadcasts = await _downloads.GetBroadcastsAsync().ConfigureAwait(false);
@@ -2193,7 +2131,7 @@ public sealed class MobileClientSession : IDisposable
 
     private async Task RefreshSyncDiagnosticsAsync()
     {
-        _syncDiagnostics = await _offlineMutations.GetDiagnosticsAsync().ConfigureAwait(false);
+        _syncDiagnostics = await _offlineMutationSynchronization.GetDiagnosticsAsync().ConfigureAwait(false);
         Notify();
     }
 
@@ -2901,6 +2839,7 @@ public sealed class MobileClientSession : IDisposable
         _syncTimer.Dispose();
         _metadataSyncTimer.Dispose();
         _metadataSynchronization.Dispose();
+        _offlineMutationSynchronization.Dispose();
         _playback.StateChanged -= PlaybackOnStateChanged;
         _playback.MediaEnded -= PlaybackOnMediaEnded;
         _nowPlaying.CommandReceived -= NowPlayingOnCommandReceived;
@@ -2910,7 +2849,6 @@ public sealed class MobileClientSession : IDisposable
         _playback.Dispose();
         _server.Dispose();
         _syncGate.Dispose();
-        _offlineMutationSyncGate.Dispose();
         _exploreSyncGate.Dispose();
     }
 }

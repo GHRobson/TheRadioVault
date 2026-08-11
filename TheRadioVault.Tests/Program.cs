@@ -1951,6 +1951,15 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(pendingChanges.Contains("EnqueueMomentAsync", StringComparison.Ordinal));
     True(pendingChanges.Contains("FileOptions.WriteThrough", StringComparison.Ordinal));
 
+    var offlineMutationSynchronization = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Synchronization",
+        "MobileOfflineMutationSynchronizationCoordinator.cs"));
+    True(offlineMutationSynchronization.Contains("_gate.WaitAsync", StringComparison.Ordinal));
+    True(offlineMutationSynchronization.Contains("MutationAlreadyAppliedAsync", StringComparison.Ordinal));
+    True(offlineMutationSynchronization.Contains("!result.Changed && !result.Duplicate", StringComparison.Ordinal));
+    True(offlineMutationSynchronization.Contains("MarkFailedAsync", StringComparison.Ordinal));
+    True(offlineMutationSynchronization.Contains("break;", StringComparison.Ordinal));
+
     var syncDiagnostics = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SyncDiagnosticsViewController.cs"));
     True(syncDiagnostics.Contains("Pending Changes", StringComparison.Ordinal));

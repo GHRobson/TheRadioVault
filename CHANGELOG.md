@@ -4,6 +4,7 @@
 - Extracted multipart logical-position mapping, decoder-settling protection, seeking and completion state into a side-effect-free mobile playback timeline with focused regression coverage.
 - Extracted remote playback observation, deterministic playhead projection and committed handoff source-stop acknowledgement behind fakeable transport and decoder boundaries.
 - Extracted serialized mobile library metadata synchronization—including change-feed cursors, reset paging, delta/deletion application, durable cache adoption and activity state—behind a fakeable transport with focused behavioural tests.
+- Extracted durable mobile offline-mutation synchronization for favourites, listened state and Moments, including ordered single-flight replay, duplicate acceptance, already-applied recovery and first-failure retention.
 
 # 0.41.0
 
