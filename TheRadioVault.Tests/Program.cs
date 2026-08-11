@@ -1895,7 +1895,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("_downloads.ReconcileSummariesAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ApplyPlaybackProgress", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("LoadArtworkAsync", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("overview.ContinueListening", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("overview.ContinueListening", StringComparison.Ordinal));
     True(mobilePlaybackTimelineSource.Contains("_pendingDecoderLogicalPositionMs", StringComparison.Ordinal));
     True(mobilePlaybackTimelineSource.Contains("CaptureDecoderPosition", StringComparison.Ordinal));
     True(mobilePlaybackTimelineSource.Contains("TryGetNextPart", StringComparison.Ordinal));
