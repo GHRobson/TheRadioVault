@@ -1058,9 +1058,12 @@ static void Alpha16ImprovesRemoteResponsivenessAndPlaybackOwnership()
 
     var mainWindow = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml"));
-    True(mainWindow.Contains("Playback.ShowMoveToThisDevice", StringComparison.Ordinal));
-    True(mainWindow.Contains("Move playback to this PC", StringComparison.Ordinal));
-    True(mainWindow.Contains("M2,11 L13,11", StringComparison.Ordinal));
+    var desktopTheme = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "App.axaml"));
+    True(mainWindow.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
+    True(desktopTheme.Contains("ShowMoveToThisDevice", StringComparison.Ordinal));
+    True(desktopTheme.Contains("Move playback to this PC", StringComparison.Ordinal));
+    True(desktopTheme.Contains("M2,11 L13,11", StringComparison.Ordinal));
 
     True(File.Exists(Path.Combine(SourceRoot(), "docs/history/release-notes/V0.34.0-ALPHA16-REMOTE-RESPONSIVENESS-OWNERSHIP.md")));
 }

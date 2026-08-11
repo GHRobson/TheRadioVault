@@ -1,6 +1,6 @@
 {
   "version": "0.41.0",
-  "generatedAtUtc": "2026-08-11T17:25:51.0926440Z",
+  "generatedAtUtc": "2026-08-11T17:31:59.4273880Z",
   "fileCount": 1034,
   "files": [
     {
@@ -2090,8 +2090,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 569374,
-      "sha256": "7fd1f4a8aa3569f440f81ad4312c1e9107588f6af9306ec5f7b4090cbbb34d39"
+      "bytes": 569585,
+      "sha256": "9a04fb95c1898eecd657d537f4064b3ef2029ab5e446fbf7c13e8252b0815066"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",
@@ -5170,8 +5170,8 @@
     },
     {
       "path": "validate-source.ps1",
-      "bytes": 84912,
-      "sha256": "e2828c7b506eee4ebb5cd340cbeffc123a54796db1bdc6c8a7388ea082b7f84b"
+      "bytes": 85113,
+      "sha256": "484b59da28f5ea028283665d94555bec8ebde37a053fdd1c906d5756f05ba13a"
     }
   ]
 }

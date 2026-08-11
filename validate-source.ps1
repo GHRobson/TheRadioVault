@@ -498,7 +498,10 @@ foreach ($marker in @('IConnectedAccessService', 'NativeConnectedAccessService')
 }
 $mainWindowViewPath = Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\MainWindow.axaml"
 $mainWindowViewText = Get-Content $mainWindowViewPath -Raw
-if ($mainWindowViewText -notmatch "ShowMoveToThisDevice") {
+$desktopThemePath = Join-Path $root "TheRadioVault.Desktop.Avalonia\App.axaml"
+$desktopThemeText = Get-Content $desktopThemePath -Raw
+if ($mainWindowViewText -notmatch "PrimaryTransportIconTemplate" -or
+    $desktopThemeText -notmatch "ShowMoveToThisDevice") {
     throw "The native centre transport is missing its move-to-this-device state."
 }
 $dashboardViewPath = Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\DashboardView.axaml"
