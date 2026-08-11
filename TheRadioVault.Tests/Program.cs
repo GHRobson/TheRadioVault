@@ -390,7 +390,6 @@ var tests = new (string Name, Action Run)[]
     ("Knowledge exports teach AI agents the portable database", KnowledgeExportsTeachAiAgentsThePortableDatabase),
     ("Complete knowledge exports include every show and transcript", CompleteKnowledgeExportsIncludeEveryShowAndTranscript),
     ("Knowledge export UI is always archive-wide", KnowledgeExportUiIsAlwaysArchiveWide),
-    ("Knowledge imports run as resumable background jobs", KnowledgeImportsRunAsResumableBackgroundJobs),
     ("Knowledge import progress bars are determinate", KnowledgeImportProgressBarsAreDeterminate),
     ("Knowledge matching uses one archive index", KnowledgeMatchingUsesOneArchiveIndex),
     ("Installers prevent accidental downgrades", InstallersPreventAccidentalDowngrades),
@@ -6458,29 +6457,6 @@ static void KnowledgeExportUiIsAlwaysArchiveWide()
     True(web.Contains("async function exportResearchPack()", StringComparison.Ordinal));
     True(web.Contains("await exportResearchPack();", StringComparison.Ordinal));
     True(!web.Contains("Choose a show to export.", StringComparison.Ordinal));
-}
-
-static void KnowledgeImportsRunAsResumableBackgroundJobs()
-{
-    var root = SourceRoot();
-    var provider = File.ReadAllText(Path.Combine(root, "TheRadioVault.Infrastructure", "Services", "WebArchiveProvider.RemoteAdministration.cs"));
-    True(provider.Contains("StartResearchPackImport", StringComparison.Ordinal));
-    True(provider.Contains("BackgroundJobCategory.ResearchImport", StringComparison.Ordinal));
-    True(provider.Contains("GetResearchPackImportStatus", StringComparison.Ordinal));
-    True(provider.Contains("CreateKnowledgeImportBackup", StringComparison.Ordinal));
-    True(provider.Contains("progress: wikiProgress", StringComparison.Ordinal));
-
-    var server = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "ViewModels", "ServerSettingsViewModel.cs"));
-    True(server.Contains("StartKnowledgeDatabaseImport", StringComparison.Ordinal));
-    True(server.Contains("GetKnowledgeDatabaseImportStatus", StringComparison.Ordinal));
-    True(server.Contains("CancelKnowledgeDatabaseImport", StringComparison.Ordinal));
-    True(server.Contains("ExportKnowledgeDatabaseAsync", StringComparison.Ordinal));
-    True(File.Exists(Path.Combine(root, "TheRadioVault.Server", "Services", "ServerKnowledgeFileService.cs")));
-
-    var web = File.ReadAllText(Path.Combine(root, "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
-    True(web.Contains("pollResearchPackImport", StringComparison.Ordinal));
-    True(web.Contains("FederationResearchImportStatus", StringComparison.Ordinal));
-    True(web.Contains("researchImportProgressCard", StringComparison.Ordinal));
 }
 
 static void KnowledgeImportProgressBarsAreDeterminate()

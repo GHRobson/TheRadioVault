@@ -1,6 +1,6 @@
 {
   "version": "0.41.0",
-  "generatedAtUtc": "2026-08-11T21:21:56.4493270Z",
+  "generatedAtUtc": "2026-08-11T21:28:30.4390840Z",
   "fileCount": 1051,
   "files": [
     {
@@ -40,8 +40,8 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 172275,
-      "sha256": "8b3ac8710fcb385b1a699a77e70a64a36dba385dbaa969d874f6e4e87cf8b446"
+      "bytes": 172298,
+      "sha256": "4d738e670e625a7b6ee4cbd6f6bacd55713686384d9323aec28c10913c0657f8"
     },
     {
       "path": "DEVELOPMENT.md",
@@ -2155,8 +2155,8 @@
     },
     {
       "path": "TheRadioVault.SourceChecks/Program.cs",
-      "bytes": 10894,
-      "sha256": "95ee9ecd014b3056088452b328668113c879cab87b1adb33dfb47fe1629625f0"
+      "bytes": 12825,
+      "sha256": "080104522e65bfd78db4e01b31aea5ad3f543f5a1d5c521d91904dd051c4e93d"
     },
     {
       "path": "TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj",
@@ -2165,8 +2165,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 574092,
-      "sha256": "b9a1fffb2664b39cbc5fd272ff78f4a65c9bbe2a3347f98b9b1c3977ecde068f"
+      "bytes": 572388,
+      "sha256": "700f78e1a6af4ecc6cf09256feb6de3427335bd3cd959e30a079bc81f50c3515"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",
@@ -2645,8 +2645,8 @@
     },
     {
       "path": "docs/architecture/SOURCE_AUDIT_2026-08-11.md",
-      "bytes": 12476,
-      "sha256": "b932dfb22b4b83f8b920427237a40448eee2ffd3d72701fc81a0c421d498c3b9"
+      "bytes": 12492,
+      "sha256": "d1f93b8025bf6c774ad7fc4d5a51a87e36dd4d2cc62b5f0c8d7625aaca1b9991"
     },
     {
       "path": "docs/current/ALPHA1_BUILDFIX1_STATIC_VALIDATION.md",

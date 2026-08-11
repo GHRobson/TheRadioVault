@@ -2,7 +2,8 @@ var checks = new (string Name, Action Run)[]
 {
     ("Web playback and queue routes stay behind one server boundary", WebPlaybackAndQueueRoutesStayBehindOneServerBoundary),
     ("Federation administration routes stay behind one server boundary", FederationAdministrationRoutesStayBehindOneServerBoundary),
-    ("Desktop Saved and transport controls match native icon parity", DesktopSavedAndTransportControlsMatchNativeParity)
+    ("Desktop Saved and transport controls match native icon parity", DesktopSavedAndTransportControlsMatchNativeParity),
+    ("Knowledge imports retain resumable background-job surfaces", KnowledgeImportsRetainResumableBackgroundJobSurfaces)
 };
 
 var selectedChecks = args.Length == 0
@@ -185,6 +186,31 @@ static void DesktopSavedAndTransportControlsMatchNativeParity()
     var transferCoordinator = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Web", "Services", "PlaybackTransferCoordinator.cs"));
     True(transferCoordinator.Contains("CommitToleranceMs = 3_000", StringComparison.Ordinal));
+}
+
+static void KnowledgeImportsRetainResumableBackgroundJobSurfaces()
+{
+    var root = SourceRoot();
+    var provider = File.ReadAllText(Path.Combine(root, "TheRadioVault.Infrastructure", "Services", "WebArchiveProvider.RemoteAdministration.cs"));
+    True(provider.Contains("StartResearchPackImport", StringComparison.Ordinal));
+    True(provider.Contains("BackgroundJobCategory.ResearchImport", StringComparison.Ordinal));
+    True(provider.Contains("GetResearchPackImportStatus", StringComparison.Ordinal));
+    True(provider.Contains("CreateKnowledgeImportBackup", StringComparison.Ordinal));
+    True(provider.Contains("progress: wikiProgress", StringComparison.Ordinal));
+
+    var server = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "ViewModels", "ServerSettingsViewModel.cs"));
+    True(server.Contains("StartKnowledgeDatabaseImport", StringComparison.Ordinal));
+    True(server.Contains("GetKnowledgeDatabaseImportStatus", StringComparison.Ordinal));
+    True(server.Contains("CancelKnowledgeDatabaseImport", StringComparison.Ordinal));
+    True(server.Contains("ExportKnowledgeDatabaseAsync", StringComparison.Ordinal));
+    True(File.Exists(Path.Combine(root, "TheRadioVault.Server", "Services", "ServerKnowledgeFileService.cs")));
+
+    var webServices = Path.Combine(root, "TheRadioVault.Web", "Services");
+    var webShell = File.ReadAllText(Path.Combine(webServices, "LocalWebServer.cs"));
+    var administrationRoutes = File.ReadAllText(Path.Combine(webServices, "LocalWebServer.FederationAdministration.cs"));
+    True(webShell.Contains("pollResearchPackImport", StringComparison.Ordinal));
+    True(webShell.Contains("researchImportProgressCard", StringComparison.Ordinal));
+    True(administrationRoutes.Contains("FederationResearchImportStatus", StringComparison.Ordinal));
 }
 
 static string SourceRoot()
