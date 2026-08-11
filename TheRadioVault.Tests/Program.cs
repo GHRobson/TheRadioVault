@@ -292,6 +292,7 @@ var tests = new (string Name, Action Run)[]
         Equal("/api/v1/player/transfer/cancel", WebApiRoutes.PlayerTransferCancel);
         Equal("/api/v1/player/transfer/source-stopped", WebApiRoutes.PlayerTransferSourceStopped);
     }),
+    ("Web playback and queue routes stay behind one server boundary", WebPlaybackAndQueueRoutesStayBehindOneServerBoundary),
     ("Alpha 6 remote administration routes are versioned", () =>
     {
         Equal("/api/v1/federation/settings", WebApiRoutes.FederationSettings);
@@ -463,6 +464,42 @@ foreach (var test in selectedTests)
 
 Console.WriteLine($"{selectedTests.Length - failures.Count}/{selectedTests.Length} smoke tests passed.");
 return failures.Count == 0 ? 0 : 1;
+
+static void WebPlaybackAndQueueRoutesStayBehindOneServerBoundary()
+{
+    var services = Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services");
+    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var playbackQueue = File.ReadAllText(Path.Combine(services, "LocalWebServer.PlaybackQueue.cs"));
+
+    True(dispatcher.Contains("TryHandlePlaybackQueueRouteAsync(", StringComparison.Ordinal));
+    True(!dispatcher.Contains("private async Task HandlePlayerApiAsync(", StringComparison.Ordinal));
+    True(!dispatcher.Contains("private async Task HandleQueueApiAsync(", StringComparison.Ordinal));
+    True(playbackQueue.Contains("private async Task<bool> TryHandlePlaybackQueueRouteAsync(", StringComparison.Ordinal));
+
+    var routeMarkers = new[]
+    {
+        "WebApiRoutes.PlayerTransferBegin",
+        "WebApiRoutes.PlayerTransferReady",
+        "WebApiRoutes.PlayerTransferCommit",
+        "WebApiRoutes.PlayerTransferCancel",
+        "WebApiRoutes.PlayerTransferSourceStopped",
+        "WebApiRoutes.PlayerCommand",
+        "WebApiRoutes.PlayerWebProgress",
+        "WebApiRoutes.Player,",
+        "WebApiRoutes.QueueAdd",
+        "WebApiRoutes.QueueClear",
+        "TryMatchQueueAction(path, \"remove\"",
+        "TryMatchQueueAction(path, \"move\"",
+        "WebApiRoutes.Queue,"
+    };
+    var priorIndex = -1;
+    foreach (var marker in routeMarkers)
+    {
+        var index = playbackQueue.IndexOf(marker, StringComparison.Ordinal);
+        True(index > priorIndex, $"Playback/queue route order changed at {marker}.");
+        priorIndex = index;
+    }
+}
 
 
 static void NewShowAliasesNormalize()
@@ -1782,33 +1819,96 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
 
     var mobileCacheSessionSource = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    var mobilePlaybackOwnershipSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Playback",
+        "MobilePlaybackOwnershipCoordinator.cs"));
+    var mobilePlaybackTimelineSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Playback",
+        "MobilePlaybackTimeline.cs"));
+    var mobilePlaybackSynchronizationSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Playback",
+        "MobilePlaybackSynchronizationCoordinator.cs"));
+    var mobileMetadataSynchronizationSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Synchronization",
+        "MobileMetadataSynchronizationCoordinator.cs"));
+    var mobileExploreQuerySource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Explore",
+        "MobileExploreQueryCoordinator.cs"));
+    var mobileKnowledgeQuerySource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Knowledge",
+        "MobileKnowledgeQueryCoordinator.cs"));
+    var mobileLibraryQuerySource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Library",
+        "MobileLibraryQueryCoordinator.cs"));
+    var mobilePairingSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Pairing",
+        "MobilePairingCoordinator.cs"));
+    var mobileDownloadedProgressSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Synchronization",
+        "MobileDownloadedProgressSynchronizationCoordinator.cs"));
     True(mobileCacheSessionSource.Contains("SynchronizeMetadataCacheAsync", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("BuildCachedArchivePeriods", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("RefreshExploreCacheAsync", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("SynchronizeLibraryAsync", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("BootstrapEmptyCacheAsync", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("afterCacheApplied", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("BuildCachedArchivePeriods", StringComparison.Ordinal));
+    True(mobileExploreQuerySource.Contains("RefreshCacheAsync", StringComparison.Ordinal));
+    True(mobileExploreQuerySource.Contains("BuildDashboard", StringComparison.Ordinal));
+    True(mobileExploreQuerySource.Contains("LoadImagesAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("IsMetadataSyncing", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ApplyOnlineOverview", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("_metadataSyncGate.WaitAsync()", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("ConfirmForeignOwner", StringComparison.Ordinal));
+    True(mobileMetadataSynchronizationSource.Contains("_gate.WaitAsync", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("ConfirmForeignOwner", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ObserveSharedPlaybackSafelyAsync", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("if (!session.Player.IsPlaying)", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("ObserveSafelyAsync", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("ProjectPosition", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("StopForCommittedTransferAsync", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("AcknowledgePlaybackSourceStoppedAsync", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("if (!session.Player.IsPlaying)", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("WasCommittedAwayFromThisDevice", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("NeedsSourceStopAcknowledgement", StringComparison.Ordinal));
+    True(mobilePlaybackOwnershipSource.Contains("_foreignOwnerCandidateSamples >= 2", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("SynchronizeDownloadedProgressWithServerAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("SynchronizeStoredDownloadedProgressWithServerAsync", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("hasNewerOfflineProgress", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("AllowRewind: false", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("ExpectedGeneration: 0", StringComparison.Ordinal));
+    True(mobileDownloadedProgressSource.Contains("HasNewerOfflineProgress", StringComparison.Ordinal));
+    True(mobileDownloadedProgressSource.Contains("AllowRewind: false", StringComparison.Ordinal));
+    True(mobileDownloadedProgressSource.Contains("ExpectedGeneration: 0", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("_downloads.ReconcileSummariesAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ApplyPlaybackProgress", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("LoadArtworkAsync", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("overview.ContinueListening", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("_pendingDecoderLogicalPositionMs", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("overview.ContinueListening", StringComparison.Ordinal));
+    True(mobilePlaybackTimelineSource.Contains("_pendingDecoderLogicalPositionMs", StringComparison.Ordinal));
+    True(mobilePlaybackTimelineSource.Contains("CaptureDecoderPosition", StringComparison.Ordinal));
+    True(mobilePlaybackTimelineSource.Contains("TryGetNextPart", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("Finishing the startup sync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("public string MiniPlayerTime", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("CombineCollections", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("NormalizeCollectionName", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("BuildLibraryKnowledgeSnapshot", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("BuildLibraryKnowledgeCoverage", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("CombineCollections", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("NormalizeCollectionName", StringComparison.Ordinal));
+    True(mobileKnowledgeQuerySource.Contains("BuildLibrarySnapshot", StringComparison.Ordinal));
+    True(mobileKnowledgeQuerySource.Contains("BuildLibraryCoverage", StringComparison.Ordinal));
+    True(mobileKnowledgeQuerySource.Contains("ResolveDateReviewAsync", StringComparison.Ordinal));
+    True(mobilePairingSource.Contains("MobilePairingOperationResult", StringComparison.Ordinal));
+    True(mobilePairingSource.Contains("PairManuallyAsync", StringComparison.Ordinal));
+    True(mobilePairingSource.Contains("public void Forget", StringComparison.Ordinal));
 
     var iconGenerator = File.ReadAllText(Path.Combine(SourceRoot(), "design", "logo", "generate-brand-assets.py"));
     True(iconGenerator.Contains("RadioVault-logo-ios-source.png", StringComparison.Ordinal));
@@ -1828,6 +1928,21 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(downloads.Contains("RemoveCompletedAsync", StringComparison.Ordinal));
     True(downloads.Contains("TrimToLimitAsync", StringComparison.Ordinal));
     True(downloads.Contains("RepairAsync", StringComparison.Ordinal));
+
+    var downloadCoordinator = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Downloads", "MobileDownloadCoordinator.cs"));
+    True(downloadCoordinator.Contains("SelectAutomaticDownload", StringComparison.Ordinal));
+    True(downloadCoordinator.Contains("ResumeAsync", StringComparison.Ordinal));
+    True(downloadCoordinator.Contains("CleanupCompletedAsync", StringComparison.Ordinal));
+    True(downloadCoordinator.Contains("protectedEpisodeId", StringComparison.Ordinal));
+    True(downloadCoordinator.Contains("ReconcileSummariesAsync", StringComparison.Ordinal));
+
+    var downloadedProgressSynchronization = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Synchronization",
+        "MobileDownloadedProgressSynchronizationCoordinator.cs"));
+    True(downloadedProgressSynchronization.Contains("HasNewerOfflineProgress", StringComparison.Ordinal));
+    True(downloadedProgressSynchronization.Contains("if (result.Conflict)", StringComparison.Ordinal));
+    True(downloadedProgressSynchronization.Contains("IncrementPlayCount", StringComparison.Ordinal));
 
     var downloadsView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "DownloadsViewController.cs"));
@@ -1893,7 +2008,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("WebPlaybackTransferBeginRequest", StringComparison.Ordinal));
     True(mobileSession.Contains("WebPlaybackTransferReadyRequest", StringComparison.Ordinal));
     True(mobileSession.Contains("WebPlaybackTransferCommitRequest", StringComparison.Ordinal));
-    True(mobileSession.Contains("WebPlaybackTransferSourceStoppedRequest", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("WebPlaybackTransferSourceStoppedRequest", StringComparison.Ordinal));
     True(mobileSession.Contains("WebOfflineProgressUpdate", StringComparison.Ordinal));
     True(mobileSession.Contains("DurableProgressInterval", StringComparison.Ordinal));
     True(mobileSession.Contains("DownloadedBroadcasts", StringComparison.Ordinal));
@@ -1910,6 +2025,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("TryAutomaticDownloadAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("LoadKnowledgeAsync", StringComparison.Ordinal));
     True(mobileSession.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
+    True(mobileSession.Contains("new MobileDownloadCoordinator", StringComparison.Ordinal));
+    True(!mobileSession.Contains("_downloadCancellation", StringComparison.Ordinal));
 
     var pendingChanges = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "Services", "MobileOfflineMutationStore.cs"));
@@ -1918,6 +2035,15 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(pendingChanges.Contains("EnqueueListeningStatusAsync", StringComparison.Ordinal));
     True(pendingChanges.Contains("EnqueueMomentAsync", StringComparison.Ordinal));
     True(pendingChanges.Contains("FileOptions.WriteThrough", StringComparison.Ordinal));
+
+    var offlineMutationSynchronization = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Synchronization",
+        "MobileOfflineMutationSynchronizationCoordinator.cs"));
+    True(offlineMutationSynchronization.Contains("_gate.WaitAsync", StringComparison.Ordinal));
+    True(offlineMutationSynchronization.Contains("MutationAlreadyAppliedAsync", StringComparison.Ordinal));
+    True(offlineMutationSynchronization.Contains("!result.Changed && !result.Duplicate", StringComparison.Ordinal));
+    True(offlineMutationSynchronization.Contains("MarkFailedAsync", StringComparison.Ordinal));
+    True(offlineMutationSynchronization.Contains("break;", StringComparison.Ordinal));
 
     var syncDiagnostics = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SyncDiagnosticsViewController.cs"));
@@ -5795,9 +5921,12 @@ static void OfflineProgressOrderingPreservesNewerManualChanges()
 
     var mobileSession = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    var mobileTimeline = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.Mobile", "Playback", "MobilePlaybackTimeline.cs"));
     True(mobileSession.Contains("DownloadedProgressSnapshot", StringComparison.Ordinal));
     True(mobileSession.Contains("CaptureDownloadedProgress", StringComparison.Ordinal));
-    True(mobileSession.Contains("_completedPlaybackEpisodeId", StringComparison.Ordinal));
+    True(mobileTimeline.Contains("public bool Completed", StringComparison.Ordinal));
+    True(mobileSession.Contains("_playbackTimeline.IsCompleted()", StringComparison.Ordinal));
     True(mobileSession.Contains("changed || snapshot.IncrementPlayCount", StringComparison.Ordinal));
     var playAsync = mobileSession.IndexOf("public async Task PlayAsync", StringComparison.Ordinal);
     var flushPrevious = mobileSession.IndexOf("await FlushPlaybackAsync().ConfigureAwait(false);", playAsync, StringComparison.Ordinal);

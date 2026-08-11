@@ -1,3 +1,15 @@
+# Unreleased — 0.44 architecture and testability
+
+- Began splitting the mobile session façade by extracting shared playback-ownership and handoff-evidence rules into a focused coordinator with behavioural regression tests.
+- Extracted multipart logical-position mapping, decoder-settling protection, seeking and completion state into a side-effect-free mobile playback timeline with focused regression coverage.
+- Extracted remote playback observation, deterministic playhead projection and committed handoff source-stop acknowledgement behind fakeable transport and decoder boundaries.
+- Extracted serialized mobile library metadata synchronization—including change-feed cursors, reset paging, delta/deletion application, durable cache adoption and activity state—behind a fakeable transport with focused behavioural tests.
+- Extracted durable mobile offline-mutation synchronization for favourites, listened state and Moments, including ordered single-flight replay, duplicate acceptance, already-applied recovery and first-failure retention.
+- Extracted mobile download lifecycle, Wi-Fi/retention policy, pause/resume/cancel state, storage maintenance and durable-index projection behind a focused coordinator, plus isolated downloaded-progress authority reconciliation from the session façade.
+- Extracted cache-first mobile Explore page/image hydration and Knowledge snapshot, coverage and triage queries behind fakeable transports, reducing the session façade while preserving offline Library fallbacks.
+- Extracted mobile discovery/pairing transitions and cache-first Library projection, filtering, archive grouping and search contracts behind focused coordinators, including normalized duplicate-show handling.
+- Extracted the versioned player handoff, playback command and queue HTTP routes from the 10,000-line web-server dispatcher into one focused partial boundary while preserving route order, method rules and handler bodies.
+
 # 0.41.0
 
 - Made the source repository public so standard GitHub-hosted parity builds are no longer metered, while retaining read-only workflow permissions.
