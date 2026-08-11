@@ -29,6 +29,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheRadioVault.Infrastructur
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheRadioVault.Server", "TheRadioVault.Server\TheRadioVault.Server.csproj", "{6F0E5A2D-3C7B-4F96-A815-6D49704E8432}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "TheRadioVault.SourceChecks", "TheRadioVault.SourceChecks\TheRadioVault.SourceChecks.csproj", "{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -195,6 +197,18 @@ Global
 		{6F0E5A2D-3C7B-4F96-A815-6D49704E8432}.Release|x64.Build.0 = Release|Any CPU
 		{6F0E5A2D-3C7B-4F96-A815-6D49704E8432}.Release|x86.ActiveCfg = Release|Any CPU
 		{6F0E5A2D-3C7B-4F96-A815-6D49704E8432}.Release|x86.Build.0 = Release|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Debug|x64.Build.0 = Debug|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Debug|x86.Build.0 = Debug|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Release|Any CPU.Build.0 = Release|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Release|x64.ActiveCfg = Release|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Release|x64.Build.0 = Release|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Release|x86.ActiveCfg = Release|Any CPU
+		{8B0A3CDC-8E7F-48E2-BA1E-17F0F715A766}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

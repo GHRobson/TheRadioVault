@@ -19,6 +19,7 @@
 | `TheRadioVault.Platform.Windows` | Windows/WPF implementations of application ports | Windows-only |
 | `TheRadioVault` | Current WPF composition root and presentation | Windows-only |
 | `TheRadioVault.Tests` | Cross-platform capability/regression console suite | Neutral |
+| `TheRadioVault.SourceChecks` | Dependency-free source, route-order and packaging boundary checks | Neutral |
 
 ## Rules
 
@@ -85,3 +86,21 @@ The proof does not claim that WPF views have disappeared. Remaining windows, XAM
 `LocalWebServer` remains the HTTP listener and global dispatcher. It owns authentication, common request parsing, the ordered relationship between route families, final media/static fallbacks and shared response helpers. `LocalWebServer.PlaybackQueue.cs` owns the contiguous player-transfer, playback-command, player-state and queue route family, including its HTTP method checks, queue action matcher and response handlers. The main dispatcher reaches this family through exactly one `TryHandlePlaybackQueueRouteAsync` call.
 
 Route order and observable protocol behaviour are compatibility boundaries. Moving a handler must not rename a route, widen an allowed method, change a status code or reorder the family relative to broadcast details, archive health, Moments, artwork and audio. Playback or queue routes must not be added back inline to `LocalWebServer.cs`; extend the focused partial instead.
+
+## 0.44 federation administration route boundary
+
+`LocalWebServer.FederationAdministration.cs` owns the authenticated federation status/bootstrap, Library synchronization and scanning, parity, settings, playback preferences, Research workspace/coverage/date review, Research-pack administration and Wiki-pack administration route family. The main dispatcher reaches this ordered family through exactly one `TryHandleFederationAdministrationRouteAsync` call.
+
+Desktop pairing remains before authorization in the main dispatcher, because it establishes the credential used by the federation family. The normal client bootstrap and client-operation APIs remain after the federation boundary. Moving or extending this route family must preserve that security order, every HTTP method rule, status code and handler contract.
+
+## 0.44 desktop playback state boundary
+
+`DesktopPlaybackStateMachine` is the platform-neutral owner of loaded, playing, busy, remote-owner, pending-transport, desired-playback and user-intent transitions for desktop playback. `PlaybackViewModel` projects that state into Avalonia bindings and remains responsible for decoder, persistence, dispatcher and handoff-service side effects; it must not recreate parallel transport flags.
+
+`RemotePlaybackProgressInterpolator` owns the monotonic projection rule between authoritative remote heartbeats. Corrections of up to three seconds within the same broadcast, owner and ownership generation are treated as network lag; a larger backwards correction, a new owner, a new generation or a new broadcast establishes a fresh baseline so real seeks remain visible.
+
+## 0.44 test-runner boundary
+
+`TheRadioVault.Tests` remains the behavioral capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.SourceChecks` is the dependency-free home for deliberate source-text, route-order, packaging and presentation-marker inspections. A test that can exercise compiled behavior must not be added to SourceChecks merely because text inspection is easier.
+
+Both runners are required by the Windows release gate and the local macOS release gate. SourceChecks supports the same optional name filters as the behavioral runner so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.

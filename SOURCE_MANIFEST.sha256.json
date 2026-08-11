@@ -1,7 +1,7 @@
 {
   "version": "0.41.0",
-  "generatedAtUtc": "2026-08-11T20:40:57.1180480Z",
-  "fileCount": 1046,
+  "generatedAtUtc": "2026-08-11T21:28:30.4390840Z",
+  "fileCount": 1051,
   "files": [
     {
       "path": ".editorconfig",
@@ -40,13 +40,13 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 171507,
-      "sha256": "dc318ba5e786e212832eebe6e57399b98872b241a719aaf3caadf9d2496d4d82"
+      "bytes": 172298,
+      "sha256": "4d738e670e625a7b6ee4cbd6f6bacd55713686384d9323aec28c10913c0657f8"
     },
     {
       "path": "DEVELOPMENT.md",
-      "bytes": 4758,
-      "sha256": "d87eef772afeb48d67700ea2c3c1dd82c4b904d9938cfb6ec4e93541b67bba74"
+      "bytes": 5204,
+      "sha256": "e1dd4ce104d4be9cfff85f435ca0bf66bff05603db817ea58efad7159959c28a"
     },
     {
       "path": "LEGACY-FEDERATION-SOURCE.txt",
@@ -274,6 +274,11 @@
       "sha256": "6bdf9972e412899ba59f7a5285311fb47e287f008db3a23ce7460e64ee998dd4"
     },
     {
+      "path": "TheRadioVault.Application/Services/DesktopPlaybackStateMachine.cs",
+      "bytes": 2558,
+      "sha256": "ca3bb100eb7dd335e4fccfa5e907cb5fa4f59f23b1e013633a5bd6f9a202143f"
+    },
+    {
       "path": "TheRadioVault.Application/Services/PlaybackCompletionCoordinator.cs",
       "bytes": 2055,
       "sha256": "1cd2f3cf52c9895ae77b0d14792f8e831f95ee19891ec9866edfa32fb13a029f"
@@ -297,6 +302,11 @@
       "path": "TheRadioVault.Application/Services/RemoteLibrarySessionCoordinator.cs",
       "bytes": 10172,
       "sha256": "c7accfb39a011cc45b3429c785c557164e0f0b2a508eb3eaedeaf3f8d6c863c0"
+    },
+    {
+      "path": "TheRadioVault.Application/Services/RemotePlaybackProgressInterpolator.cs",
+      "bytes": 1530,
+      "sha256": "8e50567136310057e5e9d479847451b0bc0007bee43a1406ed896d588e8e4ff9"
     },
     {
       "path": "TheRadioVault.Application/TheRadioVault.Application.csproj",
@@ -1665,8 +1675,8 @@
     },
     {
       "path": "TheRadioVault.Presentation/ViewModels/PlaybackViewModel.cs",
-      "bytes": 97689,
-      "sha256": "e0c78381eba9c54303fbab0e5ec82c7dc4b6252c50728d2f0c18457ae9616f39"
+      "bytes": 96615,
+      "sha256": "7878905a8a403a277fec0b5896d4f1b060780c61d67ada9af3a8cba7856ba817"
     },
     {
       "path": "TheRadioVault.Presentation/ViewModels/QueueItemViewModel.cs",
@@ -2144,9 +2154,19 @@
       "sha256": "c0f1deab7eb4b6193af185da2dc005fbdf8432c657f3a2f7789470456983f5e1"
     },
     {
+      "path": "TheRadioVault.SourceChecks/Program.cs",
+      "bytes": 12825,
+      "sha256": "080104522e65bfd78db4e01b31aea5ad3f543f5a1d5c521d91904dd051c4e93d"
+    },
+    {
+      "path": "TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj",
+      "bytes": 299,
+      "sha256": "d4a81ce5adacb15e6320ffde5e85c436fda400d159c1de3c021a9b7ef992bac1"
+    },
+    {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 577505,
-      "sha256": "5130536027abc24a618d5348ee61e304e044c65bc85ca6cce51091d388e9fc4d"
+      "bytes": 572388,
+      "sha256": "700f78e1a6af4ecc6cf09256feb6de3427335bd3cd959e30a079bc81f50c3515"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",
@@ -2404,6 +2424,11 @@
       "sha256": "9b58009a7ba2a2f8c4df27dbb7debccb8802197b14f6f7b34c7d1cdcfca6bfc3"
     },
     {
+      "path": "TheRadioVault.Web/Services/LocalWebServer.FederationAdministration.cs",
+      "bytes": 11413,
+      "sha256": "f88b3a3383ea9b2a5d79d66cc6f022a61359f75d398aaae0c39edb07434e0869"
+    },
+    {
       "path": "TheRadioVault.Web/Services/LocalWebServer.FederationLibrarySync.cs",
       "bytes": 10733,
       "sha256": "eb11e3ae1a7e0f0d3459c8e4621703c7152a3fc5d75f1eeec623a734c6d7edc2"
@@ -2435,8 +2460,8 @@
     },
     {
       "path": "TheRadioVault.Web/Services/LocalWebServer.cs",
-      "bytes": 563990,
-      "sha256": "2e40d84543d823d3d3c6a7f2f22576490631a3d8ab99349dc7846f4ba850fd0f"
+      "bytes": 551821,
+      "sha256": "cd3f0545ada2d1ef4f0d0f6885c780118417c1dcb2a7745cb18cbe7a53b7d024"
     },
     {
       "path": "TheRadioVault.Web/Services/OfflineProgressOrderingPolicy.cs",
@@ -2460,8 +2485,8 @@
     },
     {
       "path": "TheRadioVault.sln",
-      "bytes": 15419,
-      "sha256": "9cb075d8c4b0f653e67db946b67e19c9c3d89b2d7ef8e3f6c1075a95bb829419"
+      "bytes": 16569,
+      "sha256": "c43db3c79ad1bb7ee43763acefdb17cb14eddcb4e096feadde61fec41cfbdab3"
     },
     {
       "path": "TheRadioVault.slnLaunch",
@@ -2605,8 +2630,8 @@
     },
     {
       "path": "docs/architecture/ARCHITECTURE_BOUNDARIES.md",
-      "bytes": 11959,
-      "sha256": "64392b83dc10ce7ba1035054128eb35e6fd22f12bbf1cf3dda93075c22ad1b13"
+      "bytes": 14403,
+      "sha256": "7eea8b523406a38866d6baacd1dc7cc2dfc00d7efa7b550882f2933b18d50724"
     },
     {
       "path": "docs/architecture/AVALONIA_HANDOFF.md",
@@ -2620,8 +2645,8 @@
     },
     {
       "path": "docs/architecture/SOURCE_AUDIT_2026-08-11.md",
-      "bytes": 12028,
-      "sha256": "a735c6f767373e8cad30428c9fe3297f36a552269e54abdfa251f0fa46790d8c"
+      "bytes": 12492,
+      "sha256": "d1f93b8025bf6c774ad7fc4d5a51a87e36dd4d2cc62b5f0c8d7625aaca1b9991"
     },
     {
       "path": "docs/current/ALPHA1_BUILDFIX1_STATIC_VALIDATION.md",
@@ -5085,8 +5110,8 @@
     },
     {
       "path": "docs/roadmap/RADIOVAULT_ROADMAP.md",
-      "bytes": 7983,
-      "sha256": "a0099fdd9207ff41b67bbe9e2b67050d59ecfc225c0c09e606143c704643557e"
+      "bytes": 8306,
+      "sha256": "6e7408d6854797d166ae05fb98fbb51e23539fc923ece20657c78a013b68ccd8"
     },
     {
       "path": "global.json",
@@ -5135,8 +5160,8 @@
     },
     {
       "path": "local-release-gate.sh",
-      "bytes": 7092,
-      "sha256": "d6a9826f718065f45c322675eb3098c7f9c11d14ecd1090fd4253450450efeec"
+      "bytes": 7399,
+      "sha256": "4d78d7f1a1b52498a4dafd9c5fdead161785605c3f9c8bb22ea094b5fb9aeeae"
     },
     {
       "path": "package-client-installer.ps1",
@@ -5190,8 +5215,8 @@
     },
     {
       "path": "release-gate.ps1",
-      "bytes": 1746,
-      "sha256": "1e7ea049968bcdd6883201e651d2900250831e975d5b06f361e76caaaff3a0be"
+      "bytes": 2020,
+      "sha256": "98830275be99a498583e7f60e6555bec98b5f5e10d5b1d41b700ae242fac0e41"
     },
     {
       "path": "run-server-source.ps1",

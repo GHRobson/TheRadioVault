@@ -149,7 +149,6 @@ var tests = new (string Name, Action Run)[]
     }),
     ("Avalonia Settings events return to the UI dispatcher", AvaloniaSettingsEventsUseUiDispatcher),
     ("Avalonia Settings explains server ownership", AvaloniaSettingsExplainsServerOwnership),
-    ("Desktop Saved and transport controls match native icon parity", DesktopSavedAndTransportControlsMatchNativeParity),
     ("Mac client remains usable before server pairing", MacClientRemainsUsableBeforeServerPairing),
     ("Alpha 12 completes server ownership and status UX", Alpha12CompletesServerOwnershipAndStatusUx),
     ("Alpha 13 completes remote client monitoring and server installer", Alpha13CompletesRemoteClientMonitoringAndServerInstaller),
@@ -210,6 +209,8 @@ var tests = new (string Name, Action Run)[]
         True(live.Matches(item));
         Equal(50, live.ProgressPercent);
     }),
+    ("Desktop playback state machine preserves pending transport intent", DesktopPlaybackStateMachinePreservesPendingIntent),
+    ("Desktop remote progress interpolation removes heartbeat wiggle", DesktopRemoteProgressInterpolationRemovesHeartbeatWiggle),
     ("Transactional handoff keeps source authoritative until commit", TransactionalHandoffKeepsSourceUntilCommit),
     ("Unowned playback permits a gesture-authorized audible decoder", UnownedPlaybackPermitsAudibleDecoder),
     ("Transactional handoff rejects startup zero", TransactionalHandoffRejectsStartupZero),
@@ -292,7 +293,6 @@ var tests = new (string Name, Action Run)[]
         Equal("/api/v1/player/transfer/cancel", WebApiRoutes.PlayerTransferCancel);
         Equal("/api/v1/player/transfer/source-stopped", WebApiRoutes.PlayerTransferSourceStopped);
     }),
-    ("Web playback and queue routes stay behind one server boundary", WebPlaybackAndQueueRoutesStayBehindOneServerBoundary),
     ("Alpha 6 remote administration routes are versioned", () =>
     {
         Equal("/api/v1/federation/settings", WebApiRoutes.FederationSettings);
@@ -390,7 +390,6 @@ var tests = new (string Name, Action Run)[]
     ("Knowledge exports teach AI agents the portable database", KnowledgeExportsTeachAiAgentsThePortableDatabase),
     ("Complete knowledge exports include every show and transcript", CompleteKnowledgeExportsIncludeEveryShowAndTranscript),
     ("Knowledge export UI is always archive-wide", KnowledgeExportUiIsAlwaysArchiveWide),
-    ("Knowledge imports run as resumable background jobs", KnowledgeImportsRunAsResumableBackgroundJobs),
     ("Knowledge import progress bars are determinate", KnowledgeImportProgressBarsAreDeterminate),
     ("Knowledge matching uses one archive index", KnowledgeMatchingUsesOneArchiveIndex),
     ("Installers prevent accidental downgrades", InstallersPreventAccidentalDowngrades),
@@ -465,40 +464,47 @@ foreach (var test in selectedTests)
 Console.WriteLine($"{selectedTests.Length - failures.Count}/{selectedTests.Length} smoke tests passed.");
 return failures.Count == 0 ? 0 : 1;
 
-static void WebPlaybackAndQueueRoutesStayBehindOneServerBoundary()
+static void DesktopPlaybackStateMachinePreservesPendingIntent()
 {
-    var services = Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services");
-    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
-    var playbackQueue = File.ReadAllText(Path.Combine(services, "LocalWebServer.PlaybackQueue.cs"));
+    var state = new DesktopPlaybackStateMachine();
+    True(state.SetLoaded(true));
+    state.BeginTransport(desiredPlaying: true);
+    True(state.TransportPending);
+    True(state.DesiredPlaying);
+    True(!state.TransportIntentChanged);
 
-    True(dispatcher.Contains("TryHandlePlaybackQueueRouteAsync(", StringComparison.Ordinal));
-    True(!dispatcher.Contains("private async Task HandlePlayerApiAsync(", StringComparison.Ordinal));
-    True(!dispatcher.Contains("private async Task HandleQueueApiAsync(", StringComparison.Ordinal));
-    True(playbackQueue.Contains("private async Task<bool> TryHandlePlaybackQueueRouteAsync(", StringComparison.Ordinal));
+    True(state.TogglePendingTransportIntent());
+    True(!state.DesiredPlaying);
+    True(state.TransportIntentChanged);
+    state.AdoptObservedDesiredPlayback(desiredPlaying: true);
+    True(!state.DesiredPlaying);
 
-    var routeMarkers = new[]
-    {
-        "WebApiRoutes.PlayerTransferBegin",
-        "WebApiRoutes.PlayerTransferReady",
-        "WebApiRoutes.PlayerTransferCommit",
-        "WebApiRoutes.PlayerTransferCancel",
-        "WebApiRoutes.PlayerTransferSourceStopped",
-        "WebApiRoutes.PlayerCommand",
-        "WebApiRoutes.PlayerWebProgress",
-        "WebApiRoutes.Player,",
-        "WebApiRoutes.QueueAdd",
-        "WebApiRoutes.QueueClear",
-        "TryMatchQueueAction(path, \"remove\"",
-        "TryMatchQueueAction(path, \"move\"",
-        "WebApiRoutes.Queue,"
-    };
-    var priorIndex = -1;
-    foreach (var marker in routeMarkers)
-    {
-        var index = playbackQueue.IndexOf(marker, StringComparison.Ordinal);
-        True(index > priorIndex, $"Playback/queue route order changed at {marker}.");
-        priorIndex = index;
-    }
+    True(state.ObserveLocalPlayback(true));
+    True(state.IsPlaying);
+    True(!state.DesiredPlaying);
+    state.CompleteTransport();
+    True(!state.TransportPending);
+    True(state.DesiredPlaying);
+    True(!state.TransportIntentChanged);
+
+    state.ReleaseForRemoteHandoff();
+    True(!state.DesiredPlaying);
+    True(!state.TransportIntentChanged);
+}
+
+static void DesktopRemoteProgressInterpolationRemovesHeartbeatWiggle()
+{
+    var interpolator = new RemotePlaybackProgressInterpolator();
+    Equal(10_000L, interpolator.Project(42, 7, "iphone", true, 10_000));
+    Equal(10_000L, interpolator.Project(42, 7, "iphone", true, 9_500));
+    Equal(11_000L, interpolator.Project(42, 7, "iphone", true, 11_000));
+
+    // A large backwards correction is an intentional remote seek.
+    Equal(6_000L, interpolator.Project(42, 7, "iphone", true, 6_000));
+
+    // Ownership and broadcast changes establish fresh baselines immediately.
+    Equal(4_000L, interpolator.Project(42, 8, "mac", true, 4_000));
+    Equal(1_000L, interpolator.Project(99, 8, "mac", true, 1_000));
 }
 
 
@@ -683,56 +689,6 @@ static void AvaloniaSidebarHidesEmptyShowSections()
     var source = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Services", "Services", "LibraryBrowseService.cs"));
     True(source.Contains("countsByShow", StringComparison.Ordinal));
     True(source.Contains("CollectionIdentityResolver.Canonicalize", StringComparison.Ordinal));
-}
-
-static void DesktopSavedAndTransportControlsMatchNativeParity()
-{
-    var navigation = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "MainWindowViewModel.cs"));
-    True(navigation.Contains("new ShellNavigationItemViewModel(\"saved\", \"Saved\"", StringComparison.Ordinal));
-    True(!navigation.Contains("new ShellNavigationItemViewModel(\"favourites\", \"Favourites\"", StringComparison.Ordinal));
-    True(!navigation.Contains("new ShellNavigationItemViewModel(\"moments\", \"Moments\"", StringComparison.Ordinal));
-    True(navigation.Contains("Saved.SelectSectionAsync", StringComparison.Ordinal));
-
-    var savedView = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "SavedView.axaml"));
-    True(savedView.Contains("ShowFavouritesCommand", StringComparison.Ordinal));
-    True(savedView.Contains("ShowMomentsCommand", StringComparison.Ordinal));
-    True(savedView.Contains("RvStatFavouriteBrush", StringComparison.Ordinal));
-    True(savedView.Contains("RvMomentBrush", StringComparison.Ordinal));
-
-    var theme = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "App.axaml"));
-    True(theme.Contains("SkipBackIconTemplate", StringComparison.Ordinal));
-    True(theme.Contains("SkipForwardIconTemplate", StringComparison.Ordinal));
-    True(theme.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
-    True(theme.Contains("M8,1 L4,4 L8,7", StringComparison.Ordinal));
-    True(theme.Contains("M16,1 L20,4 L16,7", StringComparison.Ordinal));
-    True(theme.Contains("ShowPlayIcon", StringComparison.Ordinal));
-    True(theme.Contains("ShowPauseIcon", StringComparison.Ordinal));
-
-    var shell = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "MainWindow.axaml"));
-    True(shell.Contains("SkipBackIconTemplate", StringComparison.Ordinal));
-    True(shell.Contains("SkipForwardIconTemplate", StringComparison.Ordinal));
-    True(shell.Contains("PrimaryTransportIconTemplate", StringComparison.Ordinal));
-    True(!shell.Contains("Text=\"{Binding Playback.PlayPauseGlyph}\"", StringComparison.Ordinal));
-
-    var playback = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "PlaybackViewModel.cs"));
-    True(playback.Contains("PlaybackTransferAlignmentToleranceMs = 3_000", StringComparison.Ordinal));
-    True(playback.Contains("<= PlaybackTransferAlignmentToleranceMs", StringComparison.Ordinal));
-    True(playback.Contains("AlignPreparedDecoderAsync", StringComparison.Ordinal));
-    True(playback.Contains("canSeekPreparedDecoder", StringComparison.Ordinal));
-    True(playback.Contains("WaitForPreparedDecoderAsync", StringComparison.Ordinal));
-    True(playback.Contains("PlaybackTransferDecoderReadyTimeout", StringComparison.Ordinal));
-    True(playback.Contains("second stable sample", StringComparison.Ordinal));
-    True(playback.Contains("handoffStage = \"commit-transfer\"", StringComparison.Ordinal));
-    True(playback.Contains("[\"stage\"] = handoffStage", StringComparison.Ordinal));
-
-    var transferCoordinator = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "PlaybackTransferCoordinator.cs"));
-    True(transferCoordinator.Contains("CommitToleranceMs = 3_000", StringComparison.Ordinal));
 }
 
 static void ParserAcceptsCatalogueStyleInterviewFilenames()
@@ -6501,29 +6457,6 @@ static void KnowledgeExportUiIsAlwaysArchiveWide()
     True(web.Contains("async function exportResearchPack()", StringComparison.Ordinal));
     True(web.Contains("await exportResearchPack();", StringComparison.Ordinal));
     True(!web.Contains("Choose a show to export.", StringComparison.Ordinal));
-}
-
-static void KnowledgeImportsRunAsResumableBackgroundJobs()
-{
-    var root = SourceRoot();
-    var provider = File.ReadAllText(Path.Combine(root, "TheRadioVault.Infrastructure", "Services", "WebArchiveProvider.RemoteAdministration.cs"));
-    True(provider.Contains("StartResearchPackImport", StringComparison.Ordinal));
-    True(provider.Contains("BackgroundJobCategory.ResearchImport", StringComparison.Ordinal));
-    True(provider.Contains("GetResearchPackImportStatus", StringComparison.Ordinal));
-    True(provider.Contains("CreateKnowledgeImportBackup", StringComparison.Ordinal));
-    True(provider.Contains("progress: wikiProgress", StringComparison.Ordinal));
-
-    var server = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "ViewModels", "ServerSettingsViewModel.cs"));
-    True(server.Contains("StartKnowledgeDatabaseImport", StringComparison.Ordinal));
-    True(server.Contains("GetKnowledgeDatabaseImportStatus", StringComparison.Ordinal));
-    True(server.Contains("CancelKnowledgeDatabaseImport", StringComparison.Ordinal));
-    True(server.Contains("ExportKnowledgeDatabaseAsync", StringComparison.Ordinal));
-    True(File.Exists(Path.Combine(root, "TheRadioVault.Server", "Services", "ServerKnowledgeFileService.cs")));
-
-    var web = File.ReadAllText(Path.Combine(root, "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
-    True(web.Contains("pollResearchPackImport", StringComparison.Ordinal));
-    True(web.Contains("FederationResearchImportStatus", StringComparison.Ordinal));
-    True(web.Contains("researchImportProgressCard", StringComparison.Ordinal));
 }
 
 static void KnowledgeImportProgressBarsAreDeterminate()
