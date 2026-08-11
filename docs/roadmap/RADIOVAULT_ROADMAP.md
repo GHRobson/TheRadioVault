@@ -50,9 +50,9 @@ Exit criteria: conflict suites pass, a backup restores onto a clean server, and 
 
 Goal: reduce the cost and risk of every later feature without rewriting working behaviour.
 
-Status: in progress on `refactor/mobile-session-coordinators`. Mobile playback ownership, handoff evidence, multipart timeline mapping, remote-playhead observation, committed source-stop acknowledgement, library metadata synchronization, offline mutation replay, download lifecycle, downloaded-progress reconciliation, Explore cache/query orchestration and Knowledge queries/fallback coverage have been extracted from `MobileClientSession` into focused, behaviour-tested components while retaining the session as the public façade.
+Status: in progress on `refactor/mobile-session-coordinators`. Mobile playback ownership, handoff evidence, multipart timeline mapping, remote-playhead observation, committed source-stop acknowledgement, library metadata synchronization, offline mutation replay, download lifecycle, downloaded-progress reconciliation, Explore, Knowledge, pairing and Library query/projection rules have been extracted from `MobileClientSession` into focused, behaviour-tested components while retaining the session as the public façade.
 
-- Split the remaining pairing and Library/UI projection responsibilities out of `MobileClientSession`; sync, playback, download, Explore and Knowledge coordinators are extracted.
+- Keep `MobileClientSession` as the public high-level orchestrator; pairing, Library, sync, playback, download, Explore and Knowledge policy boundaries are now extracted.
 - Split `LocalWebServer` into static assets and grouped route handlers.
 - Introduce an explicit desktop playback state machine and progress interpolator.
 - Move behavioural checks from the 9,000-line smoke runner into subsystem test projects.

@@ -1812,6 +1812,16 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         "TheRadioVault.Client.Mobile",
         "Knowledge",
         "MobileKnowledgeQueryCoordinator.cs"));
+    var mobileLibraryQuerySource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Library",
+        "MobileLibraryQueryCoordinator.cs"));
+    var mobilePairingSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Pairing",
+        "MobilePairingCoordinator.cs"));
     var mobileDownloadedProgressSource = File.ReadAllText(Path.Combine(
         SourceRoot(),
         "TheRadioVault.Client.Mobile",
@@ -1822,8 +1832,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileMetadataSynchronizationSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
     True(mobileMetadataSynchronizationSource.Contains("BootstrapEmptyCacheAsync", StringComparison.Ordinal));
     True(mobileMetadataSynchronizationSource.Contains("afterCacheApplied", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("BuildCachedArchivePeriods", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("BuildCachedArchivePeriods", StringComparison.Ordinal));
     True(mobileExploreQuerySource.Contains("RefreshCacheAsync", StringComparison.Ordinal));
     True(mobileExploreQuerySource.Contains("BuildDashboard", StringComparison.Ordinal));
     True(mobileExploreQuerySource.Contains("LoadImagesAsync", StringComparison.Ordinal));
@@ -1854,11 +1864,14 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobilePlaybackTimelineSource.Contains("TryGetNextPart", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("Finishing the startup sync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("public string MiniPlayerTime", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("CombineCollections", StringComparison.Ordinal));
-    True(mobileCacheSessionSource.Contains("NormalizeCollectionName", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("CombineCollections", StringComparison.Ordinal));
+    True(mobileLibraryQuerySource.Contains("NormalizeCollectionName", StringComparison.Ordinal));
     True(mobileKnowledgeQuerySource.Contains("BuildLibrarySnapshot", StringComparison.Ordinal));
     True(mobileKnowledgeQuerySource.Contains("BuildLibraryCoverage", StringComparison.Ordinal));
     True(mobileKnowledgeQuerySource.Contains("ResolveDateReviewAsync", StringComparison.Ordinal));
+    True(mobilePairingSource.Contains("MobilePairingOperationResult", StringComparison.Ordinal));
+    True(mobilePairingSource.Contains("PairManuallyAsync", StringComparison.Ordinal));
+    True(mobilePairingSource.Contains("public void Forget", StringComparison.Ordinal));
 
     var iconGenerator = File.ReadAllText(Path.Combine(SourceRoot(), "design", "logo", "generate-brand-assets.py"));
     True(iconGenerator.Contains("RadioVault-logo-ios-source.png", StringComparison.Ordinal));

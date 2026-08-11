@@ -2,7 +2,9 @@ using System.Collections.Concurrent;
 using TheRadioVault.Client.Mobile.Downloads;
 using TheRadioVault.Client.Mobile.Explore;
 using TheRadioVault.Client.Mobile.Knowledge;
+using TheRadioVault.Client.Mobile.Library;
 using TheRadioVault.Client.Mobile.Models;
+using TheRadioVault.Client.Mobile.Pairing;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Client.Mobile.Playback;
 using TheRadioVault.Client.Mobile.Synchronization;
@@ -20,6 +22,8 @@ public sealed class MobileClientSession : IDisposable
     // valid transfer from ever reaching the commit and source-stop stages.
     private const long PlaybackTransferAlignmentToleranceMs = 3_000;
     private readonly MobileServerClient _server;
+    private readonly MobilePairingCoordinator _pairing;
+    private readonly MobileLibraryQueryCoordinator _libraryQueries;
     private readonly MobileDownloadCoordinator _downloads;
     private readonly MobileDownloadedProgressSynchronizationCoordinator _downloadProgressSynchronization;
     private readonly MobileOfflineMutationSynchronizationCoordinator _offlineMutationSynchronization;
@@ -60,6 +64,7 @@ public sealed class MobileClientSession : IDisposable
         IMobileDownloadPolicy downloadPolicy)
     {
         _server = server ?? throw new ArgumentNullException(nameof(server));
+        _pairing = new MobilePairingCoordinator(new MobilePairingTransport(_server));
         var downloadService = new MobileDownloadService(
             _server,
             Path.Combine(
@@ -95,6 +100,9 @@ public sealed class MobileClientSession : IDisposable
             "TheRadioVault",
             "MetadataCache");
         _metadataCache = new MobileMetadataCache(metadataRoot, _server.Connection?.ServerInstanceId ?? string.Empty);
+        _libraryQueries = new MobileLibraryQueryCoordinator(
+            new MobileLibraryQueryTransport(_server),
+            _metadataCache);
         _metadataSynchronization = new MobileMetadataSynchronizationCoordinator(
             new MobileMetadataSynchronizationTransport(_server),
             _metadataCache,
@@ -117,7 +125,6 @@ public sealed class MobileClientSession : IDisposable
             null,
             TimeSpan.FromSeconds(15),
             TimeSpan.FromSeconds(15));
-        IsPaired = _server.IsPaired;
     }
 
     public event EventHandler? StateChanged;
@@ -125,7 +132,7 @@ public sealed class MobileClientSession : IDisposable
     public event Action<int>? TabRequested;
 
     public bool IsBusy { get; private set; }
-    public bool IsPaired { get; private set; }
+    public bool IsPaired => _pairing.IsPaired;
     public bool IsLiveConnected => _server.IsReachable;
     public bool IsMetadataSyncing => _metadataSynchronization.IsSynchronizing;
     public bool ShowsOfflineIndicator => IsPaired && !IsLiveConnected;
@@ -139,7 +146,7 @@ public sealed class MobileClientSession : IDisposable
     public int CachedExplorePageCount => _metadataCache.Snapshot.ExplorePages.Count;
     public string StatusText { get; private set; } = "Pair this iPhone with your Radio Vault Server.";
     public string KnowledgeStatusText => _knowledgeQueries.Status;
-    public string ServerName => _server.Connection?.ServerDisplayName ?? "No server paired";
+    public string ServerName => _pairing.ServerName;
     public string ServerAddress => _server.Connection is { } connection
         ? $"https://{connection.ServerAddress}:{connection.SecurePort}"
         : string.Empty;
@@ -157,7 +164,7 @@ public sealed class MobileClientSession : IDisposable
     public IReadOnlyList<WebMomentSummary> SavedMoments { get; private set; } = [];
     public MobileKnowledgeSnapshot? Knowledge => _knowledgeQueries.Knowledge;
     public IReadOnlyList<WebQueueItem> QueueItems { get; private set; } = [];
-    public IReadOnlyList<DiscoveredRadioVaultServer> Servers { get; private set; } = [];
+    public IReadOnlyList<DiscoveredRadioVaultServer> Servers => _pairing.Servers;
     public MobileBroadcastItem? SelectedBroadcast { get; private set; }
     public string NowPlayingTitle { get; private set; } = "Nothing playing";
     public string NowPlayingSubtitle { get; private set; } = "Choose a broadcast from Home or Library";
@@ -258,7 +265,6 @@ public sealed class MobileClientSession : IDisposable
     {
         await RefreshSyncDiagnosticsAsync().ConfigureAwait(false);
         await _downloads.InitializeAsync().ConfigureAwait(false);
-        IsPaired = _server.IsPaired;
         if (IsPaired)
         {
             await _metadataSynchronization
@@ -384,23 +390,21 @@ public sealed class MobileClientSession : IDisposable
     public async Task SearchAsync(string searchText, bool hideCompleted = false)
     {
         var search = searchText?.Trim() ?? string.Empty;
-        if (_metadataCache.Snapshot.Broadcasts.Count > 0)
-        {
-            LibraryBroadcasts = QueryCachedBroadcasts(null, search, "All", null, null, hideCompleted);
-            StatusText = $"{LibraryBroadcasts.Count:N0} broadcast{(LibraryBroadcasts.Count == 1 ? string.Empty : "s")} shown";
-            Notify();
-            return;
-        }
-        if (!IsPaired || IsBusy) return;
-        SetBusy(true, search.Length == 0 ? "Loading the Library…" : $"Searching for “{search}”…");
+        var usesNetwork = !_libraryQueries.HasCachedLibrary;
+        if (usesNetwork && (!IsPaired || IsBusy)) return;
+        if (usesNetwork)
+            SetBusy(true, search.Length == 0 ? "Loading the Library…" : $"Searching for “{search}”…");
         try
         {
-            LibraryBroadcasts = Convert((await _server.BrowseAsync(
-                search, hideCompleted: hideCompleted).ConfigureAwait(false)).Broadcasts);
-            StatusText = $"{LibraryBroadcasts.Count:N0} broadcast{(LibraryBroadcasts.Count == 1 ? string.Empty : "s")} shown";
+            var result = await _libraryQueries.SearchAsync(search, hideCompleted).ConfigureAwait(false);
+            if (result.Succeeded) LibraryBroadcasts = result.Broadcasts;
+            StatusText = result.Status;
         }
-        catch (Exception exception) { StatusText = "Search failed: " + exception.Message; }
-        finally { SetBusy(false); }
+        finally
+        {
+            if (usesNetwork) SetBusy(false);
+            else Notify();
+        }
     }
 
     public async Task<IReadOnlyList<MobileBroadcastItem>> BrowseCollectionAsync(
@@ -413,37 +417,25 @@ public sealed class MobileClientSession : IDisposable
         string? collectionName = null)
     {
         var search = searchText?.Trim() ?? string.Empty;
-        if (_metadataCache.Snapshot.Broadcasts.Count > 0)
-        {
-            var cached = QueryCachedBroadcasts(collectionId, search, filter, year, month, hideCompleted, collectionName);
-            StatusText = $"{cached.Count:N0} broadcast{(cached.Count == 1 ? string.Empty : "s")} shown";
-            return cached;
-        }
-        if (!IsPaired || IsBusy) return [];
-        SetBusy(true, search.Length == 0 ? "Loading broadcasts…" : $"Searching for “{search}”…");
+        var usesNetwork = !_libraryQueries.HasCachedLibrary;
+        if (usesNetwork && (!IsPaired || IsBusy)) return [];
+        if (usesNetwork)
+            SetBusy(true, search.Length == 0 ? "Loading broadcasts…" : $"Searching for “{search}”…");
         try
         {
-            var collectionIds = ResolveCollectionIds(collectionId, collectionName);
-            var results = await Task.WhenAll(collectionIds.Select(id => _server.BrowseAsync(
+            var result = await _libraryQueries.BrowseCollectionAsync(
+                collectionId,
                 search,
-                collectionId: id,
-                filter: filter,
-                year: year,
-                month: month,
-                hideCompleted: hideCompleted))).ConfigureAwait(false);
-            var broadcasts = Convert(results
-                .SelectMany(value => value.Broadcasts)
-                .GroupBy(value => value.RepresentativeEpisodeId)
-                .Select(group => group.OrderByDescending(value => value.LastPlayedAt).First()));
-            StatusText = $"{broadcasts.Count:N0} broadcast{(broadcasts.Count == 1 ? string.Empty : "s")} shown";
-            return broadcasts;
+                filter,
+                year,
+                month,
+                hideCompleted,
+                collectionName,
+                LibraryCollections).ConfigureAwait(false);
+            StatusText = result.Status;
+            return result.Broadcasts;
         }
-        catch (Exception exception)
-        {
-            StatusText = "Library failed: " + exception.Message;
-            return [];
-        }
-        finally { SetBusy(false); }
+        finally { if (usesNetwork) SetBusy(false); }
     }
 
     public async Task<IReadOnlyList<WebClientLibraryArchivePeriodSummary>> LoadArchivePeriodsAsync(
@@ -452,28 +444,21 @@ public sealed class MobileClientSession : IDisposable
         bool hideCompleted = false,
         string? collectionName = null)
     {
-        if (_metadataCache.Snapshot.Broadcasts.Count > 0)
-        {
-            var cached = BuildCachedArchivePeriods(collectionId, year, hideCompleted, collectionName);
-            StatusText = $"{cached.Count:N0} archive period{(cached.Count == 1 ? string.Empty : "s")} shown";
-            return cached;
-        }
-        if (!IsPaired || IsBusy) return [];
-        SetBusy(true, year.HasValue ? "Loading months…" : "Loading years…");
+        var usesNetwork = !_libraryQueries.HasCachedLibrary;
+        if (usesNetwork && (!IsPaired || IsBusy)) return [];
+        if (usesNetwork) SetBusy(true, year.HasValue ? "Loading months…" : "Loading years…");
         try
         {
-            var results = await Task.WhenAll(ResolveCollectionIds(collectionId, collectionName)
-                .Select(id => _server.GetArchivePeriodsAsync(id, year, hideCompleted))).ConfigureAwait(false);
-            var periods = CombineArchivePeriods(results.SelectMany(value => value));
-            StatusText = $"{periods.Count:N0} archive period{(periods.Count == 1 ? string.Empty : "s")} shown";
-            return periods;
+            var result = await _libraryQueries.LoadArchivePeriodsAsync(
+                collectionId,
+                year,
+                hideCompleted,
+                collectionName,
+                LibraryCollections).ConfigureAwait(false);
+            StatusText = result.Status;
+            return result.Periods;
         }
-        catch (Exception exception)
-        {
-            StatusText = "Archive periods failed: " + exception.Message;
-            return [];
-        }
-        finally { SetBusy(false); }
+        finally { if (usesNetwork) SetBusy(false); }
     }
 
     public async Task<(
@@ -489,35 +474,18 @@ public sealed class MobileClientSession : IDisposable
     {
         if (!IsPaired || IsBusy) return (null, [], []);
         var search = searchText?.Trim() ?? string.Empty;
-        var hasFilters = collectionId.HasValue || year.HasValue || hasTranscript ||
-                         !filter.Equals("All", StringComparison.OrdinalIgnoreCase) ||
-                         !searchScope.Equals("All", StringComparison.OrdinalIgnoreCase);
         SetBusy(true, search.Length == 0 ? "Exploring the archive…" : $"Searching for “{search}”…");
         try
         {
-            var facets = await _server.GetSearchFacetsAsync().ConfigureAwait(false);
-            var suggestions = search.Length < 2
-                ? Array.Empty<WebClientLibrarySearchSuggestion>()
-                : await _server.GetSearchSuggestionsAsync(search).ConfigureAwait(false);
-            var results = search.Length == 0 && !hasFilters
-                ? Array.Empty<MobileBroadcastItem>()
-                : Convert((await _server.BrowseAsync(
-                    search,
-                    limit: 250,
-                    collectionId: collectionId,
-                    filter: filter,
-                    year: year,
-                    searchScope: searchScope,
-                    hasTranscript: hasTranscript).ConfigureAwait(false)).Broadcasts);
-            StatusText = search.Length == 0 && !hasFilters
-                ? "Choose a way into the archive or browse by show."
-                : results.Count == 1 ? "1 matching broadcast." : $"{results.Count:N0} matching broadcasts.";
-            return (facets, suggestions, results);
-        }
-        catch (Exception exception)
-        {
-            StatusText = "Explore failed: " + exception.Message;
-            return (null, [], []);
+            var result = await _libraryQueries.ExploreAsync(
+                search,
+                collectionId,
+                filter,
+                year,
+                searchScope,
+                hasTranscript).ConfigureAwait(false);
+            StatusText = result.Status;
+            return (result.Facets, result.Suggestions, result.Results);
         }
         finally { SetBusy(false); }
     }
@@ -537,9 +505,10 @@ public sealed class MobileClientSession : IDisposable
     }
 
     public IReadOnlyList<WebClientLibraryCollectionSummary> LibraryCollectionsFor(bool hideCompleted)
-    {
-        return CombineCollections(hideCompleted ? _incompleteLibraryCollections : LibraryCollections);
-    }
+        => _libraryQueries.CollectionsFor(
+            LibraryCollections,
+            _incompleteLibraryCollections,
+            hideCompleted);
 
     public async Task<IReadOnlyList<MobileExploreImage>> LoadExploreImagesAsync(
         MobileWikiPageDocument document)
@@ -1023,12 +992,9 @@ public sealed class MobileClientSession : IDisposable
         SetBusy(true, "Looking for Radio Vault Server on this network…");
         try
         {
-            Servers = await _server.DiscoverAsync().ConfigureAwait(false);
-            StatusText = Servers.Count == 0
-                ? "No servers found. Enable native clients and create a pairing code on Radio Vault Server."
-                : $"Found {Servers.Count} server{(Servers.Count == 1 ? string.Empty : "s")}.";
+            var result = await _pairing.DiscoverAsync().ConfigureAwait(false);
+            StatusText = result.Status;
         }
-        catch (Exception exception) { StatusText = "Discovery failed: " + exception.Message; }
         finally { SetBusy(false); }
     }
 
@@ -1037,21 +1003,15 @@ public sealed class MobileClientSession : IDisposable
         ArgumentNullException.ThrowIfNull(server);
         if (IsBusy) return;
         SetBusy(true, $"Pairing with {server.DisplayName}…");
-        try
+        var result = await _pairing.PairAsync(server, pairingCode).ConfigureAwait(false);
+        StatusText = result.Status;
+        if (!result.Succeeded)
         {
-            await _server.PairAsync(server, pairingCode).ConfigureAwait(false);
-            IsPaired = true;
-            StatusText = $"Paired with {ServerName}. Loading your library…";
-            Notify();
-            TabRequested?.Invoke(0);
-        }
-        catch (Exception exception)
-        {
-            StatusText = "Pairing failed: " + exception.Message;
             SetBusy(false);
             return;
         }
-
+        Notify();
+        TabRequested?.Invoke(0);
         SetBusy(false);
         await RefreshAsync().ConfigureAwait(false);
     }
@@ -1060,21 +1020,17 @@ public sealed class MobileClientSession : IDisposable
     {
         if (IsBusy) return;
         SetBusy(true, $"Pairing with {serverAddress.Trim()}…");
-        try
+        var result = await _pairing
+            .PairManuallyAsync(serverAddress, securePort, pairingCode)
+            .ConfigureAwait(false);
+        StatusText = result.Status;
+        if (!result.Succeeded)
         {
-            await _server.PairManuallyAsync(serverAddress, securePort, pairingCode).ConfigureAwait(false);
-            IsPaired = true;
-            StatusText = $"Paired with {ServerName}. Loading your library…";
-            Notify();
-            TabRequested?.Invoke(0);
-        }
-        catch (Exception exception)
-        {
-            StatusText = "Manual pairing failed: " + exception.Message;
             SetBusy(false);
             return;
         }
-
+        Notify();
+        TabRequested?.Invoke(0);
         SetBusy(false);
         await RefreshAsync().ConfigureAwait(false);
     }
@@ -1085,14 +1041,12 @@ public sealed class MobileClientSession : IDisposable
         _playback.Pause();
         _ownsPlayback = false;
         _nowPlaying.Clear();
-        _server.Forget();
+        _pairing.Forget();
         _metadataCache.Clear();
         _ = _offlineMutationSynchronization.ClearAsync();
         _artworkRequests.Clear();
         _mediaProxy?.Dispose();
         _mediaProxy = null;
-        IsPaired = false;
-        Servers = [];
         ContinueListening = [];
         RecentBroadcasts = [];
         OnThisDay = [];
@@ -1990,61 +1944,8 @@ public sealed class MobileClientSession : IDisposable
     private void ApplyMetadataSnapshot()
     {
         var snapshot = _metadataCache.Snapshot;
-        var broadcasts = snapshot.Broadcasts;
-        if (broadcasts.Count > 0)
-        {
-            TotalBroadcasts = broadcasts.Count;
-            CompletedBroadcasts = broadcasts.Count(value => value.Completed);
-            InProgressBroadcasts = broadcasts.Count(value => value.InProgress && !value.Completed);
-            FavouriteBroadcasts = broadcasts.Count(value => value.Favourite);
-            LibraryCollections = broadcasts
-                .GroupBy(value => new { value.CollectionId, value.CollectionName })
-                .Select(group => new WebClientLibraryCollectionSummary(
-                    group.Key.CollectionId,
-                    group.Key.CollectionName,
-                    group.Count()))
-                .OrderBy(value => value.CollectionName, StringComparer.CurrentCultureIgnoreCase)
-                .ToArray();
-            _incompleteLibraryCollections = broadcasts
-                .Where(value => !value.Completed)
-                .GroupBy(value => new { value.CollectionId, value.CollectionName })
-                .Select(group => new WebClientLibraryCollectionSummary(
-                    group.Key.CollectionId,
-                    group.Key.CollectionName,
-                    group.Count()))
-                .OrderBy(value => value.CollectionName, StringComparer.CurrentCultureIgnoreCase)
-                .ToArray();
-            ContinueListening = Convert(broadcasts
-                .Where(value => value.InProgress && !value.Completed)
-                .OrderByDescending(value => value.LastPlayedAt)
-                .Take(50));
-            RecentBroadcasts = Convert(broadcasts
-                .OrderByDescending(value => value.DateAdded)
-                .Take(50));
-            var today = DateTime.Today;
-            OnThisDay = Convert(broadcasts
-                .Where(value => value.AirDate is { } date && date.Month == today.Month && date.Day == today.Day)
-                .OrderByDescending(value => value.AirDate)
-                .Take(50));
-            UnheardBroadcasts = Convert(broadcasts
-                .Where(value => !value.Completed && !value.InProgress)
-                .OrderByDescending(value => value.AirDate)
-                .Take(50));
-            if (LibraryBroadcasts.Count == 0)
-                LibraryBroadcasts = Convert(broadcasts.OrderByDescending(value => value.AirDate).Take(250));
-        }
-        else if (snapshot.Overview is { } overview)
-        {
-            TotalBroadcasts = overview.TotalBroadcasts;
-            CompletedBroadcasts = overview.CompletedBroadcasts;
-            InProgressBroadcasts = overview.InProgressBroadcasts;
-            FavouriteBroadcasts = overview.FavouriteBroadcasts;
-            LibraryCollections = overview.Collections;
-            _incompleteLibraryCollections = overview.Collections;
-            ContinueListening = Convert(overview.ContinueListening);
-            RecentBroadcasts = Convert(overview.RecentBroadcasts);
-            OnThisDay = Convert(overview.OnThisDay);
-        }
+        var projection = _libraryQueries.ProjectSnapshot();
+        if (projection is not null) ApplyLibraryProjection(projection);
         QueueItems = snapshot.Queue;
         SavedMoments = snapshot.Moments ?? [];
         _knowledgeQueries.AdoptCachedSnapshot();
@@ -2053,169 +1954,26 @@ public sealed class MobileClientSession : IDisposable
 
     private void ApplyOnlineOverview(WebClientLibraryOverview overview)
     {
-        foreach (var broadcast in overview.ContinueListening
-                     .Concat(overview.RecentBroadcasts)
-                     .Concat(overview.OnThisDay)
-                     .GroupBy(value => value.RepresentativeEpisodeId)
-                     .Select(group => group.OrderByDescending(value => value.LastPlayedAt).First()))
-            _metadataCache.UpsertBroadcast(broadcast);
-        TotalBroadcasts = overview.TotalBroadcasts;
-        CompletedBroadcasts = overview.CompletedBroadcasts;
-        InProgressBroadcasts = overview.InProgressBroadcasts;
-        FavouriteBroadcasts = overview.FavouriteBroadcasts;
-        LibraryCollections = overview.Collections;
-        _incompleteLibraryCollections = overview.Collections;
-        ContinueListening = Convert(overview.ContinueListening);
-        RecentBroadcasts = Convert(overview.RecentBroadcasts);
-        OnThisDay = Convert(overview.OnThisDay);
+        ApplyLibraryProjection(_libraryQueries.ProjectOnlineOverview(overview));
         Notify();
     }
 
-    private IReadOnlyList<MobileBroadcastItem> QueryCachedBroadcasts(
-        int? collectionId,
-        string searchText,
-        string filter,
-        int? year,
-        int? month,
-        bool hideCompleted,
-        string? collectionName = null)
+    private void ApplyLibraryProjection(MobileLibraryProjection projection)
     {
-        IEnumerable<WebClientLibraryBroadcastSummary> values = _metadataCache.Snapshot.Broadcasts;
-        if (!string.IsNullOrWhiteSpace(collectionName))
-        {
-            var collectionKey = NormalizeCollectionName(collectionName);
-            values = values.Where(value => NormalizeCollectionName(value.CollectionName) == collectionKey);
-        }
-        else if (collectionId is > 0) values = values.Where(value => value.CollectionId == collectionId.Value);
-        if (year is > 0) values = values.Where(value => value.AirDate?.Year == year.Value);
-        if (month is > 0) values = values.Where(value => value.AirDate?.Month == month.Value);
-        if (hideCompleted) values = values.Where(value => !value.Completed);
-        values = filter.Trim().ToLowerInvariant() switch
-        {
-            "favourites" or "favorites" => values.Where(value => value.Favourite),
-            "continuelistening" or "continue" => values.Where(value => value.InProgress && !value.Completed),
-            "unplayed" => values.Where(value => !value.Completed && !value.InProgress),
-            "completed" => values.Where(value => value.Completed),
-            _ => values
-        };
-        if (!string.IsNullOrWhiteSpace(searchText))
-        {
-            var query = searchText.Trim();
-            values = values.Where(value =>
-                Contains(value.Title, query) ||
-                Contains(value.Description, query) ||
-                Contains(value.CollectionName, query) ||
-                Contains(value.BroadcastId, query) ||
-                Contains(value.SearchContext, query));
-        }
-        values = filter.Equals("RecentlyAdded", StringComparison.OrdinalIgnoreCase)
-            ? values.OrderByDescending(value => value.DateAdded)
-            : values.OrderByDescending(value => value.AirDate).ThenByDescending(value => value.DateAdded);
-        return Convert(values);
+        TotalBroadcasts = projection.TotalBroadcasts;
+        CompletedBroadcasts = projection.CompletedBroadcasts;
+        InProgressBroadcasts = projection.InProgressBroadcasts;
+        FavouriteBroadcasts = projection.FavouriteBroadcasts;
+        LibraryCollections = projection.Collections;
+        _incompleteLibraryCollections = projection.IncompleteCollections;
+        ContinueListening = projection.ContinueListening;
+        RecentBroadcasts = projection.RecentBroadcasts;
+        OnThisDay = projection.OnThisDay;
+        if (projection.UnheardBroadcasts is not null)
+            UnheardBroadcasts = projection.UnheardBroadcasts;
+        if (LibraryBroadcasts.Count == 0 && projection.InitialBroadcasts is not null)
+            LibraryBroadcasts = projection.InitialBroadcasts;
     }
-
-    private IReadOnlyList<WebClientLibraryArchivePeriodSummary> BuildCachedArchivePeriods(
-        int? collectionId,
-        int? year,
-        bool hideCompleted,
-        string? collectionName = null)
-    {
-        IEnumerable<WebClientLibraryBroadcastSummary> source = _metadataCache.Snapshot.Broadcasts;
-        if (!string.IsNullOrWhiteSpace(collectionName))
-        {
-            var collectionKey = NormalizeCollectionName(collectionName);
-            source = source.Where(value => NormalizeCollectionName(value.CollectionName) == collectionKey);
-        }
-        else if (collectionId is > 0) source = source.Where(value => value.CollectionId == collectionId.Value);
-        if (hideCompleted) source = source.Where(value => !value.Completed);
-        if (year is > 0) source = source.Where(value => value.AirDate?.Year == year.Value);
-        var groups = year.HasValue
-            ? source.Where(value => value.AirDate.HasValue).GroupBy(value => value.AirDate!.Value.Month)
-            : source.Where(value => value.AirDate.HasValue).GroupBy(value => value.AirDate!.Value.Year);
-        return groups
-            .OrderByDescending(group => group.Key)
-            .Select(group =>
-            {
-                var items = group.ToArray();
-                var progress = items.Length == 0 ? 0 : (int)Math.Round(items.Average(value =>
-                    value.Completed ? 100d : value.DurationMs <= 0 ? 0d :
-                    Math.Clamp(value.PositionMs * 100d / value.DurationMs, 0d, 100d)));
-                var title = year.HasValue
-                    ? new DateTime(2000, group.Key, 1).ToString("MMMM")
-                    : group.Key.ToString();
-                return new WebClientLibraryArchivePeriodSummary(
-                    group.Key,
-                    title,
-                    items.Length,
-                    items.Count(value => value.Completed),
-                    items.Count(value => value.Favourite),
-                    progress,
-                    $"{progress:N0}% listened",
-                    $"{items.Select(value => value.CollectionName).Distinct(StringComparer.OrdinalIgnoreCase).Count():N0} show(s)",
-                    items.Select(value => value.ArtworkPath).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
-            })
-            .ToArray();
-    }
-
-    private IReadOnlyList<int?> ResolveCollectionIds(int? collectionId, string? collectionName)
-    {
-        if (string.IsNullOrWhiteSpace(collectionName)) return [collectionId];
-        var key = NormalizeCollectionName(collectionName);
-        var ids = LibraryCollections
-            .Where(value => NormalizeCollectionName(value.CollectionName) == key)
-            .Select(value => (int?)value.CollectionId)
-            .Distinct()
-            .ToArray();
-        return ids.Length > 0 ? ids : [collectionId];
-    }
-
-    private static IReadOnlyList<WebClientLibraryCollectionSummary> CombineCollections(
-        IEnumerable<WebClientLibraryCollectionSummary> values)
-        => values
-            .GroupBy(value => NormalizeCollectionName(value.CollectionName))
-            .Where(group => group.Key.Length > 0)
-            .Select(group =>
-            {
-                var distinct = group.GroupBy(value => value.CollectionId).Select(value => value.First()).ToArray();
-                var display = distinct.OrderByDescending(value => value.BroadcastCount)
-                    .ThenBy(value => value.CollectionName, StringComparer.CurrentCultureIgnoreCase)
-                    .First();
-                return new WebClientLibraryCollectionSummary(
-                    display.CollectionId,
-                    display.CollectionName.Trim(),
-                    distinct.Sum(value => value.BroadcastCount));
-            })
-            .OrderBy(value => value.CollectionName, StringComparer.CurrentCultureIgnoreCase)
-            .ToArray();
-
-    private static IReadOnlyList<WebClientLibraryArchivePeriodSummary> CombineArchivePeriods(
-        IEnumerable<WebClientLibraryArchivePeriodSummary> values)
-        => values
-            .GroupBy(value => value.Value)
-            .OrderByDescending(group => group.Key)
-            .Select(group =>
-            {
-                var periods = group.ToArray();
-                var broadcasts = periods.Sum(value => value.BroadcastCount);
-                var progress = broadcasts == 0 ? 0 : (int)Math.Round(periods.Sum(value => value.ProgressPercent * value.BroadcastCount) / (double)broadcasts);
-                return new WebClientLibraryArchivePeriodSummary(
-                    group.Key,
-                    periods[0].Title,
-                    broadcasts,
-                    periods.Sum(value => value.CompletedCount),
-                    periods.Sum(value => value.FavouriteCount),
-                    progress,
-                    $"{progress:N0}% listened",
-                    periods[0].ShowsText,
-                    periods.Select(value => value.ArtworkPath).FirstOrDefault(value => !string.IsNullOrWhiteSpace(value)));
-            })
-            .ToArray();
-
-    private static string NormalizeCollectionName(string? value)
-        => new((value ?? string.Empty).Trim().ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
-
-    private static bool Contains(string? value, string query)
-        => value?.Contains(query, StringComparison.CurrentCultureIgnoreCase) == true;
 
     private void ServerOnConnectivityChanged(object? sender, EventArgs eventArgs)
     {

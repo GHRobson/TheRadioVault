@@ -3,7 +3,9 @@ using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Downloads;
 using TheRadioVault.Client.Mobile.Explore;
 using TheRadioVault.Client.Mobile.Knowledge;
+using TheRadioVault.Client.Mobile.Library;
 using TheRadioVault.Client.Mobile.Models;
+using TheRadioVault.Client.Mobile.Pairing;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Client.Mobile.Playback;
 using TheRadioVault.Client.Mobile.Synchronization;
@@ -40,6 +42,11 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Knowledge coordinator builds offline Library coverage", KnowledgeCoordinatorBuildsOfflineCoverageAsync),
     ("Knowledge coordinator persists live snapshots", KnowledgeCoordinatorPersistsLiveSnapshotAsync),
     ("Knowledge coordinator sends explicit date-review decisions", KnowledgeCoordinatorSendsDateReviewDecisionAsync),
+    ("Pairing coordinator preserves discovery state across failures", PairingCoordinatorPreservesDiscoveryStateAsync),
+    ("Pairing coordinator owns pair and forget transitions", PairingCoordinatorOwnsPairAndForgetAsync),
+    ("Library coordinator projects and filters the cached catalogue", LibraryCoordinatorProjectsCachedCatalogueAsync),
+    ("Library coordinator combines duplicate live show identities", LibraryCoordinatorCombinesLiveShowIdentitiesAsync),
+    ("Library coordinator keeps archive search queries explicit", LibraryCoordinatorKeepsArchiveSearchExplicitAsync),
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
     ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync)
@@ -1039,6 +1046,185 @@ static async Task KnowledgeCoordinatorSendsDateReviewDecisionAsync()
     finally { DeleteTemporaryDirectory(root); }
 }
 
+static async Task PairingCoordinatorPreservesDiscoveryStateAsync()
+{
+    var server = DiscoveredServer("Kitchen Radio Vault");
+    var transport = new FakePairingTransport { DiscoveredServers = [server] };
+    var coordinator = new MobilePairingCoordinator(transport);
+
+    var found = await coordinator.DiscoverAsync();
+    Ensure(found.Succeeded, "Pairing discovery did not succeed.");
+    Equal(1, coordinator.Servers.Count, "Discovered pairing servers");
+    Ensure(found.Status.Contains("Found 1 server", StringComparison.Ordinal),
+        "Successful discovery status was not preserved.");
+
+    transport.DiscoveryException = new InvalidOperationException("network unavailable");
+    var failed = await coordinator.DiscoverAsync();
+    Ensure(!failed.Succeeded, "A failed discovery was reported as successful.");
+    Equal(1, coordinator.Servers.Count, "Discovery results after a transient failure");
+    Ensure(failed.Status.Contains("network unavailable", StringComparison.Ordinal),
+        "Discovery failure detail was lost.");
+}
+
+static async Task PairingCoordinatorOwnsPairAndForgetAsync()
+{
+    var server = DiscoveredServer("Office Radio Vault");
+    var transport = new FakePairingTransport();
+    var coordinator = new MobilePairingCoordinator(transport);
+
+    var paired = await coordinator.PairAsync(server, "123456");
+    Ensure(paired.Succeeded && coordinator.IsPaired, "Discovered pairing did not update coordinator state.");
+    Equal("Office Radio Vault", coordinator.ServerName, "Discovered paired server name");
+
+    coordinator.Forget();
+    Ensure(!coordinator.IsPaired, "Forget did not remove pairing state.");
+    Equal(1, transport.ForgetCalls, "Pairing forget calls");
+
+    var manual = await coordinator.PairManuallyAsync("192.168.1.20", 30830, "654321");
+    Ensure(manual.Succeeded && coordinator.IsPaired, "Manual pairing did not update coordinator state.");
+    Equal(("192.168.1.20", 30830, "654321"), transport.ManualPairings.Single(), "Manual pairing request");
+
+    transport.PairingException = new InvalidOperationException("code expired");
+    var failed = await coordinator.PairAsync(server, "000000");
+    Ensure(!failed.Succeeded, "A rejected pairing was reported as successful.");
+    Ensure(failed.Status.Contains("code expired", StringComparison.Ordinal), "Pairing failure detail was lost.");
+}
+
+static async Task LibraryCoordinatorProjectsCachedCatalogueAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var first = Summary(101, "First Broadcast", 50_000, false, DateTimeOffset.UtcNow) with
+        {
+            CollectionId = 1,
+            CollectionName = "The Show",
+            AirDate = new DateOnly(2026, 8, 11),
+            Favourite = true
+        };
+        var second = Summary(202, "Second Broadcast", 100_000, true, DateTimeOffset.UtcNow) with
+        {
+            CollectionId = 2,
+            CollectionName = "The-Show",
+            AirDate = new DateOnly(2026, 8, 10)
+        };
+        var third = Summary(303, "Third Broadcast", 0, false, null) with
+        {
+            CollectionId = 3,
+            CollectionName = "Another Show",
+            AirDate = new DateOnly(2025, 7, 1)
+        };
+        var cache = new MobileMetadataCache(root, "server-a");
+        cache.ReplaceCompleteLibrary("server-a", [first, second, third], Overview(first, second, third));
+        var transport = new FakeLibraryQueryTransport();
+        var coordinator = new MobileLibraryQueryCoordinator(
+            transport,
+            cache,
+            () => new DateOnly(2026, 8, 11));
+
+        var projection = coordinator.ProjectSnapshot() ??
+                         throw new InvalidOperationException("Cached Library projection was not created.");
+        Equal(3, projection.TotalBroadcasts, "Projected Library broadcasts");
+        Equal(1, projection.CompletedBroadcasts, "Projected completed broadcasts");
+        Equal(1, projection.InProgressBroadcasts, "Projected in-progress broadcasts");
+        Equal(1, projection.OnThisDay.Count, "Projected On This Day broadcasts");
+        Equal(1, projection.UnheardBroadcasts!.Count, "Projected unheard broadcasts");
+
+        var combined = coordinator.CollectionsFor(
+            projection.Collections,
+            projection.IncompleteCollections,
+            hideCompleted: false);
+        Equal(2, combined.Count, "Normalized Library shows");
+        Equal(2, combined.Single(value => value.CollectionName == "The Show").BroadcastCount,
+            "Normalized show broadcast count");
+
+        var favourites = await coordinator.BrowseCollectionAsync(
+            null, null, "Favourites", null, null, false, null, projection.Collections);
+        Equal(101L, favourites.Broadcasts.Single().EpisodeId, "Cached favourite query");
+        var months = await coordinator.LoadArchivePeriodsAsync(
+            1, 2026, false, "the show", projection.Collections);
+        Equal(2, months.Periods.Sum(value => value.BroadcastCount), "Cached normalized archive broadcasts");
+        Equal(0, transport.BrowseRequests.Count, "Cached Library network requests");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task LibraryCoordinatorCombinesLiveShowIdentitiesAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var earlier = Summary(101, "Shared Broadcast", 10_000, false, DateTimeOffset.UtcNow.AddMinutes(-2)) with
+        {
+            CollectionId = 1,
+            CollectionName = "The Show"
+        };
+        var later = earlier with { LastPlayedAt = DateTimeOffset.UtcNow, PositionMs = 20_000 };
+        var second = Summary(202, "Second Broadcast", 0, false, null) with
+        {
+            CollectionId = 2,
+            CollectionName = "The-Show"
+        };
+        var transport = new FakeLibraryQueryTransport();
+        transport.BroadcastsByCollection[1] = [earlier];
+        transport.BroadcastsByCollection[2] = [later, second];
+        transport.PeriodsByCollection[1] =
+            [new WebClientLibraryArchivePeriodSummary(2026, "2026", 1, 0, 0, 10, "10% listened", "1 show(s)", null)];
+        transport.PeriodsByCollection[2] =
+            [new WebClientLibraryArchivePeriodSummary(2026, "2026", 2, 1, 1, 70, "70% listened", "1 show(s)", null)];
+        var cache = new MobileMetadataCache(root, "server-a");
+        var coordinator = new MobileLibraryQueryCoordinator(transport, cache);
+        var collections = new[]
+        {
+            new WebClientLibraryCollectionSummary(1, "The Show", 1),
+            new WebClientLibraryCollectionSummary(2, "The-Show", 2)
+        };
+
+        var broadcasts = await coordinator.BrowseCollectionAsync(
+            1, null, "All", null, null, false, "the show", collections);
+        Equal(2, broadcasts.Broadcasts.Count, "Combined live broadcasts");
+        Equal(20_000L, broadcasts.Broadcasts.Single(value => value.EpisodeId == 101).Source.PositionMs,
+            "Canonical duplicate broadcast progress");
+        Ensure(transport.BrowseRequests.Select(value => value.CollectionId).Order().SequenceEqual(new int?[] { 1, 2 }),
+            "Live query did not request every normalized show identity.");
+
+        var periods = await coordinator.LoadArchivePeriodsAsync(1, null, false, "the show", collections);
+        Equal(3, periods.Periods.Single().BroadcastCount, "Combined live archive broadcasts");
+        Equal(50, periods.Periods.Single().ProgressPercent, "Weighted live archive progress");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task LibraryCoordinatorKeepsArchiveSearchExplicitAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var result = Summary(101, "Matching Broadcast", 0, false, null);
+        var transport = new FakeLibraryQueryTransport
+        {
+            SearchFacets = new WebClientLibrarySearchFacets([2026, 2025], 12),
+            SearchSuggestions = [new WebClientLibrarySearchSuggestion("Regression Show", "Show", 3)]
+        };
+        transport.DefaultBroadcasts = [result];
+        var cache = new MobileMetadataCache(root, "server-a");
+        var coordinator = new MobileLibraryQueryCoordinator(transport, cache);
+
+        var landing = await coordinator.ExploreAsync(null, null, "All", null, "All", false);
+        Equal(0, landing.Results.Count, "Unfiltered archive landing results");
+        Equal(0, transport.BrowseRequests.Count, "Unfiltered archive browse requests");
+        Equal(0, transport.SuggestionRequests, "Short archive suggestion requests");
+
+        var search = await coordinator.ExploreAsync("reg", null, "All", null, "All", true);
+        Equal(1, search.Results.Count, "Filtered archive results");
+        Equal(1, search.Suggestions.Count, "Archive suggestions");
+        Equal(1, transport.SuggestionRequests, "Archive suggestion requests");
+        Ensure(transport.BrowseRequests.Single().HasTranscript,
+            "Transcript filtering was not forwarded to the archive query transport.");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
 static WebCanonicalMediaPart MediaPart(int partNumber, long logicalStartMs, long logicalEndMs)
     => new(
         partNumber,
@@ -1251,6 +1437,17 @@ static MobileKnowledgeDateReview KnowledgeReview(long researchId, DateOnly propo
         null,
         DateTimeOffset.UtcNow);
 
+static DiscoveredRadioVaultServer DiscoveredServer(string displayName)
+    => new(
+        Guid.NewGuid().ToString("D"),
+        displayName,
+        "192.168.1.20",
+        30830,
+        new string('A', 64),
+        "0.44.0",
+        true,
+        0);
+
 static string CreateTemporaryDirectory()
 {
     var path = Path.Combine(Path.GetTempPath(), "radiovault-mobile-tests", Guid.NewGuid().ToString("N"));
@@ -1292,6 +1489,128 @@ static void Contains(string source, string expected, string label)
     if (!source.Contains(expected, StringComparison.Ordinal))
         throw new InvalidOperationException($"Missing {label}: {expected}");
 }
+
+file sealed class FakePairingTransport : IMobilePairingTransport
+{
+    public bool IsPaired { get; private set; }
+    public string ServerName { get; private set; } = "No server paired";
+    public IReadOnlyList<DiscoveredRadioVaultServer> DiscoveredServers { get; init; } = [];
+    public Exception? DiscoveryException { get; set; }
+    public Exception? PairingException { get; set; }
+    public int ForgetCalls { get; private set; }
+    public List<(string Address, int Port, string Code)> ManualPairings { get; } = [];
+
+    public Task<IReadOnlyList<DiscoveredRadioVaultServer>> DiscoverAsync(
+        CancellationToken cancellationToken = default)
+        => DiscoveryException is null
+            ? Task.FromResult(DiscoveredServers)
+            : Task.FromException<IReadOnlyList<DiscoveredRadioVaultServer>>(DiscoveryException);
+
+    public Task PairAsync(
+        DiscoveredRadioVaultServer server,
+        string pairingCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (PairingException is not null) return Task.FromException(PairingException);
+        IsPaired = true;
+        ServerName = server.DisplayName;
+        return Task.CompletedTask;
+    }
+
+    public Task PairManuallyAsync(
+        string serverAddress,
+        int securePort,
+        string pairingCode,
+        CancellationToken cancellationToken = default)
+    {
+        if (PairingException is not null) return Task.FromException(PairingException);
+        ManualPairings.Add((serverAddress, securePort, pairingCode));
+        IsPaired = true;
+        ServerName = "Manual Radio Vault";
+        return Task.CompletedTask;
+    }
+
+    public void Forget()
+    {
+        ForgetCalls++;
+        IsPaired = false;
+        ServerName = "No server paired";
+    }
+}
+
+file sealed class FakeLibraryQueryTransport : IMobileLibraryQueryTransport
+{
+    public Dictionary<int, IReadOnlyList<WebClientLibraryBroadcastSummary>> BroadcastsByCollection { get; } = [];
+    public Dictionary<int, IReadOnlyList<WebClientLibraryArchivePeriodSummary>> PeriodsByCollection { get; } = [];
+    public IReadOnlyList<WebClientLibraryBroadcastSummary> DefaultBroadcasts { get; set; } = [];
+    public WebClientLibrarySearchFacets SearchFacets { get; init; } = new([], 0);
+    public IReadOnlyList<WebClientLibrarySearchSuggestion> SearchSuggestions { get; init; } = [];
+    public List<FakeLibraryBrowseRequest> BrowseRequests { get; } = [];
+    public int SuggestionRequests { get; private set; }
+
+    public Task<WebClientLibraryBrowseResult> BrowseAsync(
+        string? searchText,
+        int limit,
+        int offset,
+        int? collectionId,
+        string filter,
+        int? year,
+        int? month,
+        bool hideCompleted,
+        string searchScope,
+        bool hasTranscript,
+        CancellationToken cancellationToken = default)
+    {
+        BrowseRequests.Add(new FakeLibraryBrowseRequest(
+            searchText ?? string.Empty,
+            collectionId,
+            filter,
+            year,
+            month,
+            hideCompleted,
+            searchScope,
+            hasTranscript));
+        var broadcasts = collectionId is { } id && BroadcastsByCollection.TryGetValue(id, out var selected)
+            ? selected
+            : DefaultBroadcasts;
+        return Task.FromResult(new WebClientLibraryBrowseResult(
+            broadcasts.Skip(offset).Take(limit).ToArray(),
+            broadcasts.Count,
+            UsesCanonicalLibrary: true));
+    }
+
+    public Task<IReadOnlyList<WebClientLibraryArchivePeriodSummary>> GetArchivePeriodsAsync(
+        int? collectionId,
+        int? year,
+        bool hideCompleted,
+        CancellationToken cancellationToken = default)
+        => Task.FromResult<IReadOnlyList<WebClientLibraryArchivePeriodSummary>>(
+            collectionId is { } id && PeriodsByCollection.TryGetValue(id, out var periods)
+                ? periods
+                : []);
+
+    public Task<WebClientLibrarySearchFacets> GetSearchFacetsAsync(
+        CancellationToken cancellationToken = default)
+        => Task.FromResult(SearchFacets);
+
+    public Task<IReadOnlyList<WebClientLibrarySearchSuggestion>> GetSearchSuggestionsAsync(
+        string prefix,
+        CancellationToken cancellationToken = default)
+    {
+        SuggestionRequests++;
+        return Task.FromResult(SearchSuggestions);
+    }
+}
+
+file sealed record FakeLibraryBrowseRequest(
+    string SearchText,
+    int? CollectionId,
+    string Filter,
+    int? Year,
+    int? Month,
+    bool HideCompleted,
+    string SearchScope,
+    bool HasTranscript);
 
 file sealed class CallbackDisposable : IDisposable
 {
