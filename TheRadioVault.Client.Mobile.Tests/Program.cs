@@ -15,6 +15,9 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Handoff keeps its transactional ownership boundary", HandoffKeepsTransactionalBoundaryAsync),
     ("Legacy playback ownership requires stable evidence", LegacyPlaybackOwnershipRequiresStableEvidenceAsync),
     ("Committed handoff ownership is trusted immediately", CommittedHandoffOwnershipIsTrustedImmediatelyAsync),
+    ("Remote playback observation projects the shared playhead", RemotePlaybackObservationProjectsPlayheadAsync),
+    ("Uncommitted remote observations cannot steal local playback", UncommittedObservationCannotStealLocalPlaybackAsync),
+    ("Committed handoff stops and acknowledges the source", CommittedHandoffStopsAndAcknowledgesSourceAsync),
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
     ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync)
@@ -150,6 +153,11 @@ static Task HandoffKeepsTransactionalBoundaryAsync()
         "TheRadioVault.Client.Mobile",
         "Playback",
         "MobilePlaybackOwnershipCoordinator.cs"));
+    var synchronizationSource = File.ReadAllText(Path.Combine(
+        root,
+        "TheRadioVault.Client.Mobile",
+        "Playback",
+        "MobilePlaybackSynchronizationCoordinator.cs"));
     Contains(sessionSource, "BeginPlaybackTransferAsync", "handoff begin request");
     Contains(sessionSource, "WaitForSourceStopAsync", "handoff source-stop wait");
     Contains(sessionSource, "CommitPlaybackTransferAsync", "handoff commit request");
@@ -157,7 +165,8 @@ static Task HandoffKeepsTransactionalBoundaryAsync()
     Contains(ownershipSource, "receipt.Generation == session.Generation", "committed handoff generation guard");
     Contains(sessionSource, "PlaybackTransferAlignmentToleranceMs = 3_000", "live-source alignment tolerance");
     Contains(sessionSource, "<= PlaybackTransferAlignmentToleranceMs", "alignment tolerance use");
-    Contains(sessionSource, "WasCommittedAwayFromThisDevice", "uncommitted-owner rejection");
+    Contains(synchronizationSource, "WasCommittedAwayFromThisDevice", "uncommitted-owner rejection");
+    Contains(synchronizationSource, "AcknowledgePlaybackSourceStoppedAsync", "source-stop acknowledgement");
     Contains(ownershipSource, "_foreignOwnerCandidateSamples >= 2", "stable foreign-owner evidence");
     var downloadedBranchStart = sessionSource.IndexOf("if (_offlinePlayback)", StringComparison.Ordinal);
     var streamedBranchStart = sessionSource.IndexOf("if (!IsPaired) return;", downloadedBranchStart, StringComparison.Ordinal);
@@ -213,6 +222,97 @@ static Task CommittedHandoffOwnershipIsTrustedImmediatelyAsync()
     };
     Ensure(!ownership.NeedsSourceStopAcknowledgement(acknowledged), "An acknowledged source stop remained pending.");
     return Task.CompletedTask;
+}
+
+static async Task RemotePlaybackObservationProjectsPlayheadAsync()
+{
+    var now = new DateTimeOffset(2026, 8, 11, 10, 0, 0, TimeSpan.Zero);
+    var transport = new FakePlaybackSynchronizationTransport(
+        "iphone-client",
+        Summary(101, "Projected Broadcast", 0, false, null));
+    var playback = new FakePlaybackEngine();
+    var ownership = new MobilePlaybackOwnershipCoordinator(() => transport.ClientId);
+    var coordinator = new MobilePlaybackSynchronizationCoordinator(
+        transport,
+        playback,
+        ownership,
+        () => now);
+    var remoteSession = PlaybackSession("mac-client", generation: 4, isPlaying: true);
+    remoteSession = remoteSession with
+    {
+        Player = remoteSession.Player with
+        {
+            PositionMs = 10_000,
+            DurationMs = 100_000,
+            Speed = 2d,
+            UpdatedAt = now.AddSeconds(-2)
+        }
+    };
+
+    var observation = await coordinator.ObserveAsync(remoteSession);
+
+    Ensure(observation.Changed, "The first remote observation was not reported as changed.");
+    Equal(101L, coordinator.RemoteBroadcast?.EpisodeId ?? 0, "Observed episode");
+    Equal(14_000L, coordinator.RemoteBroadcast?.Source.PositionMs ?? 0, "Projected remote position");
+    Equal("Graham's Mac", coordinator.RemoteOwner, "Observed remote owner");
+    Equal(1, transport.SummaryRequests, "Remote summary requests");
+
+    var cleared = await coordinator.ObserveAsync(PlaybackSession("iphone-client", 4, isPlaying: true));
+    Ensure(cleared.Changed, "Returning ownership to this device did not clear the remote state.");
+    Ensure(coordinator.RemoteBroadcast is null, "The remote broadcast remained after local ownership returned.");
+}
+
+static async Task UncommittedObservationCannotStealLocalPlaybackAsync()
+{
+    var transport = new FakePlaybackSynchronizationTransport(
+        "iphone-client",
+        Summary(101, "Protected Broadcast", 0, false, null));
+    var playback = new FakePlaybackEngine(isOpen: true, isPlaying: true);
+    var ownership = new MobilePlaybackOwnershipCoordinator(() => transport.ClientId);
+    var coordinator = new MobilePlaybackSynchronizationCoordinator(transport, playback, ownership);
+
+    var observation = await coordinator.ObserveSafelyAsync(
+        PlaybackSession("mac-client", generation: 7, isPlaying: true),
+        hasLocalBroadcast: true,
+        decoderIsOpen: true,
+        ownsPlayback: true);
+
+    Ensure(!observation.Changed, "An uncommitted foreign snapshot changed visible playback state.");
+    Ensure(coordinator.RemoteBroadcast is null, "An uncommitted foreign snapshot replaced the local broadcast.");
+    Equal(0, transport.SummaryRequests, "Protected remote summary requests");
+}
+
+static async Task CommittedHandoffStopsAndAcknowledgesSourceAsync()
+{
+    var transport = new FakePlaybackSynchronizationTransport(
+        "iphone-client",
+        Summary(101, "Moved Broadcast", 0, false, null));
+    var playback = new FakePlaybackEngine(isOpen: true, isPlaying: true);
+    var ownership = new MobilePlaybackOwnershipCoordinator(() => transport.ClientId);
+    var coordinator = new MobilePlaybackSynchronizationCoordinator(transport, playback, ownership);
+    var transferId = Guid.NewGuid();
+    var receipt = new WebPlaybackCommittedTransfer(
+        transferId,
+        "iphone-client",
+        "Graham's iPhone",
+        "mac-client",
+        "Graham's Mac",
+        12,
+        SourceWasPlaying: true,
+        SourceStopAcknowledged: false,
+        DateTimeOffset.UtcNow,
+        SourceStoppedAt: null);
+    var session = PlaybackSession("mac-client", generation: 12, isPlaying: true, receipt);
+
+    var result = await coordinator.StopForCommittedTransferAsync(session);
+
+    Ensure(result.Stopped, "The committed source was not stopped.");
+    Equal("Playback moved to Graham's Mac", result.Status, "Source-stop status");
+    Ensure(!playback.Current.IsPlaying, "The source decoder was still playing after acknowledgement.");
+    Ensure(!playback.IsMuted, "The stopped decoder remained muted.");
+    Equal(1, transport.Acknowledgements.Count, "Source-stop acknowledgements");
+    Equal(transferId, transport.Acknowledgements[0].TransferId, "Acknowledged transfer");
+    Equal(12L, transport.Acknowledgements[0].Generation, "Acknowledged generation");
 }
 
 static WebPlaybackSession PlaybackSession(
@@ -432,4 +532,66 @@ file sealed class MemoryConnectionStore : IMobileConnectionStore
     public RadioVaultMobileConnection? Load() => null;
     public void Save(RadioVaultMobileConnection connection) { }
     public void Delete() { }
+}
+
+file sealed class FakePlaybackSynchronizationTransport(
+    string clientId,
+    WebClientLibraryBroadcastSummary summary) : IMobilePlaybackSynchronizationTransport
+{
+    public string ClientId { get; } = clientId;
+    public int SummaryRequests { get; private set; }
+    public List<WebPlaybackTransferSourceStoppedRequest> Acknowledgements { get; } = [];
+
+    public Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        SummaryRequests++;
+        if (episodeId != summary.RepresentativeEpisodeId)
+            throw new InvalidOperationException($"Unexpected episode {episodeId}.");
+        return Task.FromResult(summary);
+    }
+
+    public Task AcknowledgePlaybackSourceStoppedAsync(
+        WebPlaybackTransferSourceStoppedRequest request,
+        CancellationToken cancellationToken = default)
+    {
+        Acknowledgements.Add(request);
+        return Task.CompletedTask;
+    }
+}
+
+file sealed class FakePlaybackEngine : IMobilePlaybackEngine
+{
+    public FakePlaybackEngine(bool isOpen = false, bool isPlaying = false)
+    {
+        Current = new MobilePlaybackSnapshot(
+            isOpen,
+            isPlaying,
+            TimeSpan.Zero,
+            isOpen ? TimeSpan.FromSeconds(100) : null);
+    }
+
+    public event EventHandler<MobilePlaybackSnapshot>? StateChanged
+    {
+        add { }
+        remove { }
+    }
+
+    public event EventHandler? MediaEnded
+    {
+        add { }
+        remove { }
+    }
+
+    public MobilePlaybackSnapshot Current { get; private set; }
+    public bool IsMuted { get; private set; }
+
+    public void Open(string url) => Current = Current with { IsOpen = true };
+    public void Play() => Current = Current with { IsPlaying = true };
+    public void Pause() => Current = Current with { IsPlaying = false };
+    public void Seek(TimeSpan position) => Current = Current with { Position = position };
+    public void SetRate(double rate) { }
+    public void SetMuted(bool muted) => IsMuted = muted;
+    public void Dispose() { }
 }

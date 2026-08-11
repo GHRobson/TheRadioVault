@@ -20,6 +20,7 @@ public sealed class MobileClientSession : IDisposable
     private readonly MobileOfflineMutationStore _offlineMutations;
     private readonly IMobilePlaybackEngine _playback;
     private readonly MobilePlaybackOwnershipCoordinator _playbackOwnership;
+    private readonly MobilePlaybackSynchronizationCoordinator _playbackSynchronization;
     private readonly MobilePlaybackTimeline _playbackTimeline = new();
     private readonly IMobileNowPlayingService _nowPlaying;
     private readonly IMobileDownloadPolicy _downloadPolicy;
@@ -37,10 +38,8 @@ public sealed class MobileClientSession : IDisposable
     private MobileDownloadRecord? _activeDownload;
     private CancellationTokenSource? _downloadCancellation;
     private MobileBroadcastItem? _pendingDownload;
-    private MobileBroadcastItem? _remotePlaybackBroadcast;
     private byte[]? _nowPlayingArtwork;
     private long _nowPlayingArtworkEpisodeId;
-    private string _remotePlaybackOwner = string.Empty;
     private IReadOnlyList<WebClientLibraryCollectionSummary> _incompleteLibraryCollections = [];
     private double _speed = 1d;
     private long _playbackGeneration;
@@ -76,6 +75,10 @@ public sealed class MobileClientSession : IDisposable
                 "PendingChanges"));
         _playback = playback ?? throw new ArgumentNullException(nameof(playback));
         _playbackOwnership = new MobilePlaybackOwnershipCoordinator(() => _server.ClientId);
+        _playbackSynchronization = new MobilePlaybackSynchronizationCoordinator(
+            new MobilePlaybackSynchronizationTransport(_server),
+            _playback,
+            _playbackOwnership);
         _nowPlaying = nowPlaying ?? throw new ArgumentNullException(nameof(nowPlaying));
         _downloadPolicy = downloadPolicy ?? throw new ArgumentNullException(nameof(downloadPolicy));
         var metadataRoot = Path.Combine(
@@ -196,16 +199,16 @@ public sealed class MobileClientSession : IDisposable
     public string DownloadStorageLimitText => DownloadStorageLimitBytes <= 0
         ? "No storage limit"
         : $"Up to {FormatBytes(DownloadStorageLimitBytes)}";
-    public bool HasMiniPlayer => SelectedBroadcast is not null || _remotePlaybackBroadcast is not null;
-    public bool MiniPlayerShowsHandoff => _remotePlaybackBroadcast is not null && !_ownsPlayback;
-    public string MiniPlayerTitle => _remotePlaybackBroadcast?.Title ?? NowPlayingTitle;
-    public string MiniPlayerSubtitle => _remotePlaybackBroadcast is not null
-        ? $"Playing on {_remotePlaybackOwner}"
+    public bool HasMiniPlayer => SelectedBroadcast is not null || _playbackSynchronization.RemoteBroadcast is not null;
+    public bool MiniPlayerShowsHandoff => _playbackSynchronization.RemoteBroadcast is not null && !_ownsPlayback;
+    public string MiniPlayerTitle => _playbackSynchronization.RemoteBroadcast?.Title ?? NowPlayingTitle;
+    public string MiniPlayerSubtitle => _playbackSynchronization.RemoteBroadcast is not null
+        ? $"Playing on {_playbackSynchronization.RemoteOwner}"
         : NowPlayingSubtitle;
-    public double MiniPlayerProgress => _remotePlaybackBroadcast is not null
-        ? _remotePlaybackBroadcast.Progress / 100d
+    public double MiniPlayerProgress => _playbackSynchronization.RemoteBroadcast is not null
+        ? _playbackSynchronization.RemoteBroadcast.Progress / 100d
         : PlaybackProgress;
-    public string MiniPlayerTime => _remotePlaybackBroadcast is { } remote
+    public string MiniPlayerTime => _playbackSynchronization.RemoteBroadcast is { } remote
         ? $"{FormatTime(TimeSpan.FromMilliseconds(remote.Source.PositionMs))} / " +
           FormatTime(TimeSpan.FromMilliseconds(remote.Source.DurationMs))
         : PlaybackTime;
@@ -214,7 +217,7 @@ public sealed class MobileClientSession : IDisposable
         Math.Max(0, MiniPlayerDurationMs - MiniPlayerPositionMs)))}";
     public string MiniPlayerTotalTime => FormatTime(TimeSpan.FromMilliseconds(MiniPlayerDurationMs));
     public bool MiniPlayerCanAct => MiniPlayerShowsHandoff || CanControlPlayback;
-    public MobileBroadcastItem? CurrentBroadcast => _remotePlaybackBroadcast ?? SelectedBroadcast;
+    public MobileBroadcastItem? CurrentBroadcast => _playbackSynchronization.RemoteBroadcast ?? SelectedBroadcast;
 
     public bool CanToggleBroadcast(long episodeId)
         => CanControlPlayback && SelectedBroadcast?.EpisodeId == episodeId;
@@ -1209,8 +1212,7 @@ public sealed class MobileClientSession : IDisposable
             _activeDownload = record;
             _offlinePlayback = true;
             _ownsPlayback = true;
-            _remotePlaybackBroadcast = null;
-            _remotePlaybackOwner = string.Empty;
+            _playbackSynchronization.ClearRemotePlayback();
             _playbackTimeline.Load(
                 record.Parts.Select(part => new WebCanonicalMediaPart(
                     part.PartNumber,
@@ -1249,7 +1251,7 @@ public sealed class MobileClientSession : IDisposable
 
     public void MiniPlayerAction()
     {
-        if (MiniPlayerShowsHandoff && _remotePlaybackBroadcast is { } remote)
+        if (MiniPlayerShowsHandoff && _playbackSynchronization.RemoteBroadcast is { } remote)
         {
             _ = PlayAsync(remote);
             return;
@@ -1406,8 +1408,7 @@ public sealed class MobileClientSession : IDisposable
         }
         NowPlayingTitle = broadcast.Title;
         NowPlayingSubtitle = broadcast.Subtitle;
-        _remotePlaybackBroadcast = null;
-        _remotePlaybackOwner = string.Empty;
+        _playbackSynchronization.ClearRemotePlayback();
         PreparingPlaybackEpisodeId = broadcast.EpisodeId;
         PlaybackStatus = IsBusy
             ? "Preparing playback while the Library continues syncing…"
@@ -1452,7 +1453,7 @@ public sealed class MobileClientSession : IDisposable
             {
                 if (shared.Player.EpisodeId == broadcast.EpisodeId)
                 {
-                    logicalPosition = ProjectPosition(shared.Player);
+                    logicalPosition = _playbackSynchronization.ProjectPosition(shared.Player);
                     _speed = Math.Clamp(shared.Player.Speed, 0.5d, 3d);
                     desiredPlaying = shared.Player.IsPlaying;
                 }
@@ -1521,8 +1522,7 @@ public sealed class MobileClientSession : IDisposable
             }
 
             PlaybackStatus = IsPlaying ? $"Playing on {_server.ClientDisplayName}" : $"Paused on {_server.ClientDisplayName}";
-            _remotePlaybackBroadcast = null;
-            _remotePlaybackOwner = string.Empty;
+            _playbackSynchronization.ClearRemotePlayback();
             await SaveDurableProgressAsync().ConfigureAwait(false);
             TracePlayback($"Play preparation completed: episode={SelectedBroadcast?.EpisodeId}; playing={IsPlaying}; owns={_ownsPlayback}.");
         }
@@ -1849,77 +1849,48 @@ public sealed class MobileClientSession : IDisposable
 
     private async Task ObserveSharedPlaybackAsync(WebPlaybackSession session)
     {
-        if (!_playbackOwnership.HasActivePlayback(session) ||
-            _playbackOwnership.IsOwnedByThisDevice(session))
-        {
-            if (_remotePlaybackBroadcast is null && string.IsNullOrEmpty(_remotePlaybackOwner)) return;
-            _remotePlaybackBroadcast = null;
-            _remotePlaybackOwner = string.Empty;
-            Notify();
-            return;
-        }
-
-        var owner = _playbackOwnership.OwnerName(session);
-        var episodeId = session.Player.EpisodeId.GetValueOrDefault();
-        var changed = _remotePlaybackBroadcast?.EpisodeId != episodeId ||
-                      !string.Equals(_remotePlaybackOwner, owner, StringComparison.Ordinal);
-        if (_remotePlaybackBroadcast?.EpisodeId != episodeId)
-        {
-            try
-            {
-                _remotePlaybackBroadcast = new MobileBroadcastItem(
-                    await _server.GetBroadcastSummaryAsync(episodeId).ConfigureAwait(false));
-            }
-            catch
-            {
-                _remotePlaybackBroadcast = null;
-            }
-        }
-        if (_remotePlaybackBroadcast is { } remote)
-        {
-            var projectedPosition = ProjectPosition(session.Player);
-            var projectedDuration = Math.Max(remote.Source.DurationMs, session.Player.DurationMs);
-            var completed = string.Equals(session.Player.Status, "Completed", StringComparison.OrdinalIgnoreCase);
-            changed |= remote.Source.PositionMs != projectedPosition ||
-                       remote.Source.DurationMs != projectedDuration ||
-                       remote.Source.Completed != completed;
-            _remotePlaybackBroadcast = ApplyPlaybackProgress(
-                remote.Source,
-                projectedPosition,
-                projectedDuration,
-                completed,
-                session.Player.UpdatedAt ?? DateTimeOffset.UtcNow);
-        }
-        _remotePlaybackOwner = owner;
-        if (changed) Notify();
+        var observation = await _playbackSynchronization.ObserveAsync(session).ConfigureAwait(false);
+        ApplyRemotePlaybackObservation(observation);
     }
 
-    private Task ObserveSharedPlaybackSafelyAsync(WebPlaybackSession session)
+    private async Task ObserveSharedPlaybackSafelyAsync(WebPlaybackSession session)
     {
-        if (SelectedBroadcast is not null && _playback.Current.IsOpen && _ownsPlayback &&
-            _playbackOwnership.HasActivePlayback(session) &&
-            !_playbackOwnership.IsOwnedByThisDevice(session))
-        {
-            if (!_playbackOwnership.WasCommittedAwayFromThisDevice(session)) return Task.CompletedTask;
-        }
-
-        return ObserveSharedPlaybackAsync(session);
+        var observation = await _playbackSynchronization.ObserveSafelyAsync(
+            session,
+            SelectedBroadcast is not null,
+            _playback.Current.IsOpen,
+            _ownsPlayback).ConfigureAwait(false);
+        ApplyRemotePlaybackObservation(observation);
     }
 
     private async Task<bool> StopForCommittedTransferAsync(WebPlaybackSession session)
     {
-        if (!_playbackOwnership.NeedsSourceStopAcknowledgement(session))
-            return false;
-        var receipt = session.CommittedTransfer!;
-
-        _playback.Pause();
-        _playback.SetMuted(false);
+        if (!_playbackSynchronization.RequiresSourceStop(session)) return false;
+        // Ownership is relinquished as soon as the committed receipt requires
+        // this source to stop. A transient acknowledgement failure must not
+        // allow the old device to present itself as authoritative again.
         _ownsPlayback = false;
-        await _server.AcknowledgePlaybackSourceStoppedAsync(new WebPlaybackTransferSourceStoppedRequest(
-            _server.ClientId, receipt.TransferId, receipt.Generation)).ConfigureAwait(false);
-        PlaybackStatus = $"Playback moved to {receipt.TargetDeviceName}";
+        var result = await _playbackSynchronization
+            .StopForCommittedTransferAsync(session)
+            .ConfigureAwait(false);
+        if (!result.Stopped) return false;
+        PlaybackStatus = result.Status;
         NotifyPlayback();
         return true;
+    }
+
+    private void ApplyRemotePlaybackObservation(MobilePlaybackObservation observation)
+    {
+        if (observation.Broadcast is { } remote)
+        {
+            ApplyPlaybackProgress(
+                remote.Source,
+                remote.Source.PositionMs,
+                remote.Source.DurationMs,
+                remote.Source.Completed,
+                remote.Source.LastPlayedAt ?? DateTimeOffset.UtcNow);
+        }
+        if (observation.Changed) Notify();
     }
 
     private async Task<WebClientPlaybackResult> ReportLivePlaybackAsync(bool force)
@@ -1998,23 +1969,11 @@ public sealed class MobileClientSession : IDisposable
         return _playbackTimeline.IsCompleted();
     }
 
-    private long MiniPlayerPositionMs => _remotePlaybackBroadcast?.Source.PositionMs
+    private long MiniPlayerPositionMs => _playbackSynchronization.RemoteBroadcast?.Source.PositionMs
         ?? _playbackTimeline.PositionMs;
 
-    private long MiniPlayerDurationMs => _remotePlaybackBroadcast?.Source.DurationMs
+    private long MiniPlayerDurationMs => _playbackSynchronization.RemoteBroadcast?.Source.DurationMs
         ?? _playbackTimeline.DurationMs;
-
-    private static long ProjectPosition(WebPlaybackState state)
-    {
-        var position = Math.Max(0, state.PositionMs);
-        if (state.IsPlaying && state.UpdatedAt is { } updated)
-        {
-            var elapsed = (DateTimeOffset.UtcNow - updated).TotalMilliseconds;
-            if (elapsed > 0 && elapsed <= 15_000)
-                position += (long)Math.Round(elapsed * Math.Clamp(state.Speed, 0.5d, 3d));
-        }
-        return state.DurationMs > 0 ? Math.Clamp(position, 0, state.DurationMs) : position;
-    }
 
     private static WebPlaybackTransferTicket RequireTransfer(WebPlaybackTransferResult result)
     {
@@ -2437,7 +2396,7 @@ public sealed class MobileClientSession : IDisposable
             System.Diagnostics.Trace.WriteLine($"[iOS playback metadata cache] {exception}");
         }
         if (SelectedBroadcast?.EpisodeId == item.EpisodeId) SelectedBroadcast = item;
-        if (_remotePlaybackBroadcast?.EpisodeId == item.EpisodeId) _remotePlaybackBroadcast = item;
+        _playbackSynchronization.ReplaceRemoteBroadcast(item.EpisodeId, item);
         LibraryBroadcasts = ReplaceBroadcast(LibraryBroadcasts, item);
         RecentBroadcasts = ReplaceBroadcast(RecentBroadcasts, item);
         OnThisDay = ReplaceBroadcast(OnThisDay, item);
@@ -2971,7 +2930,7 @@ public sealed class MobileClientSession : IDisposable
         LibraryBroadcasts = Replace(LibraryBroadcasts, episodeId, replacement);
         DownloadedBroadcasts = Replace(DownloadedBroadcasts, episodeId, replacement);
         if (SelectedBroadcast?.EpisodeId == episodeId) SelectedBroadcast = replacement;
-        if (_remotePlaybackBroadcast?.EpisodeId == episodeId) _remotePlaybackBroadcast = replacement;
+        _playbackSynchronization.ReplaceRemoteBroadcast(episodeId, replacement);
     }
 
     private static IReadOnlyList<MobileBroadcastItem> Replace(

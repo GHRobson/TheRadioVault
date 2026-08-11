@@ -1792,6 +1792,11 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         "TheRadioVault.Client.Mobile",
         "Playback",
         "MobilePlaybackTimeline.cs"));
+    var mobilePlaybackSynchronizationSource = File.ReadAllText(Path.Combine(
+        SourceRoot(),
+        "TheRadioVault.Client.Mobile",
+        "Playback",
+        "MobilePlaybackSynchronizationCoordinator.cs"));
     True(mobileCacheSessionSource.Contains("SynchronizeMetadataCacheAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("FetchCompleteLibraryAsync", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("QueryCachedBroadcasts", StringComparison.Ordinal));
@@ -1802,6 +1807,10 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileCacheSessionSource.Contains("_metadataSyncGate.WaitAsync()", StringComparison.Ordinal));
     True(mobilePlaybackOwnershipSource.Contains("ConfirmForeignOwner", StringComparison.Ordinal));
     True(mobileCacheSessionSource.Contains("ObserveSharedPlaybackSafelyAsync", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("ObserveSafelyAsync", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("ProjectPosition", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("StopForCommittedTransferAsync", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("AcknowledgePlaybackSourceStoppedAsync", StringComparison.Ordinal));
     True(mobilePlaybackOwnershipSource.Contains("if (!session.Player.IsPlaying)", StringComparison.Ordinal));
     True(mobilePlaybackOwnershipSource.Contains("WasCommittedAwayFromThisDevice", StringComparison.Ordinal));
     True(mobilePlaybackOwnershipSource.Contains("NeedsSourceStopAcknowledgement", StringComparison.Ordinal));
@@ -1908,7 +1917,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(mobileSession.Contains("WebPlaybackTransferBeginRequest", StringComparison.Ordinal));
     True(mobileSession.Contains("WebPlaybackTransferReadyRequest", StringComparison.Ordinal));
     True(mobileSession.Contains("WebPlaybackTransferCommitRequest", StringComparison.Ordinal));
-    True(mobileSession.Contains("WebPlaybackTransferSourceStoppedRequest", StringComparison.Ordinal));
+    True(mobilePlaybackSynchronizationSource.Contains("WebPlaybackTransferSourceStoppedRequest", StringComparison.Ordinal));
     True(mobileSession.Contains("WebOfflineProgressUpdate", StringComparison.Ordinal));
     True(mobileSession.Contains("DurableProgressInterval", StringComparison.Ordinal));
     True(mobileSession.Contains("DownloadedBroadcasts", StringComparison.Ordinal));
