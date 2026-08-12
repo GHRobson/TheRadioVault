@@ -154,13 +154,10 @@ fi
   "macOS and Linux packages preserve the shared client-server boundary" \
   "Product versions remain consistent" \
   "iOS Client preserves native platform and server boundaries" \
-  "Repeated iPhone handoffs bypass dormant decoder gating" \
-  "Transactional handoff requires a physical source-stop receipt" \
-  "Durable playback rejects a stale zero after handoff"
+  "Repeated iPhone handoffs bypass dormant decoder gating"
 
 "$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Web.Tests/TheRadioVault.Web.Tests.csproj" \
-  -c "$CONFIGURATION" --no-build -- \
-  "Transactional handoff survives repeated device moves"
+  -c "$CONFIGURATION" --no-build
 
 if [[ "$RUN_IOS" == true ]]; then
   "$DOTNET_EXE" build "$ROOT/TheRadioVault.Client.Mobile.Tests/TheRadioVault.Client.Mobile.Tests.csproj" \
