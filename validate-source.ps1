@@ -171,10 +171,15 @@ if ($compositionText -match 'RegisterSingleton<TranscriptionCoordinator>') {
 if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA6-SERVER-TRANSCRIPTION-WORKERS.md"))) {
     throw "Alpha 6 server transcription acceptance guide is missing."
 }
-$anywhereWebText =
-    (Get-Content (Join-Path $root "TheRadioVault.Web\Services\LocalWebServer.cs") -Raw -Encoding UTF8) +
-    "`n" +
+$anywhereWebSources = Get-ChildItem (Join-Path $root "TheRadioVault.Web\Services") -Filter "LocalWebServer*.cs" -File |
+    Sort-Object FullName |
+    ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw -Encoding UTF8 }
+$anywhereWebAssets = @(
     (Get-Content (Join-Path $root "TheRadioVault.Web\Assets\web-client.html") -Raw -Encoding UTF8)
+    (Get-Content (Join-Path $root "TheRadioVault.Web\Assets\service-worker.js") -Raw -Encoding UTF8)
+    (Get-Content (Join-Path $root "TheRadioVault.Web\Assets\secure-setup.html") -Raw -Encoding UTF8)
+)
+$anywhereWebText = ($anywhereWebSources + $anywhereWebAssets) -join "`n"
 foreach ($marker in @('["transcription","Transcription studio"]', '--transcript: #43c7bd', 'loadTranscripts', 'data-transcription-action', 'data-transcript-export', 'data-transcribe-full', 'radio-vault-anywhere-shell-v67')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 7 Anywhere transcription marker missing: $marker" }
 }
