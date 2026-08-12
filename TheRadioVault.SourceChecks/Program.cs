@@ -2,6 +2,7 @@ var checks = new (string Name, Action Run)[]
 {
     ("Web playback and queue routes stay behind one server boundary", WebPlaybackAndQueueRoutesStayBehindOneServerBoundary),
     ("Federation administration routes stay behind one server boundary", FederationAdministrationRoutesStayBehindOneServerBoundary),
+    ("General Web API dispatch stays declarative and centralised", GeneralWebApiDispatchStaysDeclarativeAndCentralised),
     ("Web assets, client routes and media routes stay behind focused boundaries", WebClientAndMediaBoundariesRemainExtracted),
     ("Desktop Saved and transport controls match native icon parity", DesktopSavedAndTransportControlsMatchNativeParity),
     ("Knowledge imports retain resumable background-job surfaces", KnowledgeImportsRetainResumableBackgroundJobSurfaces),
@@ -42,12 +43,14 @@ return failures.Count == 0 ? 0 : 1;
 static void WebPlaybackAndQueueRoutesStayBehindOneServerBoundary()
 {
     var services = Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services");
-    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var coordinator = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.ApiRoutes.cs"));
     var playbackQueue = File.ReadAllText(Path.Combine(services, "LocalWebServer.PlaybackQueue.cs"));
 
     True(dispatcher.Contains("TryHandlePlaybackQueueRouteAsync(", StringComparison.Ordinal));
-    True(!dispatcher.Contains("private async Task HandlePlayerApiAsync(", StringComparison.Ordinal));
-    True(!dispatcher.Contains("private async Task HandleQueueApiAsync(", StringComparison.Ordinal));
+    True(!coordinator.Contains("TryHandlePlaybackQueueRouteAsync(", StringComparison.Ordinal));
+    True(!coordinator.Contains("private async Task HandlePlayerApiAsync(", StringComparison.Ordinal));
+    True(!coordinator.Contains("private async Task HandleQueueApiAsync(", StringComparison.Ordinal));
     True(playbackQueue.Contains("private async Task<bool> TryHandlePlaybackQueueRouteAsync(", StringComparison.Ordinal));
 
     var routeMarkers = new[]
@@ -78,19 +81,23 @@ static void WebPlaybackAndQueueRoutesStayBehindOneServerBoundary()
 static void FederationAdministrationRoutesStayBehindOneServerBoundary()
 {
     var services = Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services");
-    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var coordinator = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.ApiRoutes.cs"));
     var federationAdministration = File.ReadAllText(Path.Combine(services, "LocalWebServer.FederationAdministration.cs"));
 
     const string boundaryCall = "TryHandleFederationAdministrationRouteAsync(";
-    var pairingIndex = dispatcher.IndexOf("WebApiRoutes.FederationPair", StringComparison.Ordinal);
+    var pairingIndex = coordinator.IndexOf("WebApiRoutes.FederationPair", StringComparison.Ordinal);
+    var authorizedBoundaryIndex = coordinator.IndexOf("TryHandleAuthorizedRouteAsync(", pairingIndex, StringComparison.Ordinal);
     var boundaryIndex = dispatcher.IndexOf(boundaryCall, StringComparison.Ordinal);
     var clientBoundaryIndex = dispatcher.IndexOf("TryHandleClientRouteAsync(", boundaryIndex, StringComparison.Ordinal);
 
     True(pairingIndex >= 0);
-    True(boundaryIndex > pairingIndex);
+    True(authorizedBoundaryIndex > pairingIndex);
+    True(boundaryIndex >= 0);
     True(clientBoundaryIndex > boundaryIndex);
-    var routeWindow = dispatcher[pairingIndex..clientBoundaryIndex];
+    var routeWindow = dispatcher[boundaryIndex..clientBoundaryIndex];
     Equal(1, dispatcher.Split(boundaryCall, StringSplitOptions.None).Length - 1);
+    Equal(1, coordinator.Split("TryHandleAuthorizedRouteAsync(", StringSplitOptions.None).Length - 1);
     True(federationAdministration.Contains("private async Task<bool> TryHandleFederationAdministrationRouteAsync(", StringComparison.Ordinal));
 
     var routeMarkers = new[]
@@ -128,13 +135,62 @@ static void FederationAdministrationRoutesStayBehindOneServerBoundary()
     }
 }
 
+static void GeneralWebApiDispatchStaysDeclarativeAndCentralised()
+{
+    var services = Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services");
+    var coordinator = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.ApiRoutes.cs"));
+    var resolver = File.ReadAllText(Path.Combine(services, "WebApiRouteResolver.cs"));
+
+    Equal(1, coordinator.Split("TryHandleAuthorizedRouteAsync(", StringSplitOptions.None).Length - 1);
+    True(!coordinator.Contains("TryMatchBroadcastAction", StringComparison.Ordinal));
+    True(!coordinator.Contains("TryMatchMomentDelete", StringComparison.Ordinal));
+    True(!coordinator.Contains("TryMatchMomentUpdate", StringComparison.Ordinal));
+    True(!coordinator.Contains("TryMatchJobCancel", StringComparison.Ordinal));
+    True(dispatcher.Contains("WebApiRouteResolver.TryResolve(path", StringComparison.Ordinal));
+    True(dispatcher.Contains("DispatchGeneralApiRouteAsync(", StringComparison.Ordinal));
+    True(dispatcher.Contains("if (!route.Allows(method))", StringComparison.Ordinal));
+
+    var routeKinds = new[]
+    {
+        "WebApiRouteKind.ServerInfo",
+        "WebApiRouteKind.Episodes",
+        "WebApiRouteKind.Shows",
+        "WebApiRouteKind.Search",
+        "WebApiRouteKind.Favourites",
+        "WebApiRouteKind.Events",
+        "WebApiRouteKind.Jobs",
+        "WebApiRouteKind.JobCancel",
+        "WebApiRouteKind.OfflineProgress",
+        "WebApiRouteKind.FavouriteMutation",
+        "WebApiRouteKind.ListeningStatusMutation",
+        "WebApiRouteKind.MetadataMutation",
+        "WebApiRouteKind.Transcripts",
+        "WebApiRouteKind.Transcript",
+        "WebApiRouteKind.MomentCreate",
+        "WebApiRouteKind.MomentDelete",
+        "WebApiRouteKind.MomentUpdate",
+        "WebApiRouteKind.BroadcastDetails",
+        "WebApiRouteKind.Research",
+        "WebApiRouteKind.ArchiveHealth",
+        "WebApiRouteKind.Moments"
+    };
+    foreach (var routeKind in routeKinds)
+    {
+        True(resolver.Contains(routeKind, StringComparison.Ordinal), $"Resolver is missing {routeKind}.");
+        True(dispatcher.Contains("case " + routeKind + ":", StringComparison.Ordinal), $"Dispatcher is missing {routeKind}.");
+    }
+}
+
 static void WebClientAndMediaBoundariesRemainExtracted()
 {
     var root = SourceRoot();
     var web = Path.Combine(root, "TheRadioVault.Web");
     var services = Path.Combine(web, "Services");
     var assets = Path.Combine(web, "Assets");
-    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var coordinator = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.ApiRoutes.cs"));
+    var resolver = File.ReadAllText(Path.Combine(services, "WebApiRouteResolver.cs"));
     var clientRoutes = File.ReadAllText(Path.Combine(services, "LocalWebServer.ClientRoutes.cs"));
     var mediaRoutes = File.ReadAllText(Path.Combine(services, "LocalWebServer.Media.cs"));
     var webAssets = File.ReadAllText(Path.Combine(services, "LocalWebServer.WebAssets.cs"));
@@ -144,19 +200,19 @@ static void WebClientAndMediaBoundariesRemainExtracted()
     Equal(1, dispatcher.Split("TryHandleCanonicalMediaRouteAsync(", StringSplitOptions.None).Length - 1);
     Equal(1, dispatcher.Split("TryHandleArtworkAudioRouteAsync(", StringSplitOptions.None).Length - 1);
     var clientBoundaryIndex = dispatcher.IndexOf("TryHandleClientRouteAsync(", StringComparison.Ordinal);
-    var episodesIndex = dispatcher.IndexOf("WebApiRoutes.Broadcasts", clientBoundaryIndex, StringComparison.Ordinal);
+    var generalBoundaryIndex = dispatcher.IndexOf("if (hasGeneralRoute)", clientBoundaryIndex, StringComparison.Ordinal);
     var canonicalMediaBoundaryIndex = dispatcher.IndexOf("TryHandleCanonicalMediaRouteAsync(", StringComparison.Ordinal);
-    var broadcastDetailsIndex = dispatcher.IndexOf("HandleBroadcastDetailsApiAsync", canonicalMediaBoundaryIndex, StringComparison.Ordinal);
-    var momentsIndex = dispatcher.IndexOf("WebApiRoutes.MomentsAll", broadcastDetailsIndex, StringComparison.Ordinal);
-    var artworkAudioBoundaryIndex = dispatcher.IndexOf("TryHandleArtworkAudioRouteAsync(", momentsIndex, StringComparison.Ordinal);
-    True(clientBoundaryIndex >= 0 && episodesIndex > clientBoundaryIndex);
-    True(canonicalMediaBoundaryIndex > episodesIndex && broadcastDetailsIndex > canonicalMediaBoundaryIndex);
-    True(momentsIndex > broadcastDetailsIndex && artworkAudioBoundaryIndex > momentsIndex);
-    True(!dispatcher.Contains("private const string WebClientHtml", StringComparison.Ordinal));
-    True(!dispatcher.Contains("private const string ServiceWorkerJavaScript", StringComparison.Ordinal));
-    True(!dispatcher.Contains("TryMatchClientOperation(uri.AbsolutePath", StringComparison.Ordinal));
-    True(!dispatcher.Contains("private async Task HandleArtworkAsync", StringComparison.Ordinal));
-    True(!dispatcher.Contains("private async Task StreamAudioFileAsync", StringComparison.Ordinal));
+    var playbackBoundaryIndex = dispatcher.IndexOf("TryHandlePlaybackQueueRouteAsync(", canonicalMediaBoundaryIndex, StringComparison.Ordinal);
+    var artworkAudioBoundaryIndex = dispatcher.IndexOf("TryHandleArtworkAudioRouteAsync(", playbackBoundaryIndex, StringComparison.Ordinal);
+    True(clientBoundaryIndex >= 0 && generalBoundaryIndex > clientBoundaryIndex);
+    True(canonicalMediaBoundaryIndex > generalBoundaryIndex && playbackBoundaryIndex > canonicalMediaBoundaryIndex);
+    True(artworkAudioBoundaryIndex > playbackBoundaryIndex);
+    True(resolver.Contains("WebApiRoutes.Broadcasts", StringComparison.Ordinal));
+    True(!coordinator.Contains("private const string WebClientHtml", StringComparison.Ordinal));
+    True(!coordinator.Contains("private const string ServiceWorkerJavaScript", StringComparison.Ordinal));
+    True(!coordinator.Contains("TryMatchClientOperation(uri.AbsolutePath", StringComparison.Ordinal));
+    True(!coordinator.Contains("private async Task HandleArtworkAsync", StringComparison.Ordinal));
+    True(!coordinator.Contains("private async Task StreamAudioFileAsync", StringComparison.Ordinal));
 
     var clientMarkers = new[]
     {

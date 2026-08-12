@@ -23,6 +23,8 @@ public sealed partial class LocalWebServer : IDisposable
     private readonly object _gate = new();
     private TcpListener? _listener;
     private TcpListener? _secureListener;
+    private int _boundPort;
+    private int _boundSecurePort;
     private CancellationTokenSource? _cancellation;
     private Task? _acceptLoop;
     private Task? _secureAcceptLoop;
@@ -52,8 +54,21 @@ public sealed partial class LocalWebServer : IDisposable
 
     public bool IsRunning { get; private set; }
     public string? LastError { get; private set; }
-    public int Port => _options.Port;
-    public int SecurePort => _options.SecurePort;
+    public int Port
+    {
+        get
+        {
+            lock (_gate) return _boundPort > 0 ? _boundPort : _options.Port;
+        }
+    }
+
+    public int SecurePort
+    {
+        get
+        {
+            lock (_gate) return _boundSecurePort > 0 ? _boundSecurePort : _options.SecurePort;
+        }
+    }
     public bool IsSecure => _options.SecureAccessEnabled && _options.ServerCertificate is not null;
     public string AccessToken => _options.AccessToken;
     public string RootCertificateThumbprint => _options.RootCertificateThumbprint;
@@ -109,7 +124,7 @@ public sealed partial class LocalWebServer : IDisposable
     {
         var token = Uri.EscapeDataString(_options.AccessToken);
         var scheme = IsSecure ? "https" : "http";
-        var port = IsSecure ? _options.SecurePort : _options.Port;
+        var port = IsSecure ? SecurePort : Port;
         return GetLanAddresses().Select(address => $"{scheme}://{address}:{port}/?token={token}").ToArray();
     }
 
@@ -117,14 +132,14 @@ public sealed partial class LocalWebServer : IDisposable
     {
         if (!IsSecure) return Array.Empty<string>();
         var token = Uri.EscapeDataString(_options.AccessToken);
-        return GetLanAddresses().Select(address => $"http://{address}:{_options.Port}/secure-setup?token={token}").ToArray();
+        return GetLanAddresses().Select(address => $"http://{address}:{Port}/secure-setup?token={token}").ToArray();
     }
 
     public IReadOnlyList<string> GetBroadcastUrls(long episodeId)
     {
         var token = Uri.EscapeDataString(_options.AccessToken);
         var scheme = IsSecure ? "https" : "http";
-        var port = IsSecure ? _options.SecurePort : _options.Port;
+        var port = IsSecure ? SecurePort : Port;
         return GetLanAddresses().Select(address => $"{scheme}://{address}:{port}/broadcast/{episodeId}?token={token}").ToArray();
     }
 
@@ -146,17 +161,19 @@ public sealed partial class LocalWebServer : IDisposable
             LastError = null;
             if (_options.SecureAccessEnabled && _options.ServerCertificate is null)
                 throw new InvalidOperationException("Secure web access is enabled, but no HTTPS certificate is available.");
-            if (_options.SecureAccessEnabled && _options.SecurePort == _options.Port)
+            if (_options.SecureAccessEnabled && _options.SecurePort != 0 && _options.SecurePort == _options.Port)
                 throw new InvalidOperationException("The HTTP setup port and HTTPS port must be different.");
 
             try
             {
                 _listener = new TcpListener(_options.LoopbackOnly ? IPAddress.Loopback : IPAddress.Any, _options.Port);
                 _listener.Start(32);
+                _boundPort = ((IPEndPoint)_listener.LocalEndpoint).Port;
                 if (_options.SecureAccessEnabled)
                 {
                     _secureListener = new TcpListener(_options.LoopbackOnly ? IPAddress.Loopback : IPAddress.Any, _options.SecurePort);
                     _secureListener.Start(32);
+                    _boundSecurePort = ((IPEndPoint)_secureListener.LocalEndpoint).Port;
                 }
 
                 _cancellation = new CancellationTokenSource();
@@ -177,9 +194,9 @@ public sealed partial class LocalWebServer : IDisposable
                     : null;
                 _log?.Invoke(_options.SecureAccessEnabled
                     ? LanFederationEnabled
-                        ? $"Started HTTP setup on port {_options.Port}, HTTPS on port {_options.SecurePort}, and LAN server discovery on UDP {_options.LanDiscoveryPort}."
-                        : $"Started HTTP setup on port {_options.Port} and HTTPS on port {_options.SecurePort}."
-                    : $"Started on LAN port {_options.Port}.");
+                        ? $"Started HTTP setup on port {_boundPort}, HTTPS on port {_boundSecurePort}, and LAN server discovery on UDP {_options.LanDiscoveryPort}."
+                        : $"Started HTTP setup on port {_boundPort} and HTTPS on port {_boundSecurePort}."
+                    : $"Started on LAN port {_boundPort}.");
             }
             catch (Exception ex)
             {
@@ -189,6 +206,8 @@ public sealed partial class LocalWebServer : IDisposable
                 try { _secureListener?.Stop(); } catch { }
                 _listener = null;
                 _secureListener = null;
+                _boundPort = 0;
+                _boundSecurePort = 0;
                 _log?.Invoke($"Could not start: {ex}");
                 throw;
             }
@@ -216,6 +235,8 @@ public sealed partial class LocalWebServer : IDisposable
             _cancellation = null;
             _listener = null;
             _secureListener = null;
+            _boundPort = 0;
+            _boundSecurePort = 0;
             _acceptLoop = null;
             _secureAcceptLoop = null;
             _discoveryLoop = null;
@@ -366,7 +387,7 @@ public sealed partial class LocalWebServer : IDisposable
             WebApiRoutes.Version,
             _options.DatabaseSchemaVersion,
             _options.CapabilityGeneration,
-            _options.SecurePort,
+            SecurePort,
             _options.ServerCertificateThumbprint,
             pairing is not null,
             _pairedDesktopClients.Count,
@@ -428,14 +449,14 @@ public sealed partial class LocalWebServer : IDisposable
                     return;
                 }
                 var request = requestRead.Request;
-                var isGet = string.Equals(request.Method, "GET", StringComparison.OrdinalIgnoreCase);
-                var isHead = string.Equals(request.Method, "HEAD", StringComparison.OrdinalIgnoreCase);
-                var isPost = string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase);
-                if (!isGet && !isHead && !isPost)
+                if (!WebApiRouteResolver.TryParseMethod(request.Method, out var requestMethod))
                 {
                     await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Only GET, HEAD and selected POST actions are supported.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
                     return;
                 }
+                var isGet = requestMethod == WebRequestMethod.Get;
+                var isHead = requestMethod == WebRequestMethod.Head;
+                var isPost = requestMethod == WebRequestMethod.Post;
 
                 var uri = new Uri((secure ? "https" : "http") + "://radiovault.local" + request.Target);
                 var query = ParseQuery(uri.Query);
@@ -510,228 +531,17 @@ public sealed partial class LocalWebServer : IDisposable
                 if ((isGet || isHead) && (uri.AbsolutePath == "/" || uri.AbsolutePath.Equals("/index.html", StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.StartsWith("/broadcast/", StringComparison.OrdinalIgnoreCase)))
                 {
                     var securityHeaders = (secure ? "Cache-Control: no-cache\r\n" : "Cache-Control: no-store\r\n") + "Content-Security-Policy: default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; worker-src 'self'; base-uri 'none'; frame-ancestors 'none'\r\n";
-                    await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(BuildIndexHtml()), "text/html; charset=utf-8", request.Method == "HEAD", cancellationToken, securityHeaders).ConfigureAwait(false);
+                    await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(BuildIndexHtml()), "text/html; charset=utf-8", isHead, cancellationToken, securityHeaders).ConfigureAwait(false);
                     return;
                 }
 
-                if (uri.AbsolutePath.Equals(WebApiRoutes.ServerInfo, StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandleServerInfoApiAsync(stream, isHead, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (await TryHandleFederationAdministrationRouteAsync(
+                if (await TryHandleAuthorizedRouteAsync(
                         stream,
                         uri.AbsolutePath,
                         query,
                         request,
-                        isGet,
-                        isHead,
-                        isPost,
+                        requestMethod,
                         cancellationToken).ConfigureAwait(false))
-                {
-                    return;
-                }
-
-                if (await TryHandleClientRouteAsync(
-                        stream, uri.AbsolutePath, query, request, isHead, cancellationToken)
-                    .ConfigureAwait(false))
-                {
-                    return;
-                }
-
-                if (uri.AbsolutePath.Equals("/api/episodes", StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.Equals(WebApiRoutes.Broadcasts, StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandleEpisodesApiAsync(stream, query, request.Method == "HEAD", cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (uri.AbsolutePath.Equals("/api/shows", StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.Equals(WebApiRoutes.Shows, StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandleShowsApiAsync(stream, request.Method == "HEAD", cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (uri.AbsolutePath.Equals(WebApiRoutes.Search, StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandleEpisodesApiAsync(stream, query, request.Method == "HEAD", cancellationToken, forceSearchView: true).ConfigureAwait(false);
-                    return;
-                }
-
-                if (uri.AbsolutePath.Equals(WebApiRoutes.Favourites, StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandleEpisodesApiAsync(stream, query, isHead, cancellationToken, forcedView: "favorites").ConfigureAwait(false);
-                    return;
-                }
-
-                if (uri.AbsolutePath.Equals(WebApiRoutes.Events, StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandleEventsApiAsync(stream, query, isHead, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (uri.AbsolutePath.Equals(WebApiRoutes.Jobs, StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandleJobsApiAsync(stream, isHead, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (TryMatchJobCancel(uri.AbsolutePath, out var cancelJobId))
-                {
-                    if (!isPost)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Use POST for this action.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleJobCancellationAsync(stream, cancelJobId, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (TryMatchBroadcastAction(uri.AbsolutePath, "offline-progress", out var offlineProgressEpisodeId))
-                {
-                    if (!isPost)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Offline progress synchronisation requires POST.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleOfflineProgressAsync(stream, request, offlineProgressEpisodeId, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (TryMatchBroadcastAction(uri.AbsolutePath, "favourite", out var favouriteEpisodeId))
-                {
-                    if (!isPost)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Use POST for this action.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleFavouriteMutationAsync(stream, favouriteEpisodeId, request, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (TryMatchBroadcastAction(uri.AbsolutePath, "listening-status", out var statusEpisodeId))
-                {
-                    if (!isPost)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Use POST for this action.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleListeningStatusMutationAsync(stream, statusEpisodeId, request, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (TryMatchBroadcastAction(uri.AbsolutePath, "metadata", out var metadataEpisodeId))
-                {
-                    if (!isPost)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Metadata updates require POST.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleBroadcastMetadataMutationAsync(stream, metadataEpisodeId, request, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (uri.AbsolutePath.Equals(WebApiRoutes.Transcripts, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (!isGet && !isHead)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Transcript browsing supports GET and HEAD only.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleTranscriptsApiAsync(stream, isHead, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (TryMatchBroadcastAction(uri.AbsolutePath, "transcript", out var transcriptEpisodeId))
-                {
-                    if (!isGet && !isHead)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Transcript access supports GET and HEAD only.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleTranscriptApiAsync(stream, transcriptEpisodeId, isHead, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (TryMatchBroadcastAction(uri.AbsolutePath, "moments", out var momentsEpisodeId))
-                {
-                    if (!isPost)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Moment creation requires POST.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleMomentCreateAsync(stream, momentsEpisodeId, request, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (TryMatchMomentDelete(uri.AbsolutePath, out var momentEpisodeId, out var momentId))
-                {
-                    if (!isPost)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Moment deletion requires POST.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleMomentDeleteAsync(stream, momentEpisodeId, momentId, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (TryMatchMomentUpdate(uri.AbsolutePath, out var updateMomentId))
-                {
-                    if (!isPost)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Moment editing requires POST.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleMomentUpdateAsync(stream, updateMomentId, request, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (await TryHandleCanonicalMediaRouteAsync(
-                        stream, uri.AbsolutePath, query, request, isHead, cancellationToken)
-                    .ConfigureAwait(false))
-                {
-                    return;
-                }
-
-                if (uri.AbsolutePath.StartsWith(WebApiRoutes.Broadcasts + "/", StringComparison.OrdinalIgnoreCase) && long.TryParse(uri.AbsolutePath[(WebApiRoutes.Broadcasts.Length + 1)..], out var detailsEpisodeId))
-                {
-                    await HandleBroadcastDetailsApiAsync(stream, detailsEpisodeId, isHead, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (uri.AbsolutePath.StartsWith(WebApiRoutes.Root + "/research/", StringComparison.OrdinalIgnoreCase) && long.TryParse(uri.AbsolutePath[(WebApiRoutes.Root.Length + "/research/".Length)..], out var researchEpisodeId))
-                {
-                    await HandleResearchApiAsync(stream, researchEpisodeId, request.Method == "HEAD", cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (uri.AbsolutePath.Equals(WebApiRoutes.ArchiveHealth, StringComparison.OrdinalIgnoreCase))
-                {
-                    await HandleArchiveHealthApiAsync(stream, request.Method == "HEAD", cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (await TryHandlePlaybackQueueRouteAsync(
-                        stream, uri.AbsolutePath, request, isHead, isPost, cancellationToken)
-                    .ConfigureAwait(false))
-                {
-                    return;
-                }
-
-                if (uri.AbsolutePath.Equals(WebApiRoutes.MomentsAll, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (!isGet && !isHead)
-                    {
-                        await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Moment browsing supports GET and HEAD only.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
-                        return;
-                    }
-                    await HandleMomentsApiAsync(stream, isHead, cancellationToken).ConfigureAwait(false);
-                    return;
-                }
-
-                if (await TryHandleArtworkAudioRouteAsync(
-                        stream, uri.AbsolutePath, request, isHead, cancellationToken)
-                    .ConfigureAwait(false))
                 {
                     return;
                 }
@@ -865,7 +675,7 @@ public sealed partial class LocalWebServer : IDisposable
                 _options.ServerDisplayName,
                 paired && client is not null ? client.Token : string.Empty,
                 _options.ServerCertificateThumbprint,
-                _options.SecurePort,
+                SecurePort,
                 _options.CapabilityGeneration,
                 paired ? client?.PairedAt : null)
         }, JsonOptions);
@@ -1522,16 +1332,16 @@ public sealed partial class LocalWebServer : IDisposable
     private string BuildSecureTarget(HttpRequest request)
     {
         var host = GetRequestHost(request);
-        return $"https://{host}:{_options.SecurePort}{request.Target}";
+        return $"https://{host}:{SecurePort}{request.Target}";
     }
 
     private string BuildSecureSetupHtml(HttpRequest request)
     {
         var host = GetRequestHost(request);
         var token = Uri.EscapeDataString(_options.AccessToken);
-        var profileUrl = WebUtility.HtmlEncode($"http://{host}:{_options.Port}/secure-profile.mobileconfig?token={token}");
-        var certificateUrl = WebUtility.HtmlEncode($"http://{host}:{_options.Port}/secure-root.cer?token={token}");
-        var secureUrl = WebUtility.HtmlEncode($"https://{host}:{_options.SecurePort}/?token={token}");
+        var profileUrl = WebUtility.HtmlEncode($"http://{host}:{Port}/secure-profile.mobileconfig?token={token}");
+        var certificateUrl = WebUtility.HtmlEncode($"http://{host}:{Port}/secure-root.cer?token={token}");
+        var secureUrl = WebUtility.HtmlEncode($"https://{host}:{SecurePort}/?token={token}");
         var thumbprint = WebUtility.HtmlEncode(_options.RootCertificateThumbprint);
 
         var template = SecureSetupHtml;
@@ -1714,44 +1524,6 @@ public sealed partial class LocalWebServer : IDisposable
     private static string JavaScriptString(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\\'", StringComparison.Ordinal);
 
     public void Dispose() => Stop();
-
-    private static bool TryMatchJobCancel(string path, out Guid jobId)
-    {
-        jobId = Guid.Empty;
-        var prefix = WebApiRoutes.Jobs + "/";
-        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
-        var tail = path[prefix.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return tail.Length == 2 && tail[1].Equals("cancel", StringComparison.OrdinalIgnoreCase) && Guid.TryParse(tail[0], out jobId);
-    }
-
-    private static bool TryMatchMomentDelete(string path, out long episodeId, out long momentId)
-    {
-        episodeId = 0; momentId = 0;
-        var prefix = WebApiRoutes.Broadcasts + "/";
-        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
-        var parts = path[prefix.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length == 3 && long.TryParse(parts[0], out episodeId) &&
-               parts[1].Equals("moments", StringComparison.OrdinalIgnoreCase) && long.TryParse(parts[2], out momentId);
-    }
-
-    private static bool TryMatchMomentUpdate(string path, out long momentId)
-    {
-        momentId = 0;
-        var prefix = WebApiRoutes.MomentsAll + "/";
-        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
-        var parts = path[prefix.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length == 2 && long.TryParse(parts[0], out momentId) &&
-               parts[1].Equals("update", StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static bool TryMatchBroadcastAction(string path, string action, out long episodeId)
-    {
-        episodeId = 0;
-        var prefix = WebApiRoutes.Broadcasts + "/";
-        if (!path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) return false;
-        var tail = path[prefix.Length..].Split('/', StringSplitOptions.RemoveEmptyEntries);
-        return tail.Length == 2 && tail[1].Equals(action, StringComparison.OrdinalIgnoreCase) && long.TryParse(tail[0], out episodeId);
-    }
 
     private static bool TryGetMutationId(HttpRequest request, out string mutationId)
     {

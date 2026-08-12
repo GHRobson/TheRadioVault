@@ -161,15 +161,15 @@ static void FullClientApiPreviewsResearchPackUploads()
 
 static void FederationParityExposesNormalApplicationSurfaces()
 {
-    var port = FindFreePort();
     var token = "test-token";
     using var server = new LocalWebServer(new TestWebArchiveProvider(), new WebServerOptions
     {
-        Port = port, AccessToken = token, AppVersion = "test", ServerInstanceId = "server-test",
+        Port = 0, AccessToken = token, AppVersion = "test", ServerInstanceId = "server-test",
         ServerDisplayName = "Test server", DatabaseSchemaVersion = 45, CapabilityGeneration = 14,
         LanFederationEnabled = true
     });
     server.Start();
+    var port = server.Port;
     using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false });
     var payload = client.GetFromJsonAsync<System.Text.Json.JsonElement>(
         $"http://127.0.0.1:{port}{WebApiRoutes.FederationParity}?token={Uri.EscapeDataString(token)}").GetAwaiter().GetResult();
@@ -184,15 +184,15 @@ static void FederationParityExposesNormalApplicationSurfaces()
 
 static void FederationResearchWorkspaceExposesServerRecords()
 {
-    var port = FindFreePort();
     var token = "test-token";
     using var server = new LocalWebServer(new TestWebArchiveProvider(), new WebServerOptions
     {
-        Port = port, AccessToken = token, AppVersion = "test", ServerInstanceId = "server-test",
+        Port = 0, AccessToken = token, AppVersion = "test", ServerInstanceId = "server-test",
         ServerDisplayName = "Test server", DatabaseSchemaVersion = 45, CapabilityGeneration = 14,
         LanFederationEnabled = true
     });
     server.Start();
+    var port = server.Port;
     using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false });
     var payload = client.GetFromJsonAsync<System.Text.Json.JsonElement>(
         $"http://127.0.0.1:{port}{WebApiRoutes.FederationResearchWorkspace}?token={Uri.EscapeDataString(token)}").GetAwaiter().GetResult();
@@ -206,15 +206,15 @@ static void FederationResearchWorkspaceExposesServerRecords()
 
 static void FederationResearchUndatedAndCoverageRoutesAreAuthoritative()
 {
-    var port = FindFreePort();
     var token = "test-token";
     using var server = new LocalWebServer(new TestWebArchiveProvider(), new WebServerOptions
     {
-        Port = port, AccessToken = token, AppVersion = "test", ServerInstanceId = "server-test",
+        Port = 0, AccessToken = token, AppVersion = "test", ServerInstanceId = "server-test",
         ServerDisplayName = "Test server", DatabaseSchemaVersion = 45, CapabilityGeneration = 14,
         LanFederationEnabled = true
     });
     server.Start();
+    var port = server.Port;
     using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false });
 
     var undated = client.GetFromJsonAsync<System.Text.Json.JsonElement>(
@@ -431,7 +431,6 @@ static void WebApiAcceptsChunkedJsonRequestBodies()
 
 static void FederationBootstrapSurvivesPlaybackFailure()
 {
-    var port = GetFreeTcpPort();
     var token = "test-token-" + Guid.NewGuid().ToString("N");
     using var server = new LocalWebServer(new TestWebArchiveProvider(throwPlayback: true), new WebServerOptions
     {
@@ -440,11 +439,12 @@ static void FederationBootstrapSurvivesPlaybackFailure()
         ServerDisplayName = "Test Radio Vault Server",
         DatabaseSchemaVersion = 45,
         CapabilityGeneration = 8,
-        Port = port,
+        Port = 0,
         AccessToken = token,
         LoopbackOnly = true
     });
     server.Start();
+    var port = server.Port;
     try
     {
         using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
@@ -464,7 +464,6 @@ static void FederationBootstrapSurvivesPlaybackFailure()
 
 static void WebApiAcceptsPairedDesktopHeaderToken()
 {
-    var port = GetFreeTcpPort();
     var primaryToken = "primary-token-" + Guid.NewGuid().ToString("N");
     var pairedToken = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
     using var server = new LocalWebServer(new TestWebArchiveProvider(), new WebServerOptions
@@ -474,7 +473,7 @@ static void WebApiAcceptsPairedDesktopHeaderToken()
         ServerDisplayName = "Test Radio Vault Server",
         DatabaseSchemaVersion = 45,
         CapabilityGeneration = 8,
-        Port = port,
+        Port = 0,
         AccessToken = primaryToken,
         LoopbackOnly = true,
         PairedDesktopClients = new[]
@@ -487,6 +486,7 @@ static void WebApiAcceptsPairedDesktopHeaderToken()
         }
     });
     server.Start();
+    var port = server.Port;
     try
     {
         using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
@@ -505,9 +505,8 @@ static void WebApiAcceptsPairedDesktopHeaderToken()
 
 static void WebServerStopIsIdempotent()
 {
-    var port = GetFreeTcpPort();
     var token = "test-token-" + Guid.NewGuid().ToString("N");
-    using var server = new LocalWebServer(new TestWebArchiveProvider(), new WebServerOptions { AppVersion = "test-web-version", Port = port, AccessToken = token, LoopbackOnly = true });
+    using var server = new LocalWebServer(new TestWebArchiveProvider(), new WebServerOptions { AppVersion = "test-web-version", Port = 0, AccessToken = token, LoopbackOnly = true });
     server.Start();
     server.Stop();
     server.Stop();
@@ -515,12 +514,11 @@ static void WebServerStopIsIdempotent()
 
 static void WebServerSurvivesRapidRestartGenerations()
 {
-    var port = GetFreeTcpPort();
     var token = "restart-token-" + Guid.NewGuid().ToString("N");
     using var server = new LocalWebServer(new TestWebArchiveProvider(), new WebServerOptions
     {
         AppVersion = "restart-test-version",
-        Port = port,
+        Port = 0,
         AccessToken = token,
         LoopbackOnly = true
     });
@@ -528,6 +526,7 @@ static void WebServerSurvivesRapidRestartGenerations()
     for (var generation = 0; generation < 8; generation++)
     {
         server.Start();
+        var port = server.Port;
         using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false })
         {
             Timeout = TimeSpan.FromSeconds(3)

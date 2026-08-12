@@ -14,7 +14,6 @@ internal static class WebServerFixture
         Func<int, string, Task> test,
         Action<string>? log = null)
     {
-        var port = GetFreeTcpPort();
         var token = "test-token-" + Guid.NewGuid().ToString("N");
         using var server = new LocalWebServer(archive, new WebServerOptions
         {
@@ -23,11 +22,12 @@ internal static class WebServerFixture
             ServerDisplayName = "Test Radio Vault",
             DatabaseSchemaVersion = 47,
             CapabilityGeneration = 3,
-            Port = port,
+            Port = 0,
             AccessToken = token,
             LoopbackOnly = true
         }, log);
         server.Start();
+        var port = server.Port;
         try
         {
             test(port, token).GetAwaiter().GetResult();
@@ -38,14 +38,4 @@ internal static class WebServerFixture
         }
     }
 
-    public static int GetFreeTcpPort()
-    {
-        var listener = new System.Net.Sockets.TcpListener(System.Net.IPAddress.Loopback, 0);
-        listener.Start();
-        var port = ((System.Net.IPEndPoint)listener.LocalEndpoint).Port;
-        listener.Stop();
-        return port;
-    }
-
-    public static int FindFreePort() => GetFreeTcpPort();
 }

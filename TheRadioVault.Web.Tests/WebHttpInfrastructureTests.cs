@@ -1,5 +1,7 @@
 using System.Text;
+using TheRadioVault.Web.Models;
 using TheRadioVault.Web.Services;
+using TheRadioVault.Web.Tests.Fixtures;
 using static TheRadioVault.Web.Tests.Fixtures.WebServerFixture;
 using static TheRadioVault.Web.Tests.TestAssert;
 
@@ -20,6 +22,7 @@ internal static class WebHttpInfrastructureTests
         ("HTTP reader reports its own timeout", HttpReaderReportsTimeout),
         ("HTTP writer preserves HEAD content length", HttpWriterPreservesHeadContentLength),
         ("HTTP writer sanitises redirect locations", HttpWriterSanitisesRedirectLocation),
+        ("HTTP server binds an ephemeral test port atomically", HttpServerBindsEphemeralPort),
         ("HTTP server reports oversized request bodies", HttpServerReportsOversizedBodies),
         ("HTTP server reports oversized request headers", HttpServerReportsOversizedHeaders),
         ("HTTP server rejects ambiguous message framing", HttpServerRejectsAmbiguousFraming)
@@ -143,6 +146,38 @@ internal static class WebHttpInfrastructureTests
         True(response.StartsWith("HTTP/1.1 302 Found\r\n", StringComparison.Ordinal));
         True(response.Contains("Location: https://radiovault.local/Injected: true\r\n", StringComparison.Ordinal));
         True(!response.Contains("\r\nInjected: true\r\n", StringComparison.Ordinal));
+    }
+
+    private static void HttpServerBindsEphemeralPort()
+    {
+        const string token = "ephemeral-port-test-token";
+        using var server = new LocalWebServer(
+            new TestWebArchiveProvider(),
+            new WebServerOptions
+            {
+                AppVersion = "test-web-version",
+                Port = 0,
+                AccessToken = token,
+                LoopbackOnly = true
+            });
+
+        Equal(0, server.Port);
+        server.Start();
+        try
+        {
+            True(server.Port > 0);
+            var response = SendRawRequestAsync(
+                    server.Port,
+                    $"GET /?token={token} HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+                .GetAwaiter().GetResult();
+            True(response.StartsWith("HTTP/1.1 200 OK\r\n", StringComparison.Ordinal));
+        }
+        finally
+        {
+            server.Stop();
+        }
+
+        Equal(0, server.Port);
     }
 
     private static void HttpServerReportsOversizedBodies()

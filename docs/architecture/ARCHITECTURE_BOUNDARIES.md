@@ -84,7 +84,7 @@ The proof does not claim that WPF views have disappeared. Remaining windows, XAM
 
 ## 0.44 web playback and queue route boundary
 
-`LocalWebServer` remains the HTTP listener and global dispatcher. It owns authentication, common request parsing, the ordered relationship between route families, final media/static fallbacks and shared response helpers. `LocalWebServer.PlaybackQueue.cs` owns the contiguous player-transfer, playback-command, player-state and queue route family, including its HTTP method checks, queue action matcher and response handlers. The main dispatcher reaches this family through exactly one `TryHandlePlaybackQueueRouteAsync` call.
+`LocalWebServer` remains the HTTP listener and request-lifecycle coordinator. It owns authentication, pairing-before-authentication, secure setup/static-shell handling and shared response helpers. `LocalWebServer.ApiRoutes.cs` owns the ordered relationship between authenticated route families and the final API/media fallbacks. `LocalWebServer.PlaybackQueue.cs` owns the contiguous player-transfer, playback-command, player-state and queue route family, including its HTTP method checks, queue action matcher and response handlers. The authenticated dispatcher reaches this family through exactly one `TryHandlePlaybackQueueRouteAsync` call.
 
 Route order and observable protocol behaviour are compatibility boundaries. Moving a handler must not rename a route, widen an allowed method, change a status code or reorder the family relative to broadcast details, archive health, Moments, artwork and audio. Playback or queue routes must not be added back inline to `LocalWebServer.cs`; extend the focused partial instead.
 
@@ -98,9 +98,15 @@ Desktop pairing remains before authorization in the main dispatcher, because it 
 
 The web client, secure setup page and service worker live as embedded resources under `TheRadioVault.Web/Assets`. `LocalWebServer.WebAssets.cs` is the single loader for those resources. Keeping them embedded preserves the self-contained server deployment while allowing HTML, CSS and JavaScript to be inspected and edited without expanding the HTTP coordinator. Their served content is preserved from the former literals, and a compiled-resource regression test verifies that all three are present and loadable.
 
-`LocalWebServer.ClientRoutes.cs` owns the complete client-facing bootstrap, Research, transcription, Wiki and Library query route family. The main dispatcher reaches it through one ordered `TryHandleClientRouteAsync` call. `LocalWebServer.Media.cs` owns artwork, canonical multipart media, positioned WAV, legacy media and HTTP range streaming. It exposes separate canonical-media and artwork/audio boundary calls because those route groups occupy different compatibility positions in the main dispatcher.
+`LocalWebServer.ClientRoutes.cs` owns the complete client-facing bootstrap, Research, transcription, Wiki and Library query route family. The authenticated dispatcher reaches it through one ordered `TryHandleClientRouteAsync` call. `LocalWebServer.Media.cs` owns artwork, canonical multipart media, positioned WAV, legacy media and HTTP range streaming. It exposes separate canonical-media and artwork/audio boundary calls because those route groups occupy different compatibility positions in the authenticated dispatcher.
 
 The client boundary call and two media boundary calls must retain their relative dispatcher order. Routes, method checks, status codes, range semantics and handler bodies remain protocol contracts. New client or media routing belongs in the focused partials, and large web assets must not be embedded back into `LocalWebServer.cs`.
+
+## 0.44 general Web API dispatch boundary
+
+`WebApiRouteResolver` is the pure, declarative owner of general API route recognition, legacy aliases, captured broadcast/Moment/job identifiers and route-specific HTTP method policy. `LocalWebServer.ApiRoutes.cs` applies those matches to the existing handlers and coordinates the authenticated federation, client, general API, canonical-media, playback/queue and artwork/audio boundaries. `LocalWebServer.cs` reaches that surface through exactly one `TryHandleAuthorizedRouteAsync` call after pairing, authorization, secure setup and static-shell handling.
+
+The resolver must not consume specialised client, playback, queue or media paths. Adding or changing a general route requires focused resolver coverage plus a live HTTP compatibility check where observable behaviour changes. Method policy, status text and legacy `/api/episodes` and `/api/shows` aliases are protocol contracts; they must not be recreated as inline conditionals in the listener.
 
 ## 0.44 desktop playback state boundary
 
@@ -110,7 +116,7 @@ The client boundary call and two media boundary calls must retain their relative
 
 ## 0.44 test-runner boundary
 
-`TheRadioVault.Tests` remains the broad capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.Web.Tests` is the first compiled subsystem runner: it references only `TheRadioVault.Web` and owns Web query/model contracts, canonical routes, live HTTP behavior, server lifecycle, embedded assets and transactional playback integration. Its 72 checks use focused API, playback, shell and media groups plus reusable server, source-tree and archive-provider fixtures. The archive-provider double is split by library/media, playback and administration state instead of being embedded as one runner-wide fake. Migrated tests must be removed from the broad runner rather than duplicated.
+`TheRadioVault.Tests` remains the broad capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.Web.Tests` is the first compiled subsystem runner: it references only `TheRadioVault.Web` and owns Web query/model contracts, declarative route resolution, canonical routes, live HTTP behavior, server lifecycle, embedded assets and transactional playback integration. Its 93 checks use focused API, routing, infrastructure, playback, shell and media groups plus reusable server, source-tree and archive-provider fixtures. The archive-provider double is split by library/media, playback and administration state instead of being embedded as one runner-wide fake. Migrated tests must be removed from the broad runner rather than duplicated.
 
 `TheRadioVault.SourceChecks` is the dependency-free home for deliberate source-text, route-order, packaging and presentation-marker inspections. A test that can exercise compiled behavior must not be added to SourceChecks merely because text inspection is easier.
 
@@ -118,6 +124,6 @@ The client boundary call and two media boundary calls must retain their relative
 
 `WebHttpRequestReader` owns HTTP/1.x request framing, bounded header and body reads, fixed-length and chunked transfer decoding, framing validation and request timeouts. `LocalWebServer` supplies the route-sensitive body-size and timeout policy, then translates the reader's explicit malformed, timeout, header-limit and body-limit outcomes into HTTP responses. The reader rejects ambiguous `Content-Length` plus `Transfer-Encoding` requests and oversized payloads before allocating their declared body size.
 
-`WebHttpResponseWriter` owns common response framing, security headers, HEAD behavior and redirect sanitisation. `LocalWebServer` retains small forwarding helpers so focused route partials do not depend directly on infrastructure implementation details. Request parsing or common response framing must not be added back to the server coordinator.
+`WebHttpResponseWriter` owns common response framing, security headers, HEAD behavior and redirect sanitisation. `LocalWebServer` retains small forwarding helpers so focused route partials do not depend directly on infrastructure implementation details. Request parsing or common response framing must not be added back to the server coordinator. Live-server fixtures bind port zero and read the OS-assigned port from `LocalWebServer.Port`; tests must not reintroduce a probe-and-release free-port race.
 
 All three runners are required by the complete Windows release gate. The local macOS gate and hosted macOS and Linux jobs run the complete Web suite; the iOS job runs the portable transactional subset alongside its device architecture checks. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.
