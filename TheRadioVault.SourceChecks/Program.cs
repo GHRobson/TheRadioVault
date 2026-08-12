@@ -2,8 +2,14 @@ var checks = new (string Name, Action Run)[]
 {
     ("Web playback and queue routes stay behind one server boundary", WebPlaybackAndQueueRoutesStayBehindOneServerBoundary),
     ("Federation administration routes stay behind one server boundary", FederationAdministrationRoutesStayBehindOneServerBoundary),
+    ("Web assets, client routes and media routes stay behind focused boundaries", WebClientAndMediaBoundariesRemainExtracted),
     ("Desktop Saved and transport controls match native icon parity", DesktopSavedAndTransportControlsMatchNativeParity),
-    ("Knowledge imports retain resumable background-job surfaces", KnowledgeImportsRetainResumableBackgroundJobSurfaces)
+    ("Knowledge imports retain resumable background-job surfaces", KnowledgeImportsRetainResumableBackgroundJobSurfaces),
+    ("Web handoff preserves an aligned Safari decoder", WebHandoffPreservesAlignedSafariDecoder),
+    ("iPhone broadcast switches replace stale decoders in the tap", IphoneBroadcastSwitchesReplaceStaleDecoderInTap),
+    ("iPhone positioned failures preserve canonical gesture fallback", IphonePositionedFailuresPreserveCanonicalGestureFallback),
+    ("Repeated iPhone handoffs bypass dormant decoder gating", RepeatedIphoneHandoffsBypassDormantDecoderGating),
+    ("Canonical audio ranges are cache-combinable", CanonicalAudioRangesAreCacheCombinable)
 };
 
 var selectedChecks = args.Length == 0
@@ -78,12 +84,12 @@ static void FederationAdministrationRoutesStayBehindOneServerBoundary()
     const string boundaryCall = "TryHandleFederationAdministrationRouteAsync(";
     var pairingIndex = dispatcher.IndexOf("WebApiRoutes.FederationPair", StringComparison.Ordinal);
     var boundaryIndex = dispatcher.IndexOf(boundaryCall, StringComparison.Ordinal);
-    var clientBootstrapIndex = dispatcher.IndexOf("WebApiRoutes.Bootstrap", boundaryIndex, StringComparison.Ordinal);
+    var clientBoundaryIndex = dispatcher.IndexOf("TryHandleClientRouteAsync(", boundaryIndex, StringComparison.Ordinal);
 
     True(pairingIndex >= 0);
     True(boundaryIndex > pairingIndex);
-    True(clientBootstrapIndex > boundaryIndex);
-    var routeWindow = dispatcher[pairingIndex..clientBootstrapIndex];
+    True(clientBoundaryIndex > boundaryIndex);
+    var routeWindow = dispatcher[pairingIndex..clientBoundaryIndex];
     Equal(1, dispatcher.Split(boundaryCall, StringSplitOptions.None).Length - 1);
     True(federationAdministration.Contains("private async Task<bool> TryHandleFederationAdministrationRouteAsync(", StringComparison.Ordinal));
 
@@ -120,6 +126,79 @@ static void FederationAdministrationRoutesStayBehindOneServerBoundary()
         True(markerIndex > priorIndex);
         priorIndex = markerIndex;
     }
+}
+
+static void WebClientAndMediaBoundariesRemainExtracted()
+{
+    var root = SourceRoot();
+    var web = Path.Combine(root, "TheRadioVault.Web");
+    var services = Path.Combine(web, "Services");
+    var assets = Path.Combine(web, "Assets");
+    var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
+    var clientRoutes = File.ReadAllText(Path.Combine(services, "LocalWebServer.ClientRoutes.cs"));
+    var mediaRoutes = File.ReadAllText(Path.Combine(services, "LocalWebServer.Media.cs"));
+    var webAssets = File.ReadAllText(Path.Combine(services, "LocalWebServer.WebAssets.cs"));
+    var project = File.ReadAllText(Path.Combine(web, "TheRadioVault.Web.csproj"));
+
+    Equal(1, dispatcher.Split("TryHandleClientRouteAsync(", StringSplitOptions.None).Length - 1);
+    Equal(1, dispatcher.Split("TryHandleCanonicalMediaRouteAsync(", StringSplitOptions.None).Length - 1);
+    Equal(1, dispatcher.Split("TryHandleArtworkAudioRouteAsync(", StringSplitOptions.None).Length - 1);
+    var clientBoundaryIndex = dispatcher.IndexOf("TryHandleClientRouteAsync(", StringComparison.Ordinal);
+    var episodesIndex = dispatcher.IndexOf("WebApiRoutes.Broadcasts", clientBoundaryIndex, StringComparison.Ordinal);
+    var canonicalMediaBoundaryIndex = dispatcher.IndexOf("TryHandleCanonicalMediaRouteAsync(", StringComparison.Ordinal);
+    var broadcastDetailsIndex = dispatcher.IndexOf("HandleBroadcastDetailsApiAsync", canonicalMediaBoundaryIndex, StringComparison.Ordinal);
+    var momentsIndex = dispatcher.IndexOf("WebApiRoutes.MomentsAll", broadcastDetailsIndex, StringComparison.Ordinal);
+    var artworkAudioBoundaryIndex = dispatcher.IndexOf("TryHandleArtworkAudioRouteAsync(", momentsIndex, StringComparison.Ordinal);
+    True(clientBoundaryIndex >= 0 && episodesIndex > clientBoundaryIndex);
+    True(canonicalMediaBoundaryIndex > episodesIndex && broadcastDetailsIndex > canonicalMediaBoundaryIndex);
+    True(momentsIndex > broadcastDetailsIndex && artworkAudioBoundaryIndex > momentsIndex);
+    True(!dispatcher.Contains("private const string WebClientHtml", StringComparison.Ordinal));
+    True(!dispatcher.Contains("private const string ServiceWorkerJavaScript", StringComparison.Ordinal));
+    True(!dispatcher.Contains("TryMatchClientOperation(uri.AbsolutePath", StringComparison.Ordinal));
+    True(!dispatcher.Contains("private async Task HandleArtworkAsync", StringComparison.Ordinal));
+    True(!dispatcher.Contains("private async Task StreamAudioFileAsync", StringComparison.Ordinal));
+
+    var clientMarkers = new[]
+    {
+        "WebApiRoutes.Bootstrap",
+        "WebApiRoutes.ClientResearch",
+        "WebApiRoutes.ClientTranscripts",
+        "WebApiRoutes.ClientSpeakers",
+        "WebApiRoutes.ClientTranscription",
+        "WebApiRoutes.ClientWiki",
+        "WebApiRoutes.ClientLibraryOverview",
+        "WebApiRoutes.ClientLibraryBrowse",
+        "WebApiRoutes.ClientLibraryArchivePeriods",
+        "WebApiRoutes.ClientLibrarySearchFacets",
+        "WebApiRoutes.ClientLibrarySearchSuggestions",
+        "TryMatchClientLibraryBroadcast(path",
+        "TryMatchClientBroadcast(path"
+    };
+    AssertMarkersRemainOrdered(clientRoutes, clientMarkers, "client route");
+
+    var canonicalMediaMarkers = new[]
+    {
+        "TryMatchCanonicalMediaManifest(path",
+        "TryMatchCanonicalMediaStart(path",
+        "TryMatchCanonicalMediaPart(path"
+    };
+    AssertMarkersRemainOrdered(mediaRoutes, canonicalMediaMarkers, "canonical media route");
+    var artworkAudioMarkers = new[]
+    {
+        "path.StartsWith(\"/artwork/\"",
+        "path.StartsWith(\"/audio/\""
+    };
+    AssertMarkersRemainOrdered(mediaRoutes, artworkAudioMarkers, "artwork/audio route");
+
+    foreach (var assetName in new[] { "web-client.html", "service-worker.js", "secure-setup.html" })
+    {
+        True(File.Exists(Path.Combine(assets, assetName)), $"Missing embedded web asset {assetName}.");
+        True(webAssets.Contains($"TheRadioVault.Web.Assets.{assetName}", StringComparison.Ordinal));
+    }
+    True(project.Contains("<EmbeddedResource Include=\"Assets\\*.html\" />", StringComparison.Ordinal));
+    True(project.Contains("<EmbeddedResource Include=\"Assets\\*.js\" />", StringComparison.Ordinal));
+    True(File.ReadAllText(Path.Combine(assets, "web-client.html")).Contains("<title>Radio Vault Web</title>", StringComparison.Ordinal));
+    True(File.ReadAllText(Path.Combine(assets, "service-worker.js")).Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
 }
 
 static void DesktopSavedAndTransportControlsMatchNativeParity()
@@ -206,11 +285,179 @@ static void KnowledgeImportsRetainResumableBackgroundJobSurfaces()
     True(File.Exists(Path.Combine(root, "TheRadioVault.Server", "Services", "ServerKnowledgeFileService.cs")));
 
     var webServices = Path.Combine(root, "TheRadioVault.Web", "Services");
-    var webShell = File.ReadAllText(Path.Combine(webServices, "LocalWebServer.cs"));
+    var webShell = File.ReadAllText(Path.Combine(root, "TheRadioVault.Web", "Assets", "web-client.html"));
     var administrationRoutes = File.ReadAllText(Path.Combine(webServices, "LocalWebServer.FederationAdministration.cs"));
     True(webShell.Contains("pollResearchPackImport", StringComparison.Ordinal));
     True(webShell.Contains("researchImportProgressCard", StringComparison.Ordinal));
     True(administrationRoutes.Contains("FederationResearchImportStatus", StringComparison.Ordinal));
+}
+
+static void AssertMarkersRemainOrdered(string source, IReadOnlyList<string> markers, string boundaryName)
+{
+    var priorIndex = -1;
+    foreach (var marker in markers)
+    {
+        var markerIndex = source.IndexOf(marker, StringComparison.Ordinal);
+        True(markerIndex > priorIndex, $"The {boundaryName} order changed at {marker}.");
+        priorIndex = markerIndex;
+    }
+}
+
+static void WebHandoffPreservesAlignedSafariDecoder()
+{
+    var web = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Web", "Assets", "web-client.html"));
+    var functionStart = web.IndexOf("function setLogicalPositionImmediately(positionMs)", StringComparison.Ordinal);
+    var functionEnd = web.IndexOf("async function waitForLogicalAlignment", functionStart, StringComparison.Ordinal);
+    True(functionStart >= 0 && functionEnd > functionStart);
+    var seekFunction = web[functionStart..functionEnd];
+    True(seekFunction.Contains("logicalSeekDeadbandMs = 750", StringComparison.Ordinal));
+    True(seekFunction.Contains("!audio.ended", StringComparison.Ordinal));
+    var deadbandCheck = seekFunction.IndexOf(
+        "Math.abs(currentLogicalPositionMs() - targetLogicalMs) <= logicalSeekDeadbandMs",
+        StringComparison.Ordinal);
+    var physicalSeek = seekFunction.IndexOf("audio.currentTime = localMs / 1000", StringComparison.Ordinal);
+    True(deadbandCheck >= 0 && physicalSeek > deadbandCheck);
+    True(web.Contains("isIosWebKit = /iPhone|iPad|iPod/i.test(navigator.userAgent)", StringComparison.Ordinal));
+    var transferStart = web.IndexOf("async function startLocalEpisodeFromGesture", StringComparison.Ordinal);
+    var transferEnd = web.IndexOf("async function loadLocalEpisode", transferStart, StringComparison.Ordinal);
+    True(transferStart >= 0 && transferEnd > transferStart);
+    var transfer = web[transferStart..transferEnd];
+    var gesturePlay = transfer.IndexOf("gesturePrime = audio.play()", StringComparison.Ordinal);
+    True(gesturePlay >= 0);
+    True(!transfer.Contains("assignCanonicalPartSource(id, freshPartIndex, null)", StringComparison.Ordinal));
+    True(transfer.Contains("Reuse", StringComparison.Ordinal));
+    True(web.Contains("const dormantPositionMs = isIosWebKit ? 0 : shared.positionMs", StringComparison.Ordinal));
+    var prepareStart = web.IndexOf("async function prepareCanonicalAudio", StringComparison.Ordinal);
+    var prepareEnd = web.IndexOf("async function hydrateLocalEpisode", prepareStart, StringComparison.Ordinal);
+    True(prepareStart >= 0 && prepareEnd > prepareStart);
+    var prepare = web[prepareStart..prepareEnd];
+    True(web.Contains("currentAudioLogicalBaseMs = gesturePrimedPositionMs", StringComparison.Ordinal));
+    True(prepare.Contains("alignmentToleranceMs = currentAudioIsPositioned ? 2500 : 1250", StringComparison.Ordinal));
+    var clockProof = prepare.IndexOf("await waitForIosDecoderClock()", StringComparison.Ordinal);
+    var seekAfterProof = prepare.IndexOf("setLogicalPositionImmediately(positionMs)", StringComparison.Ordinal);
+    True(clockProof >= 0 && seekAfterProof > clockProof);
+    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+}
+
+static void IphoneBroadcastSwitchesReplaceStaleDecoderInTap()
+{
+    var web = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Web", "Assets", "web-client.html"));
+    var matchStart = web.IndexOf("function decoderMatchesGestureTarget", StringComparison.Ordinal);
+    var matchEnd = web.IndexOf("function setLogicalPositionImmediately", matchStart, StringComparison.Ordinal);
+    True(matchStart >= 0 && matchEnd > matchStart);
+    var match = web[matchStart..matchEnd];
+    True(match.Contains("currentAudioEpisodeId", StringComparison.Ordinal));
+    True(match.Contains("currentAudioIsPositioned", StringComparison.Ordinal));
+    True(match.Contains("currentAudioLogicalPositionMs()", StringComparison.Ordinal));
+
+    var transferStart = web.IndexOf("async function startLocalEpisodeFromGesture", StringComparison.Ordinal);
+    var transferEnd = web.IndexOf("async function loadLocalEpisode", transferStart, StringComparison.Ordinal);
+    True(transferStart >= 0 && transferEnd > transferStart);
+    var transfer = web[transferStart..transferEnd];
+    True(transfer.Contains("directAudiblePrime = desiredPlaying && sourceWasUnowned", StringComparison.Ordinal));
+    True(transfer.Contains("mustPrimeTargetSourceInGesture = desiredPlaying && isIosWebKit", StringComparison.Ordinal));
+    True(transfer.Contains("if (directAudiblePrime || mustPrimeTargetSourceInGesture)", StringComparison.Ordinal));
+    True(transfer.Contains("audio.muted = !directAudiblePrime", StringComparison.Ordinal));
+    var positionedAssignment = transfer.IndexOf(
+        "assignCanonicalGestureStartSource(id, shared.positionMs)", StringComparison.Ordinal);
+    var transferAwait = transfer.IndexOf(
+        "const beginResult = await beginPhoneTransfer", StringComparison.Ordinal);
+    True(positionedAssignment >= 0 && transferAwait > positionedAssignment);
+
+    var prepareStart = web.IndexOf("async function prepareCanonicalAudio", StringComparison.Ordinal);
+    var prepareEnd = web.IndexOf("async function hydrateLocalEpisode", prepareStart, StringComparison.Ordinal);
+    True(prepareStart >= 0 && prepareEnd > prepareStart);
+    var prepare = web[prepareStart..prepareEnd];
+    var primedAttach = prepare.IndexOf("Number(gesturePrimedEpisodeId || 0) === id", StringComparison.Ordinal);
+    var ordinaryAssignment = prepare.IndexOf("assignCanonicalPartSource(id, partIndex, record)", StringComparison.Ordinal);
+    True(primedAttach >= 0 && ordinaryAssignment > primedAttach);
+    True(web.Contains("audioEpisodeId: Number(currentAudioEpisodeId || 0)", StringComparison.Ordinal));
+}
+
+static void IphonePositionedFailuresPreserveCanonicalGestureFallback()
+{
+    var web = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Web", "Assets", "web-client.html"));
+    var prepareStart = web.IndexOf("async function prepareCanonicalAudio", StringComparison.Ordinal);
+    var prepareEnd = web.IndexOf("async function hydrateLocalEpisode", prepareStart, StringComparison.Ordinal);
+    True(prepareStart >= 0 && prepareEnd > prepareStart);
+    var prepare = web[prepareStart..prepareEnd];
+    True(prepare.Contains(
+        "positionedGestureTimeoutMs = isIosWebKit && currentAudioIsPositioned ? 4500 : 12000",
+        StringComparison.Ordinal));
+    True(prepare.Contains("failedWasPositioned = currentAudioIsPositioned", StringComparison.Ordinal));
+    var fallbackAssignment = prepare.IndexOf(
+        "assignCanonicalPartSource(id, retryPartIndex, null)", StringComparison.Ordinal);
+    var fallbackPlay = prepare.IndexOf("await audio.play()", fallbackAssignment, StringComparison.Ordinal);
+    var fallbackSeek = prepare.IndexOf("setLogicalPositionImmediately(positionMs)", StringComparison.Ordinal);
+    True(fallbackAssignment >= 0 && fallbackPlay > fallbackAssignment && fallbackSeek > fallbackPlay);
+
+    var transferStart = web.IndexOf("async function startLocalEpisodeFromGesture", StringComparison.Ordinal);
+    var transferEnd = web.IndexOf("async function loadLocalEpisode", transferStart, StringComparison.Ordinal);
+    True(transferStart >= 0 && transferEnd > transferStart);
+    var transfer = web[transferStart..transferEnd];
+    var captureSource = transfer.IndexOf("gesturePrimeSource = audio.src", StringComparison.Ordinal);
+    var prepareCall = transfer.IndexOf("await prepareCanonicalAudio", StringComparison.Ordinal);
+    var replacementCheck = transfer.IndexOf(
+        "audio.src !== gesturePrimeSource && audioSourceReady && !audio.error",
+        StringComparison.Ordinal);
+    var targetPrime = transfer.IndexOf("await primeTargetDecoder", StringComparison.Ordinal);
+    True(captureSource >= 0 && prepareCall > captureSource);
+    True(replacementCheck > prepareCall && targetPrime > replacementCheck);
+    True(transfer.Contains(
+        "The failed positioned play promise was replaced by a healthy canonical decoder",
+        StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+}
+
+static void RepeatedIphoneHandoffsBypassDormantDecoderGating()
+{
+    var web = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Web", "Assets", "web-client.html"));
+
+    var dormantStart = web.IndexOf("async function prepareDormantPhoneDecoder", StringComparison.Ordinal);
+    var dormantEnd = web.IndexOf("audio.addEventListener(\"loadedmetadata\"", dormantStart, StringComparison.Ordinal);
+    True(dormantStart >= 0 && dormantEnd > dormantStart);
+    var dormant = web[dormantStart..dormantEnd];
+    True(dormant.Contains(
+        "if (!id || isIosWebKit || thisPhoneOwnsSession() || phoneTransferInProgress) return;",
+        StringComparison.Ordinal));
+
+    True(web.Contains(
+        "if (!isIosWebKit && shared?.episodeId && !phoneTransferInProgress)",
+        StringComparison.Ordinal));
+    Equal(2, web.Split(
+        "const preparingDormantTarget = !isIosWebKit && inactive && has &&",
+        StringSplitOptions.None).Length - 1);
+
+    var transferStart = web.IndexOf("async function startLocalEpisodeFromGesture", StringComparison.Ordinal);
+    var transferEnd = web.IndexOf("async function loadLocalEpisode", transferStart, StringComparison.Ordinal);
+    True(transferStart >= 0 && transferEnd > transferStart);
+    var transfer = web[transferStart..transferEnd];
+    True(transfer.Contains(
+        "mustPrimeTargetSourceInGesture = desiredPlaying && isIosWebKit",
+        StringComparison.Ordinal));
+    True(transfer.Contains("assignCanonicalGestureStartSource(id, shared.positionMs)", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+}
+
+static void CanonicalAudioRangesAreCacheCombinable()
+{
+    var web = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.Media.cs"));
+    var streamStart = web.IndexOf("private async Task StreamAudioFileAsync", StringComparison.Ordinal);
+    var streamEnd = web.IndexOf("private async Task HandleCanonicalMediaManifestAsync", streamStart, StringComparison.Ordinal);
+    True(streamStart >= 0 && streamEnd > streamStart);
+    var stream = web[streamStart..streamEnd];
+    True(stream.Contains("ETag: ", StringComparison.Ordinal));
+    True(stream.Contains("Last-Modified: ", StringComparison.Ordinal));
+    True(stream.Contains("Cache-Control: private, max-age=300, no-transform", StringComparison.Ordinal));
+    True(stream.Contains("if-range", StringComparison.Ordinal));
+    True(!stream.Contains("Vary: Range", StringComparison.Ordinal));
+    True(!stream.Contains("Content-Encoding: identity", StringComparison.Ordinal));
+    True(!stream.Contains("Cache-Control: no-store", StringComparison.Ordinal));
 }
 
 static string SourceRoot()

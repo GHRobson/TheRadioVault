@@ -10,8 +10,9 @@
 - Extracted mobile discovery/pairing transitions and cache-first Library projection, filtering, archive grouping and search contracts behind focused coordinators, including normalized duplicate-show handling.
 - Extracted the versioned player handoff, playback command and queue HTTP routes from the 10,000-line web-server dispatcher into one focused partial boundary while preserving route order, method rules and handler bodies.
 - Extracted authenticated federation status, Library synchronization, remote administration, Research-pack and Wiki-pack routing from the main web dispatcher into a single ordered boundary while leaving pairing before authorization and normal client APIs after it.
+- Moved the web client, secure setup page and service worker into content-preserved embedded assets, and extracted client API plus canonical/legacy media routing into focused partial boundaries; the main web-server coordinator is now 1,972 lines rather than 10,436.
 - Introduced a platform-neutral desktop playback state machine for local transport, pending intent and remote handoff state, plus a remote-progress interpolator that removes small heartbeat corrections without hiding deliberate seeks or ownership changes.
-- Began splitting the shared test runner by moving web-route, Knowledge integration and desktop source inspections into a dependency-free `TheRadioVault.SourceChecks` project that runs separately from behavioral regression tests in both local and Windows release gates.
+- Continued splitting the shared test runner by moving web-route, streaming, Knowledge integration and desktop source inspections into a dependency-free `TheRadioVault.SourceChecks` project with ten focused checks, while retaining a compiled-resource regression test in the behavioral runner.
 
 # 0.41.0
 
