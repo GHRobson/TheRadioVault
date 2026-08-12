@@ -3,6 +3,7 @@ using System.Net;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+using TheRadioVault.Transcription.Contracts;
 using TheRadioVault.Transcription.Models;
 using TheRadioVault.Transcription.Services;
 
@@ -13,7 +14,13 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Stalled model download times out and removes its partial file", StalledDownloadTimesOutAndCleansUpAsync),
     ("Caller cancellation remains cancellation and removes its partial file", CallerCancellationRemainsCancellationAsync),
     ("Timed-out model download can be retried", TimedOutDownloadCanBeRetriedAsync),
-    ("In-app setup installs official transcription assets safely", InAppSetupInstallsOfficialAssetsSafelyAsync)
+    ("In-app setup installs official transcription assets safely", InAppSetupInstallsOfficialAssetsSafelyAsync),
+    ("Active worker output renews its inactivity deadline", ActiveWorkerOutputRenewsInactivityDeadlineAsync),
+    ("Stalled worker times out and kills its process tree", StalledWorkerTimesOutAndKillsTreeAsync),
+    ("Worker cancellation stays distinct and kills its process tree", WorkerCancellationStaysDistinctAsync),
+    ("Whisper engine parses successful worker output and releases pause registration", WhisperEngineCompletesAndReleasesPauseRegistrationAsync),
+    ("Whisper engine reports worker crashes and cleans its workspace", WhisperEngineReportsCrashAndCleansWorkspaceAsync),
+    ("Whisper engine cleans its workspace after a worker timeout", WhisperEngineCleansWorkspaceAfterTimeoutAsync)
 };
 
 var selectedTests = args.Length == 0
@@ -195,6 +202,172 @@ static async Task InAppSetupInstallsOfficialAssetsSafelyAsync()
     {
         DeleteTemporaryDirectory(root);
     }
+}
+
+static async Task ActiveWorkerOutputRenewsInactivityDeadlineAsync()
+{
+    var process = new FakeWorkerProcess();
+    var runner = new TranscriptionWorkerProcessRunner(new FakeWorkerProcessFactory(process));
+    var run = runner.RunAsync(
+        WorkerRequest(TimeSpan.FromMilliseconds(300)),
+        CancellationToken.None);
+
+    for (var index = 0; index < 6; index++)
+    {
+        await Task.Delay(75);
+        process.EmitOutput($"progress = {index * 10}%");
+    }
+    process.Complete(0);
+
+    Equal(0, await run, "worker exit code");
+    Ensure(!process.KillTreeRequested, "An active worker was incorrectly killed.");
+    Ensure(process.Disposed, "The completed worker process was not disposed.");
+}
+
+static async Task StalledWorkerTimesOutAndKillsTreeAsync()
+{
+    var process = new FakeWorkerProcess();
+    var runner = new TranscriptionWorkerProcessRunner(new FakeWorkerProcessFactory(process));
+
+    var exception = await ThrowsAsync<WhisperWorkerTimeoutException>(() => runner.RunAsync(
+        WorkerRequest(TimeSpan.FromMilliseconds(80)),
+        CancellationToken.None));
+
+    Equal(TimeSpan.FromMilliseconds(80), exception.InactivityTimeout, "worker inactivity timeout");
+    Ensure(process.KillTreeRequested, "The stalled worker process tree was not killed.");
+    Ensure(process.Disposed, "The stalled worker process was not disposed.");
+}
+
+static async Task WorkerCancellationStaysDistinctAsync()
+{
+    var process = new FakeWorkerProcess();
+    var runner = new TranscriptionWorkerProcessRunner(new FakeWorkerProcessFactory(process));
+    using var cancellation = new CancellationTokenSource(TimeSpan.FromMilliseconds(80));
+
+    await ThrowsAsync<OperationCanceledException>(() => runner.RunAsync(
+        WorkerRequest(TimeSpan.FromSeconds(5)),
+        cancellation.Token));
+
+    Ensure(cancellation.IsCancellationRequested, "The caller token did not initiate worker cancellation.");
+    Ensure(process.KillTreeRequested, "The cancelled worker process tree was not killed.");
+    Ensure(process.Disposed, "The cancelled worker process was not disposed.");
+}
+
+static async Task WhisperEngineCompletesAndReleasesPauseRegistrationAsync()
+{
+    var fixture = CreateEngineFixture("worker-success");
+    try
+    {
+        var runner = new ControlledWorkerRunner();
+        var controller = new RecordingProcessController();
+        var engine = new WhisperCppTranscriptionEngine(
+            fixture.Settings,
+            controller,
+            runner,
+            new WhisperWorkerPolicy(TimeSpan.FromSeconds(5)));
+        var operationId = Guid.NewGuid();
+        var request = fixture.Request(operationId);
+        var transcription = engine.TranscribeAsync(request, new ImmediateProgress(), CancellationToken.None);
+
+        await runner.Started.Task.WaitAsync(TimeSpan.FromSeconds(2));
+        Ensure(engine.Pause(operationId), "The active worker was not available to pause.");
+        Equal(731, controller.LastPausedProcessId, "paused process id");
+        runner.CompleteSuccessfully();
+        var result = await transcription;
+
+        Equal("Hello Radio Vault", result.FullText, "transcript text");
+        Ensure(result.HasWordTimings, "The successful worker transcript lost word timings.");
+        Ensure(!engine.Pause(operationId), "The completed worker remained registered as active.");
+        Ensure(!Directory.Exists(fixture.WorkingDirectory), "The successful worker workspace was not removed.");
+    }
+    finally
+    {
+        fixture.Dispose();
+    }
+}
+
+static async Task WhisperEngineReportsCrashAndCleansWorkspaceAsync()
+{
+    var fixture = CreateEngineFixture("worker-crash");
+    try
+    {
+        var runner = new DelegateWorkerRunner((request, _) =>
+        {
+            request.ProcessStarted?.Invoke(404);
+            request.StandardErrorReceived?.Invoke("fatal model failure");
+            return Task.FromResult(7);
+        });
+        var engine = new WhisperCppTranscriptionEngine(fixture.Settings, processRunner: runner);
+
+        var exception = await ThrowsAsync<InvalidOperationException>(() => engine.TranscribeAsync(
+            fixture.Request(Guid.NewGuid()),
+            new ImmediateProgress(),
+            CancellationToken.None));
+
+        Ensure(exception.Message.Contains("code 7", StringComparison.Ordinal), "The worker exit code was not reported.");
+        Ensure(exception.Message.Contains("fatal model failure", StringComparison.Ordinal), "The worker diagnostic tail was not reported.");
+        Ensure(!Directory.Exists(fixture.WorkingDirectory), "The crashed worker workspace was not removed.");
+    }
+    finally
+    {
+        fixture.Dispose();
+    }
+}
+
+static async Task WhisperEngineCleansWorkspaceAfterTimeoutAsync()
+{
+    var fixture = CreateEngineFixture("worker-timeout");
+    try
+    {
+        var runner = new DelegateWorkerRunner((request, _) =>
+        {
+            request.ProcessStarted?.Invoke(505);
+            throw new WhisperWorkerTimeoutException(request.InactivityTimeout);
+        });
+        var controller = new RecordingProcessController();
+        var policy = new WhisperWorkerPolicy(TimeSpan.FromMilliseconds(80));
+        var engine = new WhisperCppTranscriptionEngine(fixture.Settings, controller, runner, policy);
+        var operationId = Guid.NewGuid();
+
+        var exception = await ThrowsAsync<WhisperWorkerTimeoutException>(() => engine.TranscribeAsync(
+            fixture.Request(operationId),
+            new ImmediateProgress(),
+            CancellationToken.None));
+
+        Equal(policy.InactivityTimeout, exception.InactivityTimeout, "engine timeout policy");
+        Ensure(!engine.Resume(operationId), "The timed-out worker remained registered as active.");
+        Ensure(!Directory.Exists(fixture.WorkingDirectory), "The timed-out worker workspace was not removed.");
+    }
+    finally
+    {
+        fixture.Dispose();
+    }
+}
+
+static TranscriptionWorkerProcessRequest WorkerRequest(TimeSpan timeout)
+    => new(
+        new System.Diagnostics.ProcessStartInfo("whisper-test"),
+        timeout);
+
+static EngineFixture CreateEngineFixture(string name)
+{
+    var root = CreateTemporaryDirectory(name);
+    var executable = Path.Combine(root, OperatingSystem.IsWindows() ? "whisper-test.exe" : "whisper-test");
+    var model = Path.Combine(root, "model.bin");
+    var audio = Path.Combine(root, "audio.wav");
+    File.WriteAllBytes(executable, [1]);
+    File.WriteAllBytes(model, [2]);
+    File.WriteAllBytes(audio, [3]);
+    return new EngineFixture(
+        root,
+        Path.Combine(root, "work"),
+        new WhisperCppEngineSettings
+        {
+            ExecutablePath = executable,
+            ModelPath = model,
+            DefaultLanguage = "en"
+        },
+        audio);
 }
 
 static WhisperModelCatalogItem Model(string fileName, long approximateBytes)
@@ -387,4 +560,181 @@ sealed class OfficialAssetHandler : HttpMessageHandler
 
     private static HttpResponseMessage Response(HttpContent content)
         => new(HttpStatusCode.OK) { Content = content };
+}
+
+sealed class FakeWorkerProcessFactory(FakeWorkerProcess process) : ITranscriptionWorkerProcessFactory
+{
+    public ITranscriptionWorkerProcess Create(System.Diagnostics.ProcessStartInfo startInfo)
+    {
+        process.StartInfo = startInfo;
+        return process;
+    }
+}
+
+sealed class FakeWorkerProcess : ITranscriptionWorkerProcess
+{
+    private readonly TaskCompletionSource _exit = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public event Action<string>? StandardOutputReceived;
+    public event Action<string>? StandardErrorReceived;
+    public System.Diagnostics.ProcessStartInfo? StartInfo { get; set; }
+    public int Id { get; init; } = 731;
+    public int ExitCode { get; private set; }
+    public bool Started { get; private set; }
+    public bool OutputReadStarted { get; private set; }
+    public bool KillTreeRequested { get; private set; }
+    public bool Disposed { get; private set; }
+
+    public bool Start()
+    {
+        Started = true;
+        return true;
+    }
+
+    public void BeginOutputRead() => OutputReadStarted = true;
+    public Task WaitForExitAsync() => _exit.Task;
+    public void EmitOutput(string line) => StandardOutputReceived?.Invoke(line);
+    public void EmitError(string line) => StandardErrorReceived?.Invoke(line);
+
+    public void Complete(int exitCode)
+    {
+        ExitCode = exitCode;
+        _exit.TrySetResult();
+    }
+
+    public void TryKillTree()
+    {
+        KillTreeRequested = true;
+        Complete(137);
+    }
+
+    public void Dispose() => Disposed = true;
+}
+
+sealed class DelegateWorkerRunner(
+    Func<TranscriptionWorkerProcessRequest, CancellationToken, Task<int>> run)
+    : ITranscriptionWorkerProcessRunner
+{
+    public Task<int> RunAsync(
+        TranscriptionWorkerProcessRequest request,
+        CancellationToken cancellationToken)
+        => run(request, cancellationToken);
+}
+
+sealed class ControlledWorkerRunner : ITranscriptionWorkerProcessRunner
+{
+    private readonly TaskCompletionSource _release = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public TaskCompletionSource Started { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public async Task<int> RunAsync(
+        TranscriptionWorkerProcessRequest request,
+        CancellationToken cancellationToken)
+    {
+        request.ProcessStarted?.Invoke(731);
+        request.StandardErrorReceived?.Invoke("progress = 12%");
+        Started.TrySetResult();
+        await _release.Task.WaitAsync(cancellationToken);
+        WriteTranscript(request.StartInfo);
+        request.StandardOutputReceived?.Invoke("progress = 100%");
+        return 0;
+    }
+
+    public void CompleteSuccessfully() => _release.TrySetResult();
+
+    private static void WriteTranscript(System.Diagnostics.ProcessStartInfo startInfo)
+    {
+        var arguments = startInfo.ArgumentList;
+        var outputIndex = -1;
+        for (var index = 0; index < arguments.Count; index++)
+        {
+            if (string.Equals(arguments[index], "--output-file", StringComparison.Ordinal))
+            {
+                outputIndex = index + 1;
+                break;
+            }
+        }
+        if (outputIndex <= 0 || outputIndex >= arguments.Count)
+            throw new InvalidOperationException("The worker request did not contain an output prefix.");
+
+        var outputPath = arguments[outputIndex] + ".json";
+        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        var json = JsonSerializer.Serialize(new
+        {
+            result = new { language = "en" },
+            transcription = new[]
+            {
+                new
+                {
+                    text = "Hello Radio Vault",
+                    offsets = new { from = 0, to = 1_000 },
+                    tokens = new[]
+                    {
+                        new { text = "Hello", offsets = new { from = 0, to = 400 }, p = 0.98 },
+                        new { text = " Radio", offsets = new { from = 400, to = 700 }, p = 0.97 },
+                        new { text = " Vault", offsets = new { from = 700, to = 1_000 }, p = 0.96 }
+                    }
+                }
+            }
+        });
+        File.WriteAllText(outputPath, json);
+    }
+}
+
+sealed class RecordingProcessController : ITranscriptionProcessController
+{
+    public int LastPausedProcessId { get; private set; }
+    public int LastResumedProcessId { get; private set; }
+
+    public bool TryPause(int processId)
+    {
+        LastPausedProcessId = processId;
+        return true;
+    }
+
+    public bool TryResume(int processId)
+    {
+        LastResumedProcessId = processId;
+        return true;
+    }
+}
+
+sealed class ImmediateProgress : IProgress<TranscriptionEngineProgress>
+{
+    public List<TranscriptionEngineProgress> Updates { get; } = [];
+    public void Report(TranscriptionEngineProgress value) => Updates.Add(value);
+}
+
+sealed class EngineFixture(
+    string root,
+    string workingDirectory,
+    WhisperCppEngineSettings settings,
+    string audioPath) : IDisposable
+{
+    public string Root { get; } = root;
+    public string WorkingDirectory { get; } = workingDirectory;
+    public WhisperCppEngineSettings Settings { get; } = settings;
+
+    public TranscriptionRequest Request(Guid operationId)
+        => new(
+            EpisodeId: 42,
+            AudioPath: audioPath,
+            Language: "en",
+            ModelId: "test-model",
+            ExpectedDurationMs: 1_000,
+            WorkingDirectory: WorkingDirectory,
+            OperationId: operationId);
+
+    public void Dispose() => DeleteRoot();
+
+    private void DeleteRoot()
+    {
+        try
+        {
+            if (Directory.Exists(Root)) Directory.Delete(Root, recursive: true);
+        }
+        catch
+        {
+        }
+    }
 }

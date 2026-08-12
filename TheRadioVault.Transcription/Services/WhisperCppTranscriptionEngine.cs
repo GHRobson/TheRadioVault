@@ -19,15 +19,23 @@ public sealed class WhisperCppTranscriptionEngine : ITranscriptionEngine, IPausa
     private static readonly Regex ProgressRegex = new(@"(?:progress\s*=\s*|\b)(?<value>\d{1,3})%", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private readonly object _settingsGate = new();
     private readonly ITranscriptionProcessController? _processController;
+    private readonly ITranscriptionWorkerProcessRunner _processRunner;
+    private readonly WhisperWorkerPolicy _workerPolicy;
     private readonly ConcurrentDictionary<Guid, int> _activeProcesses = new();
     private WhisperCppEngineSettings _settings;
     private string _version = "external";
 
-    public WhisperCppTranscriptionEngine(WhisperCppEngineSettings settings, ITranscriptionProcessController? processController = null)
+    public WhisperCppTranscriptionEngine(
+        WhisperCppEngineSettings settings,
+        ITranscriptionProcessController? processController = null,
+        ITranscriptionWorkerProcessRunner? processRunner = null,
+        WhisperWorkerPolicy? workerPolicy = null)
     {
         _settings = settings?.Clone() ?? throw new ArgumentNullException(nameof(settings));
         _settings.DisableUnsupportedFeatures();
         _processController = processController;
+        _processRunner = processRunner ?? new TranscriptionWorkerProcessRunner();
+        _workerPolicy = workerPolicy ?? WhisperWorkerPolicy.Default;
         RefreshVersion();
     }
 
@@ -104,64 +112,53 @@ public sealed class WhisperCppTranscriptionEngine : ITranscriptionEngine, IPausa
 
         progress.Report(new TranscriptionEngineProgress(0, "Starting local Whisper worker", 0, request.EffectiveDurationMs));
 
-        using var process = new Process
+        void ObserveStandardOutput(string line)
         {
-            StartInfo = BuildStartInfo(settings, request, outputPrefix),
-            EnableRaisingEvents = true
-        };
-
-        process.OutputDataReceived += (_, e) =>
-        {
-            if (string.IsNullOrWhiteSpace(e.Data)) return;
-            AddTail(stdoutTail, e.Data);
-            runtimeProbe.Observe(e.Data);
-            ReportProgressLine(e.Data, request, progress);
-        };
-        process.ErrorDataReceived += (_, e) =>
-        {
-            if (string.IsNullOrWhiteSpace(e.Data)) return;
-            AddTail(stderrTail, e.Data);
-            runtimeProbe.Observe(e.Data);
-            ReportProgressLine(e.Data, request, progress);
-        };
-
-        if (!process.Start()) throw new InvalidOperationException("whisper.cpp could not be started.");
-        if (request.OperationId != Guid.Empty)
-        {
-            _activeProcesses[request.OperationId] = process.Id;
-            process.Exited += (_, _) => _activeProcesses.TryRemove(request.OperationId, out _);
+            AddTail(stdoutTail, line);
+            runtimeProbe.Observe(line);
+            ReportProgressLine(line, request, progress);
         }
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
 
-        using var cancellationRegistration = cancellationToken.Register(() =>
+        void ObserveStandardError(string line)
         {
-            try
-            {
-                if (!process.HasExited) process.Kill(entireProcessTree: true);
-            }
-            catch
-            {
-                // The worker may have exited between the cancellation signal and Kill.
-            }
-        });
+            AddTail(stderrTail, line);
+            runtimeProbe.Observe(line);
+            ReportProgressLine(line, request, progress);
+        }
 
+        int exitCode;
         try
         {
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            exitCode = await _processRunner.RunAsync(
+                new TranscriptionWorkerProcessRequest(
+                    BuildStartInfo(settings, request, outputPrefix),
+                    _workerPolicy.InactivityTimeout,
+                    ProcessStarted: processId =>
+                    {
+                        if (request.OperationId != Guid.Empty)
+                            _activeProcesses[request.OperationId] = processId;
+                    },
+                    StandardOutputReceived: ObserveStandardOutput,
+                    StandardErrorReceived: ObserveStandardError),
+                cancellationToken).ConfigureAwait(false);
         }
-        catch (OperationCanceledException)
+        catch
         {
             TryDeleteDirectory(workingDirectory);
             throw;
         }
+        finally
+        {
+            if (request.OperationId != Guid.Empty)
+                _activeProcesses.TryRemove(request.OperationId, out _);
+        }
 
-        if (process.ExitCode != 0)
+        if (exitCode != 0)
         {
             var diagnostic = string.Join(Environment.NewLine, SnapshotTail(stderrTail).Concat(SnapshotTail(stdoutTail)).TakeLast(20));
             TryDeleteDirectory(workingDirectory);
             throw new InvalidOperationException(
-                $"whisper.cpp exited with code {process.ExitCode}." +
+                $"whisper.cpp exited with code {exitCode}." +
                 (diagnostic.Length == 0 ? "" : Environment.NewLine + diagnostic));
         }
 
