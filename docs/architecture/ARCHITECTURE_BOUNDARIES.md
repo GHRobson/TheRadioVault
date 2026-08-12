@@ -144,4 +144,10 @@ The dedicated Transcription runner proves that long active transfers succeed, he
 
 Large Research and Wiki package routes opt into staged request bodies. `WebHttpRequestReader` copies fixed-length and chunked bodies directly to a uniquely named temporary file, renews the inactivity deadline after every network read, and gives the resulting request sole cleanup ownership. Route handlers open a read-only stream over that file; archive providers must hash and import that stream without recreating a whole-package `byte[]`. A timeout, malformed chunk, size-limit failure, handler completion or handler failure must remove the staged file. Ordinary small JSON requests continue to use bounded in-memory bodies.
 
+## 0.44 personal-state persistence boundary
+
+`DatabaseService` remains a compatibility façade for desktop and server callers, but it does not own playback-state or favourite SQL. It resolves the episode members that share one canonical broadcast and delegates them to `PersonalStateRepository`. The repository reads the aggregate playback state and writes every canonical member inside the same SQLite transaction, including the matching `episodes.status` projection. Completion, explicit reset, play/completion counts, playback speed and favourite mutations must not be copied back into the façade.
+
+`SqliteDatabase` remains the only connection, initialization and migration owner. `PersonalStateRepository` may open connections through it, but it may not initialize or migrate a database. A failure on any canonical member must roll back playback rows and episode projections for all members; the cross-platform smoke suite exercises that forced-failure path.
+
 All four shared runners are required by the complete Windows release gate. The local macOS gate and hosted macOS and Linux jobs run the complete Data, Transcription and Web suites; the iOS job runs the portable transactional subset alongside its device architecture checks. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.

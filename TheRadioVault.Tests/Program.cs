@@ -57,6 +57,7 @@ var tests = new (string Name, Action Run)[]
         Equal(0L, PlaybackPersistencePolicy.ResolvePosition(0, 321_000, allowPositionReset: true));
         Equal(120_000L, PlaybackPersistencePolicy.ResolvePosition(120_000, 321_000, allowPositionReset: false));
     }),
+    ("Canonical personal state writes roll back atomically", CanonicalPersonalStateWritesRollBackAtomically),
     ("Archive health presentation prioritises unavailable files", () =>
     {
         var presentation = ArchiveHealthPresentationPolicy.Create(0, 0, 2, 4);
@@ -389,6 +390,151 @@ foreach (var test in selectedTests)
 
 Console.WriteLine($"{selectedTests.Length - failures.Count}/{selectedTests.Length} smoke tests passed.");
 return failures.Count == 0 ? 0 : 1;
+
+static void CanonicalPersonalStateWritesRollBackAtomically()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(directory, "personal-state.sqlite"));
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name) VALUES('Personal State Test','Personal State Test');
+                INSERT INTO episodes(id,collection_id,title,status,date_added,updated_at,broadcast_uid,hidden)
+                VALUES(8201,(SELECT id FROM collections WHERE name='Personal State Test'),'Survivor','Unplayed',$now,$now,'STATE-A',0);
+                INSERT INTO episodes(id,collection_id,title,status,date_added,updated_at,broadcast_uid,hidden)
+                VALUES(8202,(SELECT id FROM collections WHERE name='Personal State Test'),'Retained member','Unplayed',$now,$now,'STATE-B',1);
+
+                INSERT INTO library_truth_runs(
+                    id,started_at,completed_at,status,parser_version,source_file_count,current_broadcast_count,proposed_broadcast_count)
+                VALUES(8203,$now,$now,'completed','personal-state-test',2,2,1);
+                INSERT INTO library_truth_rehearsal_runs(
+                    id,truth_run_id,started_at,completed_at,status,rollback_verified)
+                VALUES(8204,8203,$now,$now,'completed',1);
+                INSERT INTO canonical_broadcasts(
+                    canonical_key,collection_name,source_truth_run_id,adopted_at)
+                VALUES('PERSONAL-STATE-TEST','Personal State Test',8203,$now);
+                INSERT INTO episode_canonical_map(
+                    episode_id,canonical_key,survivor_episode_id,is_survivor,source_truth_run_id,adopted_at)
+                VALUES(8201,'PERSONAL-STATE-TEST',8201,1,8203,$now);
+                INSERT INTO episode_canonical_map(
+                    episode_id,canonical_key,survivor_episode_id,is_survivor,source_truth_run_id,adopted_at)
+                VALUES(8202,'PERSONAL-STATE-TEST',8201,0,8203,$now);
+                INSERT INTO library_truth_adoption_runs(
+                    truth_run_id,rehearsal_run_id,app_version,started_at,completed_at,status,
+                    commit_verified,foreign_key_violations,integrity_check)
+                VALUES(8203,8204,'test',$now,$now,'completed',1,0,'ok');
+
+                CREATE TRIGGER fail_second_personal_state
+                BEFORE INSERT ON playback_state
+                WHEN NEW.episode_id=8202
+                BEGIN
+                    SELECT RAISE(ABORT,'forced personal state failure');
+                END;
+                """;
+            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            setup.ExecuteNonQuery();
+        }
+
+        var service = new DatabaseService(database);
+        Throws<Microsoft.Data.Sqlite.SqliteException>(() => service.SavePlaybackState(
+            8202,
+            positionMs: 120_000,
+            durationMs: 180_000,
+            completed: false,
+            playbackSpeed: 1.25,
+            incrementPlayCount: true));
+
+        using (var connection = database.OpenConnection())
+        {
+            using (var rolledBack = connection.CreateCommand())
+            {
+                rolledBack.CommandText = "SELECT COUNT(*) FROM playback_state WHERE episode_id IN (8201,8202)";
+                Equal(0L, Convert.ToInt64(rolledBack.ExecuteScalar()));
+            }
+            using (var statuses = connection.CreateCommand())
+            {
+                statuses.CommandText = "SELECT COUNT(*) FROM episodes WHERE id IN (8201,8202) AND status='Unplayed'";
+                Equal(2L, Convert.ToInt64(statuses.ExecuteScalar()));
+            }
+            using var removeTrigger = connection.CreateCommand();
+            removeTrigger.CommandText = "DROP TRIGGER fail_second_personal_state";
+            removeTrigger.ExecuteNonQuery();
+        }
+
+        var playedAt = new DateTimeOffset(2026, 8, 12, 18, 30, 0, TimeSpan.Zero);
+        service.SavePlaybackState(
+            8202,
+            positionMs: 120_000,
+            durationMs: 180_000,
+            completed: false,
+            playbackSpeed: 1.25,
+            incrementPlayCount: true,
+            playedAt: playedAt);
+
+        var state = service.GetPlaybackState(8201);
+        Equal(120_000L, state.PositionMs);
+        Equal(180_000L, state.DurationMs);
+        Equal(1, state.PlayCount);
+        Equal(1.25, state.PlaybackSpeed);
+        True(!state.Completed);
+
+        using (var connection = database.OpenConnection())
+        using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = """
+                SELECT COUNT(*),MIN(position_ms),MAX(position_ms),SUM(play_count),
+                       SUM(CASE WHEN completed=0 THEN 1 ELSE 0 END)
+                  FROM playback_state
+                 WHERE episode_id IN (8201,8202)
+                """;
+            using var reader = verify.ExecuteReader();
+            True(reader.Read());
+            Equal(2, reader.GetInt32(0));
+            Equal(120_000L, reader.GetInt64(1));
+            Equal(120_000L, reader.GetInt64(2));
+            Equal(2, reader.GetInt32(3));
+            Equal(2, reader.GetInt32(4));
+        }
+
+        service.SavePlaybackState(8201, 0, 180_000, false, 1.25);
+        Equal(120_000L, service.GetPlaybackState(8202).PositionMs);
+
+        service.MarkCompleted(8202, completed: true);
+        True(service.GetPlaybackState(8201).Completed);
+        Equal(180_000L, service.GetPlaybackState(8201).PositionMs);
+        service.SetFavourite(8201, favourite: true);
+
+        using (var connection = database.OpenConnection())
+        using (var canonicalState = connection.CreateCommand())
+        {
+            canonicalState.CommandText = """
+                SELECT COUNT(*)
+                  FROM episodes e
+                  JOIN playback_state ps ON ps.episode_id=e.id
+                 WHERE e.id IN (8201,8202)
+                   AND e.favourite=1
+                   AND e.status='Completed'
+                   AND ps.completed=1
+                   AND ps.position_ms=180000
+                """;
+            Equal(2L, Convert.ToInt64(canonicalState.ExecuteScalar()));
+        }
+
+        service.MarkCompleted(8201, completed: false);
+        var reset = service.GetPlaybackState(8202);
+        True(!reset.Completed);
+        Equal(0L, reset.PositionMs);
+    }
+    finally
+    {
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
 
 static void DesktopPlaybackStateMachinePreservesPendingIntent()
 {

@@ -155,7 +155,8 @@ jobs:
             "Core hardening platform requests remain neutral" \
             "Playback startup succeeds only after decoder readiness" \
             "Playback startup reports a distinct decoder timeout" \
-            "Playback startup cancels and serializes superseded selections"
+            "Playback startup cancels and serializes superseded selections" \
+            "Canonical personal state writes roll back atomically"
 
       - name: Run Data behavioral tests on macOS
         run: >-
@@ -268,7 +269,8 @@ jobs:
             "Core hardening platform requests remain neutral" \
             "Playback startup succeeds only after decoder readiness" \
             "Playback startup reports a distinct decoder timeout" \
-            "Playback startup cancels and serializes superseded selections"
+            "Playback startup cancels and serializes superseded selections" \
+            "Canonical personal state writes roll back atomically"
 
       - name: Run Data behavioral tests on Linux
         run: >-

@@ -2,7 +2,6 @@ using Microsoft.Data.Sqlite;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
-using TheRadioVault.Core.Playback;
 using TheRadioVault.Models;
 using TheRadioVault.Services.Models;
 using TheRadioVault.Services.Services;
@@ -14,6 +13,7 @@ public sealed partial class DatabaseService
     private readonly TheRadioVault.Data.Database.SqliteDatabase _database;
     private readonly CanonicalLibraryQueryService _canonicalLibrary;
     private readonly CanonicalScanPromotionService _canonicalScanPromotion;
+    private readonly PersonalStateRepository _personalState;
     private readonly object _initializationGate = new();
     private readonly object _researchTriageGate = new();
     private bool _initialized;
@@ -28,6 +28,7 @@ public sealed partial class DatabaseService
         _database = database ?? throw new ArgumentNullException(nameof(database));
         _canonicalLibrary = new CanonicalLibraryQueryService(_database);
         _canonicalScanPromotion = new CanonicalScanPromotionService(_database);
+        _personalState = new PersonalStateRepository(_database);
     }
 
     private SqliteConnection OpenConnection() => _database.OpenConnection();
@@ -474,52 +475,7 @@ public sealed partial class DatabaseService
     }
 
     public PlaybackState GetPlaybackState(long episodeId)
-    {
-        var ids = ExpandCanonicalStateEpisodeIds(episodeId);
-        if (ids.Count == 0) return new PlaybackState { EpisodeId = episodeId };
-
-        using var connection = OpenConnection();
-        using var command = connection.CreateCommand();
-        var parameters = ids.Select((_, index) => $"$id{index}").ToArray();
-        command.CommandText = $"""
-            SELECT position_ms,completed,duration_ms,playback_speed,first_played_at,last_played_at,play_count,completion_count
-              FROM playback_state
-             WHERE episode_id IN ({string.Join(',', parameters)})
-             ORDER BY CASE WHEN last_played_at IS NULL THEN 1 ELSE 0 END,last_played_at DESC,position_ms DESC
-            """;
-        for (var index = 0; index < ids.Count; index++)
-            command.Parameters.AddWithValue(parameters[index], ids[index]);
-
-        var result = new PlaybackState { EpisodeId = episodeId };
-        var newestSpeedRead = false;
-        using var reader = command.ExecuteReader();
-        while (reader.Read())
-        {
-            result.PositionMs = Math.Max(result.PositionMs, reader.GetInt64(0));
-            result.Completed |= reader.GetInt32(1) == 1;
-            result.DurationMs = Math.Max(result.DurationMs, reader.GetInt64(2));
-            if (!newestSpeedRead)
-            {
-                result.PlaybackSpeed = reader.GetDouble(3);
-                newestSpeedRead = true;
-            }
-
-            DateTime? firstPlayed = reader.IsDBNull(4)
-                ? null
-                : DateTime.Parse(reader.GetString(4));
-            DateTime? lastPlayed = reader.IsDBNull(5)
-                ? null
-                : DateTime.Parse(reader.GetString(5));
-            if (firstPlayed.HasValue && (!result.FirstPlayedAt.HasValue || firstPlayed.Value < result.FirstPlayedAt.Value))
-                result.FirstPlayedAt = firstPlayed;
-            if (lastPlayed.HasValue && (!result.LastPlayedAt.HasValue || lastPlayed.Value > result.LastPlayedAt.Value))
-                result.LastPlayedAt = lastPlayed;
-            result.PlayCount = Math.Max(result.PlayCount, reader.IsDBNull(6) ? 0 : reader.GetInt32(6));
-            result.CompletionCount = Math.Max(result.CompletionCount, reader.IsDBNull(7) ? 0 : reader.GetInt32(7));
-        }
-
-        return result;
-    }
+        => _personalState.GetPlaybackState(episodeId, ExpandCanonicalStateEpisodeIds(episodeId));
 
     public void SavePlaybackState(
         long episodeId,
@@ -531,109 +487,26 @@ public sealed partial class DatabaseService
         bool incrementCompletionCount = false,
         bool allowPositionReset = false,
         DateTimeOffset? playedAt = null)
-    {
-        var ids = ExpandCanonicalStateEpisodeIds(episodeId);
-        if (ids.Count == 0) return;
-
-        var existing = GetPlaybackState(episodeId);
-        var requestedPosition = Math.Max(0, positionMs);
-        var effectivePosition = PlaybackPersistencePolicy.ResolvePosition(requestedPosition, existing.PositionMs, allowPositionReset);
-        var preserveExistingProgress = effectivePosition != requestedPosition;
-        var effectiveDuration = Math.Max(Math.Max(0, durationMs), existing.DurationMs);
-        var effectiveCompleted = preserveExistingProgress ? existing.Completed : completed;
-        var effectiveSpeed = playbackSpeed > 0 ? playbackSpeed : existing.PlaybackSpeed > 0 ? existing.PlaybackSpeed : 1d;
-        var receivedAt = DateTimeOffset.UtcNow.UtcDateTime.ToString("O");
-        var playedAtValue = (playedAt ?? DateTimeOffset.UtcNow).UtcDateTime.ToString("O");
-
-        using var connection = OpenConnection();
-        using var transaction = connection.BeginTransaction();
-        foreach (var stateEpisodeId in ids)
-        {
-            using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = """
-            INSERT INTO playback_state(
-              episode_id,position_ms,completed,last_played_at,play_count,duration_ms,playback_speed,
-              completed_at,first_played_at,completion_count)
-            VALUES(
-              $id,$position,$completed,$now,$playCount,$duration,$speed,
-              CASE WHEN $completed=1 THEN COALESCE($completedAt,$now) ELSE $completedAt END,
-              CASE WHEN $increment=1 THEN COALESCE($firstPlayedAt,$now) ELSE $firstPlayedAt END,
-              $completionCount)
-            ON CONFLICT(episode_id) DO UPDATE SET
-              position_ms=excluded.position_ms,
-              completed=excluded.completed,
-              last_played_at=excluded.last_played_at,
-              play_count=MAX(playback_state.play_count,$basePlayCount)+$increment,
-              duration_ms=MAX(playback_state.duration_ms,excluded.duration_ms),
-              playback_speed=excluded.playback_speed,
-              completed_at=CASE WHEN excluded.completed=1 THEN COALESCE(playback_state.completed_at,excluded.completed_at) ELSE playback_state.completed_at END,
-              first_played_at=COALESCE(playback_state.first_played_at,excluded.first_played_at),
-              completion_count=MAX(playback_state.completion_count,$baseCompletionCount)+$completionIncrement
-            """;
-            command.Parameters.AddWithValue("$id", stateEpisodeId);
-            command.Parameters.AddWithValue("$position", effectivePosition);
-            command.Parameters.AddWithValue("$duration", effectiveDuration);
-            command.Parameters.AddWithValue("$completed", effectiveCompleted ? 1 : 0);
-            command.Parameters.AddWithValue("$speed", effectiveSpeed);
-            command.Parameters.AddWithValue("$increment", incrementPlayCount ? 1 : 0);
-            command.Parameters.AddWithValue("$completionIncrement", incrementCompletionCount ? 1 : 0);
-            command.Parameters.AddWithValue("$basePlayCount", existing.PlayCount);
-            command.Parameters.AddWithValue("$baseCompletionCount", existing.CompletionCount);
-            command.Parameters.AddWithValue("$playCount", existing.PlayCount + (incrementPlayCount ? 1 : 0));
-            command.Parameters.AddWithValue("$completionCount", existing.CompletionCount + (incrementCompletionCount ? 1 : 0));
-            command.Parameters.AddWithValue("$firstPlayedAt", existing.FirstPlayedAt?.ToUniversalTime().ToString("O") ?? (object)DBNull.Value);
-            command.Parameters.AddWithValue("$completedAt", effectiveCompleted && existing.LastPlayedAt.HasValue
-                ? existing.LastPlayedAt.Value.ToUniversalTime().ToString("O")
-                : (object)DBNull.Value);
-            command.Parameters.AddWithValue("$now", playedAtValue);
-            command.ExecuteNonQuery();
-
-            using var status = connection.CreateCommand();
-            status.Transaction = transaction;
-            status.CommandText = "UPDATE episodes SET status=$status,updated_at=$now WHERE id=$id";
-            status.Parameters.AddWithValue("$status", effectiveCompleted ? "Completed" : effectivePosition > 0 ? "In Progress" : "Unplayed");
-            status.Parameters.AddWithValue("$now", receivedAt);
-            status.Parameters.AddWithValue("$id", stateEpisodeId);
-            status.ExecuteNonQuery();
-        }
-        transaction.Commit();
-    }
+        => _personalState.SavePlaybackState(
+            episodeId,
+            ExpandCanonicalStateEpisodeIds(episodeId),
+            positionMs,
+            durationMs,
+            completed,
+            playbackSpeed,
+            incrementPlayCount,
+            incrementCompletionCount,
+            allowPositionReset,
+            playedAt);
 
     public void MarkCompleted(long episodeId, bool completed)
-    {
-        var state = GetPlaybackState(episodeId);
-        var position = completed && state.DurationMs > 0
-            ? state.DurationMs
-            : completed ? state.PositionMs : 0;
-        SavePlaybackState(
+        => _personalState.MarkCompleted(
             episodeId,
-            position,
-            state.DurationMs,
-            completed,
-            state.PlaybackSpeed,
-            allowPositionReset: !completed);
-    }
+            ExpandCanonicalStateEpisodeIds(episodeId),
+            completed);
 
     public void SetFavourite(long episodeId, bool favourite)
-    {
-        var ids = ExpandCanonicalStateEpisodeIds(episodeId);
-        if (ids.Count == 0) return;
-
-        using var connection = OpenConnection();
-        using var transaction = connection.BeginTransaction();
-        foreach (var stateEpisodeId in ids)
-        {
-            using var command = connection.CreateCommand();
-            command.Transaction = transaction;
-            command.CommandText = "UPDATE episodes SET favourite=$value,updated_at=$now WHERE id=$id";
-            command.Parameters.AddWithValue("$value", favourite ? 1 : 0);
-            command.Parameters.AddWithValue("$now", DateTime.UtcNow.ToString("O"));
-            command.Parameters.AddWithValue("$id", stateEpisodeId);
-            command.ExecuteNonQuery();
-        }
-        transaction.Commit();
-    }
+        => _personalState.SetFavourite(ExpandCanonicalStateEpisodeIds(episodeId), favourite);
 
     public void UpdateEpisodeMetadata(long episodeId, string title, string description, string notes)
     {

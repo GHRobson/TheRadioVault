@@ -163,7 +163,8 @@ fi
   "Playback startup reports a distinct decoder timeout" \
   "Playback startup distinguishes unavailable media" \
   "Playback startup preserves caller cancellation" \
-  "Playback startup cancels and serializes superseded selections"
+  "Playback startup cancels and serializes superseded selections" \
+  "Canonical personal state writes roll back atomically"
 
 "$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj" \
   -c "$CONFIGURATION" --no-build
