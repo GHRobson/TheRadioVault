@@ -1,6 +1,6 @@
 {
   "version": "0.41.0",
-  "generatedAtUtc": "2026-08-12T15:09:04.2977500Z",
+  "generatedAtUtc": "2026-08-12T15:12:26.0851550Z",
   "fileCount": 1057,
   "files": [
     {
@@ -5285,8 +5285,8 @@
     },
     {
       "path": "validate-source.ps1",
-      "bytes": 85113,
-      "sha256": "484b59da28f5ea028283665d94555bec8ebde37a053fdd1c906d5756f05ba13a"
+      "bytes": 85166,
+      "sha256": "03305e5817b138a6b2c58d26ab0f070d2b60bd974af1f3b3633ad216a2f25c24"
     }
   ]
 }
