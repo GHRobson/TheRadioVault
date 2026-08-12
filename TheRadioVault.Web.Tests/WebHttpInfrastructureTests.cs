@@ -160,9 +160,10 @@ internal static class WebHttpInfrastructureTests
     {
         WithWebServer(async (port, _) =>
         {
-            var request = "GET / HTTP/1.1\r\nX-Oversized: " +
-                          new string('x', WebHttpRequestReader.DefaultMaximumHeaderBytes) +
-                          "\r\n\r\n";
+            const string prefix = "GET / HTTP/1.1\r\nX-Oversized: ";
+            var request = prefix + new string(
+                'x',
+                WebHttpRequestReader.DefaultMaximumHeaderBytes - Encoding.ASCII.GetByteCount(prefix));
             var response = await SendRawRequestAsync(port, request);
             True(response.StartsWith("HTTP/1.1 431 Request Header Fields Too Large\r\n", StringComparison.Ordinal));
         });
@@ -187,6 +188,7 @@ internal static class WebHttpInfrastructureTests
         await using var stream = client.GetStream();
         await stream.WriteAsync(Encoding.ASCII.GetBytes(request), timeout.Token);
         await stream.FlushAsync(timeout.Token);
+        client.Client.Shutdown(System.Net.Sockets.SocketShutdown.Send);
 
         using var response = new MemoryStream();
         var buffer = new byte[2048];
