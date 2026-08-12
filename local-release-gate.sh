@@ -139,6 +139,8 @@ fi
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 "$DOTNET_EXE" build "$ROOT/TheRadioVault.Tests/TheRadioVault.Tests.csproj" \
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
+"$DOTNET_EXE" build "$ROOT/TheRadioVault.Web.Tests/TheRadioVault.Web.Tests.csproj" \
+  -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 "$DOTNET_EXE" build "$ROOT/TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj" \
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 
@@ -153,9 +155,12 @@ fi
   "Product versions remain consistent" \
   "iOS Client preserves native platform and server boundaries" \
   "Repeated iPhone handoffs bypass dormant decoder gating" \
-  "Transactional handoff survives repeated device moves" \
   "Transactional handoff requires a physical source-stop receipt" \
   "Durable playback rejects a stale zero after handoff"
+
+"$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Web.Tests/TheRadioVault.Web.Tests.csproj" \
+  -c "$CONFIGURATION" --no-build -- \
+  "Transactional handoff survives repeated device moves"
 
 if [[ "$RUN_IOS" == true ]]; then
   "$DOTNET_EXE" build "$ROOT/TheRadioVault.Client.Mobile.Tests/TheRadioVault.Client.Mobile.Tests.csproj" \

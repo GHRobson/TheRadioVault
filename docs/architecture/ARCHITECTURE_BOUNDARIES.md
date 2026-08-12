@@ -19,6 +19,7 @@
 | `TheRadioVault.Platform.Windows` | Windows/WPF implementations of application ports | Windows-only |
 | `TheRadioVault` | Current WPF composition root and presentation | Windows-only |
 | `TheRadioVault.Tests` | Cross-platform capability/regression console suite | Neutral |
+| `TheRadioVault.Web.Tests` | Compiled Web query, route-contract and playback-transfer behaviour | Neutral; Web only |
 | `TheRadioVault.SourceChecks` | Dependency-free source, route-order and packaging boundary checks | Neutral |
 
 ## Rules
@@ -109,6 +110,8 @@ The client boundary call and two media boundary calls must retain their relative
 
 ## 0.44 test-runner boundary
 
-`TheRadioVault.Tests` remains the behavioral capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.SourceChecks` is the dependency-free home for deliberate source-text, route-order, packaging and presentation-marker inspections. A test that can exercise compiled behavior must not be added to SourceChecks merely because text inspection is easier.
+`TheRadioVault.Tests` remains the broad capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.Web.Tests` is the first compiled subsystem runner: it references only `TheRadioVault.Web` and owns Web query/model contracts, canonical Web routes and the pure transactional playback-transfer state machine. Migrated tests must be removed from the broad runner rather than duplicated.
 
-Both runners are required by the Windows release gate and the local macOS release gate. SourceChecks supports the same optional name filters as the behavioral runner so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.
+`TheRadioVault.SourceChecks` is the dependency-free home for deliberate source-text, route-order, packaging and presentation-marker inspections. A test that can exercise compiled behavior must not be added to SourceChecks merely because text inspection is easier.
+
+All three runners are required by the complete Windows release gate. The local macOS gate and hosted macOS, Linux and iOS jobs run the applicable subsystem coverage explicitly. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.

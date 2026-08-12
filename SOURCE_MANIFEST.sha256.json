@@ -1,7 +1,7 @@
 {
   "version": "0.41.0",
-  "generatedAtUtc": "2026-08-12T15:16:12.8286900Z",
-  "fileCount": 1057,
+  "generatedAtUtc": "2026-08-12T15:55:42.5935290Z",
+  "fileCount": 1059,
   "files": [
     {
       "path": ".editorconfig",
@@ -15,8 +15,8 @@
     },
     {
       "path": ".github/workflows/ci.yml",
-      "bytes": 8750,
-      "sha256": "8e8f1316ee9d8ecbd6b5ad616fca0d0e063749ec64cae6b9e521f0009ad714ec"
+      "bytes": 9879,
+      "sha256": "a119b7f9e9223dd84fbe59fb37be05b2fe74ebd6be2c8a84d39f87d6a7151bec"
     },
     {
       "path": ".gitignore",
@@ -40,13 +40,13 @@
     },
     {
       "path": "CHANGELOG.md",
-      "bytes": 172587,
-      "sha256": "c264deb669d759110b561b268f8ce87f88332cf22b0404b0b5ca6440d5cb6ed3"
+      "bytes": 172849,
+      "sha256": "dd42e2684a5c67e2ff91e3de6132622b131d926f566aa6666552b27528242108"
     },
     {
       "path": "DEVELOPMENT.md",
-      "bytes": 5204,
-      "sha256": "e1dd4ce104d4be9cfff85f435ca0bf66bff05603db817ea58efad7159959c28a"
+      "bytes": 5626,
+      "sha256": "98d1f0c72959ca8bee4a71993db9443500cf4ad9dc36d48deab4c831988edcbe"
     },
     {
       "path": "LEGACY-FEDERATION-SOURCE.txt",
@@ -2165,8 +2165,8 @@
     },
     {
       "path": "TheRadioVault.Tests/Program.cs",
-      "bytes": 562474,
-      "sha256": "d0e131d4a9581e8e5eb5fe3c5978434021dc8320c9a8ae2e39ed74f346fc7cec"
+      "bytes": 546546,
+      "sha256": "8f319d66d1d548942a5f7a653bde97254c86de596a54deef42e283adb0533e56"
     },
     {
       "path": "TheRadioVault.Tests/TheRadioVault.Tests.csproj",
@@ -2359,6 +2359,16 @@
       "sha256": "1dba8633b46ffca950029fe87ce05fb38101db75947a088ce897dfc52fae90aa"
     },
     {
+      "path": "TheRadioVault.Web.Tests/Program.cs",
+      "bytes": 17847,
+      "sha256": "70093387cf7309e653a4e61fb9a005ee43a530347191ea52da84d53b7bc07c6e"
+    },
+    {
+      "path": "TheRadioVault.Web.Tests/TheRadioVault.Web.Tests.csproj",
+      "bytes": 406,
+      "sha256": "0b6abdee767883108c35d865ea5c2c58f17fc6fce9cbe1246040b814fbddee79"
+    },
+    {
       "path": "TheRadioVault.Web/Assets/app-icon-180.png",
       "bytes": 34690,
       "sha256": "4cced68517c3222c65342e34e9afb6df0869df4c3be8b296782c16b613c2035d"
@@ -2515,8 +2525,8 @@
     },
     {
       "path": "TheRadioVault.sln",
-      "bytes": 16569,
-      "sha256": "c43db3c79ad1bb7ee43763acefdb17cb14eddcb4e096feadde61fec41cfbdab3"
+      "bytes": 17710,
+      "sha256": "780867d9c04bc2815685ee6ae47baae87b2875239196911819e29b8198315786"
     },
     {
       "path": "TheRadioVault.slnLaunch",
@@ -2660,8 +2670,8 @@
     },
     {
       "path": "docs/architecture/ARCHITECTURE_BOUNDARIES.md",
-      "bytes": 15804,
-      "sha256": "a7fcc6ed1b31f44b85b0677403b90d28986b0cf668798c76a13814c6263707b3"
+      "bytes": 16272,
+      "sha256": "9c0eea876e7c86adacc1fbdaea85f73ab010ee70eff03932a3b49e4de27804b7"
     },
     {
       "path": "docs/architecture/AVALONIA_HANDOFF.md",
@@ -2675,8 +2685,8 @@
     },
     {
       "path": "docs/architecture/SOURCE_AUDIT_2026-08-11.md",
-      "bytes": 12449,
-      "sha256": "f89bc212812ed479121df5c4f6c1392e5164558d29e5bbf65f6260c0983da613"
+      "bytes": 12573,
+      "sha256": "52c897cfb3a786db166f7fbb9b6e38a4288422ed83edecedf1a7a12ecf041617"
     },
     {
       "path": "docs/current/ALPHA1_BUILDFIX1_STATIC_VALIDATION.md",
@@ -5140,8 +5150,8 @@
     },
     {
       "path": "docs/roadmap/RADIOVAULT_ROADMAP.md",
-      "bytes": 8459,
-      "sha256": "424cba232763c846c30053c9df970296d31514f0625dfa38151c0e7393c12374"
+      "bytes": 8610,
+      "sha256": "b7227d9d694971f5c8f78983784883f04a09553464172c2720728ed279d44c16"
     },
     {
       "path": "global.json",
@@ -5190,8 +5200,8 @@
     },
     {
       "path": "local-release-gate.sh",
-      "bytes": 7399,
-      "sha256": "4d78d7f1a1b52498a4dafd9c5fdead161785605c3f9c8bb22ea094b5fb9aeeae"
+      "bytes": 7697,
+      "sha256": "84b0a122076935443554c74324554e6773e0b20660803f059cb83c5989d5ca77"
     },
     {
       "path": "package-client-installer.ps1",
@@ -5245,8 +5255,8 @@
     },
     {
       "path": "release-gate.ps1",
-      "bytes": 2020,
-      "sha256": "98830275be99a498583e7f60e6555bec98b5f5e10d5b1d41b700ae242fac0e41"
+      "bytes": 2239,
+      "sha256": "27c498c3a68c6048eb464a8c745be616ae00361b5a882b33692bc9ebea5c409c"
     },
     {
       "path": "run-server-source.ps1",
