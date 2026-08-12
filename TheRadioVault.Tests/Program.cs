@@ -481,6 +481,7 @@ static void CanonicalPersonalStateWritesRollBackAtomically()
         Equal(180_000L, state.DurationMs);
         Equal(1, state.PlayCount);
         Equal(1.25, state.PlaybackSpeed);
+        Equal(playedAt.UtcDateTime, state.LastPlayedAt!.Value.ToUniversalTime());
         True(!state.Completed);
 
         using (var connection = database.OpenConnection())
@@ -4290,10 +4291,6 @@ static void OfflineProgressOrderingPreservesNewerManualChanges()
     True(archiveProvider.Contains("OfflineProgressOrderingPolicy.IsStale", StringComparison.Ordinal));
     True(archiveProvider.Contains("playedAt: OfflineProgressOrderingPolicy.EffectivePlayedAt", StringComparison.Ordinal));
 
-    var database = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Infrastructure", "Services", "DatabaseService.cs"));
-    True(database.Contains("var receivedAt = DateTimeOffset.UtcNow", StringComparison.Ordinal));
-    True(database.Contains("var playedAtValue = (playedAt ?? DateTimeOffset.UtcNow)", StringComparison.Ordinal));
 }
 
 
