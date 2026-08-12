@@ -1,6 +1,8 @@
 using TheRadioVault.Web.Contracts;
 using TheRadioVault.Web.Models;
 using TheRadioVault.Web.Services;
+using TheRadioVault.Web.Tests;
+using static TheRadioVault.Web.Tests.TestAssert;
 
 var tests = new (string Name, Action Run)[]
 {
@@ -20,7 +22,12 @@ var tests = new (string Name, Action Run)[]
     ("Transactional handoff permits only one preparation", TransactionalHandoffIsSingleFlight),
     ("Transactional handoff covers all six device directions", TransactionalHandoffCoversAllDeviceDirections),
     ("Transactional handoff survives repeated device moves", TransactionalHandoffSurvivesRepeatedDeviceMoves)
-};
+}
+    .Concat(WebHttpApiTests.Cases)
+    .Concat(WebPlaybackIntegrationTests.Cases)
+    .Concat(WebShellContractTests.Cases)
+    .Concat(WebMediaServerTests.Cases)
+    .ToArray();
 
 var selectedTests = args.Length == 0
     ? tests
@@ -319,29 +326,4 @@ static void CanonicalWebRoutesAreStable()
     Equal("/api/v1/broadcasts/42/media/99", WebApiRoutes.MediaPart(42,99));
     Equal("/api/v1/broadcasts/42/metadata", WebApiRoutes.BroadcastMetadata(42));
     Equal("/api/v1/transcripts", WebApiRoutes.Transcripts);
-}
-
-static void Equal<T>(T expected, T actual)
-{
-    if (!EqualityComparer<T>.Default.Equals(expected, actual))
-        throw new InvalidOperationException($"Expected '{expected}', got '{actual}'.");
-}
-
-static void True(bool value, string? message = null)
-{
-    if (!value) throw new InvalidOperationException(message ?? "Expected true, got false.");
-}
-
-static void Throws<TException>(Action action) where TException : Exception
-{
-    try
-    {
-        action();
-    }
-    catch (TException)
-    {
-        return;
-    }
-
-    throw new InvalidOperationException($"Expected {typeof(TException).Name}.");
 }

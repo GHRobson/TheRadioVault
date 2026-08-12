@@ -19,7 +19,7 @@
 | `TheRadioVault.Platform.Windows` | Windows/WPF implementations of application ports | Windows-only |
 | `TheRadioVault` | Current WPF composition root and presentation | Windows-only |
 | `TheRadioVault.Tests` | Cross-platform capability/regression console suite | Neutral |
-| `TheRadioVault.Web.Tests` | Compiled Web query, route-contract and playback-transfer behaviour | Neutral; Web only |
+| `TheRadioVault.Web.Tests` | Compiled Web query, HTTP/server, embedded-asset and playback-transfer behaviour | Neutral; Web only |
 | `TheRadioVault.SourceChecks` | Dependency-free source, route-order and packaging boundary checks | Neutral |
 
 ## Rules
@@ -110,8 +110,8 @@ The client boundary call and two media boundary calls must retain their relative
 
 ## 0.44 test-runner boundary
 
-`TheRadioVault.Tests` remains the broad capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.Web.Tests` is the first compiled subsystem runner: it references only `TheRadioVault.Web` and owns Web query/model contracts, canonical Web routes and the pure transactional playback-transfer state machine. Migrated tests must be removed from the broad runner rather than duplicated.
+`TheRadioVault.Tests` remains the broad capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.Web.Tests` is the first compiled subsystem runner: it references only `TheRadioVault.Web` and owns Web query/model contracts, canonical routes, live HTTP behavior, server lifecycle, embedded assets and transactional playback integration. Its 72 checks use focused API, playback, shell and media groups plus reusable server, source-tree and archive-provider fixtures. The archive-provider double is split by library/media, playback and administration state instead of being embedded as one runner-wide fake. Migrated tests must be removed from the broad runner rather than duplicated.
 
 `TheRadioVault.SourceChecks` is the dependency-free home for deliberate source-text, route-order, packaging and presentation-marker inspections. A test that can exercise compiled behavior must not be added to SourceChecks merely because text inspection is easier.
 
-All three runners are required by the complete Windows release gate. The local macOS gate and hosted macOS, Linux and iOS jobs run the applicable subsystem coverage explicitly. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.
+All three runners are required by the complete Windows release gate. The local macOS gate and hosted macOS and Linux jobs run the complete Web suite; the iOS job runs the portable transactional subset alongside its device architecture checks. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.
