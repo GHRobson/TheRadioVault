@@ -152,7 +152,10 @@ jobs:
             "Mac client remains usable before server pairing" \
             "Mac Client uses native AVFoundation and existing server contracts" \
             "macOS and Linux packages preserve the shared client-server boundary" \
-            "Core hardening platform requests remain neutral"
+            "Core hardening platform requests remain neutral" \
+            "Playback startup succeeds only after decoder readiness" \
+            "Playback startup reports a distinct decoder timeout" \
+            "Playback startup cancels and serializes superseded selections"
 
       - name: Run Data behavioral tests on macOS
         run: >-
@@ -262,7 +265,10 @@ jobs:
           dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj \
             -c Release --no-build -- \
             "macOS and Linux packages preserve the shared client-server boundary" \
-            "Core hardening platform requests remain neutral"
+            "Core hardening platform requests remain neutral" \
+            "Playback startup succeeds only after decoder readiness" \
+            "Playback startup reports a distinct decoder timeout" \
+            "Playback startup cancels and serializes superseded selections"
 
       - name: Run Data behavioral tests on Linux
         run: >-
@@ -347,6 +353,9 @@ jobs:
           dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj
           -c Release --no-build --
           "iOS Client preserves native platform and server boundaries"
+          "Playback startup succeeds only after decoder readiness"
+          "Playback startup reports a distinct decoder timeout"
+          "Playback startup cancels and serializes superseded selections"
 
       - name: Run transactional Web handoff tests
         run: >-

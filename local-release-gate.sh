@@ -158,7 +158,12 @@ fi
   "macOS and Linux packages preserve the shared client-server boundary" \
   "Product versions remain consistent" \
   "iOS Client preserves native platform and server boundaries" \
-  "Repeated iPhone handoffs bypass dormant decoder gating"
+  "Repeated iPhone handoffs bypass dormant decoder gating" \
+  "Playback startup succeeds only after decoder readiness" \
+  "Playback startup reports a distinct decoder timeout" \
+  "Playback startup distinguishes unavailable media" \
+  "Playback startup preserves caller cancellation" \
+  "Playback startup cancels and serializes superseded selections"
 
 "$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj" \
   -c "$CONFIGURATION" --no-build

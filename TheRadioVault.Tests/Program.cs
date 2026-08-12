@@ -199,6 +199,11 @@ var tests = new (string Name, Action Run)[]
     }),
     ("Desktop playback state machine preserves pending transport intent", DesktopPlaybackStateMachinePreservesPendingIntent),
     ("Desktop remote progress interpolation removes heartbeat wiggle", DesktopRemoteProgressInterpolationRemovesHeartbeatWiggle),
+    ("Playback startup succeeds only after decoder readiness", PlaybackStartupWaitsForReadiness),
+    ("Playback startup reports a distinct decoder timeout", PlaybackStartupReportsTimeout),
+    ("Playback startup distinguishes unavailable media", PlaybackStartupReportsUnavailableMedia),
+    ("Playback startup preserves caller cancellation", PlaybackStartupPreservesCallerCancellation),
+    ("Playback startup cancels and serializes superseded selections", PlaybackStartupSupersedesOlderSelection),
     ("Shared playback projects the playhead between heartbeats", () =>
     {
         var now = new DateTimeOffset(2026, 7, 28, 20, 0, 0, TimeSpan.Zero);
@@ -6808,6 +6813,132 @@ static void CoreHardeningPlaybackSessionOwnsEngineCommands()
     }
 
     True(engine.Disposed);
+}
+
+static void PlaybackStartupWaitsForReadiness()
+{
+    using var coordinator = new PlaybackStartupCoordinator();
+    var ready = false;
+    var run = Task.Run(async () =>
+    {
+        await using var attempt = coordinator.Begin();
+        await attempt.EnterAsync();
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(40);
+            ready = true;
+        });
+        await attempt.WaitForReadinessAsync(
+            () => ready,
+            () => null,
+            TimeSpan.FromSeconds(1),
+            TimeSpan.FromMilliseconds(5));
+        True(attempt.IsCurrent);
+    });
+    run.GetAwaiter().GetResult();
+    True(ready);
+}
+
+static void PlaybackStartupReportsTimeout()
+{
+    using var coordinator = new PlaybackStartupCoordinator();
+    var run = Task.Run(async () =>
+    {
+        await using var attempt = coordinator.Begin();
+        await attempt.EnterAsync();
+        try
+        {
+            await attempt.WaitForReadinessAsync(
+                () => false,
+                () => null,
+                TimeSpan.FromMilliseconds(40),
+                TimeSpan.FromMilliseconds(5));
+        }
+        catch (PlaybackStartupTimeoutException exception)
+        {
+            Equal(TimeSpan.FromMilliseconds(40), exception.Timeout);
+            return;
+        }
+        throw new InvalidOperationException("Expected a distinct playback startup timeout.");
+    });
+    run.GetAwaiter().GetResult();
+}
+
+static void PlaybackStartupReportsUnavailableMedia()
+{
+    using var coordinator = new PlaybackStartupCoordinator();
+    var run = Task.Run(async () =>
+    {
+        await using var attempt = coordinator.Begin();
+        await attempt.EnterAsync();
+        try
+        {
+            await attempt.WaitForReadinessAsync(
+                () => false,
+                () => "The server stream is unavailable.",
+                TimeSpan.FromSeconds(1));
+        }
+        catch (PlaybackStartupUnavailableException exception)
+        {
+            True(exception.Message.Contains("unavailable", StringComparison.OrdinalIgnoreCase));
+            return;
+        }
+        throw new InvalidOperationException("Expected unavailable media to remain distinct from a timeout.");
+    });
+    run.GetAwaiter().GetResult();
+}
+
+static void PlaybackStartupPreservesCallerCancellation()
+{
+    using var coordinator = new PlaybackStartupCoordinator();
+    using var cancellation = new CancellationTokenSource();
+    var run = Task.Run(async () =>
+    {
+        await using var attempt = coordinator.Begin(cancellation.Token);
+        await attempt.EnterAsync();
+        cancellation.Cancel();
+        try
+        {
+            await attempt.WaitForReadinessAsync(
+                () => false,
+                () => null,
+                TimeSpan.FromSeconds(1));
+        }
+        catch (OperationCanceledException) when (!attempt.IsSuperseded)
+        {
+            return;
+        }
+        throw new InvalidOperationException("Expected the original caller cancellation.");
+    });
+    run.GetAwaiter().GetResult();
+}
+
+static void PlaybackStartupSupersedesOlderSelection()
+{
+    using var coordinator = new PlaybackStartupCoordinator();
+    var run = Task.Run(async () =>
+    {
+        await using var first = coordinator.Begin();
+        await first.EnterAsync();
+
+        var secondEntered = false;
+        var secondTask = Task.Run(async () =>
+        {
+            await using var second = coordinator.Begin();
+            await second.EnterAsync();
+            secondEntered = true;
+            True(second.IsCurrent);
+        });
+
+        await Task.Delay(30);
+        True(first.IsSuperseded);
+        True(!secondEntered, "The newer request touched the decoder before the old request released it.");
+        Throws<PlaybackStartupSupersededException>(first.ThrowIfCancelledOrSuperseded);
+        await first.DisposeAsync();
+        await secondTask;
+        True(secondEntered);
+    });
+    run.GetAwaiter().GetResult();
 }
 
 static void CoreHardeningPlaybackProgressProtectsResumePosition()

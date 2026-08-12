@@ -31,6 +31,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     private readonly PlaybackCompletionCoordinator _completion = new();
     private readonly DesktopPlaybackStateMachine _stateMachine = new();
     private readonly RemotePlaybackProgressInterpolator _remoteProgressInterpolator = new();
+    private readonly PlaybackStartupCoordinator _playbackStartup = new();
     private readonly SemaphoreSlim _saveGate = new(1, 1);
     private readonly Timer _saveTimer;
     private readonly Timer _handoffTimer;
@@ -304,10 +305,10 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
     {
         ArgumentNullException.ThrowIfNull(broadcast);
         return LoadAndPlayCoreAsync(
-            () => _library.PrepareAsync(
+            token => _library.PrepareAsync(
                 broadcast.Source.CanonicalKey,
                 broadcast.Source.RepresentativeEpisodeId,
-                cancellationToken),
+                token),
             logicalPositionMs: null,
             cancellationToken);
     }
@@ -317,13 +318,13 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
 
     public Task LoadAndPlayAsync(long representativeEpisodeId, CancellationToken cancellationToken)
         => LoadAndPlayCoreAsync(
-            () => _library.PrepareAsync(representativeEpisodeId, cancellationToken),
+            token => _library.PrepareAsync(representativeEpisodeId, token),
             logicalPositionMs: null,
             cancellationToken);
 
     public Task LoadAndPlayAtAsync(long representativeEpisodeId, long logicalPositionMs, CancellationToken cancellationToken = default)
         => LoadAndPlayCoreAsync(
-            () => _library.PrepareAsync(representativeEpisodeId, cancellationToken),
+            token => _library.PrepareAsync(representativeEpisodeId, token),
             Math.Max(0, logicalPositionMs),
             cancellationToken);
 
@@ -335,7 +336,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
         bool skipOutgoingSave = false,
         CancellationToken cancellationToken = default)
         => LoadAndPlayCoreAsync(
-            () => _library.PrepareAsync(representativeEpisodeId, cancellationToken),
+            token => _library.PrepareAsync(representativeEpisodeId, token),
             Math.Max(0, logicalPositionMs),
             cancellationToken,
             play,
@@ -344,7 +345,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             skipOutgoingSave: skipOutgoingSave);
 
     private async Task LoadAndPlayCoreAsync(
-        Func<Task<LocalPlaybackDescriptor>> prepare,
+        Func<CancellationToken, Task<LocalPlaybackDescriptor>> prepare,
         long? logicalPositionMs,
         CancellationToken cancellationToken,
         bool initialPlay = true,
@@ -360,6 +361,16 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             if (uiTask is not null) await uiTask.ConfigureAwait(false);
             return;
         }
+        await using var startup = _playbackStartup.Begin(cancellationToken);
+        try
+        {
+            await startup.EnterAsync().ConfigureAwait(true);
+        }
+        catch (OperationCanceledException) when (startup.IsSuperseded)
+        {
+            return;
+        }
+        cancellationToken = startup.CancellationToken;
         if (IsBusy) return;
         // Any explicit Play gesture made while another output owns the session is
         // a handoff, even when it came from a Library row instead of the centre
@@ -391,7 +402,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             if (!skipOutgoingSave)
                 await SaveProgressAsync(false, cancellationToken, waitForGate: true).ConfigureAwait(true);
             var resolveWatch = System.Diagnostics.Stopwatch.StartNew();
-            var descriptor = await prepare().ConfigureAwait(true);
+            var descriptor = await prepare(cancellationToken).ConfigureAwait(true);
             resolveWatch.Stop();
             LastResolveDurationMs = resolveWatch.ElapsedMilliseconds;
             RuntimeDiagnosticRecorder.Record(
@@ -489,6 +500,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                 expectedGeneration: generation,
                 keepMutedAfterOpen: transferPrimedMuted,
                 registerPlay: transfer is null).ConfigureAwait(true);
+            startup.ThrowIfCancelledOrSuperseded();
             if (_stateMachine.DesiredPlaying && !_session.IsPlaying)
             {
                 if (transferPrimedMuted) _session.SetVolume(0d);
@@ -499,18 +511,19 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             {
                 _session.Pause();
             }
+            StatusText = transfer is null
+                ? "Waiting for the audio engine…"
+                : "Waiting for the prepared audio to become playable…";
+            await WaitForPreparedDecoderAsync(
+                descriptor,
+                generation,
+                _stateMachine.DesiredPlaying,
+                startup,
+                cancellationToken).ConfigureAwait(true);
             IsLoaded = true;
 
             if (transfer is not null)
             {
-                handoffStage = "wait-for-decoder-ready";
-                StatusText = "Waiting for the prepared audio to become playable…";
-                await WaitForPreparedDecoderAsync(
-                    descriptor,
-                    generation,
-                    transfer.DesiredPlaying,
-                    cancellationToken).ConfigureAwait(true);
-
                 StatusText = "Verifying the prepared decoder…";
                 const int maximumAlignmentPasses = 4;
                 var aligned = false;
@@ -674,8 +687,17 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             RaisePropertyChanged(nameof(IsMultipart));
             RaisePropertyChanged(nameof(SegmentText));
         }
+        catch (OperationCanceledException) when (startup.IsSuperseded)
+        {
+            Interlocked.Increment(ref _playbackGeneration);
+            if (_session.IsPlaying) _session.Pause();
+            IsPlaying = false;
+            IsLoaded = false;
+            StatusText = "Preparing the newer playback selection…";
+        }
         catch (Exception exception)
         {
+            if (replacingPlayback) Interlocked.Increment(ref _playbackGeneration);
             playbackStartWatch.Stop();
             RuntimeDiagnosticRecorder.Record(
                 forceTransactionalTransfer ? "handoff" : "playback",
@@ -1132,7 +1154,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             try
             {
                 var segmentPath = segmentToOpen.MediaPath;
-                await Task.Run(() =>
+                var openTask = Task.Run(() =>
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     if (!ReferenceEquals(_descriptor, descriptor) ||
@@ -1142,16 +1164,24 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
                     // output device yet. Play creates the WaveOut pipeline exactly once
                     // at the final resume point.
                     _session.Open(segmentPath);
+                    if (!ReferenceEquals(_descriptor, descriptor) ||
+                        generation != Volatile.Read(ref _playbackGeneration))
+                        return;
+                    cancellationToken.ThrowIfCancellationRequested();
                     _session.SetSpeed(requestedSpeed);
                     _session.SetVolume(keepMutedAfterOpen || confirmAfterStart ? 0d : requestedVolume);
                     if (localTargetMs > 0)
                         _session.Seek(TimeSpan.FromMilliseconds(localTargetMs));
                     if (autoPlay)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         _session.Play();
                         shouldRegisterPlay = true;
                     }
-                }, cancellationToken).ConfigureAwait(false);
+                }, CancellationToken.None);
+                await openTask.WaitAsync(
+                    PlaybackTransferDecoderReadyTimeout,
+                    cancellationToken).ConfigureAwait(false);
             }
             finally
             {
@@ -1288,11 +1318,13 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
         LocalPlaybackDescriptor descriptor,
         long generation,
         bool desiredPlaying,
+        PlaybackStartupAttempt startup,
         CancellationToken cancellationToken)
     {
         var deadline = DateTimeOffset.UtcNow.Add(PlaybackTransferDecoderReadyTimeout);
         while (DateTimeOffset.UtcNow < deadline)
         {
+            startup.ThrowIfCancelledOrSuperseded();
             cancellationToken.ThrowIfCancellationRequested();
             if (!ReferenceEquals(_descriptor, descriptor) ||
                 generation != Volatile.Read(ref _playbackGeneration))
@@ -1334,8 +1366,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
             await Task.Delay(TimeSpan.FromMilliseconds(100), cancellationToken).ConfigureAwait(true);
         }
 
-        throw new InvalidOperationException(
-            $"The target playback engine remained {_session.Status.ToString().ToLowerInvariant()} while preparing the handoff.");
+        throw new PlaybackStartupTimeoutException(PlaybackTransferDecoderReadyTimeout);
     }
 
     private LocalPlaybackSegment FindSegment(long logicalPositionMs)
@@ -2129,6 +2160,7 @@ public sealed class PlaybackViewModel : ObservableObject, IDisposable
         _handoffReportTimer.Dispose();
         _remoteProjectionTimer.Dispose();
         _loadingGlyphTimer.Dispose();
+        _playbackStartup.Dispose();
         _session.StateChanged -= SessionOnStateChanged;
         _session.MediaEnded -= SessionOnMediaEnded;
         _session.MediaFailed -= SessionOnMediaFailed;

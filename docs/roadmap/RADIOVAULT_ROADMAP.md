@@ -58,6 +58,7 @@ Status: in progress. Mobile playback ownership, handoff evidence, multipart time
 - Continue moving coherent behavioral groups from the remaining 7,033-line smoke runner into subsystem test projects; Web HTTP/server behavior and the first database seed/schema/upgrade group are now independently release-gated, and each migrated check must remain in exactly one runner.
 - Keep every future SQLite change in the schema-48 numbered-migration boundary with order, idempotence, rollback and restorable pre-upgrade backup coverage; do not add new schema changes to the legacy bootstrap.
 - Continue cancellation/timeout policy at remaining network and media boundaries; transcription downloads and the external Whisper worker now use renewable activity deadlines with distinct caller cancellation, process-tree termination and partial-workspace cleanup.
+- Desktop and iOS playback startup now share a superseding, serialised request boundary with bounded decoder readiness. Rapid selection changes cancel stale preparation, iOS waits for native AVPlayer readiness before handoff commit, and unavailable media remains distinct from a decoder timeout.
 - Archive superseded current documents and establish a small living documentation index.
 
 Exit criteria: protocol and behaviour remain compatible, the largest coordinators shrink materially, and extracted components have focused tests.

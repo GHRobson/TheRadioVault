@@ -5,7 +5,8 @@ public sealed record MobilePlaybackSnapshot(
     bool IsPlaying,
     TimeSpan Position,
     TimeSpan? Duration,
-    string Error = "");
+    string Error = "",
+    bool IsReady = false);
 
 public interface IMobilePlaybackEngine : IDisposable
 {

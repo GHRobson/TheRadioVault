@@ -188,9 +188,14 @@ static Task HandoffKeepsTransactionalBoundaryAsync()
         "Playback",
         "MobilePlaybackSynchronizationCoordinator.cs"));
     Contains(sessionSource, "BeginPlaybackTransferAsync", "handoff begin request");
+    Contains(sessionSource, "WaitForDecoderReadyAsync(startup, desiredPlaying)", "decoder readiness wait");
     Contains(sessionSource, "WaitForSourceStopAsync", "handoff source-stop wait");
     Contains(sessionSource, "CommitPlaybackTransferAsync", "handoff commit request");
     Contains(sessionSource, "CancelPlaybackTransferAsync", "handoff cancellation path");
+    var decoderReady = sessionSource.IndexOf("WaitForDecoderReadyAsync(startup, desiredPlaying)", StringComparison.Ordinal);
+    var transferReady = sessionSource.IndexOf("MarkPlaybackTransferReadyAsync", StringComparison.Ordinal);
+    Ensure(decoderReady >= 0 && transferReady > decoderReady,
+        "The iPhone reported a handoff target ready before its decoder was ready.");
     Contains(ownershipSource, "receipt.Generation == session.Generation", "committed handoff generation guard");
     Contains(sessionSource, "PlaybackTransferAlignmentToleranceMs = 3_000", "live-source alignment tolerance");
     Contains(sessionSource, "<= PlaybackTransferAlignmentToleranceMs", "alignment tolerance use");
@@ -1810,7 +1815,8 @@ file sealed class FakePlaybackEngine : IMobilePlaybackEngine
             isOpen,
             isPlaying,
             TimeSpan.Zero,
-            isOpen ? TimeSpan.FromSeconds(100) : null);
+            isOpen ? TimeSpan.FromSeconds(100) : null,
+            IsReady: isOpen);
     }
 
     public event EventHandler<MobilePlaybackSnapshot>? StateChanged
@@ -1828,7 +1834,7 @@ file sealed class FakePlaybackEngine : IMobilePlaybackEngine
     public MobilePlaybackSnapshot Current { get; private set; }
     public bool IsMuted { get; private set; }
 
-    public void Open(string url) => Current = Current with { IsOpen = true };
+    public void Open(string url) => Current = Current with { IsOpen = true, IsReady = true };
     public void Play() => Current = Current with { IsPlaying = true };
     public void Pause() => Current = Current with { IsPlaying = false };
     public void Seek(TimeSpan position) => Current = Current with { Position = position };

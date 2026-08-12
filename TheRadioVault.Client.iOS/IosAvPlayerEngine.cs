@@ -82,7 +82,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
         _player.Muted = _muted;
         if (_player.CurrentItem is { } item)
             _endObserver = AVPlayerItem.Notifications.ObserveDidPlayToEndTime(item, (_, _) => OnEnded(item));
-        _current = new MobilePlaybackSnapshot(true, false, TimeSpan.Zero, null);
+        _current = new MobilePlaybackSnapshot(true, false, TimeSpan.Zero, null, IsReady: false);
         _timer.Change(TimeSpan.Zero, TimeSpan.FromMilliseconds(250));
         PublishLocked();
     }
@@ -163,7 +163,7 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
     {
         if (_player is null)
         {
-            _current = new MobilePlaybackSnapshot(false, false, TimeSpan.Zero, null);
+            _current = new MobilePlaybackSnapshot(false, false, TimeSpan.Zero, null, IsReady: false);
             PublishLocked();
             return;
         }
@@ -191,7 +191,8 @@ public sealed class IosAvPlayerEngine : IMobilePlaybackEngine, IMobileStreamingP
             _playRequested && string.IsNullOrWhiteSpace(error),
             position,
             ReadDurationLocked(),
-            error);
+            error,
+            _player.CurrentItem?.Status == AVPlayerItemStatus.ReadyToPlay);
         PublishLocked();
     }
 

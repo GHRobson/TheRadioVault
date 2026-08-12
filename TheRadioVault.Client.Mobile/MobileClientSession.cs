@@ -8,6 +8,7 @@ using TheRadioVault.Client.Mobile.Pairing;
 using TheRadioVault.Client.Mobile.Platform;
 using TheRadioVault.Client.Mobile.Playback;
 using TheRadioVault.Client.Mobile.Synchronization;
+using TheRadioVault.Core.Playback;
 using TheRadioVault.Web.Contracts;
 using TheRadioVault.Web.Models;
 
@@ -31,6 +32,7 @@ public sealed class MobileClientSession : IDisposable
     private readonly MobilePlaybackOwnershipCoordinator _playbackOwnership;
     private readonly MobilePlaybackSynchronizationCoordinator _playbackSynchronization;
     private readonly MobilePlaybackTimeline _playbackTimeline = new();
+    private readonly PlaybackStartupCoordinator _playbackStartup = new();
     private readonly IMobileNowPlayingService _nowPlaying;
     private readonly SemaphoreSlim _syncGate = new(1, 1);
     private readonly Timer _syncTimer;
@@ -910,13 +912,32 @@ public sealed class MobileClientSession : IDisposable
     public async Task PlayDownloadedAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (IsPreparingPlayback) return;
+        await using var startup = _playbackStartup.Begin();
+        try
+        {
+            await startup.EnterAsync().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (startup.IsSuperseded)
+        {
+            return;
+        }
+        var cancellationToken = startup.CancellationToken;
         PreparingPlaybackEpisodeId = broadcast.EpisodeId;
         PlaybackStatus = IsBusy ? "Finishing the startup sync…" : "Preparing downloaded broadcast…";
         Notify();
         var startupDeadline = DateTimeOffset.UtcNow.AddSeconds(12);
-        while (IsBusy && DateTimeOffset.UtcNow < startupDeadline)
-            await Task.Delay(100).ConfigureAwait(false);
+        try
+        {
+            while (IsBusy && DateTimeOffset.UtcNow < startupDeadline)
+                await Task.Delay(100, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (startup.IsSuperseded)
+        {
+            PreparingPlaybackEpisodeId = null;
+            PlaybackStatus = "Preparing the newer playback selection…";
+            Notify();
+            return;
+        }
         if (IsBusy)
         {
             PreparingPlaybackEpisodeId = null;
@@ -931,9 +952,9 @@ public sealed class MobileClientSession : IDisposable
                 (_offlinePlayback || CanControlPlayback))
             {
                 if (CanControlPlayback && _playback.Current.IsPlaying) _playback.Pause();
-                await FlushPlaybackAsync().ConfigureAwait(false);
+                await FlushPlaybackAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
             }
-            var record = await _downloads.GetAsync(broadcast.EpisodeId).ConfigureAwait(false)
+            var record = await _downloads.GetAsync(broadcast.EpisodeId, cancellationToken).ConfigureAwait(false)
                 ?? throw new FileNotFoundException("This broadcast is not downloaded on the iPhone.");
             _playback.Pause();
             _activeDownload = record;
@@ -958,14 +979,26 @@ public sealed class MobileClientSession : IDisposable
             _lastOfflineSave = DateTimeOffset.MinValue;
             var position = _playbackTimeline.ClampPosition(record.Summary.PositionMs);
             OpenLogicalPosition(position, play: true, muted: false);
+            await WaitForDecoderReadyAsync(startup, desiredPlaying: true).ConfigureAwait(false);
             PlaybackStatus = "Playing download on this iPhone";
         }
-        catch (Exception exception)
+        catch (OperationCanceledException) when (startup.IsSuperseded)
         {
+            _playback.Pause();
             _offlinePlayback = false;
             _activeDownload = null;
             _ownsPlayback = false;
-            PlaybackStatus = "Downloaded playback failed: " + exception.Message;
+            PlaybackStatus = "Preparing the newer playback selection…";
+        }
+        catch (Exception exception)
+        {
+            _playback.Pause();
+            _offlinePlayback = false;
+            _activeDownload = null;
+            _ownsPlayback = false;
+            PlaybackStatus = exception is PlaybackStartupTimeoutException
+                ? "Downloaded playback failed: the iPhone audio engine did not become ready in time."
+                : "Downloaded playback failed: " + exception.Message;
         }
         finally
         {
@@ -1113,11 +1146,21 @@ public sealed class MobileClientSession : IDisposable
     {
         ArgumentNullException.ThrowIfNull(broadcast);
         TracePlayback($"Play requested: episode={broadcast.EpisodeId}; title={broadcast.Title}; paired={IsPaired}; preparing={IsPreparingPlayback}; busy={IsBusy}");
-        if (!IsPaired || IsPreparingPlayback)
+        if (!IsPaired)
         {
-            TracePlayback("Play request ignored by the paired/preparing guard.");
+            TracePlayback("Play request ignored because the iPhone is not paired.");
             return;
         }
+        await using var startup = _playbackStartup.Begin();
+        try
+        {
+            await startup.EnterAsync().ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (startup.IsSuperseded)
+        {
+            return;
+        }
+        var cancellationToken = startup.CancellationToken;
         NowPlayingTitle = broadcast.Title;
         NowPlayingSubtitle = broadcast.Subtitle;
         _playbackSynchronization.ClearRemotePlayback();
@@ -1131,13 +1174,14 @@ public sealed class MobileClientSession : IDisposable
         try
         {
             TracePlayback("Flushing previous playback state.");
-            await FlushPlaybackAsync().ConfigureAwait(false);
+            await FlushPlaybackAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
             SelectedBroadcast = broadcast;
             try
             {
                 broadcast = new MobileBroadcastItem(
-                    await _server.GetBroadcastSummaryAsync(broadcast.EpisodeId).ConfigureAwait(false));
+                    await _server.GetBroadcastSummaryAsync(broadcast.EpisodeId, cancellationToken).ConfigureAwait(false));
             }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
             catch (Exception exception)
             {
                 System.Diagnostics.Trace.WriteLine($"[iOS playback summary refresh] {exception}");
@@ -1146,7 +1190,7 @@ public sealed class MobileClientSession : IDisposable
             _activeDownload = null;
             _ownsPlayback = false;
             TracePlayback($"Requesting media manifest for episode {broadcast.EpisodeId}.");
-            var manifest = await _server.GetMediaManifestAsync(broadcast.EpisodeId).ConfigureAwait(false);
+            var manifest = await _server.GetMediaManifestAsync(broadcast.EpisodeId, cancellationToken).ConfigureAwait(false);
             TracePlayback($"Media manifest received: parts={manifest.Parts.Count}; durationMs={manifest.DurationMs}.");
             if (manifest.Parts.Count == 0)
                 throw new InvalidOperationException("This broadcast has no playable media parts.");
@@ -1154,7 +1198,7 @@ public sealed class MobileClientSession : IDisposable
             _playbackTimeline.Load(manifest.Parts, manifest.DurationMs);
             var logicalPosition = _playbackTimeline.ClampPosition(broadcast.Source.PositionMs);
             TracePlayback($"Requesting shared playback session at position {logicalPosition}.");
-            var shared = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
+            var shared = await _server.GetPlaybackSessionAsync(cancellationToken).ConfigureAwait(false);
             TracePlayback($"Shared playback received: generation={shared.Generation}; owner={shared.OwnerClientId}; active={_playbackOwnership.HasActivePlayback(shared)}.");
             _playbackGeneration = Math.Max(0, shared.Generation);
             var anotherDeviceOwnsPlayback = _playbackOwnership.HasActivePlayback(shared) &&
@@ -1179,7 +1223,7 @@ public sealed class MobileClientSession : IDisposable
                     _speed,
                     desiredPlaying,
                     _server.ClientDisplayName,
-                    "iOSClient")).ConfigureAwait(false);
+                    "iOSClient"), cancellationToken).ConfigureAwait(false);
                 transfer = RequireTransfer(begin);
                 logicalPosition = transfer.ProtectedPositionMs;
                 _speed = transfer.Speed;
@@ -1199,21 +1243,22 @@ public sealed class MobileClientSession : IDisposable
             _pendingPlayCountEpisodes.TryAdd(broadcast.EpisodeId, 0);
             TracePlayback($"Opening episode {broadcast.EpisodeId} at {logicalPosition} ms; transfer={transfer is not null}.");
             OpenLogicalPosition(logicalPosition, desiredPlaying, muted: transfer is not null);
+            await WaitForDecoderReadyAsync(startup, desiredPlaying).ConfigureAwait(false);
 
             if (transfer is not null)
             {
-                transfer = await AlignTransferAsync(transfer, desiredPlaying).ConfigureAwait(false);
+                transfer = await AlignTransferAsync(transfer, desiredPlaying, startup).ConfigureAwait(false);
                 var committed = await _server.CommitPlaybackTransferAsync(new WebPlaybackTransferCommitRequest(
                     _server.ClientId,
                     transfer.TransferId,
                     transfer.ReadyRevision,
                     CaptureLogicalPosition(),
-                    DecoderRunningMuted: true)).ConfigureAwait(false);
+                    DecoderRunningMuted: true), cancellationToken).ConfigureAwait(false);
                 ThrowIfConflict(committed.Conflict, committed.Message);
                 transferCommitted = true;
                 _playbackGeneration = Math.Max(0, committed.Session.Generation);
-                await WaitForSourceStopAsync(committed.Session).ConfigureAwait(false);
-                var ownership = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
+                await WaitForSourceStopAsync(committed.Session, cancellationToken).ConfigureAwait(false);
+                var ownership = await _server.GetPlaybackSessionAsync(cancellationToken).ConfigureAwait(false);
                 if (!_playbackOwnership.IsOwnedByThisDevice(ownership))
                     throw new InvalidOperationException("Playback moved again before this iPhone became audible.");
                 _playbackGeneration = Math.Max(0, ownership.Generation);
@@ -1227,7 +1272,7 @@ public sealed class MobileClientSession : IDisposable
                 var update = await ReportLivePlaybackAsync(
                     force: !_playbackOwnership.IsOwnedByThisDevice(shared)).ConfigureAwait(false);
                 ThrowIfConflict(update.Conflict, update.Message);
-                var claimed = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
+                var claimed = await _server.GetPlaybackSessionAsync(cancellationToken).ConfigureAwait(false);
                 _playbackGeneration = Math.Max(0, claimed.Generation);
                 _ownsPlayback = _playbackOwnership.IsOwnedByThisDevice(claimed);
                 if (!_ownsPlayback) throw new InvalidOperationException("Another device owns playback.");
@@ -1237,6 +1282,24 @@ public sealed class MobileClientSession : IDisposable
             _playbackSynchronization.ClearRemotePlayback();
             await SaveDurableProgressAsync().ConfigureAwait(false);
             TracePlayback($"Play preparation completed: episode={SelectedBroadcast?.EpisodeId}; playing={IsPlaying}; owns={_ownsPlayback}.");
+        }
+        catch (OperationCanceledException) when (startup.IsSuperseded)
+        {
+            TracePlayback("Playback preparation was superseded by a newer selection.");
+            if (transfer is not null && !transferCommitted)
+            {
+                try
+                {
+                    await _server.CancelPlaybackTransferAsync(new WebPlaybackTransferCancelRequest(
+                        _server.ClientId, transfer.TransferId, "A newer playback selection replaced this request."),
+                        CancellationToken.None).ConfigureAwait(false);
+                }
+                catch { }
+            }
+            _playback.Pause();
+            _playback.SetMuted(false);
+            _ownsPlayback = false;
+            PlaybackStatus = "Preparing the newer playback selection…";
         }
         catch (Exception exception)
         {
@@ -1253,7 +1316,15 @@ public sealed class MobileClientSession : IDisposable
             _playback.Pause();
             _playback.SetMuted(false);
             _ownsPlayback = false;
-            PlaybackStatus = "Playback failed: " + exception.Message;
+            PlaybackStatus = exception switch
+            {
+                PlaybackStartupTimeoutException =>
+                    "Playback failed: the iPhone audio engine did not become ready in time.",
+                PlaybackStartupUnavailableException => "Playback unavailable: " + exception.Message,
+                HttpRequestException =>
+                    "Playback unavailable: the Radio Vault Server could not provide this broadcast.",
+                _ => "Playback failed: " + exception.Message
+            };
         }
         finally
         {
@@ -1297,8 +1368,10 @@ public sealed class MobileClientSession : IDisposable
 
     private async Task<WebPlaybackTransferTicket> AlignTransferAsync(
         WebPlaybackTransferTicket transfer,
-        bool desiredPlaying)
+        bool desiredPlaying,
+        PlaybackStartupAttempt startup)
     {
+        var cancellationToken = startup.CancellationToken;
         for (var pass = 0; pass < 4; pass++)
         {
             var ready = await _server.MarkPlaybackTransferReadyAsync(new WebPlaybackTransferReadyRequest(
@@ -1311,7 +1384,7 @@ public sealed class MobileClientSession : IDisposable
                 OverrideDesiredPlaying: false,
                 _speed,
                 _server.ClientDisplayName,
-                "iOSClient")).ConfigureAwait(false);
+                "iOSClient"), cancellationToken).ConfigureAwait(false);
             ThrowIfConflict(ready.Conflict, ready.Message);
             transfer = RequireTransfer(ready);
             desiredPlaying = transfer.DesiredPlaying;
@@ -1323,19 +1396,22 @@ public sealed class MobileClientSession : IDisposable
                 return transfer;
             PlaybackStatus = "Aligning with the latest shared playhead…";
             OpenLogicalPosition(transfer.CommitPositionMs, desiredPlaying, muted: true);
+            await WaitForDecoderReadyAsync(startup, desiredPlaying).ConfigureAwait(false);
         }
         throw new InvalidOperationException("The iPhone could not stay aligned with the source device.");
     }
 
-    private async Task WaitForSourceStopAsync(WebPlaybackSession committed)
+    private async Task WaitForSourceStopAsync(
+        WebPlaybackSession committed,
+        CancellationToken cancellationToken)
     {
         if (committed.CommittedTransfer is not { SourceWasPlaying: true, SourceStopAcknowledged: false } receipt)
             return;
         var deadline = DateTimeOffset.UtcNow.AddSeconds(4);
         while (DateTimeOffset.UtcNow < deadline)
         {
-            await Task.Delay(250).ConfigureAwait(false);
-            var latest = await _server.GetPlaybackSessionAsync().ConfigureAwait(false);
+            await Task.Delay(250, cancellationToken).ConfigureAwait(false);
+            var latest = await _server.GetPlaybackSessionAsync(cancellationToken).ConfigureAwait(false);
             if (latest.Generation != committed.Generation || !_playbackOwnership.IsOwnedByThisDevice(latest))
                 throw new InvalidOperationException("Playback moved again during handoff.");
             if (latest.CommittedTransfer?.TransferId == receipt.TransferId &&
@@ -1343,6 +1419,15 @@ public sealed class MobileClientSession : IDisposable
         }
         PlaybackStatus = "Playback moved; the previous device did not confirm that it stopped.";
     }
+
+    private Task WaitForDecoderReadyAsync(PlaybackStartupAttempt startup, bool desiredPlaying)
+        => startup.WaitForReadinessAsync(
+            () => _playback.Current.IsReady && (!desiredPlaying || _playback.Current.IsPlaying),
+            () => string.IsNullOrWhiteSpace(_playback.Current.Error)
+                ? null
+                : "The iPhone audio engine could not open this broadcast: " + _playback.Current.Error,
+            TimeSpan.FromSeconds(12),
+            TimeSpan.FromMilliseconds(50));
 
     private void OpenLogicalPosition(long logicalPositionMs, bool play, bool muted)
     {
@@ -2074,6 +2159,7 @@ public sealed class MobileClientSession : IDisposable
         _downloads.Dispose();
         _syncTimer.Dispose();
         _metadataSyncTimer.Dispose();
+        _playbackStartup.Dispose();
         _metadataSynchronization.Dispose();
         _offlineMutationSynchronization.Dispose();
         _playback.StateChanged -= PlaybackOnStateChanged;

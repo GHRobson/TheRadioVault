@@ -6,6 +6,7 @@
     <RootNamespace>TheRadioVault.Client.Mobile</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\TheRadioVault.Core\TheRadioVault.Core.csproj" />
     <ProjectReference Include="..\TheRadioVault.Protocol\TheRadioVault.Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>
