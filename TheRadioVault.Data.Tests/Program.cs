@@ -2,13 +2,18 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 using TheRadioVault.Core.Services;
 using TheRadioVault.Data.Database;
+using TheRadioVault.Data.Database.Migrations;
 
 var tests = new (string Name, Action Run)[]
 {
     ("Database seeds every first-class show", DatabaseSeedsEveryFirstClassShow),
     ("Latest schema exposes the canonical topic identity", LatestSchemaExposesCanonicalTopicIdentity),
     ("Latest schema contains required persistence boundaries", LatestSchemaContainsRequiredPersistenceBoundaries),
-    ("Schema 43 upgrades safely to the latest schema", Schema43UpgradesSafely)
+    ("Schema initialization records migration 48 once", SchemaInitializationRecordsMigrationOnce),
+    ("Schema 43 upgrades safely to the latest schema", Schema43UpgradesSafely),
+    ("Numbered migrations apply in order and are idempotent", NumberedMigrationsApplyInOrderAndAreIdempotent),
+    ("Failed numbered migrations roll back atomically", FailedNumberedMigrationRollsBackAtomically),
+    ("Migration catalogs reject gaps and newer databases", MigrationCatalogRejectsInvalidVersions)
 };
 
 var selectedTests = args.Length == 0
@@ -76,7 +81,7 @@ static void LatestSchemaExposesCanonicalTopicIdentity()
     WithDatabase("wiki-schema", database =>
     {
         using var connection = database.OpenConnection();
-        Equal(47L, ScalarLong(connection, "PRAGMA user_version"), "schema version");
+        Equal((long)SqliteDatabase.CurrentSchemaVersion, ScalarLong(connection, "PRAGMA user_version"), "schema version");
         AssertObjectsExist(connection, "table",
         [
             "wiki_pages", "wiki_page_aliases", "wiki_page_revisions", "wiki_relationships",
@@ -97,7 +102,7 @@ static void LatestSchemaContainsRequiredPersistenceBoundaries()
     WithDatabase("latest-schema", database =>
     {
         using var connection = database.OpenConnection();
-        Equal(47L, ScalarLong(connection, "PRAGMA user_version"), "schema version");
+        Equal((long)SqliteDatabase.CurrentSchemaVersion, ScalarLong(connection, "PRAGMA user_version"), "schema version");
 
         AssertObjectsExist(connection, "table",
         [
@@ -142,6 +147,28 @@ static void LatestSchemaContainsRequiredPersistenceBoundaries()
         AssertColumnsExist(connection, "library_truth_adoption_runs",
             ["truth_run_id", "rehearsal_run_id", "backup_path", "source_fingerprint", "staged_fingerprint", "post_commit_fingerprint", "rehearsal_truth_signature", "commit_truth_signature", "rehearsal_item_signature", "commit_item_signature", "rehearsal_conflict_signature", "commit_conflict_signature", "commit_verified"]);
     });
+}
+
+static void SchemaInitializationRecordsMigrationOnce()
+{
+    var directory = CreateTemporaryDirectory("migration-ledger");
+    var path = Path.Combine(directory, "migration-ledger.sqlite");
+    try
+    {
+        new SqliteDatabase(path).Initialize();
+        new SqliteDatabase(path).Initialize();
+
+        using var connection = OpenRawConnection(path);
+        Equal(48L, ScalarLong(connection, "PRAGMA user_version"), "schema version after repeated initialization");
+        Equal(1L, ScalarLong(connection, "SELECT COUNT(*) FROM schema_migrations"), "migration history row count");
+        Equal("Create migration history", ScalarString(
+            connection,
+            "SELECT name FROM schema_migrations WHERE version=48"), "migration 48 name");
+    }
+    finally
+    {
+        DeleteTemporaryDirectory(directory);
+    }
 }
 
 static void Schema43UpgradesSafely()
@@ -212,7 +239,7 @@ static void Schema43UpgradesSafely()
         var database = new SqliteDatabase(path);
         database.Initialize();
         using var connection = database.OpenConnection();
-        Equal(47L, ScalarLong(connection, "PRAGMA user_version"), "upgraded schema version");
+        Equal((long)SqliteDatabase.CurrentSchemaVersion, ScalarLong(connection, "PRAGMA user_version"), "upgraded schema version");
         AssertColumnsExist(connection, "library_truth_recordings",
             ["role", "completeness_score", "preferred_score", "duration_ratio", "is_preferred_candidate", "review_reason"]);
         AssertObjectsExist(connection, "index", ["ix_library_truth_recordings_role"]);
@@ -223,12 +250,115 @@ static void Schema43UpgradesSafely()
             "recording_segments", "recording_coverages", "episode_canonical_map", "library_truth_adoption_runs",
             "library_truth_adoption_items", "library_truth_adoption_conflicts"
         ]);
+
+        var backups = Directory.GetFiles(directory, "schema43.pre-schema-48-*.sqlite");
+        Equal(1, backups.Length, "pre-migration backup count");
+        using var backup = OpenRawConnection(backups[0]);
+        Equal(43L, ScalarLong(backup, "PRAGMA user_version"), "backup schema version");
+        AssertObjectsExist(backup, "table", ["library_truth_runs", "library_truth_broadcasts", "library_truth_recordings"]);
     }
     finally
     {
         DeleteTemporaryDirectory(directory);
     }
 }
+
+static void NumberedMigrationsApplyInOrderAndAreIdempotent()
+{
+    var directory = CreateTemporaryDirectory("ordered-migrations");
+    var path = Path.Combine(directory, "ordered.sqlite");
+    try
+    {
+        using var connection = OpenRawConnection(path);
+        Execute(connection, "PRAGMA user_version=47;");
+        var runner = CreateTestMigrationRunner();
+
+        var applied = runner.ApplyPending(connection);
+        Equal("48,49", string.Join(',', applied.Select(migration => migration.Version)), "applied migration order");
+        Equal(49L, ScalarLong(connection, "PRAGMA user_version"), "test schema version");
+        Equal("48,49", ScalarString(connection, "SELECT GROUP_CONCAT(version, ',') FROM (SELECT version FROM schema_migrations ORDER BY version)"), "migration history order");
+        Equal("48,49", ScalarString(connection, "SELECT GROUP_CONCAT(version, ',') FROM (SELECT version FROM migration_probe ORDER BY version)"), "migration side-effect order");
+
+        Equal(0, runner.ApplyPending(connection).Count, "second-pass migration count");
+        Equal(2L, ScalarLong(connection, "SELECT COUNT(*) FROM schema_migrations"), "idempotent history count");
+        Equal(2L, ScalarLong(connection, "SELECT COUNT(*) FROM migration_probe"), "idempotent side-effect count");
+    }
+    finally
+    {
+        DeleteTemporaryDirectory(directory);
+    }
+}
+
+static void FailedNumberedMigrationRollsBackAtomically()
+{
+    var directory = CreateTemporaryDirectory("failed-migration");
+    var path = Path.Combine(directory, "failed.sqlite");
+    try
+    {
+        using var connection = OpenRawConnection(path);
+        Execute(connection, "PRAGMA user_version=47;");
+        var failingRunner = CreateTestMigrationRunner(failVersion49: true);
+
+        Throws<InvalidOperationException>(() => failingRunner.ApplyPending(connection));
+        Equal(48L, ScalarLong(connection, "PRAGMA user_version"), "version after failed migration");
+        Equal(1L, ScalarLong(connection, "SELECT COUNT(*) FROM schema_migrations"), "history after failed migration");
+        Equal(0L, ScalarLong(connection, "SELECT COUNT(*) FROM migration_probe WHERE version=49"), "rolled-back side effect");
+
+        var recovered = CreateTestMigrationRunner().ApplyPending(connection);
+        Equal("49", string.Join(',', recovered.Select(migration => migration.Version)), "recovered migration");
+        Equal(49L, ScalarLong(connection, "PRAGMA user_version"), "version after recovery");
+    }
+    finally
+    {
+        DeleteTemporaryDirectory(directory);
+    }
+}
+
+static void MigrationCatalogRejectsInvalidVersions()
+{
+    Throws<InvalidOperationException>(() => new SqliteMigrationRunner(47,
+        [new TestMigration(49, "Gap", (_, _) => { })]));
+    Throws<InvalidOperationException>(() => new SqliteMigrationRunner(47,
+        [new TestMigration(48, "First", (_, _) => { }), new TestMigration(48, "Duplicate", (_, _) => { })]));
+    Throws<InvalidOperationException>(() => new SqliteMigrationRunner(47,
+        [new TestMigration(48, " ", (_, _) => { })]));
+
+    var directory = CreateTemporaryDirectory("newer-schema");
+    try
+    {
+        var path = Path.Combine(directory, "newer.sqlite");
+        using (var connection = OpenRawConnection(path))
+        {
+            Execute(connection, "PRAGMA user_version=50; CREATE TABLE future_marker(id INTEGER PRIMARY KEY);");
+            Throws<InvalidOperationException>(() => CreateTestMigrationRunner().EnsureCompatible(connection));
+            Equal(50L, ScalarLong(connection, "PRAGMA user_version"), "newer schema version after runner rejection");
+        }
+
+        Throws<InvalidOperationException>(() => new SqliteDatabase(path).Initialize());
+        using var unchanged = OpenRawConnection(path);
+        Equal(50L, ScalarLong(unchanged, "PRAGMA user_version"), "newer schema version after initialization rejection");
+        Equal(0L, ScalarLong(unchanged, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='collections'"), "legacy writes after newer-schema rejection");
+    }
+    finally
+    {
+        DeleteTemporaryDirectory(directory);
+    }
+}
+
+static SqliteMigrationRunner CreateTestMigrationRunner(bool failVersion49 = false) => new(47,
+[
+    new TestMigration(49, "Add probe row", (connection, transaction) =>
+    {
+        ExecuteInTransaction(connection, transaction, "INSERT INTO migration_probe(version) VALUES(49);");
+        if (failVersion49) throw new InvalidOperationException("Expected migration failure.");
+    }),
+    new TestMigration(48, "Create migration history", (connection, transaction) =>
+        ExecuteInTransaction(connection, transaction, """
+            CREATE TABLE schema_migrations(version INTEGER PRIMARY KEY,name TEXT NOT NULL,applied_at TEXT NOT NULL);
+            CREATE TABLE migration_probe(version INTEGER PRIMARY KEY);
+            INSERT INTO migration_probe(version) VALUES(48);
+            """))
+]);
 
 static void WithDatabase(string name, Action<SqliteDatabase> test)
 {
@@ -257,6 +387,13 @@ static void DeleteTemporaryDirectory(string directory)
     SqliteConnection.ClearAllPools();
     try { Directory.Delete(directory, recursive: true); }
     catch (DirectoryNotFoundException) { }
+}
+
+static SqliteConnection OpenRawConnection(string path)
+{
+    var connection = new SqliteConnection($"Data Source={path}");
+    connection.Open();
+    return connection;
 }
 
 static void AssertObjectsExist(SqliteConnection connection, string type, IReadOnlyCollection<string> names)
@@ -305,8 +442,41 @@ static void Execute(SqliteConnection connection, string sql)
     command.ExecuteNonQuery();
 }
 
+static void ExecuteInTransaction(SqliteConnection connection, SqliteTransaction transaction, string sql)
+{
+    using var command = connection.CreateCommand();
+    command.Transaction = transaction;
+    command.CommandText = sql;
+    command.ExecuteNonQuery();
+}
+
 static void Equal<T>(T expected, T actual, string context)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
         throw new InvalidOperationException($"Expected {context} to be {expected}, got {actual}.");
+}
+
+static void Throws<TException>(Action action) where TException : Exception
+{
+    try
+    {
+        action();
+    }
+    catch (TException)
+    {
+        return;
+    }
+
+    throw new InvalidOperationException($"Expected {typeof(TException).Name}.");
+}
+
+file sealed class TestMigration(
+    int version,
+    string name,
+    Action<SqliteConnection, SqliteTransaction> apply) : ISqliteMigration
+{
+    public int Version { get; } = version;
+    public string Name { get; } = name;
+
+    public void Apply(SqliteConnection connection, SqliteTransaction transaction) => apply(connection, transaction);
 }

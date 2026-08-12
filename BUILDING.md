@@ -182,4 +182,4 @@ The equivalent PowerShell command is:
 
 ## Alpha acceptance
 
-Before distributing this alpha, verify an upgrade on the main Server PC and a paired Client, confirm schema 47 and capability generation 40, import an AI-enriched Knowledge Database, export the whole archive, open cited broadcasts from Explore, then repeat playback, handoff and transcription checks.
+Before distributing this alpha, verify an upgrade on the main Server PC and a paired Client, confirm schema 48 and capability generation 40, import an AI-enriched Knowledge Database, export the whole archive, open cited broadcasts from Explore, then repeat playback, handoff and transcription checks.

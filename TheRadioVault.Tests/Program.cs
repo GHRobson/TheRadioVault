@@ -2026,7 +2026,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 
     var foundation = File.ReadAllText(Path.Combine(SourceRoot(), "tools", "Test-AvaloniaFoundation.ps1"));
     True(foundation.Contains("foundationVersion = '0.35-alpha9-knowledge-portability'", StringComparison.Ordinal));
-    True(foundation.Contains("databaseSchema = 47", StringComparison.Ordinal));
+    True(foundation.Contains("databaseSchema = 48", StringComparison.Ordinal));
     True(foundation.Contains("lanCapabilityGeneration = 40", StringComparison.Ordinal));
     foreach (var marker in new[]
              {

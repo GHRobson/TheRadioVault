@@ -1,5 +1,6 @@
 using Microsoft.Data.Sqlite;
 using TheRadioVault.Core.Services;
+using TheRadioVault.Data.Database.Migrations;
 
 namespace TheRadioVault.Data.Database;
 
@@ -10,7 +11,7 @@ namespace TheRadioVault.Data.Database;
 /// </summary>
 public sealed class SqliteDatabase
 {
-    public const int CurrentSchemaVersion = 47;
+    public static int CurrentSchemaVersion => SqliteMigrationCatalog.Runner.CurrentVersion;
 
     private readonly object _initializationGate = new();
     private bool _initialized;
@@ -90,6 +91,7 @@ public sealed class SqliteDatabase
             using var connection = OpenConnection();
 
             ConfigureDatabase(connection);
+            SqliteMigrationCatalog.Runner.EnsureCompatible(connection);
 
             using (var command = connection.CreateCommand())
             {
@@ -349,11 +351,14 @@ public sealed class SqliteDatabase
             EnsureWikiSchema(connection);
             EnsurePerformanceIndexes(connection);
 
-            using (var schemaVersion = connection.CreateCommand())
+            if (SqliteMigrationRunner.ReadVersion(connection) < SqliteMigrationCatalog.LegacySchemaVersion)
             {
-                schemaVersion.CommandText = $"PRAGMA user_version = {CurrentSchemaVersion};";
+                using var schemaVersion = connection.CreateCommand();
+                schemaVersion.CommandText = $"PRAGMA user_version = {SqliteMigrationCatalog.LegacySchemaVersion};";
                 schemaVersion.ExecuteNonQuery();
             }
+
+            SqliteMigrationCatalog.Runner.ApplyPending(connection);
 
             using (var optimize = connection.CreateCommand())
             {

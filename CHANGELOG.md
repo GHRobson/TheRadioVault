@@ -14,6 +14,8 @@
 - Introduced a platform-neutral desktop playback state machine for local transport, pending intent and remote handoff state, plus a remote-progress interpolator that removes small heartbeat corrections without hiding deliberate seeks or ownership changes.
 - Continued splitting the shared test runner by moving web-route, streaming, Knowledge integration and desktop source inspections into a dependency-free `TheRadioVault.SourceChecks` project with ten focused checks, while retaining a compiled-resource regression test in the behavioral runner.
 - Added the first compiled subsystem runner, `TheRadioVault.Web.Tests`, and migrated 16 Web query/model, canonical-route and pure transactional handoff checks out of the broad smoke runner; complete and platform-specific release gates now execute the new suite.
+- Added `TheRadioVault.Data.Tests` as a release-gated database suite and moved seed, latest-schema and legacy-upgrade behavior out of the broad smoke runner.
+- Introduced transactional, contiguous numbered SQLite migrations after the preserved schema-47 bootstrap. Schema 48 adds an auditable migration ledger, rejects databases created by newer builds, and has ordered, idempotence, rollback and restorable-backup coverage.
 
 # 0.41.0
 
