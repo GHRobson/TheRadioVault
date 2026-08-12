@@ -17,6 +17,7 @@ namespace TheRadioVault.Web.Services;
 public sealed partial class LocalWebServer : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly WebHttpRequestReader RequestReader = new(ResolveRequestBodyPolicy);
     private readonly IWebArchiveProvider _archive;
     private readonly Action<string>? _log;
     private readonly object _gate = new();
@@ -419,8 +420,14 @@ public sealed partial class LocalWebServer : IDisposable
                     stream = secureStream;
                 }
 
-                var request = await ReadRequestAsync(stream, cancellationToken).ConfigureAwait(false);
-                if (request is null) return;
+                var requestRead = await RequestReader.ReadAsync(stream, cancellationToken).ConfigureAwait(false);
+                if (requestRead.Request is null)
+                {
+                    if (requestRead.Failure != WebHttpRequestReadFailure.EndOfStream)
+                        await WriteRequestReadFailureAsync(stream, requestRead.Failure, cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+                var request = requestRead.Request;
                 var isGet = string.Equals(request.Method, "GET", StringComparison.OrdinalIgnoreCase);
                 var isHead = string.Equals(request.Method, "HEAD", StringComparison.OrdinalIgnoreCase);
                 var isPost = string.Equals(request.Method, "POST", StringComparison.OrdinalIgnoreCase);
@@ -730,6 +737,9 @@ public sealed partial class LocalWebServer : IDisposable
                 }
 
                 await WriteTextResponseAsync(stream, 404, "Not Found", "Not found.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
             }
             catch (Exception ex)
             {
@@ -1399,36 +1409,8 @@ public sealed partial class LocalWebServer : IDisposable
         await WriteBytesResponseAsync(stream, status.Item1, status.Item2, bytes, "application/json; charset=utf-8", false, cancellationToken, "Cache-Control: no-store\r\n").ConfigureAwait(false);
     }
 
-    private static async Task<HttpRequest?> ReadRequestAsync(Stream stream, CancellationToken cancellationToken)
+    private static WebHttpRequestBodyPolicy ResolveRequestBodyPolicy(string requestTarget)
     {
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(TimeSpan.FromSeconds(10));
-        using var input = new MemoryStream();
-        var buffer = new byte[2048];
-        var headerEnd = -1;
-
-        while (input.Length < 32 * 1024 && headerEnd < 0)
-        {
-            var read = await stream.ReadAsync(buffer, timeout.Token).ConfigureAwait(false);
-            if (read <= 0) return null;
-            input.Write(buffer, 0, read);
-            headerEnd = FindHeaderEnd(input.GetBuffer(), (int)input.Length);
-        }
-        if (headerEnd < 0) return null;
-
-        var all = input.ToArray();
-        var headerText = Encoding.ASCII.GetString(all, 0, headerEnd);
-        var lines = headerText.Split("\r\n", StringSplitOptions.None);
-        var first = lines[0].Split(' ', 3, StringSplitOptions.RemoveEmptyEntries);
-        if (first.Length < 2) return null;
-        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var line in lines.Skip(1))
-        {
-            var colon = line.IndexOf(':');
-            if (colon > 0) headers[line[..colon].Trim()] = line[(colon + 1)..].Trim();
-        }
-
-        var requestTarget = first[1];
         var isResearchPackUpload = requestTarget.StartsWith(WebApiRoutes.FederationResearchImportPreview, StringComparison.OrdinalIgnoreCase);
         var isWikiPackUpload = requestTarget.StartsWith(WebApiRoutes.FederationWikiImportPreview, StringComparison.OrdinalIgnoreCase)
             || requestTarget.StartsWith(WebApiRoutes.FederationWikiImportApply, StringComparison.OrdinalIgnoreCase);
@@ -1437,181 +1419,48 @@ public sealed partial class LocalWebServer : IDisposable
             || requestTarget.StartsWith(WebApiRoutes.ClientSpeakers, StringComparison.OrdinalIgnoreCase)
             || requestTarget.StartsWith(WebApiRoutes.ClientTranscription, StringComparison.OrdinalIgnoreCase)
             || requestTarget.StartsWith(WebApiRoutes.ClientWiki, StringComparison.OrdinalIgnoreCase);
-        var isLargePayload = isResearchPackUpload || isWikiPackUpload || isFullClientPayload;
+
         var maximumBodyBytes = isResearchPackUpload
             ? WebResearchPackLimits.MaximumPackageBytes
             : isWikiPackUpload ? 512 * 1024 * 1024
-            : isFullClientPayload ? 64 * 1024 * 1024 : 16 * 1024;
-        timeout.CancelAfter(isResearchPackUpload || isWikiPackUpload
+            : isFullClientPayload ? 64 * 1024 * 1024
+            : 16 * 1024;
+        var timeout = isResearchPackUpload || isWikiPackUpload
             ? TimeSpan.FromMinutes(10)
-            : isFullClientPayload ? TimeSpan.FromMinutes(2) : TimeSpan.FromSeconds(10));
-        var bodyOffset = headerEnd + 4;
-        var alreadyRead = Math.Max(0, all.Length - bodyOffset);
-        var initialBody = alreadyRead > 0
-            ? all.AsMemory(bodyOffset, alreadyRead)
-            : ReadOnlyMemory<byte>.Empty;
-
-        byte[] requestBody;
-        var isChunked = headers.TryGetValue("transfer-encoding", out var transferEncoding) &&
-                        transferEncoding.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                            .Any(value => value.Equals("chunked", StringComparison.OrdinalIgnoreCase));
-        if (isChunked)
-        {
-            var chunkedBody = await ReadChunkedBodyAsync(stream, initialBody, maximumBodyBytes, timeout.Token).ConfigureAwait(false);
-            if (chunkedBody is null) return null;
-            requestBody = chunkedBody;
-        }
-        else
-        {
-            var contentLength = headers.TryGetValue("content-length", out var rawLength) && int.TryParse(rawLength, out var parsedLength)
-                ? parsedLength
-                : 0;
-            if (contentLength < 0 || contentLength > maximumBodyBytes) return null;
-
-            using var body = new MemoryStream(contentLength);
-            if (alreadyRead > 0) body.Write(all, bodyOffset, Math.Min(alreadyRead, contentLength));
-            while (body.Length < contentLength)
-            {
-                var remaining = contentLength - (int)body.Length;
-                var read = await stream.ReadAsync(buffer.AsMemory(0, Math.Min(buffer.Length, remaining)), timeout.Token).ConfigureAwait(false);
-                if (read <= 0) return null;
-                body.Write(buffer, 0, read);
-            }
-            requestBody = body.ToArray();
-        }
-
-        return new HttpRequest(first[0], first[1], headers, requestBody);
+            : isFullClientPayload ? TimeSpan.FromMinutes(2)
+            : TimeSpan.FromSeconds(10);
+        return new WebHttpRequestBodyPolicy(maximumBodyBytes, timeout);
     }
 
-
-    private static async Task<byte[]?> ReadChunkedBodyAsync(
+    private static Task WriteRequestReadFailureAsync(
         Stream stream,
-        ReadOnlyMemory<byte> initialBody,
-        int maximumBodyBytes,
+        WebHttpRequestReadFailure failure,
         CancellationToken cancellationToken)
     {
-        var reader = new PrefixedBodyReader(stream, initialBody);
-        using var output = new MemoryStream();
-
-        while (true)
+        var response = failure switch
         {
-            var sizeLine = await reader.ReadAsciiLineAsync(128, cancellationToken).ConfigureAwait(false);
-            if (sizeLine is null) return null;
-            var extension = sizeLine.IndexOf(';');
-            var sizeText = (extension >= 0 ? sizeLine[..extension] : sizeLine).Trim();
-            if (!int.TryParse(sizeText, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var chunkSize) || chunkSize < 0)
-                return null;
-
-            if (chunkSize == 0)
-            {
-                while (true)
-                {
-                    var trailer = await reader.ReadAsciiLineAsync(2048, cancellationToken).ConfigureAwait(false);
-                    if (trailer is null) return null;
-                    if (trailer.Length == 0) return output.ToArray();
-                }
-            }
-
-            if (output.Length + chunkSize > maximumBodyBytes) return null;
-            var chunk = new byte[chunkSize];
-            if (!await reader.ReadExactlyAsync(chunk, cancellationToken).ConfigureAwait(false)) return null;
-            output.Write(chunk, 0, chunk.Length);
-
-            var carriageReturn = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
-            var lineFeed = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
-            if (carriageReturn != '\r' || lineFeed != '\n') return null;
-        }
-    }
-
-    private sealed class PrefixedBodyReader
-    {
-        private readonly Stream _stream;
-        private readonly byte[] _prefix;
-        private int _prefixOffset;
-        private readonly byte[] _networkBuffer = new byte[2048];
-        private int _networkOffset;
-        private int _networkCount;
-
-        public PrefixedBodyReader(Stream stream, ReadOnlyMemory<byte> prefix)
-        {
-            _stream = stream;
-            _prefix = prefix.ToArray();
-        }
-
-        public async Task<int> ReadByteAsync(CancellationToken cancellationToken)
-        {
-            if (_prefixOffset < _prefix.Length) return _prefix[_prefixOffset++];
-            if (_networkOffset >= _networkCount)
-            {
-                _networkCount = await _stream.ReadAsync(_networkBuffer, cancellationToken).ConfigureAwait(false);
-                _networkOffset = 0;
-                if (_networkCount <= 0) return -1;
-            }
-            return _networkBuffer[_networkOffset++];
-        }
-
-        public async Task<bool> ReadExactlyAsync(byte[] destination, CancellationToken cancellationToken)
-        {
-            for (var index = 0; index < destination.Length; index++)
-            {
-                var value = await ReadByteAsync(cancellationToken).ConfigureAwait(false);
-                if (value < 0) return false;
-                destination[index] = (byte)value;
-            }
-            return true;
-        }
-
-        public async Task<string?> ReadAsciiLineAsync(int maximumBytes, CancellationToken cancellationToken)
-        {
-            using var line = new MemoryStream();
-            while (line.Length <= maximumBytes)
-            {
-                var value = await ReadByteAsync(cancellationToken).ConfigureAwait(false);
-                if (value < 0) return null;
-                if (value == '\r')
-                {
-                    var next = await ReadByteAsync(cancellationToken).ConfigureAwait(false);
-                    if (next != '\n') return null;
-                    return Encoding.ASCII.GetString(line.ToArray());
-                }
-                line.WriteByte((byte)value);
-            }
-            return null;
-        }
-    }
-
-    private static int FindHeaderEnd(byte[] bytes, int length)
-    {
-        for (var i = 0; i <= length - 4; i++)
-        {
-            if (bytes[i] == 13 && bytes[i + 1] == 10 && bytes[i + 2] == 13 && bytes[i + 3] == 10) return i;
-        }
-        return -1;
-    }
-
-    private static async Task WriteJsonAsync<T>(Stream stream, T payload, bool headOnly, CancellationToken cancellationToken)
-    {
-        var bytes = JsonSerializer.SerializeToUtf8Bytes(payload, JsonOptions);
-        await WriteBytesResponseAsync(
+            WebHttpRequestReadFailure.TimedOut => (408, "Request Timeout", "The HTTP request timed out."),
+            WebHttpRequestReadFailure.HeaderTooLarge => (431, "Request Header Fields Too Large", "The HTTP request headers are too large."),
+            WebHttpRequestReadFailure.BodyTooLarge => (413, "Content Too Large", "The HTTP request body is too large."),
+            _ => (400, "Bad Request", "The HTTP request is malformed.")
+        };
+        return WriteTextResponseAsync(
             stream,
-            200,
-            "OK",
-            bytes,
-            "application/json; charset=utf-8",
-            headOnly,
-            cancellationToken,
-            "Cache-Control: no-store\r\n").ConfigureAwait(false);
+            response.Item1,
+            response.Item2,
+            response.Item3,
+            "text/plain; charset=utf-8",
+            cancellationToken);
     }
 
-    private static async Task WriteTextResponseAsync(Stream stream, int code, string reason, string text, string contentType, CancellationToken cancellationToken)
-        => await WriteBytesResponseAsync(stream, code, reason, Encoding.UTF8.GetBytes(text), contentType, false, cancellationToken).ConfigureAwait(false);
+    private static Task WriteJsonAsync<T>(Stream stream, T payload, bool headOnly, CancellationToken cancellationToken)
+        => WebHttpResponseWriter.WriteJsonAsync(stream, payload, JsonOptions, headOnly, cancellationToken);
 
-    private static async Task WriteBytesResponseAsync(Stream stream, int code, string reason, byte[] bytes, string contentType, bool headOnly, CancellationToken cancellationToken, string extraHeaders = "")
-    {
-        var header = $"HTTP/1.1 {code} {reason}\r\nContent-Type: {contentType}\r\nContent-Length: {bytes.Length}\r\nX-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\n{extraHeaders}Connection: close\r\n\r\n";
-        await stream.WriteAsync(Encoding.ASCII.GetBytes(header), cancellationToken).ConfigureAwait(false);
-        if (!headOnly) await stream.WriteAsync(bytes, cancellationToken).ConfigureAwait(false);
-    }
+    private static Task WriteTextResponseAsync(Stream stream, int code, string reason, string text, string contentType, CancellationToken cancellationToken)
+        => WebHttpResponseWriter.WriteTextAsync(stream, code, reason, text, contentType, cancellationToken);
+
+    private static Task WriteBytesResponseAsync(Stream stream, int code, string reason, byte[] bytes, string contentType, bool headOnly, CancellationToken cancellationToken, string extraHeaders = "")
+        => WebHttpResponseWriter.WriteBytesAsync(stream, code, reason, bytes, contentType, headOnly, cancellationToken, extraHeaders);
 
     private string BuildIndexHtml()
         => WebClientHtml
@@ -1707,12 +1556,8 @@ public sealed partial class LocalWebServer : IDisposable
         return colon > 0 ? host[..colon] : host;
     }
 
-    private static async Task WriteRedirectAsync(Stream stream, string location, CancellationToken cancellationToken)
-    {
-        var safeLocation = location.Replace("\r", string.Empty, StringComparison.Ordinal).Replace("\n", string.Empty, StringComparison.Ordinal);
-        var header = $"HTTP/1.1 302 Found\r\nLocation: {safeLocation}\r\nContent-Length: 0\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n";
-        await stream.WriteAsync(Encoding.ASCII.GetBytes(header), cancellationToken).ConfigureAwait(false);
-    }
+    private static Task WriteRedirectAsync(Stream stream, string location, CancellationToken cancellationToken)
+        => WebHttpResponseWriter.WriteRedirectAsync(stream, location, cancellationToken);
 
     private static IReadOnlyDictionary<string, string> ParseQuery(string query)
     {
@@ -1963,7 +1808,6 @@ public sealed partial class LocalWebServer : IDisposable
         }
     }
 
-    private sealed record HttpRequest(string Method, string Target, Dictionary<string, string> Headers, byte[] Body);
     private sealed record FavouriteMutation(bool Favourite);
     private sealed record ListeningStatusMutation(bool Played);
     private sealed record QueueAddMutation(long EpisodeId, bool PlayNext = false);

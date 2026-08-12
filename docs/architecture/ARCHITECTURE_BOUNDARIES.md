@@ -114,4 +114,10 @@ The client boundary call and two media boundary calls must retain their relative
 
 `TheRadioVault.SourceChecks` is the dependency-free home for deliberate source-text, route-order, packaging and presentation-marker inspections. A test that can exercise compiled behavior must not be added to SourceChecks merely because text inspection is easier.
 
+## 0.44 web HTTP infrastructure boundary
+
+`WebHttpRequestReader` owns HTTP/1.x request framing, bounded header and body reads, fixed-length and chunked transfer decoding, framing validation and request timeouts. `LocalWebServer` supplies the route-sensitive body-size and timeout policy, then translates the reader's explicit malformed, timeout, header-limit and body-limit outcomes into HTTP responses. The reader rejects ambiguous `Content-Length` plus `Transfer-Encoding` requests and oversized payloads before allocating their declared body size.
+
+`WebHttpResponseWriter` owns common response framing, security headers, HEAD behavior and redirect sanitisation. `LocalWebServer` retains small forwarding helpers so focused route partials do not depend directly on infrastructure implementation details. Request parsing or common response framing must not be added back to the server coordinator.
+
 All three runners are required by the complete Windows release gate. The local macOS gate and hosted macOS and Linux jobs run the complete Web suite; the iOS job runs the portable transactional subset alongside its device architecture checks. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.
