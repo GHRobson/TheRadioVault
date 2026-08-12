@@ -448,7 +448,7 @@ public sealed partial class LocalWebServer : IDisposable
                         await WriteRequestReadFailureAsync(stream, requestRead.Failure, cancellationToken).ConfigureAwait(false);
                     return;
                 }
-                var request = requestRead.Request;
+                using var request = requestRead.Request;
                 if (!WebApiRouteResolver.TryParseMethod(request.Method, out var requestMethod))
                 {
                     await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Only GET, HEAD and selected POST actions are supported.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
@@ -1239,7 +1239,10 @@ public sealed partial class LocalWebServer : IDisposable
             ? TimeSpan.FromMinutes(10)
             : isFullClientPayload ? TimeSpan.FromMinutes(2)
             : TimeSpan.FromSeconds(10);
-        return new WebHttpRequestBodyPolicy(maximumBodyBytes, timeout);
+        return new WebHttpRequestBodyPolicy(
+            maximumBodyBytes,
+            timeout,
+            StageToFile: isResearchPackUpload || isWikiPackUpload);
     }
 
     private static Task WriteRequestReadFailureAsync(

@@ -4,11 +4,50 @@ using System.Text;
 
 namespace TheRadioVault.Web.Services;
 
-internal sealed record HttpRequest(
-    string Method,
-    string Target,
-    IReadOnlyDictionary<string, string> Headers,
-    byte[] Body);
+internal sealed class HttpRequest : IDisposable
+{
+    private readonly string? _stagedBodyPath;
+    private bool _disposed;
+
+    public HttpRequest(
+        string method,
+        string target,
+        IReadOnlyDictionary<string, string> headers,
+        byte[] body,
+        string? stagedBodyPath = null)
+    {
+        Method = method;
+        Target = target;
+        Headers = headers;
+        Body = body;
+        _stagedBodyPath = stagedBodyPath;
+    }
+
+    public string Method { get; }
+    public string Target { get; }
+    public IReadOnlyDictionary<string, string> Headers { get; }
+    public byte[] Body { get; }
+    public bool IsBodyStaged => _stagedBodyPath is not null;
+    internal string? StagedBodyPath => _stagedBodyPath;
+    public long BodyLength => _stagedBodyPath is null ? Body.LongLength : new FileInfo(_stagedBodyPath).Length;
+
+    public Stream OpenBodyStream()
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        return _stagedBodyPath is null
+            ? new MemoryStream(Body, writable: false)
+            : new FileStream(_stagedBodyPath, FileMode.Open, FileAccess.Read, FileShare.Read, 128 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+    }
+
+    public void Dispose()
+    {
+        if (_disposed) return;
+        _disposed = true;
+        if (_stagedBodyPath is null) return;
+        try { File.Delete(_stagedBodyPath); } catch { }
+    }
+}
 
 internal enum WebHttpRequestReadFailure
 {
@@ -20,7 +59,10 @@ internal enum WebHttpRequestReadFailure
     Malformed
 }
 
-internal readonly record struct WebHttpRequestBodyPolicy(int MaximumBytes, TimeSpan Timeout);
+internal readonly record struct WebHttpRequestBodyPolicy(
+    int MaximumBytes,
+    TimeSpan Timeout,
+    bool StageToFile = false);
 
 internal readonly record struct WebHttpRequestReadResult(HttpRequest? Request, WebHttpRequestReadFailure Failure)
 {
@@ -56,9 +98,10 @@ internal sealed class WebHttpRequestReader
     {
         ArgumentNullException.ThrowIfNull(stream);
 
-        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeout.CancelAfter(_headerTimeout);
+        using var headerTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        headerTimeout.CancelAfter(_headerTimeout);
         var rented = ArrayPool<byte>.Shared.Rent(_maximumHeaderBytes + ReadBufferBytes);
+        string? stagedBodyPath = null;
         try
         {
             var bytesRead = 0;
@@ -69,7 +112,7 @@ internal sealed class WebHttpRequestReader
                     return WebHttpRequestReadResult.Failed(WebHttpRequestReadFailure.HeaderTooLarge);
 
                 var readSize = Math.Min(ReadBufferBytes, rented.Length - bytesRead);
-                var read = await stream.ReadAsync(rented.AsMemory(bytesRead, readSize), timeout.Token).ConfigureAwait(false);
+                var read = await stream.ReadAsync(rented.AsMemory(bytesRead, readSize), headerTimeout.Token).ConfigureAwait(false);
                 if (read <= 0)
                     return WebHttpRequestReadResult.Failed(WebHttpRequestReadFailure.EndOfStream);
 
@@ -89,7 +132,6 @@ internal sealed class WebHttpRequestReader
             if (policy.MaximumBytes < 0 || policy.Timeout <= TimeSpan.Zero)
                 throw new InvalidOperationException("The HTTP request body policy is invalid.");
 
-            timeout.CancelAfter(policy.Timeout);
             var bodyOffset = headerEnd + 4;
             var initialBodyLength = Math.Max(0, bytesRead - bodyOffset);
             var initialBody = rented.AsMemory(bodyOffset, initialBodyLength);
@@ -111,11 +153,14 @@ internal sealed class WebHttpRequestReader
                         stream,
                         initialBody,
                         policy.MaximumBytes,
-                        timeout.Token)
+                        policy.Timeout,
+                        policy.StageToFile,
+                        cancellationToken)
                     .ConfigureAwait(false);
                 if (chunked.Failure != WebHttpRequestReadFailure.None)
                     return WebHttpRequestReadResult.Failed(chunked.Failure);
-                body = chunked.Body!;
+                body = chunked.Body ?? [];
+                stagedBodyPath = chunked.StagedBodyPath;
             }
             else
             {
@@ -128,19 +173,52 @@ internal sealed class WebHttpRequestReader
                 if (contentLength > policy.MaximumBytes)
                     return WebHttpRequestReadResult.Failed(WebHttpRequestReadFailure.BodyTooLarge);
 
-                body = GC.AllocateUninitializedArray<byte>(contentLength);
-                var copied = Math.Min(initialBody.Length, body.Length);
-                initialBody.Span[..copied].CopyTo(body);
-                while (copied < body.Length)
+                if (policy.StageToFile && contentLength > 0)
                 {
-                    var read = await stream.ReadAsync(body.AsMemory(copied), timeout.Token).ConfigureAwait(false);
-                    if (read <= 0)
-                        return WebHttpRequestReadResult.Failed(WebHttpRequestReadFailure.EndOfStream);
-                    copied += read;
+                    stagedBodyPath = CreateStagedBodyPath();
+                    await using var output = CreateStagedBodyStream(stagedBodyPath);
+                    var copied = Math.Min(initialBody.Length, contentLength);
+                    await output.WriteAsync(initialBody[..copied], cancellationToken).ConfigureAwait(false);
+                    var buffer = ArrayPool<byte>.Shared.Rent(128 * 1024);
+                    try
+                    {
+                        while (copied < contentLength)
+                        {
+                            var requested = Math.Min(buffer.Length, contentLength - copied);
+                            var read = await ReadWithInactivityTimeoutAsync(
+                                stream, buffer.AsMemory(0, requested), policy.Timeout, cancellationToken).ConfigureAwait(false);
+                            if (read <= 0)
+                                return WebHttpRequestReadResult.Failed(WebHttpRequestReadFailure.EndOfStream);
+                            await output.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+                            copied += read;
+                        }
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+                    }
+                    await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+                    body = [];
+                }
+                else
+                {
+                    body = GC.AllocateUninitializedArray<byte>(contentLength);
+                    var copied = Math.Min(initialBody.Length, body.Length);
+                    initialBody.Span[..copied].CopyTo(body);
+                    while (copied < body.Length)
+                    {
+                        var read = await ReadWithInactivityTimeoutAsync(
+                            stream, body.AsMemory(copied), policy.Timeout, cancellationToken).ConfigureAwait(false);
+                        if (read <= 0)
+                            return WebHttpRequestReadResult.Failed(WebHttpRequestReadFailure.EndOfStream);
+                        copied += read;
+                    }
                 }
             }
 
-            return WebHttpRequestReadResult.Success(new HttpRequest(method, target, headers, body));
+            var request = new HttpRequest(method, target, headers, body, stagedBodyPath);
+            stagedBodyPath = null;
+            return WebHttpRequestReadResult.Success(request);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
@@ -148,6 +226,10 @@ internal sealed class WebHttpRequestReader
         }
         finally
         {
+            if (stagedBodyPath is not null)
+            {
+                try { File.Delete(stagedBodyPath); } catch { }
+            }
             ArrayPool<byte>.Shared.Return(rented, clearArray: true);
         }
     }
@@ -197,51 +279,108 @@ internal sealed class WebHttpRequestReader
         return -1;
     }
 
-    private static async Task<(byte[]? Body, WebHttpRequestReadFailure Failure)> ReadChunkedBodyAsync(
+    private static async Task<(byte[]? Body, string? StagedBodyPath, WebHttpRequestReadFailure Failure)> ReadChunkedBodyAsync(
         Stream stream,
         ReadOnlyMemory<byte> initialBody,
         int maximumBodyBytes,
+        TimeSpan inactivityTimeout,
+        bool stageToFile,
         CancellationToken cancellationToken)
     {
-        var reader = new PrefixedBodyReader(stream, initialBody);
-        using var output = new MemoryStream();
+        var reader = new PrefixedBodyReader(stream, initialBody, inactivityTimeout);
+        var stagedBodyPath = stageToFile ? CreateStagedBodyPath() : null;
+        await using Stream output = stagedBodyPath is null
+            ? new MemoryStream()
+            : CreateStagedBodyStream(stagedBodyPath);
+        var completed = false;
 
-        while (true)
+        try
         {
-            var sizeLine = await reader.ReadAsciiLineAsync(128, cancellationToken).ConfigureAwait(false);
-            if (sizeLine is null) return (null, WebHttpRequestReadFailure.Malformed);
-            var extension = sizeLine.IndexOf(';');
-            var sizeText = (extension >= 0 ? sizeLine[..extension] : sizeLine).Trim();
-            if (!int.TryParse(sizeText, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var chunkSize) || chunkSize < 0)
-                return (null, WebHttpRequestReadFailure.Malformed);
-
-            if (chunkSize == 0)
+            while (true)
             {
-                var trailerBytes = 0;
-                while (true)
+                var sizeLine = await reader.ReadAsciiLineAsync(128, cancellationToken).ConfigureAwait(false);
+                if (sizeLine is null) return (null, null, WebHttpRequestReadFailure.Malformed);
+                var extension = sizeLine.IndexOf(';');
+                var sizeText = (extension >= 0 ? sizeLine[..extension] : sizeLine).Trim();
+                if (!int.TryParse(sizeText, NumberStyles.AllowHexSpecifier, CultureInfo.InvariantCulture, out var chunkSize) || chunkSize < 0)
+                    return (null, null, WebHttpRequestReadFailure.Malformed);
+
+                if (chunkSize == 0)
                 {
-                    var trailer = await reader.ReadAsciiLineAsync(2048, cancellationToken).ConfigureAwait(false);
-                    if (trailer is null) return (null, WebHttpRequestReadFailure.Malformed);
-                    if (trailer.Length == 0) return (output.ToArray(), WebHttpRequestReadFailure.None);
-                    trailerBytes += trailer.Length + 2;
-                    if (trailerBytes > MaximumTrailerBytes)
-                        return (null, WebHttpRequestReadFailure.Malformed);
+                    var trailerBytes = 0;
+                    while (true)
+                    {
+                        var trailer = await reader.ReadAsciiLineAsync(2048, cancellationToken).ConfigureAwait(false);
+                        if (trailer is null) return (null, null, WebHttpRequestReadFailure.Malformed);
+                        if (trailer.Length == 0)
+                        {
+                            await output.FlushAsync(cancellationToken).ConfigureAwait(false);
+                            if (output is MemoryStream memory)
+                            {
+                                completed = true;
+                                return (memory.ToArray(), null, WebHttpRequestReadFailure.None);
+                            }
+                            completed = true;
+                            return (null, stagedBodyPath, WebHttpRequestReadFailure.None);
+                        }
+                        trailerBytes += trailer.Length + 2;
+                        if (trailerBytes > MaximumTrailerBytes)
+                            return (null, null, WebHttpRequestReadFailure.Malformed);
+                    }
                 }
+
+                if (output.Length + chunkSize > maximumBodyBytes)
+                    return (null, null, WebHttpRequestReadFailure.BodyTooLarge);
+
+                var remaining = chunkSize;
+                var buffer = ArrayPool<byte>.Shared.Rent(Math.Min(128 * 1024, Math.Max(1, chunkSize)));
+                try
+                {
+                    while (remaining > 0)
+                    {
+                        var requested = Math.Min(buffer.Length, remaining);
+                        if (!await reader.ReadExactlyAsync(buffer.AsMemory(0, requested), cancellationToken).ConfigureAwait(false))
+                            return (null, null, WebHttpRequestReadFailure.Malformed);
+                        await output.WriteAsync(buffer.AsMemory(0, requested), cancellationToken).ConfigureAwait(false);
+                        remaining -= requested;
+                    }
+                }
+                finally
+                {
+                    ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+                }
+
+                var carriageReturn = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
+                var lineFeed = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
+                if (carriageReturn != '\r' || lineFeed != '\n')
+                    return (null, null, WebHttpRequestReadFailure.Malformed);
             }
-
-            if (output.Length + chunkSize > maximumBodyBytes)
-                return (null, WebHttpRequestReadFailure.BodyTooLarge);
-
-            var offset = checked((int)output.Length);
-            output.SetLength(offset + chunkSize);
-            if (!await reader.ReadExactlyAsync(output.GetBuffer().AsMemory(offset, chunkSize), cancellationToken).ConfigureAwait(false))
-                return (null, WebHttpRequestReadFailure.Malformed);
-
-            var carriageReturn = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
-            var lineFeed = await reader.ReadByteAsync(cancellationToken).ConfigureAwait(false);
-            if (carriageReturn != '\r' || lineFeed != '\n')
-                return (null, WebHttpRequestReadFailure.Malformed);
         }
+        finally
+        {
+            if (stagedBodyPath is not null && !completed)
+            {
+                try { File.Delete(stagedBodyPath); } catch { }
+            }
+        }
+    }
+
+    private static string CreateStagedBodyPath()
+        => Path.Combine(Path.GetTempPath(), $"radiovault-http-{Environment.ProcessId}-{Guid.NewGuid():N}.upload");
+
+    private static FileStream CreateStagedBodyStream(string path)
+        => new(path, FileMode.CreateNew, FileAccess.ReadWrite, FileShare.Read, 128 * 1024,
+            FileOptions.Asynchronous | FileOptions.SequentialScan);
+
+    private static async ValueTask<int> ReadWithInactivityTimeoutAsync(
+        Stream stream,
+        Memory<byte> destination,
+        TimeSpan inactivityTimeout,
+        CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(inactivityTimeout);
+        return await stream.ReadAsync(destination, timeout.Token).ConfigureAwait(false);
     }
 
     private sealed class PrefixedBodyReader
@@ -254,10 +393,13 @@ internal sealed class WebHttpRequestReader
         private int _networkOffset;
         private int _networkCount;
 
-        public PrefixedBodyReader(Stream stream, ReadOnlyMemory<byte> prefix)
+        private readonly TimeSpan _inactivityTimeout;
+
+        public PrefixedBodyReader(Stream stream, ReadOnlyMemory<byte> prefix, TimeSpan inactivityTimeout)
         {
             _stream = stream;
             _prefix = prefix;
+            _inactivityTimeout = inactivityTimeout;
         }
 
         public async Task<int> ReadByteAsync(CancellationToken cancellationToken)
@@ -265,7 +407,8 @@ internal sealed class WebHttpRequestReader
             if (_prefixOffset < _prefix.Length) return _prefix.Span[_prefixOffset++];
             if (_networkOffset >= _networkCount)
             {
-                _networkCount = await _stream.ReadAsync(_networkBuffer, cancellationToken).ConfigureAwait(false);
+                _networkCount = await ReadWithInactivityTimeoutAsync(
+                    _stream, _networkBuffer, _inactivityTimeout, cancellationToken).ConfigureAwait(false);
                 _networkOffset = 0;
                 if (_networkCount <= 0) return -1;
             }
@@ -293,7 +436,8 @@ internal sealed class WebHttpRequestReader
 
             while (written < destination.Length)
             {
-                var read = await _stream.ReadAsync(destination[written..], cancellationToken).ConfigureAwait(false);
+                var read = await ReadWithInactivityTimeoutAsync(
+                    _stream, destination[written..], _inactivityTimeout, cancellationToken).ConfigureAwait(false);
                 if (read <= 0) return false;
                 written += read;
             }

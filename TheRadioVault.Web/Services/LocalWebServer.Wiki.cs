@@ -14,7 +14,8 @@ public sealed partial class LocalWebServer
         try
         {
             var sourceName = ReadWikiFileName(request);
-            var result = await _archive.PreviewWikiPackAsync(request.Body, sourceName, cancellationToken).ConfigureAwait(false);
+            await using var packageStream = request.OpenBodyStream();
+            var result = await _archive.PreviewWikiPackAsync(packageStream, sourceName, cancellationToken).ConfigureAwait(false);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(new { apiVersion = WebApiRoutes.Version, result }, JsonOptions);
             await WriteBytesResponseAsync(stream, 200, "OK", bytes, "application/json; charset=utf-8", false,
                 cancellationToken, "Cache-Control: no-store\r\n").ConfigureAwait(false);
@@ -47,8 +48,9 @@ public sealed partial class LocalWebServer
                     "Preview this exact wiki pack before importing it.", diagnosticId, cancellationToken).ConfigureAwait(false);
                 return;
             }
+            await using var packageStream = request.OpenBodyStream();
             var result = await _archive.ApplyWikiPackAsync(
-                request.Body, ReadWikiFileName(request), expectedSha256, cancellationToken).ConfigureAwait(false);
+                packageStream, ReadWikiFileName(request), expectedSha256, cancellationToken).ConfigureAwait(false);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(new { apiVersion = WebApiRoutes.Version, result }, JsonOptions);
             await WriteBytesResponseAsync(stream, 200, "OK", bytes, "application/json; charset=utf-8", false,
                 cancellationToken, "Cache-Control: no-store\r\n").ConfigureAwait(false);

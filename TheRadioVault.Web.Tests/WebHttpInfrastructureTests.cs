@@ -15,6 +15,10 @@ internal static class WebHttpInfrastructureTests
     [
         ("HTTP reader parses a bounded fixed request", HttpReaderParsesBoundedFixedRequest),
         ("HTTP reader parses chunk extensions and trailers", HttpReaderParsesChunkExtensionsAndTrailers),
+        ("HTTP reader stages large fixed bodies outside managed memory", HttpReaderStagesLargeFixedBody),
+        ("HTTP reader stages chunked bodies outside managed memory", HttpReaderStagesChunkedBody),
+        ("HTTP reader renews the large-upload inactivity deadline", HttpReaderRenewsUploadDeadline),
+        ("HTTP reader removes a timed-out staged upload", HttpReaderRemovesTimedOutStagedUpload),
         ("HTTP reader rejects oversized bodies before allocation", HttpReaderRejectsOversizedBody),
         ("HTTP reader rejects oversized headers", HttpReaderRejectsOversizedHeader),
         ("HTTP reader rejects ambiguous message framing", HttpReaderRejectsAmbiguousFraming),
@@ -52,6 +56,77 @@ internal static class WebHttpInfrastructureTests
 
         Equal(WebHttpRequestReadFailure.None, result.Failure);
         Equal("Wikipedia", Encoding.ASCII.GetString(result.Request?.Body ?? []));
+    }
+
+    private static void HttpReaderStagesLargeFixedBody()
+    {
+        var requestBytes = Encoding.ASCII.GetBytes(
+            "POST /pack HTTP/1.1\r\nContent-Length: 12\r\n\r\nRadio Vault!");
+        using var stream = new MemoryStream(requestBytes);
+        var result = new WebHttpRequestReader(
+                _ => new WebHttpRequestBodyPolicy(64, TimeSpan.FromSeconds(1), StageToFile: true))
+            .ReadAsync(stream, CancellationToken.None).GetAwaiter().GetResult();
+
+        var request = result.Request ?? throw new InvalidOperationException("The staged request was not returned.");
+        True(request.IsBodyStaged);
+        var stagedPath = request.StagedBodyPath ?? throw new InvalidOperationException("The staged request has no temporary path.");
+        True(File.Exists(stagedPath));
+        Equal(12L, request.BodyLength);
+        Equal(0, request.Body.Length);
+        using (var body = request.OpenBodyStream())
+        using (var reader = new StreamReader(body, Encoding.ASCII))
+            Equal("Radio Vault!", reader.ReadToEnd());
+        request.Dispose();
+        True(!File.Exists(stagedPath), "Disposing a request did not remove its staged upload.");
+    }
+
+    private static void HttpReaderStagesChunkedBody()
+    {
+        var requestBytes = Encoding.ASCII.GetBytes(
+            "POST /pack HTTP/1.1\r\nTransfer-Encoding: chunked\r\n\r\n" +
+            "5\r\nRadio\r\n6\r\n Vault\r\n0\r\n\r\n");
+        using var stream = new MemoryStream(requestBytes);
+        var result = new WebHttpRequestReader(
+                _ => new WebHttpRequestBodyPolicy(64, TimeSpan.FromSeconds(1), StageToFile: true))
+            .ReadAsync(stream, CancellationToken.None).GetAwaiter().GetResult();
+
+        using var request = result.Request ?? throw new InvalidOperationException("The staged request was not returned.");
+        True(request.IsBodyStaged);
+        using var body = request.OpenBodyStream();
+        using var reader = new StreamReader(body, Encoding.ASCII);
+        Equal("Radio Vault", reader.ReadToEnd());
+    }
+
+    private static void HttpReaderRenewsUploadDeadline()
+    {
+        var requestBytes = Encoding.ASCII.GetBytes(
+            "POST /pack HTTP/1.1\r\nContent-Length: 6\r\n\r\nstream");
+        using var stream = new PacedReadStream(requestBytes, headerBytes: requestBytes.Length - 6);
+        var result = new WebHttpRequestReader(
+                _ => new WebHttpRequestBodyPolicy(64, TimeSpan.FromMilliseconds(35), StageToFile: true),
+                headerTimeout: TimeSpan.FromSeconds(1))
+            .ReadAsync(stream, CancellationToken.None).GetAwaiter().GetResult();
+
+        using var request = result.Request ?? throw new InvalidOperationException("The active upload timed out despite continuing to make progress.");
+        Equal(WebHttpRequestReadFailure.None, result.Failure);
+        Equal(6L, request.BodyLength);
+    }
+
+    private static void HttpReaderRemovesTimedOutStagedUpload()
+    {
+        var before = Directory.GetFiles(Path.GetTempPath(), "radiovault-http-*.upload").ToHashSet(StringComparer.Ordinal);
+        var prefix = Encoding.ASCII.GetBytes(
+            "POST /pack HTTP/1.1\r\nContent-Length: 6\r\n\r\nx");
+        using var stream = new StallingAfterBytesStream(prefix);
+        var result = new WebHttpRequestReader(
+                _ => new WebHttpRequestBodyPolicy(64, TimeSpan.FromMilliseconds(25), StageToFile: true),
+                headerTimeout: TimeSpan.FromSeconds(1))
+            .ReadAsync(stream, CancellationToken.None).GetAwaiter().GetResult();
+
+        Equal(WebHttpRequestReadFailure.TimedOut, result.Failure);
+        True(result.Request is null);
+        var after = Directory.GetFiles(Path.GetTempPath(), "radiovault-http-*.upload");
+        True(after.All(before.Contains), "A timed-out staged upload left a temporary file behind.");
     }
 
     private static void HttpReaderRejectsOversizedBody()
@@ -250,6 +325,35 @@ internal static class WebHttpInfrastructureTests
 
         public override async ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = default)
         {
+            await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+            return 0;
+        }
+    }
+
+    private sealed class PacedReadStream(byte[] bytes, int headerBytes) : MemoryStream(bytes)
+    {
+        private int _reads;
+
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (Position >= headerBytes)
+                await Task.Delay(15, cancellationToken).ConfigureAwait(false);
+            var maximum = Position < headerBytes ? (int)Math.Min(headerBytes - Position, buffer.Length) : 1;
+            _reads++;
+            return await base.ReadAsync(buffer[..Math.Max(1, maximum)], cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private sealed class StallingAfterBytesStream(byte[] bytes) : MemoryStream(bytes)
+    {
+        public override async ValueTask<int> ReadAsync(
+            Memory<byte> buffer,
+            CancellationToken cancellationToken = default)
+        {
+            if (Position < Length)
+                return await base.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
             await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
             return 0;
         }

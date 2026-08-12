@@ -183,20 +183,18 @@ internal sealed partial class WebArchiveProvider
     }
 
     public async Task<WebResearchPackPreviewResponse> PreviewResearchPackAsync(
-        byte[] packageBytes,
+        Stream packageStream,
         string sourceName,
         CancellationToken cancellationToken = default)
     {
-        ArgumentNullException.ThrowIfNull(packageBytes);
-        if (packageBytes.Length == 0) throw new InvalidDataException("The Archive Knowledge Database is empty.");
-        if (packageBytes.Length > MaximumResearchPackBytes)
-            throw new InvalidDataException($"Archive Knowledge Databases are limited to {MaximumResearchPackBytes / 1024 / 1024} MB for remote import.");
+        ArgumentNullException.ThrowIfNull(packageStream);
 
         ExpireResearchImportSessions();
         TrimResearchImportSessions();
         var safeSourceName = SafeResearchPackName(sourceName);
         var sessionId = Guid.NewGuid();
-        var sourcePath = WriteResearchImportSessionFile(sessionId, safeSourceName, packageBytes);
+        var sourcePath = await WriteResearchImportSessionFileAsync(
+            sessionId, safeSourceName, packageStream, cancellationToken).ConfigureAwait(false);
         return await PreviewStagedResearchPackAsync(sessionId, safeSourceName, sourcePath, cancellationToken).ConfigureAwait(false);
     }
 
@@ -481,13 +479,48 @@ internal sealed partial class WebArchiveProvider
     }
 
 
-    private static string WriteResearchImportSessionFile(Guid sessionId, string sourceName, byte[] bytes)
+    private static async Task<string> WriteResearchImportSessionFileAsync(
+        Guid sessionId,
+        string sourceName,
+        Stream source,
+        CancellationToken cancellationToken)
     {
+        if (!source.CanRead) throw new InvalidDataException("The Archive Knowledge Database cannot be read.");
+        if (source.CanSeek)
+        {
+            if (source.Length == 0) throw new InvalidDataException("The Archive Knowledge Database is empty.");
+            if (source.Length > MaximumResearchPackBytes)
+                throw new InvalidDataException($"Archive Knowledge Databases are limited to {MaximumResearchPackBytes / 1024 / 1024} MB for remote import.");
+            source.Position = 0;
+        }
         var sessionDirectory = Path.Combine(AppPaths.DataDirectory, "remote-research-imports", sessionId.ToString("N"));
         Directory.CreateDirectory(sessionDirectory);
         var path = Path.Combine(sessionDirectory, sourceName);
-        File.WriteAllBytes(path, bytes);
-        return path;
+        try
+        {
+            await using var destination = new FileStream(
+                path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024,
+                FileOptions.Asynchronous | FileOptions.SequentialScan);
+            var buffer = new byte[128 * 1024];
+            long written = 0;
+            while (true)
+            {
+                var read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+                if (read <= 0) break;
+                written += read;
+                if (written > MaximumResearchPackBytes)
+                    throw new InvalidDataException($"Archive Knowledge Databases are limited to {MaximumResearchPackBytes / 1024 / 1024} MB for remote import.");
+                await destination.WriteAsync(buffer.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+            }
+            if (written == 0) throw new InvalidDataException("The Archive Knowledge Database is empty.");
+            await destination.FlushAsync(cancellationToken).ConfigureAwait(false);
+            return path;
+        }
+        catch
+        {
+            DeleteResearchImportSessionFiles(path);
+            throw;
+        }
     }
 
     private static string CopyResearchImportSessionFile(Guid sessionId, string sourceName, string sourcePath)

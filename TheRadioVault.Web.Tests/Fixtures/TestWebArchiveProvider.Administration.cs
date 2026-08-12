@@ -131,7 +131,7 @@ internal sealed partial class TestWebArchiveProvider
             "browse" => Array.Empty<object>(),
             _ => null
         });
-    public Task<WebResearchPackPreviewResponse> PreviewResearchPackAsync(byte[] packageBytes, string sourceName, CancellationToken cancellationToken = default)
+    public Task<WebResearchPackPreviewResponse> PreviewResearchPackAsync(Stream packageStream, string sourceName, CancellationToken cancellationToken = default)
         => Task.FromResult(new WebResearchPackPreviewResponse(
             Guid.NewGuid(),
             new WebResearchPackPreview(
@@ -145,9 +145,9 @@ internal sealed partial class TestWebArchiveProvider
     public bool CancelResearchPackImport(Guid sessionId) => false;
     public Task<WebResearchPackExportPayload> ExportResearchPackAsync(CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
-    public Task<WebWikiPackPreview> PreviewWikiPackAsync(byte[] packageBytes, string sourceName, CancellationToken cancellationToken = default)
+    public Task<WebWikiPackPreview> PreviewWikiPackAsync(Stream packageStream, string sourceName, CancellationToken cancellationToken = default)
         => Task.FromResult(new WebWikiPackPreview(sourceName, "hash", 1, 1, 0, 0, 0, 1, 1, 1, 1, Array.Empty<string>(), true, "Ready", Array.Empty<WebWikiPackPageChangePreview>()));
-    public Task<WebWikiPackImportResult> ApplyWikiPackAsync(byte[] packageBytes, string sourceName, string expectedSha256, CancellationToken cancellationToken = default)
+    public Task<WebWikiPackImportResult> ApplyWikiPackAsync(Stream packageStream, string sourceName, string expectedSha256, CancellationToken cancellationToken = default)
         => Task.FromResult(new WebWikiPackImportResult(1, 0, 0, 0, 1, 1, 1, 1, 1, "Imported"));
     public Task<WebWikiPackExportPayload> ExportWikiPackAsync(CancellationToken cancellationToken = default)
         => Task.FromResult(new WebWikiPackExportPayload(Array.Empty<byte>(), "test.rvwiki", 0, 0));
@@ -162,4 +162,3 @@ internal sealed partial class TestWebArchiveProvider
     }
     private void AddChange(string kind, long episodeId) => _changes.Add(new WebChangeEvent(++_sequence, kind, episodeId, "test", DateTimeOffset.UtcNow));
 }
-

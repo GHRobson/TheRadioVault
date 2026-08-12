@@ -85,12 +85,21 @@ public sealed class WikiAuthoringPackService
     public WikiAuthoringSnapshot Import(byte[] packageBytes)
     {
         ArgumentNullException.ThrowIfNull(packageBytes);
-        if (packageBytes.Length == 0) throw new InvalidDataException("The wiki authoring pack is empty.");
-        if (packageBytes.Length > MaximumPackageBytes)
+        using var input = new MemoryStream(packageBytes, writable: false);
+        return Import(input);
+    }
+
+    public WikiAuthoringSnapshot Import(Stream packageStream)
+    {
+        ArgumentNullException.ThrowIfNull(packageStream);
+        if (!packageStream.CanRead || !packageStream.CanSeek)
+            throw new ArgumentException("The wiki authoring pack stream must be readable and seekable.", nameof(packageStream));
+        if (packageStream.Length == 0) throw new InvalidDataException("The wiki authoring pack is empty.");
+        if (packageStream.Length > MaximumPackageBytes)
             throw new InvalidDataException($"Wiki authoring packs are limited to {MaximumPackageBytes / 1024 / 1024} MB.");
 
-        using var input = new MemoryStream(packageBytes, writable: false);
-        using var archive = new ZipArchive(input, ZipArchiveMode.Read, leaveOpen: false);
+        packageStream.Position = 0;
+        using var archive = new ZipArchive(packageStream, ZipArchiveMode.Read, leaveOpen: true);
         if (archive.Entries.Count > MaximumEntries) throw new InvalidDataException("The wiki authoring pack contains too many files.");
         var byPath = new Dictionary<string, ZipArchiveEntry>(StringComparer.Ordinal);
         long expandedBytes = 0;

@@ -86,7 +86,19 @@ public sealed class LocalWebServerService : IDisposable
         byte[] bytes,
         string sourceName,
         CancellationToken cancellationToken = default)
-        => _provider.PreviewResearchPackAsync(bytes, sourceName, cancellationToken);
+    {
+        var stream = new MemoryStream(bytes, writable: false);
+        return PreviewAsync(stream, sourceName, cancellationToken);
+
+        async Task<WebResearchPackPreviewResponse> PreviewAsync(
+            Stream packageStream,
+            string name,
+            CancellationToken token)
+        {
+            await using var owned = packageStream;
+            return await _provider.PreviewResearchPackAsync(packageStream, name, token).ConfigureAwait(false);
+        }
+    }
     public Task<WebResearchPackPreviewResponse> PreviewResearchPackFileAsync(
         string filePath,
         string sourceName,

@@ -4123,7 +4123,10 @@ static void OfflineProgressOrderingPreservesNewerManualChanges()
     True(mobileSession.Contains("_playbackTimeline.IsCompleted()", StringComparison.Ordinal));
     True(mobileSession.Contains("changed || snapshot.IncrementPlayCount", StringComparison.Ordinal));
     var playAsync = mobileSession.IndexOf("public async Task PlayAsync", StringComparison.Ordinal);
-    var flushPrevious = mobileSession.IndexOf("await FlushPlaybackAsync().ConfigureAwait(false);", playAsync, StringComparison.Ordinal);
+    var flushPrevious = mobileSession.IndexOf(
+        "await FlushPlaybackAsync().WaitAsync(cancellationToken).ConfigureAwait(false);",
+        playAsync,
+        StringComparison.Ordinal);
     var selectNext = mobileSession.IndexOf("SelectedBroadcast = broadcast;", flushPrevious, StringComparison.Ordinal);
     True(flushPrevious >= 0 && selectNext > flushPrevious);
 
@@ -4225,7 +4228,8 @@ static void WikiAuthoringPacksRoundTripEvidence()
             True(archive.GetEntry($"pages/{pageId:D}.md") is not null);
             True(archive.GetEntry(WikiAuthoringPackService.ImageArchivePath(image)) is not null);
         }
-        var imported = packService.Import(bytes);
+        using var packageStream = new MemoryStream(bytes, writable: false);
+        var imported = packService.Import(packageStream);
         Equal(1, imported.Sources.Count);
         Equal(1, imported.Images.Count);
         Equal(1, imported.TimelineEvents.Count);

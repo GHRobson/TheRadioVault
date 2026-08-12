@@ -62,13 +62,13 @@ public interface IWebArchiveProvider
     WebResearchCoverageShow? GetResearchCoverage(int collectionId);
     WebResearchCoverageShow? GetResearchCoverageByShow(string show);
     WebPlaybackPreferencesSnapshot SetPlaybackPreferences(WebPlaybackPreferencesSnapshot preferences);
-    Task<WebResearchPackPreviewResponse> PreviewResearchPackAsync(byte[] packageBytes, string sourceName, CancellationToken cancellationToken = default);
+    Task<WebResearchPackPreviewResponse> PreviewResearchPackAsync(Stream packageStream, string sourceName, CancellationToken cancellationToken = default);
     WebResearchPackImportJob StartResearchPackImport(Guid sessionId);
     WebResearchPackImportJob GetResearchPackImportStatus(Guid sessionId);
     bool CancelResearchPackImport(Guid sessionId);
     Task<WebResearchPackExportPayload> ExportResearchPackAsync(CancellationToken cancellationToken = default);
-    Task<WebWikiPackPreview> PreviewWikiPackAsync(byte[] packageBytes, string sourceName, CancellationToken cancellationToken = default);
-    Task<WebWikiPackImportResult> ApplyWikiPackAsync(byte[] packageBytes, string sourceName, string expectedSha256, CancellationToken cancellationToken = default);
+    Task<WebWikiPackPreview> PreviewWikiPackAsync(Stream packageStream, string sourceName, CancellationToken cancellationToken = default);
+    Task<WebWikiPackImportResult> ApplyWikiPackAsync(Stream packageStream, string sourceName, string expectedSha256, CancellationToken cancellationToken = default);
     Task<WebWikiPackExportPayload> ExportWikiPackAsync(CancellationToken cancellationToken = default);
 }
 

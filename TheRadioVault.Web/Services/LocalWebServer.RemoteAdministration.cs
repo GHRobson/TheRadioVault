@@ -123,7 +123,8 @@ public sealed partial class LocalWebServer
             var sourceName = request.Headers.TryGetValue("X-Radio-Vault-File-Name", out var rawName)
                 ? Uri.UnescapeDataString(rawName)
                 : "remote-research.trvpack";
-            var result = await _archive.PreviewResearchPackAsync(request.Body, sourceName, cancellationToken).ConfigureAwait(false);
+            await using var packageStream = request.OpenBodyStream();
+            var result = await _archive.PreviewResearchPackAsync(packageStream, sourceName, cancellationToken).ConfigureAwait(false);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 apiVersion = WebApiRoutes.Version,

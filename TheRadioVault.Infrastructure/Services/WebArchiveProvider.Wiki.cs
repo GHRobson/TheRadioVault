@@ -82,13 +82,14 @@ internal sealed partial class WebArchiveProvider
     }
 
     public async Task<WebWikiPackPreview> PreviewWikiPackAsync(
-        byte[] packageBytes,
+        Stream packageStream,
         string sourceName,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(packageStream);
         var transfer = new WikiAuthoringPackService();
-        var snapshot = transfer.Import(packageBytes);
-        var hash = WikiAuthoringPackService.Sha256(packageBytes);
+        var hash = await HashSeekablePackageAsync(packageStream, cancellationToken).ConfigureAwait(false);
+        var snapshot = transfer.Import(packageStream);
         var preview = await new WikiService(_database.PlatformDatabase)
             .PreviewImportAsync(snapshot, SafePackageName(sourceName), hash, cancellationToken)
             .ConfigureAwait(false);
@@ -96,19 +97,20 @@ internal sealed partial class WebArchiveProvider
     }
 
     public async Task<WebWikiPackImportResult> ApplyWikiPackAsync(
-        byte[] packageBytes,
+        Stream packageStream,
         string sourceName,
         string expectedSha256,
         CancellationToken cancellationToken = default)
     {
-        var hash = WikiAuthoringPackService.Sha256(packageBytes);
+        ArgumentNullException.ThrowIfNull(packageStream);
+        var hash = await HashSeekablePackageAsync(packageStream, cancellationToken).ConfigureAwait(false);
         if (string.IsNullOrWhiteSpace(expectedSha256) ||
             !CryptographicOperations.FixedTimeEquals(
                 Encoding.ASCII.GetBytes(hash),
                 Encoding.ASCII.GetBytes(expectedSha256.Trim().ToLowerInvariant())))
             throw new InvalidDataException("The wiki pack changed after it was previewed. Preview it again before importing.");
 
-        var snapshot = new WikiAuthoringPackService().Import(packageBytes);
+        var snapshot = new WikiAuthoringPackService().Import(packageStream);
         var result = await new WikiService(_database.PlatformDatabase)
             .ApplyImportAsync(snapshot, SafePackageName(sourceName), hash, cancellationToken)
             .ConfigureAwait(false);
@@ -145,6 +147,20 @@ internal sealed partial class WebArchiveProvider
     {
         var name = Path.GetFileName(sourceName ?? string.Empty);
         return string.IsNullOrWhiteSpace(name) ? "RadioVault-Wiki.rvwiki" : name;
+    }
+
+    private static async Task<string> HashSeekablePackageAsync(
+        Stream packageStream,
+        CancellationToken cancellationToken)
+    {
+        if (!packageStream.CanRead || !packageStream.CanSeek)
+            throw new InvalidDataException("The staged wiki authoring pack is not seekable.");
+        packageStream.Position = 0;
+        var hash = Convert.ToHexString(
+            await SHA256.HashDataAsync(packageStream, cancellationToken).ConfigureAwait(false))
+            .ToLowerInvariant();
+        packageStream.Position = 0;
+        return hash;
     }
 
     private sealed record WikiPageRequest(Guid PageId);
