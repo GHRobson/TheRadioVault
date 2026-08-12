@@ -16,4 +16,7 @@
     <Compile Remove="Models\WebModels.cs" />
     <ProjectReference Include="..\TheRadioVault.Protocol\TheRadioVault.Protocol.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TheRadioVault.Web.Tests" />
+  </ItemGroup>
 </Project>
