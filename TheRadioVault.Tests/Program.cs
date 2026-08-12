@@ -337,7 +337,6 @@ var tests = new (string Name, Action Run)[]
     ("Whisper configuration exposes model capabilities", WhisperConfigurationExposesModelCapabilities),
     ("Multi-speaker diarization splits timed transcript turns", MultiSpeakerDiarizationSplitsTimedTranscriptTurns),
     ("Whisper settings persist for the live desktop engine", WhisperSettingsPersistForLiveDesktopEngine),
-    ("In-app transcription setup installs official assets safely", InAppTranscriptionSetupInstallsOfficialAssetsSafely),
     ("Transcription ranges have stable display text", TranscriptionRangesHaveStableDisplayText),
     ("Long-form transcription protects continuity and timestamps", LongFormTranscriptionProtectsContinuityAndTimestamps),
     ("Dedicated server foundation is UI-isolated and revision-safe", DedicatedServerFoundationIsUiIsolatedAndRevisionSafe),
@@ -5499,36 +5498,6 @@ static void WhisperSettingsPersistForLiveDesktopEngine()
     }
 }
 
-static void InAppTranscriptionSetupInstallsOfficialAssetsSafely()
-{
-    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(directory);
-    try
-    {
-        using var handler = new FakeWhisperDownloadHandler();
-        using var downloads = new WhisperDownloadService(directory, handler);
-        var worker = downloads.InstallLatestWindowsWorkerAsync().GetAwaiter().GetResult();
-        True(File.Exists(worker.ExecutablePath));
-        Equal("v-test", worker.Version);
-        True(File.Exists(Path.Combine(Path.GetDirectoryName(worker.ExecutablePath)!, "whisper.dll")));
-
-        var model = downloads.DownloadModelAsync(new WhisperModelCatalogItem(
-            "test", "Test model", "ggml-test.bin",
-            "https://huggingface.co/ggml-org/test/resolve/main/ggml-test.bin", 1024)).GetAwaiter().GetResult();
-        True(File.Exists(model));
-        Equal(1024L, new FileInfo(model).Length);
-
-        var vad = downloads.DownloadVadModelAsync().GetAwaiter().GetResult();
-        True(File.Exists(vad));
-        Equal(WhisperDownloadService.VadFileName, Path.GetFileName(vad));
-        True(handler.ReleaseRequested && handler.WorkerRequested && handler.ModelRequested && handler.VadRequested);
-    }
-    finally
-    {
-        try { Directory.Delete(directory, true); } catch { }
-    }
-}
-
 static void TranscriptionRangesHaveStableDisplayText()
 {
     Equal("Full broadcast", new TranscriptionJobOptions().RangeDisplay);
@@ -6957,77 +6926,4 @@ sealed class FakePlaybackEngine : IPlaybackEngine
         Status, IsPlaying, Position, Duration, Volume, Speed, MediaPath));
 
     public void Dispose() => Disposed = true;
-}
-
-sealed class FakeWhisperDownloadHandler : HttpMessageHandler
-{
-    private readonly byte[] _workerArchive;
-    private readonly string _workerDigest;
-
-    public FakeWhisperDownloadHandler()
-    {
-        using var stream = new MemoryStream();
-        using (var archive = new System.IO.Compression.ZipArchive(stream, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
-        {
-            WriteEntry(archive, "Release/whisper-cli.exe", new byte[] { 1, 2, 3, 4 });
-            WriteEntry(archive, "Release/whisper.dll", new byte[] { 5, 6, 7, 8 });
-        }
-        _workerArchive = stream.ToArray();
-        _workerDigest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(_workerArchive)).ToLowerInvariant();
-    }
-
-    public bool ReleaseRequested { get; private set; }
-    public bool WorkerRequested { get; private set; }
-    public bool ModelRequested { get; private set; }
-    public bool VadRequested { get; private set; }
-
-    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
-    {
-        var uri = request.RequestUri ?? throw new InvalidOperationException("A request URI is required.");
-        if (uri.Host == "api.github.com")
-        {
-            ReleaseRequested = true;
-            var json = System.Text.Json.JsonSerializer.Serialize(new
-            {
-                tag_name = "v-test",
-                assets = new[]
-                {
-                    new
-                    {
-                        name = "whisper-bin-x64.zip",
-                        browser_download_url = "https://github.com/ggml-org/whisper.cpp/releases/download/v-test/worker.zip",
-                        digest = $"sha256:{_workerDigest}",
-                        size = _workerArchive.Length
-                    }
-                }
-            });
-            return Task.FromResult(Response(new StringContent(json, Encoding.UTF8, "application/json")));
-        }
-        if (uri.Host == "github.com")
-        {
-            WorkerRequested = true;
-            return Task.FromResult(Response(new ByteArrayContent(_workerArchive)));
-        }
-        if (uri.Host == "huggingface.co" && uri.AbsolutePath.Contains("whisper-vad", StringComparison.OrdinalIgnoreCase))
-        {
-            VadRequested = true;
-            return Task.FromResult(Response(new ByteArrayContent(Enumerable.Repeat((byte)9, 512).ToArray())));
-        }
-        if (uri.Host == "huggingface.co")
-        {
-            ModelRequested = true;
-            return Task.FromResult(Response(new ByteArrayContent(Enumerable.Repeat((byte)10, 1024).ToArray())));
-        }
-        return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
-    }
-
-    private static HttpResponseMessage Response(HttpContent content)
-        => new(System.Net.HttpStatusCode.OK) { Content = content };
-
-    private static void WriteEntry(System.IO.Compression.ZipArchive archive, string path, byte[] contents)
-    {
-        var entry = archive.CreateEntry(path);
-        using var target = entry.Open();
-        target.Write(contents);
-    }
 }

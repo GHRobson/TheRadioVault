@@ -20,6 +20,8 @@
 | `TheRadioVault` | Current WPF composition root and presentation | Windows-only |
 | `TheRadioVault.Tests` | Cross-platform capability/regression console suite | Neutral |
 | `TheRadioVault.Web.Tests` | Compiled Web query, HTTP/server, embedded-asset and playback-transfer behaviour | Neutral; Web only |
+| `TheRadioVault.Data.Tests` | Compiled database seed, schema, upgrade and migration behaviour | Neutral; Core and Data only |
+| `TheRadioVault.Transcription.Tests` | Compiled transcription download, timeout, cleanup and asset-installation behaviour | Neutral; Transcription only |
 | `TheRadioVault.SourceChecks` | Dependency-free source, route-order and packaging boundary checks | Neutral |
 
 ## Rules
@@ -116,7 +118,7 @@ The resolver must not consume specialised client, playback, queue or media paths
 
 ## 0.44 test-runner boundary
 
-`TheRadioVault.Tests` remains the broad capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.Web.Tests` references only `TheRadioVault.Web` and owns Web query/model contracts, declarative route resolution, canonical routes, live HTTP behavior, server lifecycle, embedded assets and transactional playback integration. Its 93 checks use focused API, routing, infrastructure, playback, shell and media groups plus reusable server, source-tree and archive-provider fixtures. `TheRadioVault.Data.Tests` references only Core and Data and owns database seed, latest-schema, legacy-upgrade, pre-upgrade backup and numbered-migration behavior through eight compiled checks with reusable declarative schema assertions. Both suites are release-gated. Migrated tests must be removed from the broad runner rather than duplicated.
+`TheRadioVault.Tests` remains the broad capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.Web.Tests` references only `TheRadioVault.Web` and owns Web query/model contracts, declarative route resolution, canonical routes, live HTTP behavior, server lifecycle, embedded assets and transactional playback integration. Its 93 checks use focused API, routing, infrastructure, playback, shell and media groups plus reusable server, source-tree and archive-provider fixtures. `TheRadioVault.Data.Tests` references only Core and Data and owns database seed, latest-schema, legacy-upgrade, pre-upgrade backup and numbered-migration behavior through eight compiled checks with reusable declarative schema assertions. `TheRadioVault.Transcription.Tests` references the Transcription subsystem and owns official-asset installation plus network progress, timeout, cancellation, cleanup and retry behavior. All three focused suites are release-gated. Migrated tests must be removed from the broad runner rather than duplicated.
 
 ## 0.44 SQLite migration boundary
 
@@ -124,10 +126,16 @@ The resolver must not consume specialised client, playback, queue or media paths
 
 `TheRadioVault.SourceChecks` is the dependency-free home for deliberate source-text, route-order, packaging and presentation-marker inspections. A test that can exercise compiled behavior must not be added to SourceChecks merely because text inspection is easier.
 
+## 0.44 transcription download boundary
+
+`WhisperDownloadService` keeps the `HttpClient` total timeout disabled because official model downloads can legitimately take a long time. `WhisperDownloadPolicy` instead sets a renewable inactivity deadline for response headers and every streamed read. Any received data starts a fresh deadline, so an active download may run for hours without being mistaken for a timeout. A stalled transfer raises `WhisperDownloadTimeoutException` with retry guidance, while caller cancellation remains `OperationCanceledException`. Temporary worker archives and model files must remain hidden behind `.download` names and be deleted after cancellation, timeout or verification failure.
+
+The dedicated Transcription runner proves that long active transfers succeed, header and body stalls time out, caller cancellation stays distinct, incomplete files are removed, retries succeed and official assets still install safely. This policy must be reused rather than replaced with an arbitrary whole-download timeout.
+
 ## 0.44 web HTTP infrastructure boundary
 
 `WebHttpRequestReader` owns HTTP/1.x request framing, bounded header and body reads, fixed-length and chunked transfer decoding, framing validation and request timeouts. `LocalWebServer` supplies the route-sensitive body-size and timeout policy, then translates the reader's explicit malformed, timeout, header-limit and body-limit outcomes into HTTP responses. The reader rejects ambiguous `Content-Length` plus `Transfer-Encoding` requests and oversized payloads before allocating their declared body size.
 
 `WebHttpResponseWriter` owns common response framing, security headers, HEAD behavior and redirect sanitisation. `LocalWebServer` retains small forwarding helpers so focused route partials do not depend directly on infrastructure implementation details. Request parsing or common response framing must not be added back to the server coordinator. Live-server fixtures bind port zero and read the OS-assigned port from `LocalWebServer.Port`; tests must not reintroduce a probe-and-release free-port race.
 
-All three runners are required by the complete Windows release gate. The local macOS gate and hosted macOS and Linux jobs run the complete Web suite; the iOS job runs the portable transactional subset alongside its device architecture checks. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.
+All four shared runners are required by the complete Windows release gate. The local macOS gate and hosted macOS and Linux jobs run the complete Data, Transcription and Web suites; the iOS job runs the portable transactional subset alongside its device architecture checks. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.

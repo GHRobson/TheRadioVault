@@ -9,9 +9,42 @@ public sealed record WhisperDownloadProgress(string Stage, double? Percent, stri
 public sealed record WhisperWorkerInstallResult(string ExecutablePath, string Version);
 public sealed record DiarizationModelInstallResult(string SegmentationModelPath, string EmbeddingModelPath);
 
+public sealed record WhisperDownloadPolicy
+{
+    public static WhisperDownloadPolicy Default { get; } = new(TimeSpan.FromSeconds(90));
+
+    public WhisperDownloadPolicy(TimeSpan inactivityTimeout)
+    {
+        if (inactivityTimeout <= TimeSpan.Zero || inactivityTimeout.TotalMilliseconds > uint.MaxValue - 1)
+            throw new ArgumentOutOfRangeException(nameof(inactivityTimeout), "The download inactivity timeout must be positive and no longer than 49 days.");
+        InactivityTimeout = inactivityTimeout;
+    }
+
+    public TimeSpan InactivityTimeout { get; }
+}
+
+public sealed class WhisperDownloadTimeoutException : TimeoutException
+{
+    public WhisperDownloadTimeoutException(string stage, TimeSpan inactivityTimeout, Exception innerException)
+        : base($"The {stage.ToLowerInvariant()} download stopped making progress for {FormatDuration(inactivityTimeout)}. Check the connection and try again.", innerException)
+    {
+        Stage = stage;
+        InactivityTimeout = inactivityTimeout;
+    }
+
+    public string Stage { get; }
+    public TimeSpan InactivityTimeout { get; }
+
+    private static string FormatDuration(TimeSpan value)
+        => value.TotalSeconds >= 1
+            ? $"{value.TotalSeconds:0.#} seconds"
+            : $"{value.TotalMilliseconds:0} milliseconds";
+}
+
 public sealed class WhisperDownloadService : IDisposable
 {
     private static readonly Uri LatestReleaseUri = new("https://api.github.com/repos/ggml-org/whisper.cpp/releases/latest");
+    private const int MaximumReleaseMetadataBytes = 1024 * 1024;
     public const string VadFileName = "ggml-silero-v6.2.0.bin";
     public const string VadDownloadUrl = "https://huggingface.co/ggml-org/whisper-vad/resolve/main/ggml-silero-v6.2.0.bin";
     public const string DiarizationSegmentationFileName = "sherpa-pyannote-segmentation-3.0-int8.onnx";
@@ -23,12 +56,17 @@ public sealed class WhisperDownloadService : IDisposable
     public const string DiarizationEmbeddingSha256 = "ad4a1802485d8b34c722d2a9d04249662f2ece5d28a7a039063ca22f515a789e";
     private readonly HttpClient _http;
     private readonly string _root;
+    private readonly WhisperDownloadPolicy _downloadPolicy;
     private bool _disposed;
 
-    public WhisperDownloadService(string rootDirectory, HttpMessageHandler? handler = null)
+    public WhisperDownloadService(
+        string rootDirectory,
+        HttpMessageHandler? handler = null,
+        WhisperDownloadPolicy? downloadPolicy = null)
     {
         if (string.IsNullOrWhiteSpace(rootDirectory)) throw new ArgumentException("A transcription directory is required.", nameof(rootDirectory));
         _root = Path.GetFullPath(rootDirectory);
+        _downloadPolicy = downloadPolicy ?? WhisperDownloadPolicy.Default;
         _http = handler is null ? new HttpClient() : new HttpClient(handler, disposeHandler: true);
         _http.DefaultRequestHeaders.UserAgent.ParseAdd("RadioVault/0.33");
         _http.Timeout = Timeout.InfiniteTimeSpan;
@@ -39,10 +77,16 @@ public sealed class WhisperDownloadService : IDisposable
         CancellationToken cancellationToken = default)
     {
         progress?.Report(new WhisperDownloadProgress("Worker", null, "Checking the latest stable whisper.cpp release…"));
-        using var releaseResponse = await _http.GetAsync(LatestReleaseUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        using var releaseResponse = await RunNetworkOperationAsync(
+            "Worker",
+            token => _http.GetAsync(LatestReleaseUri, HttpCompletionOption.ResponseHeadersRead, token),
+            cancellationToken).ConfigureAwait(false);
         releaseResponse.EnsureSuccessStatusCode();
-        await using var releaseStream = await releaseResponse.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var release = await JsonDocument.ParseAsync(releaseStream, cancellationToken: cancellationToken).ConfigureAwait(false);
+        await using var releaseStream = await RunNetworkOperationAsync(
+            "Worker",
+            token => releaseResponse.Content.ReadAsStreamAsync(token),
+            cancellationToken).ConfigureAwait(false);
+        using var release = await ReadReleaseMetadataAsync(releaseStream, cancellationToken).ConfigureAwait(false);
         var root = release.RootElement;
         var version = root.TryGetProperty("tag_name", out var tag) ? tag.GetString() ?? "latest" : "latest";
         if (!root.TryGetProperty("assets", out var assets) || assets.ValueKind != JsonValueKind.Array)
@@ -196,17 +240,26 @@ public sealed class WhisperDownloadService : IDisposable
         IProgress<WhisperDownloadProgress>? progress,
         CancellationToken cancellationToken)
     {
-        using var response = await _http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
+        using var response = await RunNetworkOperationAsync(
+            stage,
+            token => _http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, token),
+            cancellationToken).ConfigureAwait(false);
         response.EnsureSuccessStatusCode();
         var total = response.Content.Headers.ContentLength ?? expectedBytes;
         if (total > maximumBytes) throw new InvalidDataException($"The {stage.ToLowerInvariant()} download is unexpectedly large.");
-        await using var source = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        await using var source = await RunNetworkOperationAsync(
+            stage,
+            token => response.Content.ReadAsStreamAsync(token),
+            cancellationToken).ConfigureAwait(false);
         await using var target = new FileStream(destination, FileMode.CreateNew, FileAccess.Write, FileShare.None, 128 * 1024, useAsync: true);
         var buffer = new byte[128 * 1024];
         long copied = 0;
         while (true)
         {
-            var read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false);
+            var read = await RunNetworkOperationAsync(
+                stage,
+                token => source.ReadAsync(buffer.AsMemory(), token).AsTask(),
+                cancellationToken).ConfigureAwait(false);
             if (read == 0) break;
             copied += read;
             if (copied > maximumBytes) throw new InvalidDataException($"The {stage.ToLowerInvariant()} download exceeded its safety limit.");
@@ -217,6 +270,47 @@ public sealed class WhisperDownloadService : IDisposable
         await target.FlushAsync(cancellationToken).ConfigureAwait(false);
         if (expectedBytes > 0 && copied < expectedBytes * 0.75)
             throw new InvalidDataException($"The downloaded {stage.ToLowerInvariant()} file is smaller than expected.");
+    }
+
+    private async Task<T> RunNetworkOperationAsync<T>(
+        string stage,
+        Func<CancellationToken, Task<T>> operation,
+        CancellationToken cancellationToken)
+    {
+        using var inactivityCancellation = new CancellationTokenSource(_downloadPolicy.InactivityTimeout);
+        using var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
+            cancellationToken,
+            inactivityCancellation.Token);
+        try
+        {
+            return await operation(linkedCancellation.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception)
+            when (!cancellationToken.IsCancellationRequested && inactivityCancellation.IsCancellationRequested)
+        {
+            throw new WhisperDownloadTimeoutException(stage, _downloadPolicy.InactivityTimeout, exception);
+        }
+    }
+
+    private async Task<JsonDocument> ReadReleaseMetadataAsync(
+        Stream source,
+        CancellationToken cancellationToken)
+    {
+        using var buffer = new MemoryStream();
+        var chunk = new byte[16 * 1024];
+        while (true)
+        {
+            var read = await RunNetworkOperationAsync(
+                "Worker",
+                token => source.ReadAsync(chunk.AsMemory(), token).AsTask(),
+                cancellationToken).ConfigureAwait(false);
+            if (read == 0) break;
+            if (buffer.Length + read > MaximumReleaseMetadataBytes)
+                throw new InvalidDataException("The whisper.cpp release metadata is unexpectedly large.");
+            await buffer.WriteAsync(chunk.AsMemory(0, read), cancellationToken).ConfigureAwait(false);
+        }
+        buffer.Position = 0;
+        return await JsonDocument.ParseAsync(buffer, cancellationToken: cancellationToken).ConfigureAwait(false);
     }
 
     private static void ExtractArchiveSafely(string archivePath, string destination)

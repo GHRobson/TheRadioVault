@@ -5,6 +5,7 @@ $project = Join-Path $root "TheRadioVault.Desktop.Avalonia\TheRadioVault.Desktop
 $solution = Join-Path $root "TheRadioVault.sln"
 $tests = Join-Path $root "TheRadioVault.Tests\TheRadioVault.Tests.csproj"
 $dataTests = Join-Path $root "TheRadioVault.Data.Tests\TheRadioVault.Data.Tests.csproj"
+$transcriptionTests = Join-Path $root "TheRadioVault.Transcription.Tests\TheRadioVault.Transcription.Tests.csproj"
 $webTests = Join-Path $root "TheRadioVault.Web.Tests\TheRadioVault.Web.Tests.csproj"
 $sourceChecks = Join-Path $root "TheRadioVault.SourceChecks\TheRadioVault.SourceChecks.csproj"
 
@@ -24,6 +25,8 @@ dotnet run --project $tests -c Release --no-build
 if ($LASTEXITCODE -ne 0) { throw "One or more Radio Vault smoke tests failed." }
 dotnet run --project $dataTests -c Release --no-build
 if ($LASTEXITCODE -ne 0) { throw "One or more Radio Vault data tests failed." }
+dotnet run --project $transcriptionTests -c Release --no-build
+if ($LASTEXITCODE -ne 0) { throw "One or more Radio Vault transcription tests failed." }
 dotnet run --project $webTests -c Release --no-build
 if ($LASTEXITCODE -ne 0) { throw "One or more Radio Vault Web behavioral tests failed." }
 dotnet run --project $sourceChecks -c Release --no-build

@@ -141,6 +141,8 @@ fi
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 "$DOTNET_EXE" build "$ROOT/TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj" \
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
+"$DOTNET_EXE" build "$ROOT/TheRadioVault.Transcription.Tests/TheRadioVault.Transcription.Tests.csproj" \
+  -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 "$DOTNET_EXE" build "$ROOT/TheRadioVault.Web.Tests/TheRadioVault.Web.Tests.csproj" \
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 "$DOTNET_EXE" build "$ROOT/TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj" \
@@ -159,6 +161,9 @@ fi
   "Repeated iPhone handoffs bypass dormant decoder gating"
 
 "$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj" \
+  -c "$CONFIGURATION" --no-build
+
+"$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Transcription.Tests/TheRadioVault.Transcription.Tests.csproj" \
   -c "$CONFIGURATION" --no-build
 
 "$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Web.Tests/TheRadioVault.Web.Tests.csproj" \
