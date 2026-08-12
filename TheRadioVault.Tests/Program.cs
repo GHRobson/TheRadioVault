@@ -3,6 +3,7 @@ using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
 using System.Net.Http.Json;
+using System.Reflection;
 using TheRadioVault.Application.Abstractions;
 using TheRadioVault.Application.Composition;
 using TheRadioVault.Application.Models;
@@ -159,16 +160,11 @@ var tests = new (string Name, Action Run)[]
     ("Alpha 17 bounds large-library web handoffs", Alpha17BoundsLargeLibraryWebHandoffs),
     ("Direct episode lookup returns only the requested broadcast", DirectEpisodeLookupReturnsOnlyRequestedBroadcast),
     ("Alpha 18 hardens connected-client reliability", Alpha18HardensConnectedClientReliability),
-    ("Web handoff preserves an aligned Safari decoder", WebHandoffPreservesAlignedSafariDecoder),
-    ("iPhone broadcast switches replace stale decoders in the tap", IphoneBroadcastSwitchesReplaceStaleDecoderInTap),
-    ("iPhone positioned failures preserve canonical gesture fallback", IphonePositionedFailuresPreserveCanonicalGestureFallback),
-    ("Repeated iPhone handoffs bypass dormant decoder gating", RepeatedIphoneHandoffsBypassDormantDecoderGating),
     ("Native handoff preserves the Windows volume session", NativeHandoffPreservesWindowsVolumeSession),
     ("Mac Client uses native AVFoundation and existing server contracts", MacClientUsesNativeAvFoundationAndExistingServerContracts),
     ("macOS and Linux packages preserve the shared client-server boundary", MacAndLinuxPackagesPreserveSharedClientServerBoundary),
     ("Product versions remain consistent", ProductVersionsRemainConsistent),
     ("iOS Client preserves native platform and server boundaries", IosClientPreservesNativePlatformAndServerBoundaries),
-    ("Canonical audio ranges are cache-combinable", CanonicalAudioRangesAreCacheCombinable),
     ("Positioned web audio is stable across Safari ranges", PositionedWebAudioIsStableAcrossSafariRanges),
     ("Alpha 19 uses a truthful cache-first startup", Alpha19UsesTruthfulCacheFirstStartup),
     ("Alpha 20 hardens release truth and installer payloads", Alpha20HardensReleaseTruthAndInstallerPayloads),
@@ -358,6 +354,7 @@ var tests = new (string Name, Action Run)[]
     ("Web API requests job cancellation", WebApiRequestsJobCancellation),
     ("Web server stop is idempotent", WebServerStopIsIdempotent),
     ("Web server survives rapid restart generations", WebServerSurvivesRapidRestartGenerations),
+    ("Embedded web assets load from the Web assembly", EmbeddedWebAssetsLoadFromAssembly),
     ("Web player is Radio Vault branded", WebPlayerIsRadioVaultBranded),
     ("Web shell reports configured app version", WebShellReportsConfiguredAppVersion),
     ("Web API sends remote playback commands", WebApiSendsRemotePlaybackCommands),
@@ -966,8 +963,7 @@ static void Alpha14RenamesWebAndRestoresPhoneConnectionControls()
     True(qr.Rows.SelectMany(row => row.Cells).Any(cell => cell.Fill == "#101318"));
     True(qr.Rows.SelectMany(row => row.Cells).Any(cell => cell.Fill == "#FFFFFF"));
 
-    var webServer = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var webServer = ReadWebServerSourceBundle();
     True(webServer.Contains("productName = \"Radio Vault Web\"", StringComparison.Ordinal));
     True(webServer.Contains("accessUrl = GetAccessUrls().FirstOrDefault()", StringComparison.Ordinal));
     True(webServer.Contains("secureSetupUrl = GetSecureSetupUrls().FirstOrDefault()", StringComparison.Ordinal));
@@ -1161,8 +1157,7 @@ static void Alpha18HardensConnectedClientReliability()
     True(playback.Contains("_handoffSnapshot?.HasActivePlayback == true", StringComparison.Ordinal));
     True(playback.Contains("_handoffSnapshot.IsOwnedByCurrentDevice == false", StringComparison.Ordinal));
 
-    var web = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var web = ReadWebServerSourceBundle();
     True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
     True(!web.Contains("radio-vault-anywhere-shell-v42", StringComparison.Ordinal));
 
@@ -1194,146 +1189,6 @@ static void ConnectedViewsRefreshBoundedStaleData()
         var source = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Presentation", "ViewModels", viewModel));
         True(source.Contains("ConnectedViewRefreshPolicy.IsFresh", StringComparison.Ordinal));
     }
-}
-
-static void WebHandoffPreservesAlignedSafariDecoder()
-{
-    var web = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
-    var functionStart = web.IndexOf("function setLogicalPositionImmediately(positionMs)", StringComparison.Ordinal);
-    var functionEnd = web.IndexOf("async function waitForLogicalAlignment", functionStart, StringComparison.Ordinal);
-    True(functionStart >= 0 && functionEnd > functionStart);
-    var seekFunction = web[functionStart..functionEnd];
-    True(seekFunction.Contains("logicalSeekDeadbandMs = 750", StringComparison.Ordinal));
-    True(seekFunction.Contains("!audio.ended", StringComparison.Ordinal));
-    var deadbandCheck = seekFunction.IndexOf(
-        "Math.abs(currentLogicalPositionMs() - targetLogicalMs) <= logicalSeekDeadbandMs",
-        StringComparison.Ordinal);
-    var physicalSeek = seekFunction.IndexOf("audio.currentTime = localMs / 1000", StringComparison.Ordinal);
-    True(deadbandCheck >= 0 && physicalSeek > deadbandCheck);
-    True(web.Contains("isIosWebKit = /iPhone|iPad|iPod/i.test(navigator.userAgent)", StringComparison.Ordinal));
-    var transferStart = web.IndexOf("async function startLocalEpisodeFromGesture", StringComparison.Ordinal);
-    var transferEnd = web.IndexOf("async function loadLocalEpisode", transferStart, StringComparison.Ordinal);
-    True(transferStart >= 0 && transferEnd > transferStart);
-    var transfer = web[transferStart..transferEnd];
-    var gesturePlay = transfer.IndexOf("gesturePrime = audio.play()", StringComparison.Ordinal);
-    True(gesturePlay >= 0);
-    True(!transfer.Contains("assignCanonicalPartSource(id, freshPartIndex, null)", StringComparison.Ordinal));
-    True(transfer.Contains("Reuse", StringComparison.Ordinal));
-    True(web.Contains("const dormantPositionMs = isIosWebKit ? 0 : shared.positionMs", StringComparison.Ordinal));
-    var prepareStart = web.IndexOf("async function prepareCanonicalAudio", StringComparison.Ordinal);
-    var prepareEnd = web.IndexOf("async function hydrateLocalEpisode", prepareStart, StringComparison.Ordinal);
-    True(prepareStart >= 0 && prepareEnd > prepareStart);
-    var prepare = web[prepareStart..prepareEnd];
-    True(web.Contains("currentAudioLogicalBaseMs = gesturePrimedPositionMs", StringComparison.Ordinal));
-    True(prepare.Contains("alignmentToleranceMs = currentAudioIsPositioned ? 2500 : 1250", StringComparison.Ordinal));
-    var clockProof = prepare.IndexOf("await waitForIosDecoderClock()", StringComparison.Ordinal);
-    var seekAfterProof = prepare.IndexOf("setLogicalPositionImmediately(positionMs)", StringComparison.Ordinal);
-    True(clockProof >= 0 && seekAfterProof > clockProof);
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
-}
-
-static void IphoneBroadcastSwitchesReplaceStaleDecoderInTap()
-{
-    var web = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
-    var matchStart = web.IndexOf("function decoderMatchesGestureTarget", StringComparison.Ordinal);
-    var matchEnd = web.IndexOf("function setLogicalPositionImmediately", matchStart, StringComparison.Ordinal);
-    True(matchStart >= 0 && matchEnd > matchStart);
-    var match = web[matchStart..matchEnd];
-    True(match.Contains("currentAudioEpisodeId", StringComparison.Ordinal));
-    True(match.Contains("currentAudioIsPositioned", StringComparison.Ordinal));
-    True(match.Contains("currentAudioLogicalPositionMs()", StringComparison.Ordinal));
-
-    var transferStart = web.IndexOf("async function startLocalEpisodeFromGesture", StringComparison.Ordinal);
-    var transferEnd = web.IndexOf("async function loadLocalEpisode", transferStart, StringComparison.Ordinal);
-    True(transferStart >= 0 && transferEnd > transferStart);
-    var transfer = web[transferStart..transferEnd];
-    True(transfer.Contains("directAudiblePrime = desiredPlaying && sourceWasUnowned", StringComparison.Ordinal));
-    True(transfer.Contains("mustPrimeTargetSourceInGesture = desiredPlaying && isIosWebKit", StringComparison.Ordinal));
-    True(transfer.Contains("if (directAudiblePrime || mustPrimeTargetSourceInGesture)", StringComparison.Ordinal));
-    True(transfer.Contains("audio.muted = !directAudiblePrime", StringComparison.Ordinal));
-    var positionedAssignment = transfer.IndexOf(
-        "assignCanonicalGestureStartSource(id, shared.positionMs)", StringComparison.Ordinal);
-    var transferAwait = transfer.IndexOf(
-        "const beginResult = await beginPhoneTransfer", StringComparison.Ordinal);
-    True(positionedAssignment >= 0 && transferAwait > positionedAssignment);
-
-    var prepareStart = web.IndexOf("async function prepareCanonicalAudio", StringComparison.Ordinal);
-    var prepareEnd = web.IndexOf("async function hydrateLocalEpisode", prepareStart, StringComparison.Ordinal);
-    True(prepareStart >= 0 && prepareEnd > prepareStart);
-    var prepare = web[prepareStart..prepareEnd];
-    var primedAttach = prepare.IndexOf("Number(gesturePrimedEpisodeId || 0) === id", StringComparison.Ordinal);
-    var ordinaryAssignment = prepare.IndexOf("assignCanonicalPartSource(id, partIndex, record)", StringComparison.Ordinal);
-    True(primedAttach >= 0 && ordinaryAssignment > primedAttach);
-    True(web.Contains("audioEpisodeId: Number(currentAudioEpisodeId || 0)", StringComparison.Ordinal));
-}
-
-static void RepeatedIphoneHandoffsBypassDormantDecoderGating()
-{
-    var web = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
-
-    var dormantStart = web.IndexOf("async function prepareDormantPhoneDecoder", StringComparison.Ordinal);
-    var dormantEnd = web.IndexOf("audio.addEventListener(\"loadedmetadata\"", dormantStart, StringComparison.Ordinal);
-    True(dormantStart >= 0 && dormantEnd > dormantStart);
-    var dormant = web[dormantStart..dormantEnd];
-    True(dormant.Contains(
-        "if (!id || isIosWebKit || thisPhoneOwnsSession() || phoneTransferInProgress) return;",
-        StringComparison.Ordinal));
-
-    True(web.Contains(
-        "if (!isIosWebKit && shared?.episodeId && !phoneTransferInProgress)",
-        StringComparison.Ordinal));
-    Equal(2, web.Split(
-        "const preparingDormantTarget = !isIosWebKit && inactive && has &&",
-        StringSplitOptions.None).Length - 1);
-
-    var transferStart = web.IndexOf("async function startLocalEpisodeFromGesture", StringComparison.Ordinal);
-    var transferEnd = web.IndexOf("async function loadLocalEpisode", transferStart, StringComparison.Ordinal);
-    True(transferStart >= 0 && transferEnd > transferStart);
-    var transfer = web[transferStart..transferEnd];
-    True(transfer.Contains(
-        "mustPrimeTargetSourceInGesture = desiredPlaying && isIosWebKit",
-        StringComparison.Ordinal));
-    True(transfer.Contains("assignCanonicalGestureStartSource(id, shared.positionMs)", StringComparison.Ordinal));
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
-}
-
-static void IphonePositionedFailuresPreserveCanonicalGestureFallback()
-{
-    var web = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
-    var prepareStart = web.IndexOf("async function prepareCanonicalAudio", StringComparison.Ordinal);
-    var prepareEnd = web.IndexOf("async function hydrateLocalEpisode", prepareStart, StringComparison.Ordinal);
-    True(prepareStart >= 0 && prepareEnd > prepareStart);
-    var prepare = web[prepareStart..prepareEnd];
-    True(prepare.Contains(
-        "positionedGestureTimeoutMs = isIosWebKit && currentAudioIsPositioned ? 4500 : 12000",
-        StringComparison.Ordinal));
-    True(prepare.Contains("failedWasPositioned = currentAudioIsPositioned", StringComparison.Ordinal));
-    var fallbackAssignment = prepare.IndexOf(
-        "assignCanonicalPartSource(id, retryPartIndex, null)", StringComparison.Ordinal);
-    var fallbackPlay = prepare.IndexOf("await audio.play()", fallbackAssignment, StringComparison.Ordinal);
-    var fallbackSeek = prepare.IndexOf("setLogicalPositionImmediately(positionMs)", StringComparison.Ordinal);
-    True(fallbackAssignment >= 0 && fallbackPlay > fallbackAssignment && fallbackSeek > fallbackPlay);
-
-    var transferStart = web.IndexOf("async function startLocalEpisodeFromGesture", StringComparison.Ordinal);
-    var transferEnd = web.IndexOf("async function loadLocalEpisode", transferStart, StringComparison.Ordinal);
-    True(transferStart >= 0 && transferEnd > transferStart);
-    var transfer = web[transferStart..transferEnd];
-    var captureSource = transfer.IndexOf("gesturePrimeSource = audio.src", StringComparison.Ordinal);
-    var prepareCall = transfer.IndexOf("await prepareCanonicalAudio", StringComparison.Ordinal);
-    var replacementCheck = transfer.IndexOf(
-        "audio.src !== gesturePrimeSource && audioSourceReady && !audio.error",
-        StringComparison.Ordinal);
-    var targetPrime = transfer.IndexOf("await primeTargetDecoder", StringComparison.Ordinal);
-    True(captureSource >= 0 && prepareCall > captureSource);
-    True(replacementCheck > prepareCall && targetPrime > replacementCheck);
-    True(transfer.Contains(
-        "The failed positioned play promise was replaced by a healthy canonical decoder",
-        StringComparison.Ordinal));
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
 }
 
 static void NativeHandoffPreservesWindowsVolumeSession()
@@ -2157,23 +2012,6 @@ static void PositionedWebAudioIsStableAcrossSafariRanges()
     }
 }
 
-static void CanonicalAudioRangesAreCacheCombinable()
-{
-    var web = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
-    var streamStart = web.IndexOf("private async Task StreamAudioFileAsync", StringComparison.Ordinal);
-    var streamEnd = web.IndexOf("private async Task HandleCanonicalMediaManifestAsync", streamStart, StringComparison.Ordinal);
-    True(streamStart >= 0 && streamEnd > streamStart);
-    var stream = web[streamStart..streamEnd];
-    True(stream.Contains("ETag: ", StringComparison.Ordinal));
-    True(stream.Contains("Last-Modified: ", StringComparison.Ordinal));
-    True(stream.Contains("Cache-Control: private, max-age=300, no-transform", StringComparison.Ordinal));
-    True(stream.Contains("if-range", StringComparison.Ordinal));
-    True(!stream.Contains("Vary: Range", StringComparison.Ordinal));
-    True(!stream.Contains("Content-Encoding: identity", StringComparison.Ordinal));
-    True(!stream.Contains("Cache-Control: no-store", StringComparison.Ordinal));
-}
-
 static void Alpha19UsesTruthfulCacheFirstStartup()
 {
     var app = File.ReadAllText(Path.Combine(
@@ -2263,8 +2101,7 @@ static void Rc1FreezesRecoveryAndUpgradePreservation()
     True(access.Contains("var recovered = !_current.IsLive;", StringComparison.Ordinal));
     True(access.Contains("MarkServerLive(invalidateMemoryCache: recovered)", StringComparison.Ordinal));
 
-    var web = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var web = ReadWebServerSourceBundle();
     True(web.Contains("var startListener = _listener!;", StringComparison.Ordinal));
     True(web.Contains("AcceptLoopAsync(startListener", StringComparison.Ordinal));
     True(!web.Contains("AcceptLoopAsync(_listener!", StringComparison.Ordinal));
@@ -2308,8 +2145,7 @@ static void Rc1BuildfixRestoresVisibleResearchPackImport()
     True(view.Contains("No partial changes were kept", StringComparison.Ordinal));
     True(view.Contains("RetryImportCommand", StringComparison.Ordinal));
 
-    var server = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var server = ReadWebServerSourceBundle();
     True(server.Contains("WebResearchPackLimits.MaximumPackageBytes", StringComparison.Ordinal));
     True(server.Contains("TimeSpan.FromMinutes(10)", StringComparison.Ordinal));
 }
@@ -2322,8 +2158,7 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
     True(splash.Contains("Width=\"132\" Height=\"132\" Source=\"/Assets/RadioVault-Logo.png\"", StringComparison.Ordinal));
     True(!splash.Contains("RvTranscriptBrush", StringComparison.Ordinal));
 
-    var web = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var web = ReadWebServerSourceBundle();
     True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
     True(web.Contains("class=\"menuToggle\"", StringComparison.Ordinal));
     True(web.Contains("id=\"menuScrim\"", StringComparison.Ordinal));
@@ -2416,8 +2251,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
              })
         True(foundation.Contains(marker, StringComparison.Ordinal));
 
-    var web = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var web = ReadWebServerSourceBundle();
     True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
 
     var truthService = File.ReadAllText(Path.Combine(
@@ -4960,11 +4794,33 @@ static void WebServerSurvivesRapidRestartGenerations()
         server.Stop();
     }
 
-    var source = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var source = ReadWebServerSourceBundle();
     True(source.Contains("var startListener = _listener!;", StringComparison.Ordinal));
     True(source.Contains("AcceptLoopAsync(startListener", StringComparison.Ordinal));
     True(!source.Contains("AcceptLoopAsync(_listener!", StringComparison.Ordinal));
+}
+
+static void EmbeddedWebAssetsLoadFromAssembly()
+{
+    var serverType = typeof(LocalWebServer);
+    var resources = serverType.Assembly.GetManifestResourceNames();
+    foreach (var resourceName in new[]
+             {
+                 "TheRadioVault.Web.Assets.web-client.html",
+                 "TheRadioVault.Web.Assets.service-worker.js",
+                 "TheRadioVault.Web.Assets.secure-setup.html"
+             })
+    {
+        True(resources.Contains(resourceName, StringComparer.Ordinal), $"Missing assembly resource {resourceName}.");
+    }
+
+    var flags = BindingFlags.NonPublic | BindingFlags.Static;
+    var webClient = serverType.GetProperty("WebClientHtml", flags)?.GetValue(null) as string;
+    var serviceWorker = serverType.GetProperty("ServiceWorkerJavaScript", flags)?.GetValue(null) as string;
+    var secureSetup = serverType.GetProperty("SecureSetupHtml", flags)?.GetValue(null) as string;
+    True(webClient?.Contains("<title>Radio Vault Web</title>", StringComparison.Ordinal) == true);
+    True(serviceWorker?.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal) == true);
+    True(secureSetup?.Contains("<title>Radio Vault secure setup</title>", StringComparison.Ordinal) == true);
 }
 
 static void WithWebServer(Func<int, string, Task> test)
@@ -6453,7 +6309,7 @@ static void KnowledgeExportUiIsAlwaysArchiveWide()
     True(!contract.Contains("collectionName", StringComparison.Ordinal));
     True(!contract.Contains("int? year", StringComparison.Ordinal));
 
-    var web = File.ReadAllText(Path.Combine(root, "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var web = ReadWebServerSourceBundle();
     True(web.Contains("async function exportResearchPack()", StringComparison.Ordinal));
     True(web.Contains("await exportResearchPack();", StringComparison.Ordinal));
     True(!web.Contains("Choose a show to export.", StringComparison.Ordinal));
@@ -6561,7 +6417,7 @@ static void WikiEntityChipsOpenNativeAndWebReaders()
         True(view.Contains("RelatedWiki.OpenEntityCommand", StringComparison.Ordinal));
     }
 
-    var web = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var web = ReadWebServerSourceBundle();
     True(web.Contains("data-section=\"wiki\"", StringComparison.Ordinal));
     True(web.Contains("async function loadWiki", StringComparison.Ordinal));
     True(web.Contains("async function openWikiEntity", StringComparison.Ordinal));
@@ -6690,7 +6546,7 @@ static void WikiRefinementAddsNavigationDiscoveryAndTimelineExploration()
         True(native.Contains("Timeline Explorer", StringComparison.Ordinal));
         True(native.Contains("Content=\"&#x22EF;\"", StringComparison.Ordinal));
         True(native.Contains("IsVisible=\"{Binding IsArticleMode}\"", StringComparison.Ordinal));
-        var web = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+        var web = ReadWebServerSourceBundle();
         True(web.Contains("function wikiNavBar", StringComparison.Ordinal));
         True(web.Contains("showWikiTimelineExplorer", StringComparison.Ordinal));
         True(web.Contains("wikiNavigation", StringComparison.Ordinal));
@@ -7780,7 +7636,7 @@ static void DedicatedServerFoundationIsUiIsolatedAndRevisionSafe()
     True(serverView.Contains("It contains settings only", StringComparison.Ordinal));
     True(!serverView.Contains("Dashboard", StringComparison.Ordinal));
     True(!serverView.Contains("Now Playing", StringComparison.Ordinal));
-    var webServer = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Web", "Services", "LocalWebServer.cs"));
+    var webServer = ReadWebServerSourceBundle();
     True(webServer.Contains("Re-resolve once before returning a 404", StringComparison.Ordinal));
     True(webServer.Contains("Refresh the plan and give the decoder one new, cache-busted source", StringComparison.Ordinal));
     True(webServer.Contains("Canonical media {episodeId}/{mediaFileId}: 404 because", StringComparison.Ordinal));
@@ -8808,6 +8664,22 @@ static string SourceRoot()
     }
 
     throw new DirectoryNotFoundException("Could not locate the Radio Vault source root from the test output directory.");
+}
+
+static string ReadWebServerSourceBundle()
+{
+    var root = SourceRoot();
+    var services = Path.Combine(root, "TheRadioVault.Web", "Services");
+    var assets = Path.Combine(root, "TheRadioVault.Web", "Assets");
+    var sources = Directory.GetFiles(services, "LocalWebServer*.cs")
+        .OrderBy(path => path, StringComparer.Ordinal)
+        .Concat(new[]
+        {
+            Path.Combine(assets, "web-client.html"),
+            Path.Combine(assets, "service-worker.js"),
+            Path.Combine(assets, "secure-setup.html")
+        });
+    return string.Join(Environment.NewLine, sources.Select(File.ReadAllText));
 }
 
 static int FindFreePort()

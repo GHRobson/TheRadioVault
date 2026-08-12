@@ -93,6 +93,14 @@ Route order and observable protocol behaviour are compatibility boundaries. Movi
 
 Desktop pairing remains before authorization in the main dispatcher, because it establishes the credential used by the federation family. The normal client bootstrap and client-operation APIs remain after the federation boundary. Moving or extending this route family must preserve that security order, every HTTP method rule, status code and handler contract.
 
+## 0.44 web asset, client and media boundaries
+
+The web client, secure setup page and service worker live as embedded resources under `TheRadioVault.Web/Assets`. `LocalWebServer.WebAssets.cs` is the single loader for those resources. Keeping them embedded preserves the self-contained server deployment while allowing HTML, CSS and JavaScript to be inspected and edited without expanding the HTTP coordinator. Their served content is preserved from the former literals, and a compiled-resource regression test verifies that all three are present and loadable.
+
+`LocalWebServer.ClientRoutes.cs` owns the complete client-facing bootstrap, Research, transcription, Wiki and Library query route family. The main dispatcher reaches it through one ordered `TryHandleClientRouteAsync` call. `LocalWebServer.Media.cs` owns artwork, canonical multipart media, positioned WAV, legacy media and HTTP range streaming. It exposes separate canonical-media and artwork/audio boundary calls because those route groups occupy different compatibility positions in the main dispatcher.
+
+The client boundary call and two media boundary calls must retain their relative dispatcher order. Routes, method checks, status codes, range semantics and handler bodies remain protocol contracts. New client or media routing belongs in the focused partials, and large web assets must not be embedded back into `LocalWebServer.cs`.
+
 ## 0.44 desktop playback state boundary
 
 `DesktopPlaybackStateMachine` is the platform-neutral owner of loaded, playing, busy, remote-owner, pending-transport, desired-playback and user-intent transitions for desktop playback. `PlaybackViewModel` projects that state into Avalonia bindings and remains responsible for decoder, persistence, dispatcher and handoff-service side effects; it must not recreate parallel transport flags.

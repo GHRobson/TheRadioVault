@@ -1,0 +1,46 @@
+<!doctype html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Radio Vault secure setup</title>
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #101010; color: #f4f4f4; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+    main { max-width: 700px; margin: auto; padding: 24px 16px 50px; }
+    .logo { width: 48px; height: 48px; display: grid; place-items: center; border: 2px solid #f2c94c; border-radius: 12px; color: #f2c94c; font-weight: 900; }
+    h1 { font-size: 28px; margin: 16px 0 8px; }
+    p, li { color: #bbb; line-height: 1.5; }
+    .card { margin-top: 16px; padding: 17px; background: #1d1d1d; border: 1px solid #3a3a3a; border-radius: 14px; }
+    .step { color: #f2c94c; font-weight: 800; }
+    a.button { display: block; text-align: center; margin-top: 12px; padding: 13px 16px; background: #f2c94c; color: #111; text-decoration: none; border-radius: 10px; font-weight: 800; }
+    a.secondary { background: #2a2a2a; color: #f4f4f4; border: 1px solid #444; }
+    code { word-break: break-all; color: #ffe27c; font-size: 11px; }
+    .warning { padding: 12px; border-left: 3px solid #f2c94c; background: #262216; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="logo">RV</div>
+    <h1>Secure offline access</h1>
+    <p>This one-time setup lets Safari trust Radio Vault's private HTTPS server. Afterwards, downloaded broadcasts can open from a cold offline launch when the computer is unreachable.</p>
+    <div class="card">
+      <div class="step">1 · Install the profile</div>
+      <p>Tap below, allow the profile download, then open <strong>Settings → Profile Downloaded</strong> and install <strong>Radio Vault Secure Offline Access</strong>.</p>
+      <a class="button" href="__PROFILE_URL__">Download iPhone profile</a>
+      <a class="button secondary" href="__CERTIFICATE_URL__">Download certificate only</a>
+    </div>
+    <div class="card">
+      <div class="step">2 · Enable full trust</div>
+      <p>Open <strong>Settings → General → About → Certificate Trust Settings</strong>, then enable full trust for <strong>Radio Vault Local Root CA</strong>.</p>
+      <div class="warning">The root private key remains on the Radio Vault computer. The phone receives only the public certificate used to verify this local server.</div>
+    </div>
+    <div class="card">
+      <div class="step">3 · Test secure access</div>
+      <p>Return here and tap the button below. Once Radio Vault opens over HTTPS, Safari will install its offline application shell automatically.</p>
+      <a class="button" href="__SECURE_URL__">Open Radio Vault securely</a>
+      <p>Root certificate fingerprint:<br><code>__THUMBPRINT__</code></p>
+    </div>
+  </main>
+</body>
+</html>
