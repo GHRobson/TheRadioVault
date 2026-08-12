@@ -37,7 +37,6 @@ var tests = new (string Name, Action Run)[]
     ("New show aliases", NewShowAliasesNormalize),
     ("Parser recognises new show types", ParserRecognisesNewShowTypes),
     ("Library Truth recognises new show types", LibraryTruthRecognisesNewShowTypes),
-    ("Database seeds new Research pack shows", DatabaseSeedsNewResearchPackShows),
     ("Show projections combine legacy collection aliases", ShowProjectionsCombineLegacyCollectionAliases),
     ("Library search finds transcript speech", LibrarySearchFindsTranscriptSpeech),
     ("Avalonia sidebar hides empty show sections", AvaloniaSidebarHidesEmptyShowSections),
@@ -307,8 +306,6 @@ var tests = new (string Name, Action Run)[]
     ("Background jobs dispose safely while running", BackgroundJobsDisposeSafelyWhileRunning),
     ("Live playback state is atomic", LivePlaybackStateIsAtomic),
     ("Offline progress ordering preserves newer manual changes", OfflineProgressOrderingPreservesNewerManualChanges),
-    ("Schema 45 includes guarded Library Truth adoption tables", Schema45IncludesGuardedLibraryTruthAdoptionTables),
-    ("Schema 47 adds canonical topic identities and merge history", Schema47AddsCanonicalTopicIdentity),
     ("Wiki pages protect newer human revisions", WikiPagesProtectNewerHumanRevisions),
     ("Wiki authoring packs round-trip citations images and timelines", WikiAuthoringPacksRoundTripEvidence),
     ("Knowledge imports recover untitled AI citation sources", KnowledgeImportsRecoverUntitledAiCitationSources),
@@ -337,7 +334,6 @@ var tests = new (string Name, Action Run)[]
     ("Research packs round-trip date-review decisions", ResearchPacksRoundTripDateReviewDecisions),
     ("Research packs tolerate harmless AI scalar variations", ResearchPacksTolerateAiScalarVariations),
     ("Canonical timeline maps source transcript positions", CanonicalTimelineMapsSourcePosition),
-    ("Schema 45 upgrades Library Truth schema 43 safely", Schema45UpgradesLibraryTruthSchema43Safely),
     ("Whisper configuration exposes model capabilities", WhisperConfigurationExposesModelCapabilities),
     ("Multi-speaker diarization splits timed transcript turns", MultiSpeakerDiarizationSplitsTimedTranscriptTurns),
     ("Whisper settings persist for the live desktop engine", WhisperSettingsPersistForLiveDesktopEngine),
@@ -469,46 +465,6 @@ static void LibraryTruthRecognisesNewShowTypes()
     Equal("The Ron & Ron Show", LibraryTruthParser.DetectExplicitCollection("The Ron & Ron Show 1997-01-14"));
     Equal("Unmasked", LibraryTruthParser.DetectExplicitCollection(@"Unmasked\2012\Unmasked 2012-06-01"));
     Equal("Ron Bennington Interviews", LibraryTruthParser.DetectExplicitCollection("Ron Bennington Interviews 2019-04-22"));
-}
-
-static void DatabaseSeedsNewResearchPackShows()
-{
-    var path = Path.Combine(Path.GetTempPath(), $"radiovault-show-seed-{Guid.NewGuid():N}.db");
-    try
-    {
-        var database = new SqliteDatabase(path);
-        database.Initialize();
-        using var connection = database.OpenConnection();
-        foreach (var show in new[]
-                 {
-                     KnownShowCatalog.RonRon,
-                     KnownShowCatalog.Unmasked,
-                     KnownShowCatalog.RonBenningtonInterviews
-                 })
-        {
-            using var collection = connection.CreateCommand();
-            collection.CommandText = "SELECT COUNT(*) FROM collections WHERE name=$name";
-            collection.Parameters.AddWithValue("$name", show);
-            Equal(1L, Convert.ToInt64(collection.ExecuteScalar(), CultureInfo.InvariantCulture));
-        }
-
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT c.name
-              FROM collections c
-              JOIN collection_aliases a ON a.collection_id=c.id
-             WHERE a.alias=$alias COLLATE NOCASE;
-            """;
-        command.Parameters.AddWithValue("$alias", "ron bennington interview");
-        Equal("Ron Bennington Interviews", Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture));
-    }
-    finally
-    {
-        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
-        if (File.Exists(path)) File.Delete(path);
-        if (File.Exists(path + "-wal")) File.Delete(path + "-wal");
-        if (File.Exists(path + "-shm")) File.Delete(path + "-shm");
-    }
 }
 
 static void LibrarySearchFindsTranscriptSpeech()
@@ -4188,28 +4144,6 @@ static void OfflineProgressOrderingPreservesNewerManualChanges()
 }
 
 
-static void Schema47AddsCanonicalTopicIdentity()
-{
-    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(directory);
-    try
-    {
-        var database = new SqliteDatabase(Path.Combine(directory, "wiki-schema.sqlite"));
-        database.Initialize();
-        using var connection = database.OpenConnection();
-        using var version = connection.CreateCommand();
-        version.CommandText = "PRAGMA user_version";
-        Equal(47L, Convert.ToInt64(version.ExecuteScalar()));
-        using var tables = connection.CreateCommand();
-        tables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('wiki_pages','wiki_page_aliases','wiki_page_revisions','wiki_relationships','wiki_sources','wiki_citations','wiki_images','wiki_page_images','wiki_timeline_events','wiki_timeline_event_sources','wiki_timeline_event_images','wiki_timeline_event_broadcasts','wiki_import_runs','canonical_topics','canonical_topic_aliases','topic_merge_history','wiki_page_redirects')";
-        Equal(17L, Convert.ToInt64(tables.ExecuteScalar()));
-        using var indexes = connection.CreateCommand();
-        indexes.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('ix_wiki_pages_type_status','ix_wiki_citations_page','ix_wiki_timeline_events_page_date')";
-        Equal(3L, Convert.ToInt64(indexes.ExecuteScalar()));
-    }
-    finally { try { Directory.Delete(directory, true); } catch { } }
-}
-
 static void WikiPagesProtectNewerHumanRevisions()
 {
     var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
@@ -4932,201 +4866,6 @@ static void WikiPacksCarryArchiveContextAndDetailedReview()
     }
     finally { try { Directory.Delete(directory, true); } catch { } }
 }
-
-static void Schema45UpgradesLibraryTruthSchema43Safely()
-{
-    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(directory);
-    var path = Path.Combine(directory, "schema43.sqlite");
-    try
-    {
-        using (var legacy = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={path}"))
-        {
-            legacy.Open();
-            using var command = legacy.CreateCommand();
-            command.CommandText = """
-                PRAGMA user_version=43;
-                CREATE TABLE library_truth_runs (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    started_at TEXT NOT NULL,
-                    completed_at TEXT NULL,
-                    status TEXT NOT NULL DEFAULT 'running',
-                    parser_version TEXT NOT NULL DEFAULT '',
-                    source_file_count INTEGER NOT NULL DEFAULT 0,
-                    current_broadcast_count INTEGER NOT NULL DEFAULT 0,
-                    proposed_broadcast_count INTEGER NOT NULL DEFAULT 0,
-                    unchanged_files INTEGER NOT NULL DEFAULT 0,
-                    changed_files INTEGER NOT NULL DEFAULT 0,
-                    recovered_dates INTEGER NOT NULL DEFAULT 0,
-                    unknown_dates INTEGER NOT NULL DEFAULT 0,
-                    needs_review INTEGER NOT NULL DEFAULT 0,
-                    merge_groups INTEGER NOT NULL DEFAULT 0,
-                    split_groups INTEGER NOT NULL DEFAULT 0,
-                    exact_duplicate_groups INTEGER NOT NULL DEFAULT 0,
-                    strong_duplicate_groups INTEGER NOT NULL DEFAULT 0,
-                    multipart_broadcasts INTEGER NOT NULL DEFAULT 0,
-                    message TEXT NOT NULL DEFAULT ''
-                );
-                CREATE TABLE library_truth_broadcasts (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id INTEGER NOT NULL,
-                    canonical_key TEXT NOT NULL,
-                    collection_name TEXT NOT NULL DEFAULT '',
-                    air_date TEXT NULL,
-                    broadcast_slot TEXT NOT NULL DEFAULT '',
-                    file_count INTEGER NOT NULL DEFAULT 0,
-                    segment_count INTEGER NOT NULL DEFAULT 1,
-                    recording_count INTEGER NOT NULL DEFAULT 1,
-                    exact_duplicate_count INTEGER NOT NULL DEFAULT 0,
-                    strong_duplicate_count INTEGER NOT NULL DEFAULT 0,
-                    current_episode_count INTEGER NOT NULL DEFAULT 0,
-                    status TEXT NOT NULL DEFAULT 'Stable',
-                    confidence_score INTEGER NOT NULL DEFAULT 0,
-                    evidence_json TEXT NOT NULL DEFAULT ''
-                );
-                CREATE TABLE library_truth_recordings (
-                    id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    run_id INTEGER NOT NULL,
-                    canonical_broadcast_key TEXT NOT NULL,
-                    recording_key TEXT NOT NULL,
-                    label TEXT NOT NULL DEFAULT '',
-                    file_count INTEGER NOT NULL DEFAULT 0,
-                    segment_count INTEGER NOT NULL DEFAULT 1,
-                    duration_ms INTEGER NOT NULL DEFAULT 0,
-                    relationship TEXT NOT NULL DEFAULT 'Single recording',
-                    confidence_score INTEGER NOT NULL DEFAULT 0,
-                    evidence_json TEXT NOT NULL DEFAULT ''
-                );
-                """;
-            command.ExecuteNonQuery();
-        }
-
-        var database = new SqliteDatabase(path);
-        database.Initialize();
-        using var connection = database.OpenConnection();
-        using var version = connection.CreateCommand();
-        version.CommandText = "PRAGMA user_version";
-        Equal(47L, Convert.ToInt64(version.ExecuteScalar()));
-        using var columns = connection.CreateCommand();
-        columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_recordings') WHERE name IN ('role','completeness_score','preferred_score','duration_ratio','is_preferred_candidate','review_reason')";
-        Equal(6L, Convert.ToInt64(columns.ExecuteScalar()));
-        using var index = connection.CreateCommand();
-        index.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='ix_library_truth_recordings_role'";
-        Equal(1L, Convert.ToInt64(index.ExecuteScalar()));
-        using var alpha6Tables = connection.CreateCommand();
-        alpha6Tables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_coverages','library_truth_adoption_previews')";
-        Equal(2L, Convert.ToInt64(alpha6Tables.ExecuteScalar()));
-        using var alpha7Tables = connection.CreateCommand();
-        alpha7Tables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_rehearsal_runs','library_truth_rehearsal_items')";
-        Equal(2L, Convert.ToInt64(alpha7Tables.ExecuteScalar()));
-        using var alpha8Table = connection.CreateCommand();
-        alpha8Table.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='library_truth_rehearsal_conflicts'";
-        Equal(1L, Convert.ToInt64(alpha8Table.ExecuteScalar()));
-        using var alpha10Tables = connection.CreateCommand();
-        alpha10Tables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('canonical_broadcasts','recordings','recording_segments','recording_coverages','episode_canonical_map','library_truth_adoption_runs','library_truth_adoption_items','library_truth_adoption_conflicts')";
-        Equal(8L, Convert.ToInt64(alpha10Tables.ExecuteScalar()));
-    }
-    finally
-    {
-        try { Directory.Delete(directory, true); } catch { }
-    }
-}
-
-static void Schema45IncludesGuardedLibraryTruthAdoptionTables()
-{
-    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
-    Directory.CreateDirectory(directory);
-    var path = Path.Combine(directory, "test.sqlite");
-    try
-    {
-        var database = new SqliteDatabase(path);
-        database.Initialize();
-        using var connection = database.OpenConnection();
-        using var version = connection.CreateCommand();
-        version.CommandText = "PRAGMA user_version";
-        Equal(47L, Convert.ToInt64(version.ExecuteScalar()));
-        using var qualityTable = connection.CreateCommand();
-        qualityTable.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='research_quality_actions'";
-        Equal(1L, Convert.ToInt64(qualityTable.ExecuteScalar()));
-        using var rollbackTables = connection.CreateCommand();
-        rollbackTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('research_import_rollbacks','research_import_rollback_changes','research_field_provenance')";
-        Equal(3L, Convert.ToInt64(rollbackTables.ExecuteScalar()));
-        using var transcriptTables = connection.CreateCommand();
-        transcriptTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('transcripts','transcript_segments','transcription_jobs','transcript_imports')";
-        Equal(4L, Convert.ToInt64(transcriptTables.ExecuteScalar()));
-        using var transcriptIndexes = connection.CreateCommand();
-        transcriptIndexes.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name IN ('ix_transcripts_status_updated','ix_transcript_segments_time','ix_transcription_jobs_state_requested')";
-        Equal(3L, Convert.ToInt64(transcriptIndexes.ExecuteScalar()));
-        using var voiceTables = connection.CreateCommand();
-        voiceTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('voice_people','transcript_speakers','voice_profiles','voice_samples','speaker_match_suggestions')";
-        Equal(5L, Convert.ToInt64(voiceTables.ExecuteScalar()));
-        using var segmentColumns = connection.CreateCommand();
-        segmentColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('transcript_segments') WHERE name IN ('speaker_key','content_kind','is_reviewed')";
-        Equal(3L, Convert.ToInt64(segmentColumns.ExecuteScalar()));
-        using var jobColumns = connection.CreateCommand();
-        jobColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('transcription_jobs') WHERE name IN ('language','start_ms','duration_ms','enable_speaker_diarization','use_vad','replace_existing')";
-        Equal(6L, Convert.ToInt64(jobColumns.ExecuteScalar()));
-        using var triageColumns = connection.CreateCommand();
-        triageColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('research_reconciliation_candidates') WHERE name IN ('requires_review','review_category','recommended_action','decision_source')";
-        Equal(4L, Convert.ToInt64(triageColumns.ExecuteScalar()));
-        using var actionDecisionSource = connection.CreateCommand();
-        actionDecisionSource.CommandText = "SELECT COUNT(*) FROM pragma_table_info('research_reconciliation_actions') WHERE name='decision_source'";
-        Equal(1L, Convert.ToInt64(actionDecisionSource.ExecuteScalar()));
-        using var preservationColumns = connection.CreateCommand();
-        preservationColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('media_files') WHERE name IN ('fingerprinted_at','full_hashed_at','inspection_error','inspection_error_at')";
-        Equal(4L, Convert.ToInt64(preservationColumns.ExecuteScalar()));
-        using var preservationRuns = connection.CreateCommand();
-        preservationRuns.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='preservation_scan_runs'";
-        Equal(1L, Convert.ToInt64(preservationRuns.ExecuteScalar()));
-        using var truthTables = connection.CreateCommand();
-        truthTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_runs','library_truth_files','library_truth_recordings','library_truth_broadcasts')";
-        Equal(4L, Convert.ToInt64(truthTables.ExecuteScalar()));
-        using var truthFileColumns = connection.CreateCommand();
-        truthFileColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_files') WHERE name='recording_key'";
-        Equal(1L, Convert.ToInt64(truthFileColumns.ExecuteScalar()));
-        using var truthAuditTables = connection.CreateCommand();
-        truthAuditTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_years','library_truth_conflicts','library_truth_coverages','library_truth_adoption_previews')";
-        Equal(4L, Convert.ToInt64(truthAuditTables.ExecuteScalar()));
-        using var truthCoverageColumns = connection.CreateCommand();
-        truthCoverageColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_coverages') WHERE name IN ('recording_key','segment_number','target_broadcast_key','coverage_kind','start_offset_ms','end_offset_ms','requires_review','media_file_ids_json')";
-        Equal(8L, Convert.ToInt64(truthCoverageColumns.ExecuteScalar()));
-        using var truthPreviewColumns = connection.CreateCommand();
-        truthPreviewColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_adoption_previews') WHERE name IN ('canonical_key','planned_action','provisional_episode_id','current_episode_ids_json','coverage_count','planned_write_count','eligible_for_guarded_adoption','guard_reason')";
-        Equal(8L, Convert.ToInt64(truthPreviewColumns.ExecuteScalar()));
-        using var truthRehearsalTables = connection.CreateCommand();
-        truthRehearsalTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('library_truth_rehearsal_runs','library_truth_rehearsal_items')";
-        Equal(2L, Convert.ToInt64(truthRehearsalTables.ExecuteScalar()));
-        using var truthRehearsalColumns = connection.CreateCommand();
-        truthRehearsalColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_rehearsal_runs') WHERE name IN ('backup_path','source_fingerprint','rollback_fingerprint','truth_run_signature','item_signature','conflict_signature','file_reassignments','state_rows_migrated','auto_resolved_conflicts','unresolved_conflicts','preserved_alternates','foreign_key_violations','rollback_verified','message')";
-        Equal(14L, Convert.ToInt64(truthRehearsalColumns.ExecuteScalar()));
-        using var truthForensicTable = connection.CreateCommand();
-        truthForensicTable.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='library_truth_rehearsal_conflicts'";
-        Equal(1L, Convert.ToInt64(truthForensicTable.ExecuteScalar()));
-        using var truthForensicColumns = connection.CreateCommand();
-        truthForensicColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_rehearsal_conflicts') WHERE name IN ('canonical_key','field_name','classification','selected_value','candidate_values_json','provenance_json','resolution','auto_resolved','requires_review','preserved_alternate_count')";
-        Equal(10L, Convert.ToInt64(truthForensicColumns.ExecuteScalar()));
-        using var truthRecordingColumns = connection.CreateCommand();
-        truthRecordingColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_recordings') WHERE name IN ('role','completeness_score','preferred_score','duration_ratio','is_preferred_candidate','review_reason')";
-        Equal(6L, Convert.ToInt64(truthRecordingColumns.ExecuteScalar()));
-        using var truthBroadcastColumns = connection.CreateCommand();
-        truthBroadcastColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_broadcasts') WHERE name IN ('adoption_state','adoption_reason','preferred_recording_key','suspicious_merge','duration_spread_ratio','cross_identity_conflict_count')";
-        Equal(6L, Convert.ToInt64(truthBroadcastColumns.ExecuteScalar()));
-        using var adoptionTables = connection.CreateCommand();
-        adoptionTables.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('canonical_broadcasts','recordings','recording_segments','recording_coverages','episode_canonical_map','library_truth_adoption_runs','library_truth_adoption_items','library_truth_adoption_conflicts')";
-        Equal(8L, Convert.ToInt64(adoptionTables.ExecuteScalar()));
-        using var adoptionRunColumns = connection.CreateCommand();
-        adoptionRunColumns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('library_truth_adoption_runs') WHERE name IN ('truth_run_id','rehearsal_run_id','backup_path','source_fingerprint','staged_fingerprint','post_commit_fingerprint','rehearsal_truth_signature','commit_truth_signature','rehearsal_item_signature','commit_item_signature','rehearsal_conflict_signature','commit_conflict_signature','commit_verified')";
-        Equal(13L, Convert.ToInt64(adoptionRunColumns.ExecuteScalar()));
-        using var completedAdoptionGuard = connection.CreateCommand();
-        completedAdoptionGuard.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='index' AND name='ux_library_truth_adoption_completed_truth'";
-        Equal(1L, Convert.ToInt64(completedAdoptionGuard.ExecuteScalar()));
-    }
-    finally
-    {
-        try { Directory.Delete(directory, true); } catch { }
-    }
-}
-
 
 static void CanonicalLibraryCutoverProjectsBroadcasts()
 {

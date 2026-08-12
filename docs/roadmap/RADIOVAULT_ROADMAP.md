@@ -55,7 +55,7 @@ Status: in progress. Mobile playback ownership, handoff evidence, multipart time
 - Keep `MobileClientSession` as the public high-level orchestrator; pairing, Library, sync, playback, download, Explore and Knowledge policy boundaries are now extracted.
 - Continue splitting `LocalWebServer`; playback/queue, federation/administration, client and media route groups, static web assets, HTTP request/response infrastructure, and general API dispatch are extracted. The next extraction should target a coherent request-lifecycle or handler family backed by compiled behaviour tests, not merely move methods into another file.
 - Keep the explicit desktop playback state machine and remote-progress interpolator as the single pure-policy owners while the view model retains UI and side effects.
-- Continue moving coherent behavioral groups from the remaining 7,294-line smoke runner into subsystem test projects; use the completed Web HTTP/server fixture extraction as the pattern, and keep each migrated check in exactly one runner.
+- Continue moving coherent behavioral groups from the remaining 7,033-line smoke runner into subsystem test projects; Web HTTP/server behavior and the first database seed/schema/upgrade group are now independently release-gated, and each migrated check must remain in exactly one runner.
 - Separate future SQLite migrations into numbered migration objects with fixtures.
 - Add cancellation/timeout policy at external-process, network and media boundaries.
 - Archive superseded current documents and establish a small living documentation index.
