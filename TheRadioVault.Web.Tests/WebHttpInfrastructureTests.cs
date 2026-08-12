@@ -101,15 +101,17 @@ internal static class WebHttpInfrastructureTests
     {
         var requestBytes = Encoding.ASCII.GetBytes(
             "POST /pack HTTP/1.1\r\nContent-Length: 6\r\n\r\nstream");
-        using var stream = new PacedReadStream(requestBytes, headerBytes: requestBytes.Length - 6);
+        using var stream = new RecordingReadStream(requestBytes, headerBytes: requestBytes.Length - 6);
         var result = new WebHttpRequestReader(
-                _ => new WebHttpRequestBodyPolicy(64, TimeSpan.FromMilliseconds(35), StageToFile: true),
+                _ => new WebHttpRequestBodyPolicy(64, TimeSpan.FromSeconds(1), StageToFile: true),
                 headerTimeout: TimeSpan.FromSeconds(1))
             .ReadAsync(stream, CancellationToken.None).GetAwaiter().GetResult();
 
         using var request = result.Request ?? throw new InvalidOperationException("The active upload timed out despite continuing to make progress.");
         Equal(WebHttpRequestReadFailure.None, result.Failure);
         Equal(6L, request.BodyLength);
+        Equal(6, stream.BodyReadTokens.Count);
+        Equal(6, stream.BodyReadTokens.Distinct().Count());
     }
 
     private static void HttpReaderRemovesTimedOutStagedUpload()
@@ -330,19 +332,18 @@ internal static class WebHttpInfrastructureTests
         }
     }
 
-    private sealed class PacedReadStream(byte[] bytes, int headerBytes) : MemoryStream(bytes)
+    private sealed class RecordingReadStream(byte[] bytes, int headerBytes) : MemoryStream(bytes)
     {
-        private int _reads;
+        public List<CancellationToken> BodyReadTokens { get; } = [];
 
-        public override async ValueTask<int> ReadAsync(
+        public override ValueTask<int> ReadAsync(
             Memory<byte> buffer,
             CancellationToken cancellationToken = default)
         {
             if (Position >= headerBytes)
-                await Task.Delay(15, cancellationToken).ConfigureAwait(false);
+                BodyReadTokens.Add(cancellationToken);
             var maximum = Position < headerBytes ? (int)Math.Min(headerBytes - Position, buffer.Length) : 1;
-            _reads++;
-            return await base.ReadAsync(buffer[..Math.Max(1, maximum)], cancellationToken).ConfigureAwait(false);
+            return base.ReadAsync(buffer[..Math.Max(1, maximum)], cancellationToken);
         }
     }
 
