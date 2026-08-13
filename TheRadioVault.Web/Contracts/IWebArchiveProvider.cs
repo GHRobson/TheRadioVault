@@ -9,6 +9,7 @@ public interface IWebArchiveProvider
     WebEpisode? GetEpisode(long episodeId);
     WebBroadcastDetails? GetBroadcastDetails(long episodeId);
     WebClientLibraryOverview GetClientLibraryOverview();
+    WebLiveRadioSnapshot GetLiveRadioSnapshot();
     WebClientLibraryBroadcastSummary? GetClientLibraryBroadcast(long episodeId);
     WebClientLibraryBrowseResult BrowseClientLibrary(WebClientLibraryBrowseRequest request);
     IReadOnlyList<WebClientLibraryArchivePeriodSummary> GetClientLibraryArchivePeriods(int? collectionId, int? year, bool hideCompleted);

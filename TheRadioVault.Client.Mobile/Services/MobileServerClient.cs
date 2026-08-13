@@ -243,6 +243,12 @@ public sealed class MobileServerClient : IDisposable
             MobileJsonContext.Default.OverviewEnvelope,
             cancellationToken).ConfigureAwait(false)).Overview;
 
+    public async Task<WebLiveRadioSnapshot> GetLiveRadioAsync(CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.ClientLiveRadio,
+            MobileJsonContext.Default.LiveRadioEnvelope,
+            cancellationToken).ConfigureAwait(false)).Station;
+
     public async Task<WebClientLibraryBrowseResult> BrowseAsync(
         string? searchText,
         int limit = 100,

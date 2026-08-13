@@ -1,4 +1,4 @@
-const CACHE_NAME='radio-vault-anywhere-shell-v67';
+const CACHE_NAME='radio-vault-anywhere-shell-v68';
 const AUDIO_CACHE='radio-vault-anywhere-audio-v1';
 const ARTWORK_CACHE='radio-vault-anywhere-artwork-v1';
 const SHELL_KEY='/__radio_vault_offline_shell__';

@@ -1140,7 +1140,7 @@ static void Alpha14RenamesWebAndRestoresPhoneConnectionControls()
     True(webServer.Contains("accessUrl = GetAccessUrls().FirstOrDefault()", StringComparison.Ordinal));
     True(webServer.Contains("secureSetupUrl = GetSecureSetupUrls().FirstOrDefault()", StringComparison.Ordinal));
     True(webServer.Contains("<title>Radio Vault Web</title>", StringComparison.Ordinal));
-    True(webServer.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(webServer.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
 
     var clientAdapter = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Anywhere", "DedicatedServerRadioVaultAnywhereService.cs"));
@@ -1330,7 +1330,7 @@ static void Alpha18HardensConnectedClientReliability()
     True(playback.Contains("_handoffSnapshot.IsOwnedByCurrentDevice == false", StringComparison.Ordinal));
 
     var web = ReadWebServerSourceBundle();
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
     True(!web.Contains("radio-vault-anywhere-shell-v42", StringComparison.Ordinal));
 
     foreach (var installerName in new[] { "RadioVault.Client.iss", "RadioVault.Server.iss" })
@@ -2238,7 +2238,7 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
     True(!splash.Contains("RvTranscriptBrush", StringComparison.Ordinal));
 
     var web = ReadWebServerSourceBundle();
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
     True(web.Contains("class=\"menuToggle\"", StringComparison.Ordinal));
     True(web.Contains("id=\"menuScrim\"", StringComparison.Ordinal));
     True(web.Contains("body.menuOpen", StringComparison.Ordinal));
@@ -2320,7 +2320,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 
     var foundation = File.ReadAllText(Path.Combine(SourceRoot(), "tools", "Test-AvaloniaFoundation.ps1"));
     True(foundation.Contains("foundationVersion = '0.35-alpha9-knowledge-portability'", StringComparison.Ordinal));
-    True(foundation.Contains("databaseSchema = 50", StringComparison.Ordinal));
+    True(foundation.Contains("databaseSchema = 51", StringComparison.Ordinal));
     True(foundation.Contains("lanCapabilityGeneration = 41", StringComparison.Ordinal));
     foreach (var marker in new[]
              {
@@ -2331,7 +2331,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
         True(foundation.Contains(marker, StringComparison.Ordinal));
 
     var web = ReadWebServerSourceBundle();
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
 
     var truthService = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Services", "Services", "LibraryTruthAdoptionService.cs"));

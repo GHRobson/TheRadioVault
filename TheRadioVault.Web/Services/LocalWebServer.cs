@@ -767,6 +767,8 @@ public sealed partial class LocalWebServer : IDisposable
         {
             new WebServerCapability("library.read", "Browse canonical library", "read", true),
             new WebServerCapability("library.search", "Search broadcasts, people and topics", "read", true),
+            new WebServerCapability("radio.live", "Clock-driven Radio Vault Live archive station", "read", true,
+                "Listening is separate from Library progress and play history."),
             new WebServerCapability("broadcast.details", "Broadcast details and research", "read", true),
             new WebServerCapability("moments.write", "Create and delete Moments", "read-write", true),
             new WebServerCapability("transcripts.read", "Read timed transcripts", "read", true),

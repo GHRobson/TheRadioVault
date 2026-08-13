@@ -105,7 +105,7 @@ public sealed class IosNowPlayingService : IMobileNowPlayingService
         var artwork = ResolveArtwork(snapshot.Artwork);
         if (artwork is not null) info.Artwork = artwork;
         MPNowPlayingInfoCenter.DefaultCenter.NowPlaying = info;
-        SetCommandsEnabled(available: true, isPlaying: snapshot.IsPlaying);
+        SetCommandsEnabled(available: true, isPlaying: snapshot.IsPlaying, isLive: snapshot.IsLive);
     }
 
     private MPMediaItemArtwork? ResolveArtwork(byte[]? bytes)
@@ -140,14 +140,14 @@ public sealed class IosNowPlayingService : IMobileNowPlayingService
         _artworkBytes = null;
     }
 
-    private void SetCommandsEnabled(bool available, bool isPlaying)
+    private void SetCommandsEnabled(bool available, bool isPlaying, bool isLive = false)
     {
         _commandCenter.PlayCommand.Enabled = available && !isPlaying;
         _commandCenter.PauseCommand.Enabled = available && isPlaying;
         _commandCenter.TogglePlayPauseCommand.Enabled = available;
-        _commandCenter.SkipBackwardCommand.Enabled = available;
-        _commandCenter.SkipForwardCommand.Enabled = available;
-        _commandCenter.ChangePlaybackPositionCommand.Enabled = available;
+        _commandCenter.SkipBackwardCommand.Enabled = available && !isLive;
+        _commandCenter.SkipForwardCommand.Enabled = available && !isLive;
+        _commandCenter.ChangePlaybackPositionCommand.Enabled = available && !isLive;
     }
 
     private void Register(MPRemoteCommand command, Func<MPRemoteCommandEvent, MPRemoteCommandHandlerStatus> handler)

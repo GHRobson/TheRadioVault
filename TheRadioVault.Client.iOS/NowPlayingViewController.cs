@@ -393,14 +393,14 @@ public sealed class NowPlayingViewController : UIViewController
                 : RadioVaultIcons.Image(_session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play, RadioVaultTheme.Accent, 68, 1.5f),
             UIControlState.Normal);
         _playButton.TintColor = RadioVaultTheme.Accent;
-        _backButton.Enabled = _session.CanControlPlayback;
+        _backButton.Enabled = _session.CanSeekPlayback;
         _playButton.Enabled = !loading && _session.MiniPlayerCanAct;
         _playButton.AccessibilityLabel = loading ? "Loading broadcast" : _session.MiniPlayerShowsHandoff
             ? "Move playback to this iPhone"
             : _session.IsPlaying ? "Pause" : "Play";
-        _forwardButton.Enabled = _session.CanControlPlayback;
-        _progressSlider.Enabled = _session.CanControlPlayback;
-        _speedButton.Enabled = _session.CanControlPlayback;
+        _forwardButton.Enabled = _session.CanSeekPlayback;
+        _progressSlider.Enabled = _session.CanSeekPlayback;
+        _speedButton.Enabled = _session.CanSeekPlayback;
         _speedButton.SetTitle(_session.SpeedText, UIControlState.Normal);
         var broadcast = _session.CurrentBroadcast;
         if (broadcast is not null &&

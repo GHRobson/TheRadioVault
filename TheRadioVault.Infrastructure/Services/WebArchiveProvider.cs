@@ -3,6 +3,7 @@ using TheRadioVault.Models;
 using TheRadioVault.Core.Events;
 using TheRadioVault.Core.Playback;
 using TheRadioVault.Services.Jobs;
+using TheRadioVault.Services.Services;
 using TheRadioVault.Web.Contracts;
 using TheRadioVault.Web.Models;
 using TheRadioVault.Web.Services;
@@ -24,6 +25,7 @@ internal sealed partial class WebArchiveProvider : IWebArchiveProvider, IDisposa
     private readonly ILivePlaybackStateStore _livePlayback;
     private readonly IBackgroundJobQueue _jobs;
     private readonly IWebPlaybackController _playbackController;
+    private readonly LiveRadioScheduleService _liveRadio;
     private readonly ServerTranscriptionRuntime? _transcription;
     private readonly ITranscriptRepository _transcripts;
     private readonly ISpeakerIdentityRepository _speakers;
@@ -83,6 +85,7 @@ internal sealed partial class WebArchiveProvider : IWebArchiveProvider, IDisposa
         _livePlayback = livePlayback ?? throw new ArgumentNullException(nameof(livePlayback));
         _jobs = jobs ?? throw new ArgumentNullException(nameof(jobs));
         _playbackController = playbackController ?? throw new ArgumentNullException(nameof(playbackController));
+        _liveRadio = new LiveRadioScheduleService(_database.PlatformDatabase);
         _transcription = transcription;
         _transcripts = transcription?.TranscriptRepository ?? new SqliteTranscriptRepository(_database.PlatformDatabase);
         _speakers = transcription?.SpeakerRepository ?? new SqliteSpeakerIdentityRepository(_database.PlatformDatabase);
@@ -1302,6 +1305,7 @@ internal sealed partial class WebArchiveProvider : IWebArchiveProvider, IDisposa
     public void Dispose()
     {
         DisposeResearchImportSessions();
+        _liveRadio.Dispose();
         foreach (var subscription in _subscriptions) subscription.Dispose();
         _subscriptions.Clear();
         _libraryScanGate.Dispose();

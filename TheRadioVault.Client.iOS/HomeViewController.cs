@@ -80,7 +80,7 @@ public sealed class HomeViewController : SessionTableViewController
 
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
-        0 => 1,
+        0 => 2,
         1 => 1,
         2 => Math.Max(1, UpNext.Count),
         3 => 1,
@@ -109,6 +109,12 @@ public sealed class HomeViewController : SessionTableViewController
     {
         if (indexPath.Section == 0)
         {
+            if (indexPath.Row == 0)
+            {
+                var live = new LiveRadioDashboardCell();
+                live.Configure(Session.LiveRadio, Session.IsLiveRadioTunedIn, Session.IsLiveRadioLoading);
+                return live;
+            }
             var overview = new DashboardOverviewCell();
             overview.Configure(
                 Session.UnheardBroadcasts.Count > 0,
@@ -179,6 +185,11 @@ public sealed class HomeViewController : SessionTableViewController
     public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
     {
         tableView.DeselectRow(indexPath, true);
+        if (indexPath.Section == 0 && indexPath.Row == 0)
+        {
+            NavigationController?.PushViewController(new LiveRadioViewController(Session), true);
+            return;
+        }
         if (indexPath.Section == 1 && FeaturedContinue is { } featured)
         {
             HandleFeaturedPlayback(featured);
@@ -255,7 +266,8 @@ public sealed class HomeViewController : SessionTableViewController
         var featured = FeaturedContinue;
         return
         [
-            $"{Session.TotalBroadcasts}:{Session.InProgressBroadcasts}:{Session.CompletedBroadcasts}:{Session.FavouriteBroadcasts}:{Session.UnheardBroadcasts.Count}",
+            $"{Session.TotalBroadcasts}:{Session.InProgressBroadcasts}:{Session.CompletedBroadcasts}:{Session.FavouriteBroadcasts}:{Session.UnheardBroadcasts.Count}:" +
+            $"{Session.LiveRadio?.ScheduleRevision}:{Session.LiveRadio?.Current?.ScheduleEntryId}:{Session.IsLiveRadioTunedIn}:{Session.IsLiveRadioLoading}",
             featured is null
                 ? "empty"
                 : $"{BroadcastFingerprint([featured])}:{Session.PreparingPlaybackEpisodeId}:{Session.IsPlayingBroadcast(featured.EpisodeId)}",

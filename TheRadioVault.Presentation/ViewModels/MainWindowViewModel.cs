@@ -33,6 +33,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         WikiViewModel wiki,
         DownloadsViewModel downloads,
         PlaybackViewModel playback,
+        LiveRadioViewModel liveRadio,
         NowPlayingViewModel nowPlaying,
         FullBroadcastInfoViewModel broadcastInfo,
         DesktopToolsViewModel tools,
@@ -52,6 +53,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         Wiki = wiki ?? throw new ArgumentNullException(nameof(wiki));
         Downloads = downloads ?? throw new ArgumentNullException(nameof(downloads));
         Playback = playback ?? throw new ArgumentNullException(nameof(playback));
+        LiveRadio = liveRadio ?? throw new ArgumentNullException(nameof(liveRadio));
         NowPlaying = nowPlaying ?? throw new ArgumentNullException(nameof(nowPlaying));
         BroadcastInfo = broadcastInfo ?? throw new ArgumentNullException(nameof(broadcastInfo));
         Tools = tools ?? throw new ArgumentNullException(nameof(tools));
@@ -84,6 +86,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         NavigationItems = new ObservableCollection<ShellNavigationItemViewModel>(new[]
         {
             new ShellNavigationItemViewModel("dashboard", "Dashboard", "Overview and likely next actions", "⌂", NavigateToAsync, iconTone: "accent"),
+            new ShellNavigationItemViewModel("live-radio", "Live Radio", "Your archive, broadcasting now", "◉", NavigateToAsync, iconTone: "progress"),
             new ShellNavigationItemViewModel("search", "Search", "Search, shows and collections", "⌕", NavigateToAsync, iconTone: "search"),
             _libraryNavigation,
             new ShellNavigationItemViewModel("wiki", "Explore", "People, shows, history and cited timelines", "W", NavigateToAsync, iconTone: "wiki"),
@@ -130,6 +133,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public WikiViewModel Wiki { get; }
     public DownloadsViewModel Downloads { get; }
     public PlaybackViewModel Playback { get; }
+    public LiveRadioViewModel LiveRadio { get; }
     public NowPlayingViewModel NowPlaying { get; }
     public FullBroadcastInfoViewModel BroadcastInfo { get; }
     public DesktopToolsViewModel Tools { get; }
@@ -153,6 +157,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         {
             if (string.Equals(CurrentRoute, "dashboard", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(CurrentRoute, "now-playing", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(CurrentRoute, "live-radio", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(CurrentRoute, "saved", StringComparison.OrdinalIgnoreCase)
                 || string.Equals(CurrentRoute, "transcripts", StringComparison.OrdinalIgnoreCase)
                 || CurrentRoute.StartsWith("research", StringComparison.OrdinalIgnoreCase)
@@ -310,6 +315,12 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 PageTitle = "Now Playing";
                 PageDescription = "Current playback, broadcast context and the queue in one place.";
                 await NowPlaying.LoadAsync().ConfigureAwait(true);
+                break;
+            case "live-radio":
+                CurrentPage = LiveRadio;
+                PageTitle = "Radio Vault Live";
+                PageDescription = "Your archive, playing like live radio.";
+                await LiveRadio.LoadAsync().ConfigureAwait(true);
                 break;
             case "saved":
                 CurrentPage = Saved;

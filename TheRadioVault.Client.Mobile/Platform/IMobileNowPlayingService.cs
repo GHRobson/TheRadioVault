@@ -20,7 +20,8 @@ public sealed record MobileNowPlayingSnapshot(
     double Rate,
     bool IsPlaying,
     bool IsAvailable,
-    byte[]? Artwork = null);
+    byte[]? Artwork = null,
+    bool IsLive = false);
 
 public interface IMobileNowPlayingService : IDisposable
 {

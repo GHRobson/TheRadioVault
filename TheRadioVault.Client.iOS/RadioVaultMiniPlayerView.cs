@@ -120,14 +120,14 @@ public sealed class RadioVaultMiniPlayerView : UIView
             _artworkWasRequestedOnline = _session.IsLiveConnected;
             RadioVaultArtwork.Load(_artwork, _session, broadcast);
         }
-        var loading = _session.IsPreparingPlayback;
+        var loading = _session.IsPreparingPlayback || _session.IsLiveRadioLoading;
         if (loading) _activity.StartAnimating(); else _activity.StopAnimating();
         _actionButton.SetImage(loading
             ? null
             : _session.MiniPlayerShowsHandoff
                 ? RadioVaultIcons.Image(RadioVaultIcon.Handoff, RadioVaultTheme.Accent, 30, 2.5)
                 : RadioVaultIcons.Image(
-                    _session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play,
+                    _session.IsLiveRadioTunedIn || _session.IsPlaying ? RadioVaultIcon.Pause : RadioVaultIcon.Play,
                     RadioVaultTheme.Accent,
                     30,
                     2.5), UIControlState.Normal);
@@ -135,6 +135,7 @@ public sealed class RadioVaultMiniPlayerView : UIView
         _actionButton.Enabled = !loading && _session.MiniPlayerCanAct;
         _actionButton.AccessibilityLabel = loading
             ? "Loading broadcast"
+            : _session.IsLiveRadioTunedIn ? "Leave Radio Vault Live"
             : _session.MiniPlayerShowsHandoff
             ? "Move playback to this iPhone"
             : _session.IsPlaying ? "Pause" : "Play";

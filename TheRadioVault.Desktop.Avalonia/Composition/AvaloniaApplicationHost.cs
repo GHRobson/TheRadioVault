@@ -121,6 +121,7 @@ public sealed class AvaloniaApplicationHost : IDisposable
             .RegisterSingleton<IServerTranscriptionAdministrationService>(registry => new LoopbackServerTranscriptionAdministrationService(
                 registry.GetRequiredService<LoopbackServerClient>()))
             .RegisterSingleton<ILibraryBrowseService>(registry => new LoopbackLibraryBrowseService(registry.GetRequiredService<LoopbackServerClient>()))
+            .RegisterSingleton<ILiveRadioService>(registry => new LoopbackLiveRadioService(registry.GetRequiredService<LoopbackServerClient>()))
             .RegisterSingleton<ILibraryActionService>(registry => new LoopbackLibraryActionService(registry.GetRequiredService<LoopbackServerClient>()))
             .RegisterSingleton<ILocalPlaybackLibraryService>(registry => new LoopbackPlaybackLibraryService(
                 registry.GetRequiredService<LoopbackServerClient>(),
@@ -157,6 +158,13 @@ public sealed class AvaloniaApplicationHost : IDisposable
                 registry.GetRequiredService<IUiDispatcher>(),
                 registry.GetRequiredService<IPlaybackHandoffService>(),
                 isRemoteSession ? nativeServerPreferences.ServerDisplayName : "this computer's server"))
+            .RegisterSingleton(registry => new LiveRadioViewModel(
+                registry.GetRequiredService<ILiveRadioService>(),
+                registry.GetRequiredService<ILocalPlaybackLibraryService>(),
+                registry.GetRequiredService<IMomentsService>(),
+                new PlaybackSessionCoordinator(CreatePlaybackEngine()),
+                registry.GetRequiredService<PlaybackViewModel>(),
+                registry.GetRequiredService<IUiDispatcher>()))
             .RegisterSingleton(registry => new DownloadsViewModel(
                 registry.GetRequiredService<INativeDownloadService>(),
                 registry.GetRequiredService<PlaybackViewModel>(),
@@ -272,6 +280,7 @@ public sealed class AvaloniaApplicationHost : IDisposable
                 wiki: registry.GetRequiredService<WikiViewModel>(),
                 downloads: registry.GetRequiredService<DownloadsViewModel>(),
                 playback: registry.GetRequiredService<PlaybackViewModel>(),
+                liveRadio: registry.GetRequiredService<LiveRadioViewModel>(),
                 nowPlaying: registry.GetRequiredService<NowPlayingViewModel>(),
                 broadcastInfo: registry.GetRequiredService<FullBroadcastInfoViewModel>(),
                 tools: registry.GetRequiredService<DesktopToolsViewModel>(),
@@ -284,12 +293,12 @@ public sealed class AvaloniaApplicationHost : IDisposable
             typeof(RadioVaultApplicationLifetime), typeof(IUserNotificationService), typeof(INavigationService),
             typeof(ITranscriptRepository),
             typeof(IBackgroundJobQueue), typeof(ITranscriptionCoordinator), typeof(IServerTranscriptionAdministrationService),
-            typeof(LoopbackServerClient), typeof(ServerMediaProxy), typeof(INativeDownloadService), typeof(ILibraryBrowseService), typeof(ILibraryActionService), typeof(ILocalPlaybackLibraryService),
+            typeof(LoopbackServerClient), typeof(ServerMediaProxy), typeof(INativeDownloadService), typeof(ILibraryBrowseService), typeof(ILiveRadioService), typeof(ILibraryActionService), typeof(ILocalPlaybackLibraryService),
             typeof(IQueueService), typeof(ISavedCollectionService), typeof(IMomentsService), typeof(IResearchWorkspaceService), typeof(IResearchPackTransferService), typeof(IWikiService), typeof(IWikiPackTransferService),
             typeof(IBroadcastDetailsService), typeof(ILibraryFolderService), typeof(IArchiveHealthService),
             typeof(ILibraryMaintenanceService), typeof(IPlaybackHandoffService),
             typeof(IRadioVaultAnywhereService), typeof(IConnectedAccessService), typeof(IConnectedPlaybackDiagnosticsService),
-            typeof(PlaybackSessionCoordinator), typeof(PlaybackViewModel), typeof(DownloadsViewModel), typeof(QueueViewModel), typeof(MomentsViewModel), typeof(CollectionsViewModel), typeof(TranscriptsViewModel),
+            typeof(PlaybackSessionCoordinator), typeof(PlaybackViewModel), typeof(LiveRadioViewModel), typeof(DownloadsViewModel), typeof(QueueViewModel), typeof(MomentsViewModel), typeof(CollectionsViewModel), typeof(TranscriptsViewModel),
             typeof(SearchViewModel), typeof(ResearchWorkspaceViewModel), typeof(WikiViewModel),
             typeof(NowPlayingViewModel), typeof(FullBroadcastInfoViewModel), typeof(DesktopToolsViewModel),
             typeof(ApplicationStartupCoordinator), typeof(ApplicationShutdownCoordinator),

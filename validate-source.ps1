@@ -180,7 +180,7 @@ $anywhereWebAssets = @(
     (Get-Content (Join-Path $root "TheRadioVault.Web\Assets\secure-setup.html") -Raw -Encoding UTF8)
 )
 $anywhereWebText = ($anywhereWebSources + $anywhereWebAssets) -join "`n"
-foreach ($marker in @('["transcription","Transcription studio"]', '--transcript: #43c7bd', 'loadTranscripts', 'data-transcription-action', 'data-transcript-export', 'data-transcribe-full', 'radio-vault-anywhere-shell-v67')) {
+foreach ($marker in @('["transcription","Transcription studio"]', '--transcript: #43c7bd', 'loadTranscripts', 'data-transcription-action', 'data-transcript-export', 'data-transcribe-full', 'radio-vault-anywhere-shell-v68')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 7 Anywhere transcription marker missing: $marker" }
 }
 if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA7-ANYWHERE-TRANSCRIPTS.md"))) {
@@ -329,13 +329,13 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA9-
 if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.35.0-ALPHA9-BUILDFIX2-ARCHIVE-WIDE-KNOWLEDGE-EXPORT.md"))) {
     throw "0.35 Alpha 9 Buildfix 2 archive-wide Knowledge export acceptance guide is missing."
 }
-foreach ($marker in @('if (!id || isIosWebKit || thisPhoneOwnsSession() || phoneTransferInProgress) return;', 'if (!isIosWebKit && shared?.episodeId && !phoneTransferInProgress)', 'const preparingDormantTarget = !isIosWebKit && inactive && has &&', 'radio-vault-anywhere-shell-v67')) {
+foreach ($marker in @('if (!id || isIosWebKit || thisPhoneOwnsSession() || phoneTransferInProgress) return;', 'if (!isIosWebKit && shared?.episodeId && !phoneTransferInProgress)', 'const preparingDormantTarget = !isIosWebKit && inactive && has &&', 'radio-vault-anywhere-shell-v68')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 20 Buildfix 1 repeated-iPhone-handoff marker missing: $marker" }
 }
 if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX1-IPHONE-REPEATED-HANDOFF.md"))) {
     throw "Alpha 20 Buildfix 1 acceptance guide is missing."
 }
-foreach ($marker in @('GetOrCreatePositionedWaveSession', 'PositionedWaveSessionIdleLifetime', 'WriteRangeAsync', 'streamSession', 'radio-vault-anywhere-shell-v67')) {
+foreach ($marker in @('GetOrCreatePositionedWaveSession', 'PositionedWaveSessionIdleLifetime', 'WriteRangeAsync', 'streamSession', 'radio-vault-anywhere-shell-v68')) {
     if ($anywhereWebText -notmatch [regex]::Escape($marker)) { throw "Alpha 20 Buildfix 2 iPhone range-continuity marker missing: $marker" }
 }
 if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA20-BUILDFIX2-IPHONE-RANGE-CONTINUITY.md"))) {
@@ -999,7 +999,7 @@ $alpha14ClientAdapterText = Get-Content (Join-Path $root "TheRadioVault.Desktop.
 $alpha14ClientViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\DesktopToolsView.axaml") -Raw
 $alpha14ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml") -Raw
 $alpha14QrText = Get-Content (Join-Path $root "TheRadioVault.Application\Models\PhoneQrCode.cs") -Raw
-foreach ($marker in @('productName = "Radio Vault Web"', 'GetAccessUrls().FirstOrDefault()', 'GetSecureSetupUrls().FirstOrDefault()', '<title>Radio Vault Web</title>', 'radio-vault-anywhere-shell-v67')) {
+foreach ($marker in @('productName = "Radio Vault Web"', 'GetAccessUrls().FirstOrDefault()', 'GetSecureSetupUrls().FirstOrDefault()', '<title>Radio Vault Web</title>', 'radio-vault-anywhere-shell-v68')) {
     if ($alpha14WebServerText -notmatch [regex]::Escape($marker)) { throw "Alpha 14 Radio Vault Web server marker missing: $marker" }
 }
 foreach ($marker in @('response.Web?.AccessUrl', 'response.Web?.SecureSetupUrl')) {

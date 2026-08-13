@@ -51,7 +51,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Library coordinator keeps archive search queries explicit", LibraryCoordinatorKeepsArchiveSearchExplicitAsync),
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
-    ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync)
+    ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync),
+    ("Live Radio stays outside personal playback state", LiveRadioStaysOutsidePersonalPlaybackStateAsync)
 };
 
 var failures = new List<string>();
@@ -214,6 +215,35 @@ static Task HandoffKeepsTransactionalBoundaryAsync()
     Contains(downloadedBranch, "GetPlaybackSessionAsync", "downloaded playback ownership polling");
     Contains(downloadedBranch, "StopForCommittedTransferAsync", "downloaded playback source-stop acknowledgement");
     Contains(downloadedBranch, "ReportLivePlaybackAsync", "downloaded playback ownership publication");
+    return Task.CompletedTask;
+}
+
+static Task LiveRadioStaysOutsidePersonalPlaybackStateAsync()
+{
+    var root = FindRepositoryRoot();
+    var source = File.ReadAllText(Path.Combine(root, "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    var synchronizeStart = source.IndexOf("private async Task SynchronizePlaybackAsync", StringComparison.Ordinal);
+    var observeStart = source.IndexOf("private async Task ObserveSharedPlaybackAsync", synchronizeStart, StringComparison.Ordinal);
+    Ensure(synchronizeStart >= 0 && observeStart > synchronizeStart,
+        "The mobile playback synchronization boundary could not be located.");
+    var synchronization = source[synchronizeStart..observeStart];
+    var liveBranch = synchronization.IndexOf("if (IsLiveRadioTunedIn)", StringComparison.Ordinal);
+    var ordinaryBranch = synchronization.IndexOf("if (_offlinePlayback)", StringComparison.Ordinal);
+    Ensure(liveBranch >= 0 && ordinaryBranch > liveBranch,
+        "Live Radio did not exit before ordinary progress synchronization.");
+    Contains(synchronization[liveBranch..ordinaryBranch], "await SynchronizeLiveRadioAsync()", "isolated live synchronization");
+    Contains(synchronization[liveBranch..ordinaryBranch], "return;", "live synchronization early return");
+
+    var liveStart = source.IndexOf("private async Task SynchronizeLiveRadioAsync", StringComparison.Ordinal);
+    Ensure(liveStart >= 0 && observeStart > liveStart, "The Live Radio synchronization method could not be located.");
+    var liveSynchronization = source[liveStart..observeStart];
+    Ensure(!liveSynchronization.Contains("UpdateProgress", StringComparison.Ordinal),
+        "Live Radio synchronization writes personal progress.");
+    Ensure(!liveSynchronization.Contains("ReportLivePlayback", StringComparison.Ordinal),
+        "Live Radio synchronization publishes shared playback ownership.");
+    Ensure(!liveSynchronization.Contains("PlaybackTransfer", StringComparison.Ordinal),
+        "Live Radio synchronization participates in handoff.");
+    Contains(source, "IsLiveRadioTunedIn\n            ? Task.CompletedTask", "live progress flush suppression");
     return Task.CompletedTask;
 }
 
