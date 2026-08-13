@@ -34,7 +34,7 @@ public sealed partial class FilenameParserService
 
     public ParsedFilename Parse(string path, FilenameParseContext? context)
     {
-        var filename = Path.GetFileNameWithoutExtension(path);
+        var filename = ArchivePath.GetFileNameWithoutExtension(path);
         var collectionFromFilename = DetectCollection(filename.ToLowerInvariant());
         var assignedCollection = KnownShowCatalog.Normalize(context?.AssignedCollectionName);
         var result = new ParsedFilename
@@ -110,7 +110,7 @@ public sealed partial class FilenameParserService
 
     public FilenameParseContext AnalyseFolder(IEnumerable<string> paths)
     {
-        var filenames = paths.Select(Path.GetFileNameWithoutExtension).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
+        var filenames = paths.Select(ArchivePath.GetFileNameWithoutExtension).Where(x => !string.IsNullOrWhiteSpace(x)).ToArray();
         if (filenames.Length < 3) return FilenameParseContext.None;
 
         var numbers = new List<int>();
@@ -238,7 +238,7 @@ public sealed partial class FilenameParserService
         if (!KnownShowCatalog.UsesUsArchiveDateOrder(collectionName))
             return null;
 
-        var yearMatches = ArchiveFolderYearRegex().Matches(Path.GetDirectoryName(path) ?? string.Empty);
+        var yearMatches = ArchiveFolderYearRegex().Matches(ArchivePath.GetDirectoryName(path) ?? string.Empty);
         if (yearMatches.Count == 0)
             return null;
 

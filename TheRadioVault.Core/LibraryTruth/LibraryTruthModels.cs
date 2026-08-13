@@ -1,3 +1,5 @@
+using TheRadioVault.Core.Services;
+
 namespace TheRadioVault.Core.LibraryTruth;
 
 public enum LibraryTruthConfidence
@@ -42,10 +44,10 @@ public sealed class LibraryTruthFileInput
     public string LibraryRoot { get; init; } = string.Empty;
     public string AssignedCollectionName { get; init; } = string.Empty;
 
-    public string FilenameWithoutExtension => System.IO.Path.GetFileNameWithoutExtension(
+    public string FilenameWithoutExtension => ArchivePath.GetFileNameWithoutExtension(
         string.IsNullOrWhiteSpace(OriginalFilename) ? Path : OriginalFilename);
 
-    public string DirectoryPath => System.IO.Path.GetDirectoryName(Path) ?? LibraryRoot;
+    public string DirectoryPath => ArchivePath.GetDirectoryName(Path) ?? LibraryRoot;
 }
 
 public sealed class LibraryTruthFolderContext

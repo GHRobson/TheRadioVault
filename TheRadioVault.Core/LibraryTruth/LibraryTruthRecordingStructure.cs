@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using TheRadioVault.Core.Services;
 
 namespace TheRadioVault.Core.LibraryTruth;
 
@@ -52,7 +53,7 @@ public static class LibraryTruthRecordingStructure
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(originalFilename);
 
-        var stem = Path.GetFileNameWithoutExtension(originalFilename).Trim();
+        var stem = ArchivePath.GetFileNameWithoutExtension(originalFilename).Trim();
         var variantMatch = Variant.Match(stem);
         var variant = variantMatch.Success ? $"V{variantMatch.Groups["number"].Value}" : null;
         var leadingTrack = IsLeadingTrackNumberBeforeDate(stem);

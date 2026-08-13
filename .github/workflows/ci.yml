@@ -129,6 +129,14 @@ jobs:
           -p:ContinuousIntegrationBuild=true
           -p:Deterministic=true
 
+      - name: Build Library Truth behavioral-test runner
+        run: >-
+          dotnet build
+          TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj
+          -c Release --no-restore -warnaserror
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+
       - name: Build Transcription behavioral-test runner
         run: >-
           dotnet build
@@ -161,6 +169,11 @@ jobs:
       - name: Run Data behavioral tests on macOS
         run: >-
           dotnet run --project TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj
+          -c Release --no-build
+
+      - name: Run Library Truth behavioral tests on macOS
+        run: >-
+          dotnet run --project TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj
           -c Release --no-build
 
       - name: Run Transcription behavioral tests on macOS
@@ -245,6 +258,14 @@ jobs:
           -p:ContinuousIntegrationBuild=true
           -p:Deterministic=true
 
+      - name: Build Library Truth behavioral-test runner
+        run: >-
+          dotnet build
+          TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj
+          -c Release --no-restore -warnaserror
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+
       - name: Build Transcription behavioral-test runner
         run: >-
           dotnet build
@@ -275,6 +296,11 @@ jobs:
       - name: Run Data behavioral tests on Linux
         run: >-
           dotnet run --project TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj
+          -c Release --no-build
+
+      - name: Run Library Truth behavioral tests on Linux
+        run: >-
+          dotnet run --project TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj
           -c Release --no-build
 
       - name: Run Transcription behavioral tests on Linux
@@ -350,6 +376,14 @@ jobs:
           -p:ContinuousIntegrationBuild=true
           -p:Deterministic=true
 
+      - name: Build Library Truth behavioral-test runner
+        run: >-
+          dotnet build
+          TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj
+          -c Release -warnaserror
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+
       - name: Run iOS architecture smoke test
         run: >-
           dotnet run --project TheRadioVault.Tests/TheRadioVault.Tests.csproj
@@ -358,6 +392,11 @@ jobs:
           "Playback startup succeeds only after decoder readiness"
           "Playback startup reports a distinct decoder timeout"
           "Playback startup cancels and serializes superseded selections"
+
+      - name: Run Library Truth behavioral tests on iOS host
+        run: >-
+          dotnet run --project TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj
+          -c Release --no-build
 
       - name: Run transactional Web handoff tests
         run: >-

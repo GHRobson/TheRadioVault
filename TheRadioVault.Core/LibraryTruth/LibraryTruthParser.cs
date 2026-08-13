@@ -629,7 +629,7 @@ public sealed class LibraryTruthParser
     {
         var yearPattern = new Regex(@"(?<!\d)(?<year>(?:19|20)\d{2})(?!\d)",
             RegexOptions.CultureInvariant | RegexOptions.Compiled);
-        foreach (var component in path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Reverse())
+        foreach (var component in ArchivePath.Components(path).Reverse())
         {
             var matches = yearPattern.Matches(component);
             for (var index = matches.Count - 1; index >= 0; index--)

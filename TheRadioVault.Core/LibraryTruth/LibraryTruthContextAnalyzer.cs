@@ -85,7 +85,7 @@ public sealed class LibraryTruthContextAnalyzer
         var relative = path;
         if (!string.IsNullOrWhiteSpace(root) && path.StartsWith(root, StringComparison.OrdinalIgnoreCase))
             relative = path[root.Length..];
-        foreach (var component in relative.Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries).Reverse())
+        foreach (var component in ArchivePath.Components(relative).Reverse())
         {
             var matches = YearComponent.Matches(component);
             for (var index = matches.Count - 1; index >= 0; index--)
