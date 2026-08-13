@@ -224,7 +224,7 @@ public sealed class SearchViewModel : ObservableObject
                 HasTranscript: HasTranscriptOnly)).ConfigureAwait(true);
             Results.Clear();
             foreach (var item in result.Broadcasts)
-                Results.Add(new BroadcastRowViewModel(item, _playback.LoadAndPlayAsync, ToggleFavouriteAsync, AddToQueueAsync,
+                Results.Add(new BroadcastRowViewModel(item, PlaySearchResultAsync, ToggleFavouriteAsync, AddToQueueAsync,
                     transcribe: TranscribeAsync, setPlayed: SetPlayedAsync));
             RaiseResultState();
             await RelatedWiki.LoadAsync(query, SelectedShow?.Title).ConfigureAwait(true);
@@ -329,6 +329,11 @@ public sealed class SearchViewModel : ObservableObject
 
     private Task AddToQueueAsync(BroadcastRowViewModel row, bool playNext)
         => _queue.AddAsync(row.Source.RepresentativeEpisodeId, playNext);
+
+    private Task PlaySearchResultAsync(BroadcastRowViewModel row)
+        => row.Source.SearchStartMs is { } startMs
+            ? _playback.LoadAndPlayAtAsync(row.Source.RepresentativeEpisodeId, startMs)
+            : _playback.LoadAndPlayAsync(row);
 
     private async Task SetPlayedAsync(BroadcastRowViewModel row, bool played)
     {

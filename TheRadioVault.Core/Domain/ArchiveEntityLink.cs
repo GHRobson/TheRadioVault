@@ -32,6 +32,32 @@ public sealed record ArchiveEntityLink(
     public string EntityKey => $"{Kind.ToString().ToLowerInvariant()}:{EntityId}";
 }
 
+public enum ArchiveEntityDestination
+{
+    Explore,
+    LibraryShow,
+    Broadcast
+}
+
+public sealed record ArchiveEntityNavigationTarget(
+    ArchiveEntityDestination Destination,
+    string TargetId,
+    string Label);
+
+public static class ArchiveEntityNavigation
+{
+    public static ArchiveEntityNavigationTarget Resolve(ArchiveEntityLink link)
+    {
+        ArgumentNullException.ThrowIfNull(link);
+        return link.Kind switch
+        {
+            ArchiveEntityKind.Broadcast => new(ArchiveEntityDestination.Broadcast, link.TargetId, link.Label),
+            ArchiveEntityKind.Show => new(ArchiveEntityDestination.LibraryShow, link.TargetId, link.Label),
+            _ => new(ArchiveEntityDestination.Explore, link.TargetId, link.Label)
+        };
+    }
+}
+
 public static class ArchiveEntityLinkFactory
 {
     public static ArchiveEntityLink Create(

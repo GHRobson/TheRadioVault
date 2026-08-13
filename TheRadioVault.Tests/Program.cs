@@ -619,6 +619,20 @@ static void ArchiveEntityLinksPreserveIdentity()
     Equal("BENNINGTON-2016-05-17", broadcastId);
     Equal("42", episodeId);
     Equal("broadcast:BENNINGTON-2016-05-17", broadcast.EntityKey);
+
+    var show = ArchiveEntityLinkFactory.ForShow(7, "Bennington");
+    var showTarget = ArchiveEntityNavigation.Resolve(show);
+    Equal(ArchiveEntityDestination.LibraryShow, showTarget.Destination);
+    Equal("7", showTarget.TargetId);
+    Equal("Bennington", showTarget.Label);
+
+    var broadcastTarget = ArchiveEntityNavigation.Resolve(broadcast);
+    Equal(ArchiveEntityDestination.Broadcast, broadcastTarget.Destination);
+    Equal("42", broadcastTarget.TargetId);
+
+    var personNavigation = ArchiveEntityNavigation.Resolve(person);
+    Equal(ArchiveEntityDestination.Explore, personNavigation.Destination);
+    Equal("Ron Bennington", personNavigation.Label);
 }
 
 static void CanonicalPersonalStateWritesRollBackAtomically()
@@ -872,14 +886,15 @@ static void LibrarySearchFindsTranscriptSpeech()
         {
             EpisodeId = episodeId,
             FullText = "A discussion about phosphorescent penguins in radio.",
-            Segments = new[] { new TranscriptSegment(0, 0, 4000, "A discussion about phosphorescent penguins in radio.") }
+            Segments = new[] { new TranscriptSegment(0, 90_000, 94_000, "A discussion about phosphorescent penguins in radio.") }
         }).GetAwaiter().GetResult();
 
         var result = new LibraryBrowseService(database).BrowseAsync(new TheRadioVault.Services.Models.LibraryBrowseRequest(
             SearchText: "phosphorescent penguins",
             SearchScope: TheRadioVault.Services.Models.LibrarySearchScope.Transcripts)).GetAwaiter().GetResult();
         Equal(1, result.TotalMatching);
-        True(result.Broadcasts.Single().SearchContext.StartsWith("Transcript:", StringComparison.Ordinal));
+        True(result.Broadcasts.Single().SearchContext.StartsWith("Transcript · 1:30:", StringComparison.Ordinal));
+        Equal(90_000L, result.Broadcasts.Single().SearchStartMs);
         var titlesOnly = new LibraryBrowseService(database).BrowseAsync(new TheRadioVault.Services.Models.LibraryBrowseRequest(
             SearchText: "phosphorescent penguins",
             SearchScope: TheRadioVault.Services.Models.LibrarySearchScope.TitlesAndSummaries)).GetAwaiter().GetResult();

@@ -48,11 +48,11 @@ Verify on a physical phone: Lock Screen play/pause/seek, wired and Bluetooth con
 
 ### 4. Treat backup and restore as release features
 
-The schema has reached version 48 and the database is one of the most important parts of the application. Migration backup and a verified daily scheduled-backup service now exist, with current status exposed to server administration. A guided restore wizard and automated clean-server restore rehearsal are still needed before 1.0. A backup is not fully proven until that rehearsal passes.
+The schema has reached version 48 and the database is one of the most important parts of the application. Migration backup and a verified daily scheduled-backup service now exist. Every candidate backup can be extracted under strict archive limits and rehearsed against an isolated SQLite copy with integrity, foreign-key, schema and content checks before live restore. Live restore retains a pre-restore database and rolls back if post-copy validation fails. A physical clean-server rehearsal remains part of release acceptance.
 
 ### 5. Improve release diagnostics
 
-When a real device fails, debugging currently depends heavily on live development access. Add a privacy-conscious diagnostics export containing application version, platform, sync checkpoints, playback ownership transitions, recent errors and server health—never tokens, recordings or transcript contents.
+The server now exports a privacy-conscious diagnostic report containing version, platform, sync checkpoints, recent errors, backup state and database/storage/certificate/client/media health. Client identifiers are pseudonymized and tokens, profile paths, recordings and transcript contents are excluded. The next diagnostics work is to include a bounded playback-ownership transition trail without exposing library content.
 
 ## Major refactoring targets
 
@@ -64,7 +64,7 @@ When a real device fails, debugging currently depends heavily on live developmen
 | P2 | Desktop playback | `PlaybackViewModel.cs` began at 2,168 lines and coordinates UI commands, handoff and timing. Transport/handoff transitions now live in `DesktopPlaybackStateMachine`, remote heartbeat smoothing lives in `RemotePlaybackProgressInterpolator`, and shared startup supersession/readiness policy lives in `PlaybackStartupCoordinator`. | Keep Avalonia binding projection and decoder/network side effects in the view model while moving future pure transition or timing policy into focused shared services. |
 | P2 | Database services | `DatabaseService.cs` began this pass at 2,153 lines and its partials still carry broad library, research and reconciliation responsibilities. Listener-controlled playback, completion and favourite writes now delegate to `PersonalStateRepository`; canonical members are read and updated inside one transaction, while `SqliteDatabase` remains the connection and migration owner. The façade is 2,026 lines. | Continue one bounded context at a time. Prefer an extracted repository only when it removes duplicate policy or creates a stronger transactional boundary with compiled rollback coverage. |
 | P2 | Database schema | The schema-47 bootstrap remains intact in `SqliteDatabase.cs`. Schema 48 begins a contiguous numbered-migration catalog with a transactional runner and durable history ledger. | Keep each future change in one numbered object with order, idempotence, rollback and pre-upgrade-backup coverage. Do not rewrite the legacy bootstrap. |
-| P2 | Explore/Knowledge | Wiki, research workspace and their view models are large and partially overlapping. A neutral entity-link contract now covers articles, people, shows, topics, images, timelines and broadcasts and is emitted by Broadcast Info and Explore documents. | Make every client route the shared links consistently, then use them in Knowledge and transcript search instead of maintaining target-name heuristics. |
+| P2 | Explore/Knowledge | Wiki, research workspace and their view models are large and partially overlapping. A neutral entity-link contract covers articles, people, shows, topics, images, timelines and broadcasts. Broadcast Info now emits it locally and remotely, and desktop/iOS metadata pills use the shared routing policy. Transcript search carries a timed target directly into playback. | Replace the remaining Explore prose and Knowledge label heuristics with entity links, then add equivalent timed transcript-search presentation on mobile. |
 | P3 | iOS presentation | `RadioVaultCells.cs` is 1,516 lines and controllers manually repeat styling/layout decisions. | Extract a design-system layer and reusable cells after accessibility identifiers and snapshot baselines exist. |
 | P3 | Documentation | There are 457 Markdown files. `docs/current` now contains only its living-document index; 203 superseded Alpha/Beta/RC reports were preserved under indexed history folders. | Keep new living guidance in the indexed guide/architecture/roadmap locations and immutable release evidence under `history`. |
 
@@ -72,7 +72,7 @@ When a real device fails, debugging currently depends heavily on live developmen
 
 ### Server
 
-The server should remain authoritative for library metadata, playback ownership and conflict resolution. Its next work should focus on operations: a database/storage/certificate/client health page; scheduled backup and verified restore; bounded structured logs; visible per-device sync state; background-service installation on every desktop platform; maintenance mode for migration/restore; and rate limits and expiry around pairing.
+The server remains authoritative for library metadata, playback ownership and conflict resolution. Database/storage/certificate/client/media health, per-device sync state, scheduled backup, isolated restore rehearsal and redacted diagnostics are now implemented. The next operational work is bounded structured logging, background-service installation on every desktop platform, maintenance mode for migration/restore, and rate limits and expiry around pairing.
 
 The server should not be exposed directly to the public internet. Remote access needs a designed relay or private-network approach with short-lived credentials, not port forwarding.
 

@@ -472,6 +472,7 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
     {
         var score = 0;
         var context = string.Empty;
+        long? searchStartMs = null;
         if (scope is LibrarySearchScope.All or LibrarySearchScope.TitlesAndSummaries)
         {
             if (string.Equals(item.Title?.Trim(), search, StringComparison.CurrentCultureIgnoreCase)) score = 120;
@@ -489,9 +490,10 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
             {
                 score = candidate.Score;
                 context = candidate.Context;
+                searchStartMs = candidate.StartMs;
             }
         }
-        return item with { SearchScore = score, SearchContext = context };
+        return item with { SearchScore = score, SearchContext = context, SearchStartMs = searchStartMs };
     }
 
     private IReadOnlyDictionary<long, ExtendedSearchMatch> LoadExtendedSearchMatches(string search)
@@ -506,7 +508,14 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
                    COALESCE((SELECT group_concat(rp.name,'; ') FROM research_people rp JOIN research_broadcasts rb ON rb.id=rp.research_broadcast_id WHERE rb.episode_id=e.id),''),
                    COALESCE((SELECT group_concat(rt.topic,'; ') FROM research_topics rt JOIN research_broadcasts rb ON rb.id=rt.research_broadcast_id WHERE rb.episode_id=e.id),''),
                    COALESCE((SELECT group_concat(rb.research_json,' ') FROM research_broadcasts rb WHERE rb.episode_id=e.id),''),
-                   COALESCE((SELECT t.full_text FROM transcripts t WHERE t.episode_id=e.id LIMIT 1),'')
+                   COALESCE((SELECT t.full_text FROM transcripts t WHERE t.episode_id=e.id LIMIT 1),''),
+                   (SELECT ts.start_ms
+                      FROM transcripts matching_transcript
+                      JOIN transcript_segments ts ON ts.transcript_id=matching_transcript.id
+                     WHERE matching_transcript.episode_id=e.id
+                       AND instr(lower(ts.text),lower($search))>0
+                     ORDER BY ts.start_ms,ts.segment_index
+                     LIMIT 1)
               FROM episodes e
              WHERE COALESCE(e.hidden,0)=0
                AND (
@@ -530,11 +539,15 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
             var topics = reader.GetString(7);
             var notes = string.Join(" ", reader.GetString(4), reader.GetString(8));
             var transcript = reader.GetString(9);
+            long? transcriptStartMs = reader.IsDBNull(10) ? null : reader.GetInt64(10);
             result[id] = new ExtendedSearchMatch(
-                Contains(people, search) ? new SearchMatch(88, BuildExcerpt(people, search, "Person")) : null,
-                Contains(topics, search) ? new SearchMatch(84, BuildExcerpt(topics, search, "Topic")) : null,
-                Contains(notes, search) ? new SearchMatch(72, BuildExcerpt(notes, search, "Research")) : null,
-                Contains(transcript, search) ? new SearchMatch(68, BuildExcerpt(transcript, search, "Transcript")) : null);
+                Contains(people, search) ? new SearchMatch(88, BuildExcerpt(people, search, "Person"), null) : null,
+                Contains(topics, search) ? new SearchMatch(84, BuildExcerpt(topics, search, "Topic"), null) : null,
+                Contains(notes, search) ? new SearchMatch(72, BuildExcerpt(notes, search, "Research"), null) : null,
+                Contains(transcript, search) ? new SearchMatch(
+                    68,
+                    BuildExcerpt(transcript, search, transcriptStartMs.HasValue ? $"Transcript · {FormatTime(transcriptStartMs.Value)}" : "Transcript"),
+                    transcriptStartMs) : null);
         }
         return result;
     }
@@ -563,7 +576,13 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
         return $"{label}: {excerpt}";
     }
 
-    private sealed record SearchMatch(int Score, string Context);
+    private static string FormatTime(long milliseconds)
+    {
+        var value = TimeSpan.FromMilliseconds(Math.Max(0, milliseconds));
+        return value.TotalHours >= 1 ? value.ToString(@"h\:mm\:ss") : value.ToString(@"m\:ss");
+    }
+
+    private sealed record SearchMatch(int Score, string Context, long? StartMs);
 
     private sealed record ExtendedSearchMatch(
         SearchMatch? People,

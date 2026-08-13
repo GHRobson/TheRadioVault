@@ -170,8 +170,16 @@ Schema 49 owns the durable `saved_collections` and `saved_collection_items` tabl
 
 `RssFeedIngestionService` owns server-side feed polling and audio acquisition. Subscription metadata and item identities are durable in schema 50, while the complete source URL and optional Basic credentials are authenticated-encrypted and never projected into clients, diagnostics or display text. A new subscription establishes a no-download baseline unless the administrator explicitly opts into importing existing entries. Conditional requests, stable item keys and content hashes prevent duplicate ingestion. Audio is streamed to a hidden `.part` file with an inactivity deadline and size bound, then atomically moved into a registered Library folder; completed downloads remain pending until a successful normal Library scan, so restart recovery cannot strand an unindexed recording.
 
+`PersonalStateConflictPolicy` owns captured-time validation and deterministic ordering for favourite and listened/unlistened decisions. `WebPersonalStateDecisionLedger` durably records the latest accepted decision only after its database callback succeeds. Progress retains its dedicated monotonic/offline reconciliation policy, Moments remain append-only by mutation ID, and queue ordering remains server-serialized. Client controllers and route handlers must not recreate these merge rules.
+
+`BackupRestoreRehearsalService` is the only boundary that declares a backup restorable. It enforces archive entry and expanded-size limits, safe extraction paths, SQLite quick and foreign-key checks and required schema/content checks in an isolated directory. Live restore must rehearse first and retain rollback evidence until post-copy validation succeeds.
+
+`ServerHealthDiagnosticsService` assembles immutable database, storage, media-root, certificate, paired-client and backup health. Its exported JSON must pseudonymize device identities and remove credentials and user-specific paths; UI code may render this snapshot but must not implement a second health or redaction policy.
+
 ## 0.45 archive entity-link boundary
 
 `ArchiveEntityLink` is the neutral identity and navigation contract for articles, shows, broadcasts, people, topics, images and timelines. `EntityId` is canonical identity, `TargetId` is the actionable platform value, `Relationship` describes context such as host or guest, and `Route` is the deterministic `radiovault://entity/...` representation. Labels are presentation only and must never become identity.
 
 Broadcast Info and Explore documents expose this contract additively while preserving existing protocol fields. New Library, Explore, Knowledge and transcript-search navigation must consume these links or extend the factory; it must not introduce another string-only deep-link format.
+
+`ArchiveEntityNavigation` is the client-neutral dispatch policy: broadcasts open Broadcast Info, shows open their Library collection, and people/topics/articles/images/timeline entries open Explore. Presentation layers may adapt those destinations to native navigation controllers, but labels remain display text and never become identity where a typed link is available.

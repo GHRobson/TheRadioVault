@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using TheRadioVault.Application.Abstractions;
 using TheRadioVault.Application.Models;
+using TheRadioVault.Core.Domain;
 using TheRadioVault.Presentation.Infrastructure;
 using TheRadioVault.Services.Models;
 
@@ -114,6 +115,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         {
             relatedWiki.SetOpenHandler(OpenWikiPageAsync);
             relatedWiki.SetOpenEntityHandler(OpenWikiEntityAsync);
+            relatedWiki.SetOpenEntityLinkHandler(OpenArchiveEntityAsync);
         }
         Transcripts.SetOpenSettingsHandler(OpenTranscriptionSettingsAsync);
         Tools.LibraryScanCompleted += OnLibraryScanCompleted;
@@ -412,6 +414,19 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         if (string.IsNullOrWhiteSpace(entity)) return;
         await NavigateToAsync("wiki").ConfigureAwait(true);
         await Wiki.OpenEntityAsync(entity).ConfigureAwait(true);
+    }
+
+    private Task OpenArchiveEntityAsync(ArchiveEntityLink link)
+    {
+        var target = ArchiveEntityNavigation.Resolve(link);
+        return target.Destination switch
+        {
+            ArchiveEntityDestination.Broadcast when long.TryParse(target.TargetId, out var episodeId)
+                => OpenBroadcastInfoAsync(episodeId),
+            ArchiveEntityDestination.LibraryShow when int.TryParse(target.TargetId, out var collectionId)
+                => OpenLibraryPresetAsync(collectionId, LibraryListeningFilter.All),
+            _ => OpenWikiEntityAsync(target.Label)
+        };
     }
 
     private async Task OpenTranscriptionSettingsAsync()

@@ -127,7 +127,8 @@ public sealed class LoopbackLibraryBrowseService : ILibraryBrowseService
             value.AttentionReason)
         {
             SearchContext = value.SearchContext,
-            SearchScore = value.SearchScore
+            SearchScore = value.SearchScore,
+            SearchStartMs = value.SearchStartMs
         };
 
     private static LibraryCollectionSummary Map(WebClientLibraryCollectionSummary value)
@@ -212,7 +213,8 @@ public sealed class LoopbackBroadcastDetailsService : IBroadcastDetailsService
             value.RecordingCount,
             value.SegmentCount,
             value.PhysicalFileCount,
-            IsRemoteOwned: true);
+            IsRemoteOwned: true,
+            EntityLinks: value.EntityLinks);
     }
 
     private sealed record DetailsEnvelope(WebClientBroadcastDetails Broadcast);

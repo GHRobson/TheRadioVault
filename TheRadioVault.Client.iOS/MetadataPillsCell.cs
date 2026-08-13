@@ -1,4 +1,5 @@
 using UIKit;
+using TheRadioVault.Core.Domain;
 
 namespace TheRadioVault.Client.iOS;
 
@@ -37,27 +38,52 @@ internal sealed class MetadataPillsCell : UITableViewCell
     public void Configure(string heading, IReadOnlyList<string> values, UIColor color, Action<string> selected)
     {
         _heading.Text = heading.ToUpperInvariant();
-        foreach (var existing in _rows.ArrangedSubviews)
-        {
-            _rows.RemoveArrangedSubview(existing);
-            existing.RemoveFromSuperview();
-            existing.Dispose();
-        }
+        ClearRows();
         for (var index = 0; index < values.Count; index += 2)
         {
-            var row = new UIStackView
-            {
-                Axis = UILayoutConstraintAxis.Horizontal,
-                Alignment = UIStackViewAlignment.Fill,
-                Distribution = UIStackViewDistribution.FillEqually,
-                Spacing = 7
-            };
+            var row = CreateRow();
             row.AddArrangedSubview(Pill(values[index], color, selected));
             if (index + 1 < values.Count) row.AddArrangedSubview(Pill(values[index + 1], color, selected));
             else row.AddArrangedSubview(new UIView());
             _rows.AddArrangedSubview(row);
         }
     }
+
+    public void Configure(
+        string heading,
+        IReadOnlyList<ArchiveEntityLink> links,
+        UIColor color,
+        Action<ArchiveEntityLink> selected)
+    {
+        _heading.Text = heading.ToUpperInvariant();
+        ClearRows();
+        for (var index = 0; index < links.Count; index += 2)
+        {
+            var row = CreateRow();
+            row.AddArrangedSubview(Pill(links[index], color, selected));
+            if (index + 1 < links.Count) row.AddArrangedSubview(Pill(links[index + 1], color, selected));
+            else row.AddArrangedSubview(new UIView());
+            _rows.AddArrangedSubview(row);
+        }
+    }
+
+    private void ClearRows()
+    {
+        foreach (var existing in _rows.ArrangedSubviews)
+        {
+            _rows.RemoveArrangedSubview(existing);
+            existing.RemoveFromSuperview();
+            existing.Dispose();
+        }
+    }
+
+    private static UIStackView CreateRow() => new()
+    {
+        Axis = UILayoutConstraintAxis.Horizontal,
+        Alignment = UIStackViewAlignment.Fill,
+        Distribution = UIStackViewDistribution.FillEqually,
+        Spacing = 7
+    };
 
     private static UIButton Pill(string value, UIColor color, Action<string> selected)
     {
@@ -76,6 +102,26 @@ internal sealed class MetadataPillsCell : UITableViewCell
         button.AccessibilityLabel = value;
         button.AccessibilityHint = "Open related broadcasts and Explore articles";
         button.TouchUpInside += (_, _) => selected(value);
+        return button;
+    }
+
+    private static UIButton Pill(ArchiveEntityLink link, UIColor color, Action<ArchiveEntityLink> selected)
+    {
+        var button = UIButton.FromType(UIButtonType.System);
+        button.SetTitle(link.Label, UIControlState.Normal);
+        button.SetTitleColor(color, UIControlState.Normal);
+        button.TitleLabel!.Font = UIFont.SystemFontOfSize(12, UIFontWeight.Semibold)!;
+        button.TitleLabel.Lines = 1;
+        button.TitleLabel.AdjustsFontSizeToFitWidth = true;
+        button.TitleLabel.MinimumScaleFactor = 0.72f;
+        button.BackgroundColor = color.ColorWithAlpha(0.14f);
+        button.Layer.CornerRadius = 16;
+        button.Layer.BorderWidth = 1;
+        button.Layer.BorderColor = color.ColorWithAlpha(0.7f).CGColor;
+        button.HeightAnchor.ConstraintEqualTo(32).Active = true;
+        button.AccessibilityLabel = link.Label;
+        button.AccessibilityHint = "Open related broadcasts and Explore articles";
+        button.TouchUpInside += (_, _) => selected(link);
         return button;
     }
 }

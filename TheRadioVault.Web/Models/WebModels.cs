@@ -303,7 +303,8 @@ public sealed record WebClientLibraryBroadcastSummary(
     bool NeedsAttention,
     string AttentionReason,
     string SearchContext,
-    int SearchScore);
+    int SearchScore,
+    long? SearchStartMs = null);
 
 public sealed record WebClientLibraryCollectionSummary(int CollectionId, string CollectionName, int BroadcastCount);
 

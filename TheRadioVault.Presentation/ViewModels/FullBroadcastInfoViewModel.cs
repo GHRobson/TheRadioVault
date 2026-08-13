@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using TheRadioVault.Core.Domain;
 using TheRadioVault.Presentation.Infrastructure;
 using TheRadioVault.Services.Contracts;
 using TheRadioVault.Services.Models;
@@ -86,11 +87,16 @@ public sealed class FullBroadcastInfoViewModel : ObservableObject
     public IReadOnlyList<string> Guests => SplitPeople(Details?.Guests);
     public IReadOnlyList<string> Callers => SplitPeople(Details?.Callers);
     public IReadOnlyList<string> MentionedPeople => SplitPeople(Details?.MentionedPeople);
+    public IReadOnlyList<ArchiveEntityLink> HostLinks => Details?.HostLinks ?? [];
+    public IReadOnlyList<ArchiveEntityLink> GuestLinks => Details?.GuestLinks ?? [];
+    public IReadOnlyList<ArchiveEntityLink> CallerLinks => Details?.CallerLinks ?? [];
+    public IReadOnlyList<ArchiveEntityLink> MentionedPeopleLinks => Details?.MentionedPeopleLinks ?? [];
     public bool HasHosts => Details?.HasHosts == true;
     public bool HasGuests => Details?.HasGuests == true;
     public bool HasCallers => Details?.HasCallers == true;
     public bool HasMentionedPeople => Details?.HasMentionedPeople == true;
     public IReadOnlyList<string> Topics => Details?.Topics ?? Array.Empty<string>();
+    public IReadOnlyList<ArchiveEntityLink> TopicLinks => Details?.TopicLinks ?? [];
     public IReadOnlyList<TranscriptSegment> TranscriptSegments => _transcript?.Segments ?? Array.Empty<TranscriptSegment>();
     public bool HasTranscriptSegments => TranscriptSegments.Count > 0;
     public string TranscriptDetailsText => _transcript is null
@@ -211,11 +217,16 @@ public sealed class FullBroadcastInfoViewModel : ObservableObject
         RaisePropertyChanged(nameof(Guests));
         RaisePropertyChanged(nameof(Callers));
         RaisePropertyChanged(nameof(MentionedPeople));
+        RaisePropertyChanged(nameof(HostLinks));
+        RaisePropertyChanged(nameof(GuestLinks));
+        RaisePropertyChanged(nameof(CallerLinks));
+        RaisePropertyChanged(nameof(MentionedPeopleLinks));
         RaisePropertyChanged(nameof(HasHosts));
         RaisePropertyChanged(nameof(HasGuests));
         RaisePropertyChanged(nameof(HasCallers));
         RaisePropertyChanged(nameof(HasMentionedPeople));
         RaisePropertyChanged(nameof(Topics));
+        RaisePropertyChanged(nameof(TopicLinks));
         RaiseCommandState();
     }
 

@@ -35,7 +35,7 @@ Exit criteria: no critical accessibility failures, a 24-hour offline/reconnect s
 
 Goal: make multi-device state boringly reliable.
 
-Status: in progress. Offline favourite, listened/unlistened and Moment writes now retain stable mutation IDs through mobile replay; the server durably records per-device acknowledgements across restarts and exposes device checkpoint summaries through its administration contract. The server also runs a non-overlapping daily backup scheduler, verifies that each archive contains a readable database snapshot and exposes last/next/error state. Restore rehearsal, richer conflict diagnostics and the complete health dashboard remain release work.
+Status: implementation complete, physical soak and clean-machine release validation pending. Offline favourite, listened/unlistened and Moment writes retain stable mutation IDs and captured decision times through mobile replay. The server durably records per-device acknowledgements and accepted decisions, rejects stale or future-skewed changes, and exposes device checkpoints. Scheduled backups now undergo an isolated restore rehearsal with archive limits, SQLite integrity, foreign-key and schema checks before live restore; failed live validation rolls back automatically. The server UI reports database, storage, media-root, certificate, client and backup health and exports a privacy-safe diagnostic report with paths, tokens and client identities redacted.
 
 - Formal conflict rules for progress, listened/unlistened, favourites, Moments and queue changes.
 - Durable mutation ids and acknowledgements for every offline write.
@@ -69,7 +69,7 @@ Exit criteria: protocol and behaviour remain compatible, the largest coordinator
 
 Goal: turn the collection into a genuinely connected radio encyclopaedia.
 
-Status: foundation started. Core now owns one typed entity link for articles, shows, broadcasts, people, topics, images and timelines, including stable identity, an actionable target and a deterministic Radio Vault deep link. Broadcast Info and Explore documents expose this same additive contract to native and remote clients while preserving their established fields. Client-side routing, transcript results and full Knowledge coverage still need to adopt it.
+Status: in progress. Core owns one typed entity link and navigation policy for articles, shows, broadcasts, people, topics, images and timelines, including stable identity, an actionable target and a deterministic Radio Vault deep link. Broadcast Info emits these links locally and remotely; desktop and iOS metadata pills consume them while retaining a compatibility fallback for older servers. Library transcript search returns the first matching timed phrase and desktop playback opens directly at that time. Explore prose, complete Knowledge coverage and mobile transcript-search presentation still need to adopt the same contract.
 
 - Consistent Wikipedia-inspired pages on desktop, iOS and web.
 - One link model for shows, broadcasts, people, guests, topics, images and timelines.
