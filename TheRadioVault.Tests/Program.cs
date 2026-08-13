@@ -80,6 +80,7 @@ var tests = new (string Name, Action Run)[]
     ("Scheduled backups are verified and report their next run", ScheduledBackupsAreVerified),
     ("RSS archive inbox baselines, encrypts and deduplicates private feeds", RssArchiveInboxIsSafeAndIncremental),
     ("Backup restore rehearsal validates a disposable clean-server restore", BackupRestoreRehearsalValidatesCleanRestore),
+    ("Server diagnostics redact secrets paths and client identities", ServerDiagnosticsRedactPrivateState),
     ("Moment deduplication keeps one near-identical save", () =>
     {
         True(MomentDeduplicationPolicy.IsEquivalent("BENNINGTON-2026-06-22", 4_498_945, "The old slave hanging tree", "", "BENNINGTON-2026-06-22", 4_498_000, "The old slave hanging tree", ""));
@@ -564,6 +565,41 @@ static void BackupRestoreRehearsalValidatesCleanRestore()
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
     }
+}
+
+static void ServerDiagnosticsRedactPrivateState()
+{
+    var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    var secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    var snapshot = new ServerHealthSnapshot(
+        DateTimeOffset.UtcNow,
+        false,
+        "Archive needs attention",
+        "ok",
+        "radio_vault.db",
+        1024,
+        2048,
+        2,
+        10,
+        8,
+        1,
+        1,
+        true,
+        true,
+        DateTimeOffset.UtcNow.AddYears(1),
+        1,
+        [new WebDeviceSyncStatus("real-iphone-client-id", 12, DateTimeOffset.UtcNow,
+            $"Could not write {profile}/RadioVault?token={secret}")],
+        new WebScheduledBackupStatus(true, false, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1),
+            Path.Combine(profile, "Backups", "latest.trvbackup"), false, $"Bearer {secret}"),
+        $"Access token={secret} at {profile}/RadioVault");
+
+    var json = Encoding.UTF8.GetString(new ServerHealthDiagnosticsService().CreateRedactedReport(snapshot, "test"));
+    True(!json.Contains(secret, StringComparison.Ordinal));
+    True(!json.Contains("real-iphone-client-id", StringComparison.Ordinal));
+    True(string.IsNullOrWhiteSpace(profile) || !json.Contains(profile, StringComparison.OrdinalIgnoreCase));
+    True(json.Contains("clientIdsPseudonymized", StringComparison.Ordinal));
+    True(json.Contains("latest.trvbackup", StringComparison.Ordinal));
 }
 
 static void ArchiveEntityLinksPreserveIdentity()

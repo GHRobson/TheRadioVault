@@ -59,6 +59,9 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     private Guid? _knowledgeImportSessionId;
     private string? _knowledgeImportPath;
     private WebResearchPackPreview? _knowledgeImportPreview;
+    private ServerHealthSnapshot? _health;
+    private DateTimeOffset _lastHealthRefresh = DateTimeOffset.MinValue;
+    private string _healthActionText = "Health checks have not run yet.";
     private readonly ServerCommand? _installTranscriptionCommand;
     private readonly ServerCommand? _cancelTranscriptionCommand;
     private readonly ServerCommand? _generatePairingCodeCommand;
@@ -74,6 +77,8 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     private readonly ServerCommand? _applyKnowledgeImportCommand;
     private readonly ServerCommand? _cancelKnowledgeImportCommand;
     private readonly ServerCommand? _exportKnowledgeCommand;
+    private readonly ServerCommand? _rehearseBackupCommand;
+    private readonly ServerCommand? _exportDiagnosticsCommand;
 
     public ServerSettingsViewModel(
         RadioVaultServerRuntime runtime,
@@ -126,10 +131,14 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         _applyKnowledgeImportCommand = new ServerCommand(() => _ = ApplyKnowledgeImportAsync(), () => HasKnowledgeImportPreview && !IsKnowledgeBusy);
         _cancelKnowledgeImportCommand = new ServerCommand(CancelKnowledgeImport, () => HasKnowledgeImportPreview);
         _exportKnowledgeCommand = new ServerCommand(() => _ = ExportKnowledgeAsync(), () => !IsKnowledgeBusy);
+        _rehearseBackupCommand = new ServerCommand(RehearseLatestBackup, () => _health?.ScheduledBackup.LastCompletedAt.HasValue == true);
+        _exportDiagnosticsCommand = new ServerCommand(() => _ = ExportDiagnosticsAsync(), () => _health is not null);
         ChooseKnowledgeImportCommand = _chooseKnowledgeImportCommand;
         ApplyKnowledgeImportCommand = _applyKnowledgeImportCommand;
         CancelKnowledgeImportCommand = _cancelKnowledgeImportCommand;
         ExportKnowledgeCommand = _exportKnowledgeCommand;
+        RehearseBackupCommand = _rehearseBackupCommand;
+        ExportDiagnosticsCommand = _exportDiagnosticsCommand;
         LoadPreferences();
         RefreshStatus();
         _ = LoadLibraryFoldersAsync();
@@ -148,6 +157,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             GeneratePairingCodeCommand = CancelPairingCommand = RevokeClientCommand = RevokeAllClientsCommand = AddLibraryFolderCommand =
             ToggleLibraryFolderCommand = AssignLibraryFolderCommand = RemoveLibraryFolderCommand = ScanLibraryCommand =
             ChooseKnowledgeImportCommand = ApplyKnowledgeImportCommand = CancelKnowledgeImportCommand = ExportKnowledgeCommand =
+            RehearseBackupCommand = ExportDiagnosticsCommand =
                 new ServerCommand(() => { }, () => false);
     }
 
@@ -209,6 +219,28 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         : $"{_knowledgeImportPreview.TotalRecords:N0} records · {_knowledgeImportPreview.ExactMatches:N0} matched · " +
           $"{_knowledgeImportPreview.MissingRecords:N0} missing · {_knowledgeImportPreview.AmbiguousMatches:N0} need review · " +
           $"{_knowledgeImportPreview.WikiPageCount:N0} Explore pages · {_knowledgeImportPreview.WikiImageCount:N0} images";
+    public string HealthHeadline => _health?.OverallStatus ?? "Checking archive health…";
+    public string HealthStateBrush => _health?.Healthy == true ? "#52D6A2" : "#E2A84A";
+    public string DatabaseHealthText => _health is null
+        ? "Checking the authoritative database…"
+        : $"SQLite {_health.DatabaseQuickCheck} · {FormatBytes(_health.DatabaseBytes)} · {FormatBytes(_health.FreeStorageBytes)} free";
+    public string MediaHealthText => _health is null
+        ? "Checking archive storage…"
+        : $"{_health.AvailableMediaFiles:N0} available · {_health.CloudOnlyMediaFiles:N0} cloud-only · {_health.MissingMediaFiles:N0} missing";
+    public string BackupHealthText => _health is null
+        ? "Checking scheduled backups…"
+        : !_health.ScheduledBackup.LastCompletedAt.HasValue
+            ? "No scheduled backup has completed yet"
+            : $"Last verified {_health.ScheduledBackup.LastCompletedAt.Value.LocalDateTime:g} · next {_health.ScheduledBackup.NextDueAt?.LocalDateTime:g}";
+    public string CertificateHealthText => _health is null
+        ? "Checking secure access…"
+        : !_health.SecureAccess
+            ? "Secure access is not active"
+            : $"HTTPS certificate valid until {_health.CertificateExpiresAt?.LocalDateTime:d}";
+    public string ClientHealthText => _health is null
+        ? "Checking paired clients…"
+        : $"{_health.PairedClientCount:N0} paired · {_health.DeviceSync.Count:N0} with acknowledged changes";
+    public string HealthActionText { get => _healthActionText; private set => Set(ref _healthActionText, value); }
     public LibraryFolderRecord? SelectedLibraryFolder
     {
         get => _selectedLibraryFolder;
@@ -347,6 +379,40 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     public ICommand ApplyKnowledgeImportCommand { get; }
     public ICommand CancelKnowledgeImportCommand { get; }
     public ICommand ExportKnowledgeCommand { get; }
+    public ICommand RehearseBackupCommand { get; }
+    public ICommand ExportDiagnosticsCommand { get; }
+
+    private void RehearseLatestBackup()
+    {
+        if (_runtime is null) return;
+        try
+        {
+            HealthActionText = "Restoring the latest backup into an isolated rehearsal area…";
+            var result = _runtime.RehearseLatestScheduledBackup();
+            HealthActionText = result.Message;
+        }
+        catch (Exception exception)
+        {
+            HealthActionText = exception.Message;
+        }
+    }
+
+    private async Task ExportDiagnosticsAsync()
+    {
+        if (_runtime is null || _knowledgeFiles is null) return;
+        var path = await _knowledgeFiles.PickDiagnosticsExportAsync(
+            $"RadioVault-Server-Diagnostics-{DateTime.Now:yyyyMMdd-HHmmss}.trvdiag.json").ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(path)) return;
+        try
+        {
+            await _runtime.ExportRedactedDiagnosticsAsync(path).ConfigureAwait(true);
+            HealthActionText = $"Privacy-safe diagnostics exported to {path}";
+        }
+        catch (Exception exception)
+        {
+            HealthActionText = exception.Message;
+        }
+    }
 
     private async Task ChooseKnowledgeImportAsync()
     {
@@ -792,6 +858,30 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             : $"Expires in {Math.Max(0, (int)Math.Ceiling((pairing.ExpiresAt - DateTimeOffset.UtcNow).TotalSeconds))} seconds.";
         RefreshPairedClients();
         RaisePairingState();
+        if (DateTimeOffset.UtcNow - _lastHealthRefresh >= TimeSpan.FromSeconds(5)) RefreshHealth();
+    }
+
+    private void RefreshHealth()
+    {
+        if (_runtime is null) return;
+        try
+        {
+            _health = _runtime.GetHealthSnapshot();
+            _lastHealthRefresh = DateTimeOffset.UtcNow;
+            foreach (var property in new[]
+                     {
+                         nameof(HealthHeadline), nameof(HealthStateBrush), nameof(DatabaseHealthText),
+                         nameof(MediaHealthText), nameof(BackupHealthText), nameof(CertificateHealthText),
+                         nameof(ClientHealthText)
+                     })
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+            _rehearseBackupCommand?.RaiseCanExecuteChanged();
+            _exportDiagnosticsCommand?.RaiseCanExecuteChanged();
+        }
+        catch (Exception exception)
+        {
+            HealthActionText = $"Health check failed: {exception.Message}";
+        }
     }
 
     private bool CanGeneratePairingCode()
@@ -921,6 +1011,14 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         if (!int.TryParse(text, out var value) || value is < 1024 or > 65535)
             throw new InvalidOperationException($"{label} port must be between 1024 and 65535.");
         return value;
+    }
+
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes:N0} B";
+        if (bytes < 1024L * 1024) return $"{bytes / 1024d:N1} KB";
+        if (bytes < 1024L * 1024 * 1024) return $"{bytes / 1024d / 1024d:N1} MB";
+        return $"{bytes / 1024d / 1024d / 1024d:N1} GB";
     }
 
     public void Dispose()

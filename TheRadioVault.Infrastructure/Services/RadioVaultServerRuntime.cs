@@ -115,6 +115,12 @@ public sealed class RadioVaultServerRuntime : IDisposable
         => _rssFeeds.DeleteAsync(feedId, cancellationToken);
     public Task<RssFeedCheckResult> CheckRssFeedsNowAsync(long? feedId = null, CancellationToken cancellationToken = default)
         => _rssFeeds.CheckNowAsync(feedId, cancellationToken);
+    public ServerHealthSnapshot GetHealthSnapshot() => _server.GetHealthSnapshot();
+    public BackupRestoreRehearsalResult RehearseLatestScheduledBackup()
+        => _server.RehearseLatestScheduledBackup();
+    public Task ExportRedactedDiagnosticsAsync(string destinationPath, CancellationToken cancellationToken = default)
+        => new ServerHealthDiagnosticsService().ExportAsync(
+            GetHealthSnapshot(), AppVersionService.Version, destinationPath, cancellationToken);
 
     public WebDesktopPairingSession BeginDesktopPairing()
     {

@@ -71,6 +71,7 @@ public sealed partial class LocalWebServer : IDisposable
     public int LanDiscoveryPort => _options.LanDiscoveryPort;
     public int PairedDesktopClientCount => _pairing.Count;
     public IReadOnlyList<WebPairedDesktopClient> PairedDesktopClients => _pairing.Clients;
+    public IReadOnlyList<WebDeviceSyncStatus> DeviceSyncStatuses => _mutations.GetDeviceStatuses();
     public WebDesktopPairingSession? CurrentDesktopPairing => _pairing.Current;
 
     public WebDesktopPairingSession BeginDesktopPairing()

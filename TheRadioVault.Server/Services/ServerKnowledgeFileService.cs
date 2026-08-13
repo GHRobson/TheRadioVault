@@ -10,6 +10,11 @@ public sealed class ServerKnowledgeFileService
         Patterns = ["*.trvknowledge"],
         MimeTypes = ["application/vnd.radiovault.knowledge+sqlite3"]
     };
+    private static readonly FilePickerFileType DiagnosticsType = new("Radio Vault diagnostics")
+    {
+        Patterns = ["*.trvdiag.json"],
+        MimeTypes = ["application/json"]
+    };
 
     private readonly Window _owner;
 
@@ -37,6 +42,21 @@ public sealed class ServerKnowledgeFileService
             SuggestedFileName = suggestedFileName,
             DefaultExtension = "trvknowledge",
             FileTypeChoices = [KnowledgeDatabaseType],
+            ShowOverwritePrompt = true
+        }).WaitAsync(cancellationToken).ConfigureAwait(true);
+        return file?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickDiagnosticsExportAsync(
+        string suggestedFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export privacy-safe Radio Vault diagnostics",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "json",
+            FileTypeChoices = [DiagnosticsType],
             ShowOverwritePrompt = true
         }).WaitAsync(cancellationToken).ConfigureAwait(true);
         return file?.TryGetLocalPath();

@@ -18,6 +18,7 @@ namespace TheRadioVault.Services;
 /// </summary>
 public sealed class LocalWebServerService : IDisposable
 {
+    private readonly DatabaseService _database;
     private readonly LocalWebServer _server;
     private readonly WebArchiveProvider _provider;
     private readonly ScheduledBackupService _scheduledBackups;
@@ -34,6 +35,7 @@ public sealed class LocalWebServerService : IDisposable
         ServerTranscriptionRuntime? transcription = null)
     {
         ArgumentNullException.ThrowIfNull(database);
+        _database = database;
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _provider = new WebArchiveProvider(database, events, livePlayback, jobs, playbackController, transcription);
         _scheduledBackups = new ScheduledBackupService();
@@ -58,6 +60,7 @@ public sealed class LocalWebServerService : IDisposable
     public int PairedDesktopClientCount => _server.PairedDesktopClientCount;
     public IReadOnlyList<WebPairedDesktopClient> PairedDesktopClients => _server.PairedDesktopClients;
     public WebDesktopPairingSession? CurrentDesktopPairing => _server.CurrentDesktopPairing;
+    public WebScheduledBackupStatus ScheduledBackupStatus => _scheduledBackups.Status;
 
     public WebDesktopPairingSession BeginDesktopPairing() => _server.BeginDesktopPairing();
     public void CancelDesktopPairing() => _server.CancelDesktopPairing();
@@ -114,6 +117,59 @@ public sealed class LocalWebServerService : IDisposable
         => _provider.CancelResearchPackImport(sessionId);
     public Task<WebResearchPackExportPayload> ExportResearchPackAsync(CancellationToken cancellationToken = default)
         => _provider.ExportResearchPackAsync(cancellationToken);
+
+    public BackupRestoreRehearsalResult RehearseLatestScheduledBackup()
+    {
+        var path = _scheduledBackups.Status.LatestBackupPath;
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            throw new InvalidOperationException("No scheduled backup is available to rehearse yet.");
+        return new BackupRestoreRehearsalService().Rehearse(path);
+    }
+
+    public ServerHealthSnapshot GetHealthSnapshot()
+    {
+        var settings = _provider.GetAuthoritativeSettings();
+        var databasePath = _database.PlatformDatabase.DatabasePath;
+        var databaseBytes = File.Exists(databasePath) ? new FileInfo(databasePath).Length : 0;
+        var freeStorage = 0L;
+        try
+        {
+            var root = Path.GetPathRoot(databasePath);
+            if (!string.IsNullOrWhiteSpace(root)) freeStorage = new DriveInfo(root).AvailableFreeSpace;
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+
+        var scheduled = _scheduledBackups.Status;
+        DateTimeOffset? certificateExpires = _certificates is null
+            ? null
+            : new DateTimeOffset(_certificates.ServerCertificate.NotAfter.ToUniversalTime());
+        var healthy = string.Equals(settings.DatabaseQuickCheck, "ok", StringComparison.OrdinalIgnoreCase) &&
+                      settings.Storage.Missing == 0 &&
+                      string.IsNullOrWhiteSpace(_server.LastError) &&
+                      string.IsNullOrWhiteSpace(scheduled.LastError) &&
+                      (!scheduled.LastCompletedAt.HasValue || scheduled.LastBackupVerified);
+        return new ServerHealthSnapshot(
+            DateTimeOffset.UtcNow,
+            healthy,
+            healthy ? "Archive healthy" : "Archive needs attention",
+            settings.DatabaseQuickCheck,
+            Path.GetFileName(databasePath),
+            databaseBytes,
+            freeStorage,
+            settings.ArchiveFolders.Count,
+            settings.Storage.TotalFiles,
+            settings.Storage.AvailableOffline,
+            settings.Storage.CloudOnly,
+            settings.Storage.Missing,
+            _server.IsRunning,
+            _server.IsSecure,
+            certificateExpires,
+            _server.PairedDesktopClientCount,
+            _server.DeviceSyncStatuses,
+            scheduled,
+            _server.LastError ?? string.Empty);
+    }
 
     public Task<WebLibraryScanSnapshot> RunAutomaticLibraryScanIfDueAsync(
         TimeSpan interval,
