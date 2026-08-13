@@ -84,13 +84,18 @@ public abstract class SessionTableViewController : UITableViewController
                     "radiovault.playlist." + collection.Id,
                     action => _ = Session.AddToSavedCollectionAsync(broadcast, collection)))
                 .Cast<UIMenuElement>()
-                .ToArray();
+                .ToList();
+            playlistActions.Add(UIAction.Create(
+                "New Playlist…",
+                RadioVaultIcons.Image(RadioVaultIcon.Add),
+                "radiovault.playlist.new",
+                action => PromptForNewPlaylistAndAdd(broadcast)));
             var addToPlaylist = UIMenu.Create(
                 "Add to Playlist",
                 RadioVaultIcons.Image(RadioVaultIcon.UpNext),
                 UIMenuIdentifier.None,
-                UIMenuOptions.DisplayInline,
-                playlistActions);
+                (UIMenuOptions)0,
+                playlistActions.ToArray());
             var favourite = UIAction.Create(
                 broadcast.Source.Favourite ? "Remove from Favourites" : "Add to Favourites",
                 RadioVaultIcons.Image(RadioVaultIcon.Favourite),
@@ -123,10 +128,33 @@ public abstract class SessionTableViewController : UITableViewController
                 action => NavigationController?.PushViewController(
                     new BroadcastDetailsViewController(Session, broadcast), true));
             var actions = new List<UIMenuElement> { play, playNext, addToQueue };
-            if (playlistActions.Length > 0) actions.Add(addToPlaylist);
+            actions.Add(addToPlaylist);
             actions.AddRange([favourite, markListened, markUnlistened, download, information]);
             return UIMenu.Create("", actions.ToArray());
         });
+    }
+
+    private void PromptForNewPlaylistAndAdd(MobileBroadcastItem broadcast)
+    {
+        var alert = UIAlertController.Create(
+            "New Playlist",
+            "Create a playlist and add this broadcast to it.",
+            UIAlertControllerStyle.Alert);
+        alert.AddTextField(field =>
+        {
+            field.Placeholder = "Playlist name";
+            field.ClearButtonMode = UITextFieldViewMode.WhileEditing;
+        });
+        alert.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        alert.AddAction(UIAlertAction.Create("Create", UIAlertActionStyle.Default, async _ =>
+        {
+            var name = alert.TextFields?.FirstOrDefault()?.Text?.Trim() ?? string.Empty;
+            if (name.Length == 0) return;
+            var created = await Session.CreateSavedCollectionAsync(name).ConfigureAwait(false);
+            if (created is not null)
+                await Session.AddToSavedCollectionAsync(broadcast, created.Summary).ConfigureAwait(false);
+        }));
+        PresentViewController(alert, true, null);
     }
 
     protected static UITableViewCell DetailCell(string reuseIdentifier, string title, string detail)

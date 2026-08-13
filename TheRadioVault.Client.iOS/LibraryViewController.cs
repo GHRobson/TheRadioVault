@@ -25,13 +25,9 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         TableView.EstimatedRowHeight = 74;
         _header.SearchBar.Placeholder = "Search broadcasts";
         _header.SearchBar.Delegate = this;
+        _header.CollectionsButton.TouchUpInside += CollectionsButtonTapped;
         _header.CompletedButton.TouchUpInside += CompletedButtonTapped;
         TableView.TableHeaderView = _header;
-        NavigationItem.RightBarButtonItem = new UIBarButtonItem(
-            RadioVaultIcons.Image(RadioVaultIcon.Add),
-            UIBarButtonItemStyle.Plain,
-            (_, _) => ShowSavedCollectionActions());
-        NavigationItem.RightBarButtonItem.AccessibilityLabel = "Create a playlist or save Up Next";
         UpdateHideCompletedButton();
         RefreshControl = new UIRefreshControl();
         RefreshControl.ValueChanged += async (_, _) =>
@@ -173,7 +169,10 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
             _ => PromptForPlaylistName(true)));
         sheet.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
         if (sheet.PopoverPresentationController is { } popover)
-            popover.SourceItem = NavigationItem.RightBarButtonItem;
+        {
+            popover.SourceView = _header.CollectionsButton;
+            popover.SourceRect = _header.CollectionsButton.Bounds;
+        }
         PresentViewController(sheet, true, null);
     }
 
@@ -200,7 +199,10 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         }
         sheet.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
         if (sheet.PopoverPresentationController is { } popover)
-            popover.SourceItem = NavigationItem.RightBarButtonItem;
+        {
+            popover.SourceView = _header.CollectionsButton;
+            popover.SourceRect = _header.CollectionsButton.Bounds;
+        }
         PresentViewController(sheet, true, null);
     }
 
@@ -294,6 +296,8 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
 
     private void CompletedButtonTapped(object? sender, EventArgs eventArgs) => ToggleHideCompleted();
 
+    private void CollectionsButtonTapped(object? sender, EventArgs eventArgs) => ShowSavedCollectionActions();
+
     private void UpdateHideCompletedButton()
     {
         _header.SetHideCompleted(_hideCompleted);
@@ -303,6 +307,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
     {
         if (disposing)
         {
+            _header.CollectionsButton.TouchUpInside -= CollectionsButtonTapped;
             _header.CompletedButton.TouchUpInside -= CompletedButtonTapped;
             _header.Dispose();
         }

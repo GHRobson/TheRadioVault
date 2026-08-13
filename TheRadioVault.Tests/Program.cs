@@ -1590,6 +1590,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(library.Contains("DownloadsViewController", StringComparison.Ordinal));
     True(library.Contains("LibraryQuickAccessCell", StringComparison.Ordinal));
     True(library.Contains("RadioVaultIcon.Radio", StringComparison.Ordinal));
+    True(library.Contains("_header.CollectionsButton.TouchUpInside += CollectionsButtonTapped", StringComparison.Ordinal));
+    True(library.Contains("\"New Smart Collection\"", StringComparison.Ordinal));
+    True(library.Contains("popover.SourceView = _header.CollectionsButton", StringComparison.Ordinal));
 
     var showLibrary = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ShowLibraryViewController.cs"));
@@ -1609,6 +1612,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosCells.Contains("PageHeaderView", StringComparison.Ordinal));
     True(iosCells.Contains("LibraryControlsHeaderView", StringComparison.Ordinal));
     True(iosCells.Contains("CompletedButton", StringComparison.Ordinal));
+    True(iosCells.Contains("public UIButton CollectionsButton", StringComparison.Ordinal));
     True(iosCells.Contains("UITapGestureRecognizer", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardStatsCell", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardOverviewCell", StringComparison.Ordinal));
@@ -1639,6 +1643,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosTableBase.Contains("RadioVaultIcon.Sync", StringComparison.Ordinal));
     True(iosTableBase.Contains("Mark as Listened", StringComparison.Ordinal));
     True(iosTableBase.Contains("Mark as Unlistened", StringComparison.Ordinal));
+    True(iosTableBase.Contains("\"New Playlist…\"", StringComparison.Ordinal));
+    True(iosTableBase.Contains("PromptForNewPlaylistAndAdd", StringComparison.Ordinal));
+    True(iosTableBase.Contains("actions.Add(addToPlaylist)", StringComparison.Ordinal));
     True(iosTableBase.Contains("new UIBarButtonItem(image)", StringComparison.Ordinal));
     True(iosTableBase.Contains("NavigationItem.Title = string.Empty", StringComparison.Ordinal));
     True(iosTableBase.Contains("UINavigationItemBackButtonDisplayMode.Minimal", StringComparison.Ordinal));
