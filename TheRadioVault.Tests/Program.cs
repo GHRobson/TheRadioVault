@@ -130,6 +130,7 @@ var tests = new (string Name, Action Run)[]
     ("RC1 buildfix 4 unifies client UI and native downloads", Rc1Buildfix4UnifiesClientUiAndNativeDownloads),
     ("Alpha 0.35 begins the Wiki without breaking stable upgrades", Alpha035BeginsWikiWithoutBreakingStableUpgrades),
     ("Native downloads persist, audit and prepare local media", NativeDownloadsPersistAuditAndPrepareLocalMedia),
+    ("Native download policies expire and trim local media safely", NativeDownloadPoliciesExpireAndTrimSafely),
     ("Connected views refresh bounded stale data", ConnectedViewsRefreshBoundedStaleData),
     ("Avalonia incomplete progress overrun clamps to 99", () =>
     {
@@ -2408,6 +2409,76 @@ static void NativeDownloadsPersistAuditAndPrepareLocalMedia()
         Equal(1, audit.Checked);
         Equal(1, audit.NeedsRepair);
         True(service.TryPrepareAsync("CANONICAL-42", 42).GetAwaiter().GetResult() is null);
+    }
+    finally
+    {
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+}
+
+static void NativeDownloadPoliciesExpireAndTrimSafely()
+{
+    var root = Path.Combine(Path.GetTempPath(), "rv-native-retention-test-" + Guid.NewGuid().ToString("N"));
+    var now = new DateTimeOffset(2026, 8, 13, 12, 0, 0, TimeSpan.Zero);
+    try
+    {
+        var records = Path.Combine(root, "records");
+        Directory.CreateDirectory(records);
+        WriteRecord(1, completed: true, downloadedAt: now.AddHours(-1), lastAccessedAt: null);
+        WriteRecord(2, completed: false, downloadedAt: now.AddDays(-20), lastAccessedAt: null);
+        WriteRecord(3, completed: false, downloadedAt: now.AddDays(-20), lastAccessedAt: null);
+        WriteRecord(4, completed: false, downloadedAt: now.AddHours(-2), lastAccessedAt: now.AddHours(-1));
+
+        var preferencesPath = Path.Combine(root, "preferences.json");
+        var preferencesStore = new NativeDownloadPreferencesStore(preferencesPath);
+        preferencesStore.Save(new NativeDownloadPreferences
+        {
+            AutomaticDownloadsEnabled = true,
+            AutomaticDownloadSince = now,
+            AutomaticDownloadWatermarkEpisodeId = 44,
+            DeleteCompletedDownloads = true,
+            DownloadExpiryDays = 7,
+            StorageLimitBytes = 5
+        });
+        var restored = preferencesStore.Load();
+        True(restored.AutomaticDownloadsEnabled);
+        Equal(44L, restored.AutomaticDownloadWatermarkEpisodeId);
+        Equal(7, restored.DownloadExpiryDays);
+        Equal(5L, restored.StorageLimitBytes);
+
+        using var connection = new LoopbackServerClient(new WebServerPreferences { Enabled = false });
+        var service = new NativeDownloadService(connection, root);
+        var result = service.MaintainAsync(
+            new NativeDownloadMaintenancePolicy(true, 7, 5, now),
+            protectedEpisodeId: 3).GetAwaiter().GetResult();
+        Equal(1, result.RemovedCompleted);
+        Equal(1, result.RemovedExpired);
+        Equal(1, result.RemovedForStorage);
+        Equal(15L, result.BytesFreed);
+        var remaining = service.GetDownloadsAsync().GetAwaiter().GetResult();
+        Equal(1, remaining.Count);
+        Equal(3L, remaining[0].RepresentativeEpisodeId);
+
+        void WriteRecord(long episodeId, bool completed, DateTimeOffset downloadedAt, DateTimeOffset? lastAccessedAt)
+        {
+            var generation = Path.Combine(root, "media", episodeId.ToString(), "generation-a");
+            Directory.CreateDirectory(generation);
+            var fileName = $"part-001-{episodeId}.mp3";
+            File.WriteAllBytes(Path.Combine(generation, fileName), [1, 2, 3, 4, 5]);
+            var part = new NativeDownloadPart(
+                1, 1, 0, 60_000, episodeId, 5,
+                Path.Combine("media", episodeId.ToString(), "generation-a", fileName),
+                "audio/mpeg");
+            var record = new NativeDownloadRecord(
+                episodeId, $"CANONICAL-{episodeId}", $"RECORDING-{episodeId}", $"BROADCAST-{episodeId}",
+                $"Download {episodeId}", "Test", new DateOnly(2026, 8, 13), null,
+                0, 60_000, 1, completed, false, downloadedAt, 5, [part], string.Empty, lastAccessedAt);
+            File.WriteAllBytes(
+                Path.Combine(records, episodeId + ".json"),
+                JsonSerializer.SerializeToUtf8Bytes(record, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        }
     }
     finally
     {

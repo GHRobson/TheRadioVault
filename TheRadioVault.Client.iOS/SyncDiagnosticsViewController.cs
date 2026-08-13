@@ -241,6 +241,7 @@ public sealed class SyncDiagnosticsViewController : SessionTableViewController
         report.AppendLine($"Wi-Fi only: {snapshot.WifiOnlyDownloads}");
         report.AppendLine($"Automatic downloads: {snapshot.AutoDownloadNewBroadcasts}");
         report.AppendLine($"Delete completed: {snapshot.DeleteCompletedDownloads}");
+        report.AppendLine($"Download expiry: {(snapshot.DownloadExpiryDays <= 0 ? "Never" : snapshot.DownloadExpiryDays + " days")}");
         report.AppendLine($"Storage limit: {(snapshot.DownloadStorageLimitBytes <= 0 ? "None" : FormatBytes(snapshot.DownloadStorageLimitBytes))}");
         report.AppendLine();
         report.AppendLine("Privacy: access tokens, pairing codes and certificates are not included.");

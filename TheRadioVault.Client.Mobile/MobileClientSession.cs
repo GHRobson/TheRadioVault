@@ -217,6 +217,16 @@ public sealed class MobileClientSession : IDisposable
         }
     }
     public string DownloadStorageLimitText => _downloads.StorageLimitText;
+    public int DownloadExpiryDays
+    {
+        get => _downloads.DownloadExpiryDays;
+        set
+        {
+            _downloads.DownloadExpiryDays = value;
+            _ = MaintainDownloadStorageAsync();
+        }
+    }
+    public string DownloadExpiryText => _downloads.DownloadExpiryText;
     public bool HasMiniPlayer => SelectedBroadcast is not null || _playbackSynchronization.RemoteBroadcast is not null;
     public bool MiniPlayerShowsHandoff => _playbackSynchronization.RemoteBroadcast is not null && !_ownsPlayback;
     public string MiniPlayerTitle => _playbackSynchronization.RemoteBroadcast?.Title ?? NowPlayingTitle;
@@ -343,6 +353,7 @@ public sealed class MobileClientSession : IDisposable
             WifiOnlyDownloads,
             AutoDownloadNewBroadcasts,
             DeleteCompletedDownloads,
+            DownloadExpiryDays,
             DownloadStorageLimitBytes);
     }
 
@@ -1088,7 +1099,7 @@ public sealed class MobileClientSession : IDisposable
 
     public async Task CleanupCompletedDownloadsAsync()
         => _ = await _downloads
-            .CleanupCompletedAsync(_activeDownload?.EpisodeId)
+            .CleanupCompletedAsync(ProtectedPlaybackEpisodeId())
             .ConfigureAwait(false);
 
     public async Task RepairDownloadsAsync()
@@ -1096,15 +1107,22 @@ public sealed class MobileClientSession : IDisposable
 
     private async Task EnforceDownloadStorageLimitAsync()
         => _ = await _downloads
-            .EnforceStorageLimitAsync(_activeDownload?.EpisodeId)
+            .EnforceStorageLimitAsync(ProtectedPlaybackEpisodeId())
+            .ConfigureAwait(false);
+
+    private async Task MaintainDownloadStorageAsync()
+        => _ = await _downloads
+            .MaintainStorageAsync(ProtectedPlaybackEpisodeId())
             .ConfigureAwait(false);
 
     public async Task RemoveDownloadAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        var protectedEpisodeId = _playback.Current.IsOpen ? _activeDownload?.EpisodeId : null;
-        _ = await _downloads.RemoveAsync(broadcast, protectedEpisodeId).ConfigureAwait(false);
+        _ = await _downloads.RemoveAsync(broadcast, ProtectedPlaybackEpisodeId()).ConfigureAwait(false);
     }
+
+    private long? ProtectedPlaybackEpisodeId()
+        => _playback.Current.IsOpen ? CurrentBroadcast?.EpisodeId : null;
 
     public async Task PlayDownloadedAsync(MobileBroadcastItem broadcast)
     {
@@ -2068,16 +2086,21 @@ public sealed class MobileClientSession : IDisposable
         }
         if (warmExplore)
             _ = _exploreQueries.RefreshCacheAsync(warmEntireCache: true, IsPaired, IsLiveConnected);
-        if (DeleteCompletedDownloads) _ = CleanupCompletedDownloadsAsync();
+        await MaintainDownloadStorageAsync().ConfigureAwait(false);
         if (AutoDownloadNewBroadcasts) _ = TryAutomaticDownloadAsync();
     }
 
     private async Task TryAutomaticDownloadAsync()
     {
-        if (_disposed || !AutoDownloadNewBroadcasts || !IsLiveConnected || IsDownloading) return;
-        var candidate = _downloads.SelectAutomaticDownload(_metadataCache.Snapshot.Broadcasts);
-        if (candidate is null) return;
-        await DownloadAsync(candidate).ConfigureAwait(false);
+        while (!_disposed && AutoDownloadNewBroadcasts && IsLiveConnected && !IsDownloading)
+        {
+            var candidate = _downloads.SelectAutomaticDownload(_metadataCache.Snapshot.Broadcasts);
+            if (candidate is null) return;
+            var downloaded = await _downloads.DownloadAutomaticallyAsync(
+                candidate,
+                async value => _ = await LoadArtworkAsync(value).ConfigureAwait(false)).ConfigureAwait(false);
+            if (!downloaded) return;
+        }
     }
 
     private async Task FlushOfflineMutationsAsync()

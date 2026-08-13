@@ -36,7 +36,8 @@ public sealed record NativeDownloadRecord(
     DateTimeOffset DownloadedAt,
     long SizeBytes,
     IReadOnlyList<NativeDownloadPart> Parts,
-    string RepairState = "")
+    string RepairState = "",
+    DateTimeOffset? LastAccessedAt = null)
 {
     public bool IsMultipart => Parts.Count > 1;
     public bool NeedsRepair => !string.IsNullOrWhiteSpace(RepairState);
@@ -64,3 +65,28 @@ public sealed record NativeDownloadAuditResult(
     int Healthy,
     int NeedsRepair,
     long StoredBytes);
+
+public sealed record NativeDownloadMaintenancePolicy(
+    bool DeleteCompleted,
+    int ExpiryDays,
+    long StorageLimitBytes,
+    DateTimeOffset Now);
+
+public sealed record NativeDownloadMaintenanceResult(
+    int RemovedCompleted,
+    int RemovedExpired,
+    int RemovedForStorage,
+    long BytesFreed)
+{
+    public int Removed => RemovedCompleted + RemovedExpired + RemovedForStorage;
+}
+
+public sealed class NativeDownloadPreferences
+{
+    public bool AutomaticDownloadsEnabled { get; set; }
+    public DateTimeOffset AutomaticDownloadSince { get; set; } = DateTimeOffset.MinValue;
+    public long AutomaticDownloadWatermarkEpisodeId { get; set; }
+    public bool DeleteCompletedDownloads { get; set; }
+    public int DownloadExpiryDays { get; set; }
+    public long StorageLimitBytes { get; set; }
+}

@@ -3,6 +3,7 @@
 - Adds server-owned saved playlists and smart collections with ordered items, queue snapshots, revision-conflict protection, desktop/iPhone management and cached offline iPhone reading.
 - Advances the durable database to schema 49 and the connected client/server capability generation to 41 for the new collection contract.
 - Adds a server-owned RSS Archive Inbox for private or public feeds, including encrypted credentials, first-check back-catalogue protection, conditional polling, atomic downloads, content-hash deduplication and automatic Library ingestion; advances the durable database to schema 50 without changing the client protocol generation.
+- Adds per-device automatic downloads and storage rules to iPhone and desktop clients: new-only watermarks prevent removed media returning, completed or expired copies can be cleared automatically, storage limits evict least-recently-used media first and the currently playing broadcast is always protected.
 - Began splitting the mobile session façade by extracting shared playback-ownership and handoff-evidence rules into a focused coordinator with behavioural regression tests.
 - Extracted multipart logical-position mapping, decoder-settling protection, seeking and completion state into a side-effect-free mobile playback timeline with focused regression coverage.
 - Extracted remote playback observation, deterministic playhead projection and committed handoff source-stop acknowledgement behind fakeable transport and decoder boundaries.

@@ -88,7 +88,12 @@ server-owned Library; Play Next and Play Last appear in the shared Up Next
 queue on another client; queue rows can be reordered, removed and cleared;
 and a multipart download can be paused, resumed from its retained byte count
 and cancelled without leaving staged media. Toggle Wi-Fi Only and verify a
-download is rejected when the active iOS path is not Wi-Fi.
+download is rejected when the active iOS path is not Wi-Fi. Enable automatic
+downloads, add two newer broadcasts on the Server and confirm both arrive in
+date order without importing older Library items. Remove one automatic copy
+and confirm it does not return. Exercise completed cleanup, a short expiry and
+a small storage limit; the currently playing download must remain available,
+and every removed broadcast must remain intact in the Server Library.
 
 ## Release validation
 
@@ -182,4 +187,4 @@ The equivalent PowerShell command is:
 
 ## Alpha acceptance
 
-Before distributing this build, verify an upgrade on the main Server PC and a paired Client, confirm schema 50 and capability generation 41, create and edit a saved playlist from both desktop and iPhone, add a disposable RSS feed to a test Library folder and confirm only a newly published enclosure downloads once, import an AI-enriched Knowledge Database, export the whole archive, open cited broadcasts from Explore, then repeat playback, handoff and transcription checks.
+Before distributing this build, verify an upgrade on the main Server PC and a paired Client, confirm schema 50 and capability generation 41, create and edit a saved playlist from both desktop and iPhone, add a disposable RSS feed to a test Library folder and confirm only a newly published enclosure downloads once, and repeat the new-only automatic-download and protected-storage checks on both iPhone and desktop. Then import an AI-enriched Knowledge Database, export the whole archive, open cited broadcasts from Explore, and repeat playback, handoff and transcription checks.

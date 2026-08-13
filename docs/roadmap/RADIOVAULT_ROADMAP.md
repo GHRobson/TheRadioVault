@@ -98,7 +98,7 @@ Goal: improve long-term listening and make every desktop platform straightforwar
 
 Exit criteria: installers are signed where appropriate, upgrades preserve data, and saved collections/queues work across devices.
 
-Progress: the server-owned, revisioned saved-collection model is implemented through schema 49, with ordered manual playlists, live smart collections, queue snapshots, conflict-safe mutations, desktop and iPhone surfaces, and offline iPhone reads. Schema 50 adds the Server RSS Archive Inbox with encrypted private-feed details, safe first-run baselining, scheduled conditional checks, atomic downloads and duplicate prevention. Per-device automatic downloads, expiry, signing, service installation and update notifications remain before 0.46 is complete.
+Progress: the server-owned, revisioned saved-collection model is implemented through schema 49, with ordered manual playlists, live smart collections, queue snapshots, conflict-safe mutations, desktop and iPhone surfaces, and offline iPhone reads. Schema 50 adds the Server RSS Archive Inbox with encrypted private-feed details, safe first-run baselining, scheduled conditional checks, atomic downloads and duplicate prevention. iPhone and desktop clients now have device-local new-broadcast watermarks, automatic downloads, completed/age-based cleanup, least-recently-used storage limits and active-playback protection. Signing, service installation and update notifications remain before 0.46 is complete.
 
 ## 0.47 — Secure away-from-home listening
 

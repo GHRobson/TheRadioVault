@@ -107,6 +107,8 @@ public sealed class AvaloniaApplicationHost : IDisposable
             .RegisterSingleton<INativeDownloadService>(registry => new NativeDownloadService(
                 registry.GetRequiredService<LoopbackServerClient>(),
                 Path.Combine(AvaloniaAppPaths.DataDirectory, "Downloads", downloadScope)))
+            .RegisterSingleton<INativeDownloadPreferencesStore>(new NativeDownloadPreferencesStore(
+                Path.Combine(AvaloniaAppPaths.DataDirectory, "Downloads", downloadScope, "preferences.json")))
             .RegisterSingleton<ITranscriptRepository>(registry => new LoopbackTranscriptRepository(registry.GetRequiredService<LoopbackServerClient>()))
             .RegisterSingleton<ISpeakerIdentityRepository>(registry => new LoopbackSpeakerIdentityRepository(registry.GetRequiredService<LoopbackServerClient>()))
             .RegisterSingleton<IVoiceLearningCoordinator>(registry => new LoopbackVoiceLearningCoordinator(
@@ -159,7 +161,9 @@ public sealed class AvaloniaApplicationHost : IDisposable
                 registry.GetRequiredService<INativeDownloadService>(),
                 registry.GetRequiredService<PlaybackViewModel>(),
                 registry.GetRequiredService<IUiDispatcher>(),
-                registry.GetRequiredService<IUserNotificationService>()))
+                registry.GetRequiredService<IUserNotificationService>(),
+                registry.GetRequiredService<ILibraryBrowseService>(),
+                registry.GetRequiredService<INativeDownloadPreferencesStore>()))
             .RegisterSingleton(registry => new QueueViewModel(
                 registry.GetRequiredService<IQueueService>(),
                 registry.GetRequiredService<PlaybackViewModel>()))
