@@ -1,6 +1,7 @@
 using Foundation;
 using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Models;
+using TheRadioVault.Web.Models;
 using UIKit;
 
 namespace TheRadioVault.Client.iOS;
@@ -26,6 +27,11 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         _header.SearchBar.Delegate = this;
         _header.CompletedButton.TouchUpInside += CompletedButtonTapped;
         TableView.TableHeaderView = _header;
+        NavigationItem.RightBarButtonItem = new UIBarButtonItem(
+            RadioVaultIcons.Image(RadioVaultIcon.Add),
+            UIBarButtonItemStyle.Plain,
+            (_, _) => ShowSavedCollectionActions());
+        NavigationItem.RightBarButtonItem.AccessibilityLabel = "Create a playlist or save Up Next";
         UpdateHideCompletedButton();
         RefreshControl = new UIRefreshControl();
         RefreshControl.ValueChanged += async (_, _) =>
@@ -35,7 +41,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         };
     }
 
-    public override nint NumberOfSections(UITableView tableView) => IsShowingSearchResults ? 1 : 2;
+    public override nint NumberOfSections(UITableView tableView) => IsShowingSearchResults ? 1 : 3;
 
     public override nint RowsInSection(UITableView tableView, nint section)
     {
@@ -43,6 +49,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         return section switch
         {
             0 => 1,
+            1 => Math.Max(1, Session.SavedCollections.Count),
             _ => Math.Max(1, VisibleCollections.Count)
         };
     }
@@ -51,6 +58,7 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         => IsShowingSearchResults ? "Search results" : section switch
         {
             0 => "Your Library",
+            1 => "Playlists & Smart Collections",
             _ => "Shows"
         };
 
@@ -91,6 +99,24 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
             return quick;
         }
 
+        if (indexPath.Section == 1)
+        {
+            if (Session.SavedCollections.Count == 0)
+                return DetailCell("empty-saved-collections", "No playlists yet", "Tap + to create one or save the current Up Next queue.");
+            var saved = Session.SavedCollections[indexPath.Row];
+            var kind = saved.Kind.Equals("Smart", StringComparison.OrdinalIgnoreCase)
+                ? "Smart collection · updates automatically"
+                : saved.ItemCount is { } count
+                    ? $"Playlist · {count:N0} broadcast{(count == 1 ? string.Empty : "s")}"
+                    : "Playlist";
+            return IconDetailCell(
+                "saved-collection",
+                saved.Name,
+                kind,
+                saved.Kind.Equals("Smart", StringComparison.OrdinalIgnoreCase) ? RadioVaultIcon.Search : RadioVaultIcon.UpNext,
+                disclosure: true);
+        }
+
         if (VisibleCollections.Count == 0)
             return DetailCell("empty-shows", Session.IsPaired ? "No shows found" : "Pair a server first", Session.StatusText);
         var show = VisibleCollections[indexPath.Row];
@@ -116,6 +142,14 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         if (indexPath.Section == 0)
             return;
 
+        if (indexPath.Section == 1)
+        {
+            if (indexPath.Row < Session.SavedCollections.Count)
+                NavigationController?.PushViewController(
+                    new SavedCollectionViewController(Session, Session.SavedCollections[indexPath.Row]), true);
+            return;
+        }
+
         if (indexPath.Row < VisibleCollections.Count)
         {
             var show = VisibleCollections[indexPath.Row];
@@ -127,6 +161,104 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
     private void OpenLibrarySection(string title, string filter = "All")
         => NavigationController?.PushViewController(
             new ShowLibraryViewController(Session, null, title, filter, _hideCompleted), true);
+
+    private void ShowSavedCollectionActions()
+    {
+        var sheet = UIAlertController.Create("Saved Collections", null, UIAlertControllerStyle.ActionSheet);
+        sheet.AddAction(UIAlertAction.Create("New Playlist", UIAlertActionStyle.Default, _ => PromptForPlaylistName(false)));
+        sheet.AddAction(UIAlertAction.Create("New Smart Collection", UIAlertActionStyle.Default, _ => ChooseSmartCollectionFilter()));
+        sheet.AddAction(UIAlertAction.Create(
+            "Save Up Next as Playlist",
+            UIAlertActionStyle.Default,
+            _ => PromptForPlaylistName(true)));
+        sheet.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        if (sheet.PopoverPresentationController is { } popover)
+            popover.SourceItem = NavigationItem.RightBarButtonItem;
+        PresentViewController(sheet, true, null);
+    }
+
+    private void ChooseSmartCollectionFilter()
+    {
+        var sheet = UIAlertController.Create(
+            "Smart Collection",
+            "Choose which part of your Library should update automatically.",
+            UIAlertControllerStyle.ActionSheet);
+        foreach (var option in new[]
+                 {
+                     (Title: "Every Broadcast", Filter: "All"),
+                     (Title: "Favourites", Filter: "Favourites"),
+                     (Title: "Continue Listening", Filter: "ContinueListening"),
+                     (Title: "Unplayed", Filter: "Unplayed"),
+                     (Title: "Recently Added", Filter: "RecentlyAdded"),
+                     (Title: "Completed", Filter: "Completed")
+                 })
+        {
+            sheet.AddAction(UIAlertAction.Create(
+                option.Title,
+                UIAlertActionStyle.Default,
+                _ => PromptForSmartCollection(option.Title, option.Filter)));
+        }
+        sheet.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        if (sheet.PopoverPresentationController is { } popover)
+            popover.SourceItem = NavigationItem.RightBarButtonItem;
+        PresentViewController(sheet, true, null);
+    }
+
+    private void PromptForSmartCollection(string defaultName, string filter)
+    {
+        var alert = UIAlertController.Create(
+            "New Smart Collection",
+            "It will stay up to date as your Radio Vault Library changes.",
+            UIAlertControllerStyle.Alert);
+        alert.AddTextField(field =>
+        {
+            field.Placeholder = "Collection name";
+            field.Text = defaultName;
+            field.ClearButtonMode = UITextFieldViewMode.WhileEditing;
+        });
+        alert.AddTextField(field =>
+        {
+            field.Placeholder = "Optional words, person, topic or title";
+            field.ClearButtonMode = UITextFieldViewMode.WhileEditing;
+        });
+        alert.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        alert.AddAction(UIAlertAction.Create("Create", UIAlertActionStyle.Default, async _ =>
+        {
+            var name = alert.TextFields?[0].Text?.Trim() ?? string.Empty;
+            if (name.Length == 0) return;
+            var search = alert.TextFields?[1].Text;
+            var created = await Session.CreateSmartCollectionAsync(name, filter, search).ConfigureAwait(false);
+            if (created is not null)
+                BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+                    new SavedCollectionViewController(Session, created.Summary), true));
+        }));
+        PresentViewController(alert, true, null);
+    }
+
+    private void PromptForPlaylistName(bool fromQueue)
+    {
+        var alert = UIAlertController.Create(
+            fromQueue ? "Save Up Next" : "New Playlist",
+            fromQueue ? "The shared queue will be copied into a reusable playlist." : "Give this playlist a short, memorable name.",
+            UIAlertControllerStyle.Alert);
+        alert.AddTextField(field =>
+        {
+            field.Placeholder = "Playlist name";
+            field.Text = fromQueue ? "Up Next" : string.Empty;
+            field.ClearButtonMode = UITextFieldViewMode.WhileEditing;
+        });
+        alert.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        alert.AddAction(UIAlertAction.Create("Save", UIAlertActionStyle.Default, async _ =>
+        {
+            var name = alert.TextFields?.FirstOrDefault()?.Text?.Trim() ?? string.Empty;
+            if (name.Length == 0) return;
+            var created = await Session.CreateSavedCollectionAsync(name, fromQueue).ConfigureAwait(false);
+            if (created is not null)
+                BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+                    new SavedCollectionViewController(Session, created.Summary), true));
+        }));
+        PresentViewController(alert, true, null);
+    }
 
     [Export("searchBarSearchButtonClicked:")]
     public void SearchButtonClicked(UISearchBar searchBar)

@@ -25,6 +25,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Uncommitted remote observations cannot steal local playback", UncommittedObservationCannotStealLocalPlaybackAsync),
     ("Committed handoff stops and acknowledges the source", CommittedHandoffStopsAndAcknowledgesSourceAsync),
     ("Metadata synchronization persists a complete cache", MetadataSynchronizationPersistsCompleteCacheAsync),
+    ("Saved collections remain readable from the offline cache", SavedCollectionsRemainReadableOfflineAsync),
     ("Metadata synchronization applies changed and deleted broadcasts", MetadataSynchronizationAppliesDeltaAsync),
     ("Metadata synchronization serializes concurrent refreshes", MetadataSynchronizationSerializesRefreshesAsync),
     ("Metadata synchronization failure preserves the cache", MetadataSynchronizationFailurePreservesCacheAsync),
@@ -390,6 +391,36 @@ static async Task MetadataSynchronizationPersistsCompleteCacheAsync()
             () => { });
         await loader.LoadAsync("server-a");
         Equal(2, reopened.Snapshot.Broadcasts.Count, "Persisted metadata cache count");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task SavedCollectionsRemainReadableOfflineAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var now = DateTimeOffset.UtcNow;
+        var summary = new WebSavedCollectionSummary(41, "Train journey", "Manual", 1, 3, now, now);
+        var details = new WebSavedCollectionDetails(
+            summary,
+            null,
+            [Summary(101, "First Cached Broadcast", 0, false, null)]);
+        var cache = new MobileMetadataCache(root, "server-a");
+        cache.SetSavedCollections([summary]);
+        cache.UpsertSavedCollection(details);
+        await cache.SaveAsync();
+
+        var reopened = new MobileMetadataCache(root, "server-a");
+        await reopened.LoadAsync("server-a");
+        Equal(1, reopened.Snapshot.SavedCollections?.Count ?? 0, "Persisted saved collection summaries");
+        Ensure(
+            reopened.FindSavedCollection(41)?.Summary.Name == "Train journey",
+            "Persisted saved collection details were not restored.");
+
+        reopened.RemoveSavedCollection(41);
+        Equal(0, reopened.Snapshot.SavedCollections?.Count ?? 0, "Removed saved collection summaries");
+        Ensure(reopened.FindSavedCollection(41) is null, "Removed saved collection details remain cached.");
     }
     finally { DeleteTemporaryDirectory(root); }
 }

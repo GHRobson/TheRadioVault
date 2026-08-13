@@ -9,7 +9,7 @@ var tests = new (string Name, Action Run)[]
     ("Database seeds every first-class show", DatabaseSeedsEveryFirstClassShow),
     ("Latest schema exposes the canonical topic identity", LatestSchemaExposesCanonicalTopicIdentity),
     ("Latest schema contains required persistence boundaries", LatestSchemaContainsRequiredPersistenceBoundaries),
-    ("Schema initialization records migration 48 once", SchemaInitializationRecordsMigrationOnce),
+    ("Schema initialization records numbered migrations once", SchemaInitializationRecordsMigrationOnce),
     ("Schema 43 upgrades safely to the latest schema", Schema43UpgradesSafely),
     ("Numbered migrations apply in order and are idempotent", NumberedMigrationsApplyInOrderAndAreIdempotent),
     ("Failed numbered migrations roll back atomically", FailedNumberedMigrationRollsBackAtomically),
@@ -115,12 +115,14 @@ static void LatestSchemaContainsRequiredPersistenceBoundaries()
             "library_truth_rehearsal_runs", "library_truth_rehearsal_items",
             "library_truth_rehearsal_conflicts", "canonical_broadcasts", "recordings", "recording_segments",
             "recording_coverages", "episode_canonical_map", "library_truth_adoption_runs",
-            "library_truth_adoption_items", "library_truth_adoption_conflicts"
+            "library_truth_adoption_items", "library_truth_adoption_conflicts",
+            "saved_collections", "saved_collection_items"
         ]);
         AssertObjectsExist(connection, "index",
         [
             "ix_transcripts_status_updated", "ix_transcript_segments_time",
-            "ix_transcription_jobs_state_requested", "ux_library_truth_adoption_completed_truth"
+            "ix_transcription_jobs_state_requested", "ux_library_truth_adoption_completed_truth",
+            "ux_saved_collections_name", "ix_saved_collection_items_order"
         ]);
 
         AssertColumnsExist(connection, "transcript_segments", ["speaker_key", "content_kind", "is_reviewed"]);
@@ -146,6 +148,10 @@ static void LatestSchemaContainsRequiredPersistenceBoundaries()
             ["adoption_state", "adoption_reason", "preferred_recording_key", "suspicious_merge", "duration_spread_ratio", "cross_identity_conflict_count"]);
         AssertColumnsExist(connection, "library_truth_adoption_runs",
             ["truth_run_id", "rehearsal_run_id", "backup_path", "source_fingerprint", "staged_fingerprint", "post_commit_fingerprint", "rehearsal_truth_signature", "commit_truth_signature", "rehearsal_item_signature", "commit_item_signature", "rehearsal_conflict_signature", "commit_conflict_signature", "commit_verified"]);
+        AssertColumnsExist(connection, "saved_collections",
+            ["name", "kind", "smart_rule_json", "revision", "created_at", "updated_at"]);
+        AssertColumnsExist(connection, "saved_collection_items",
+            ["collection_id", "episode_id", "item_position", "added_at"]);
     });
 }
 
@@ -159,11 +165,14 @@ static void SchemaInitializationRecordsMigrationOnce()
         new SqliteDatabase(path).Initialize();
 
         using var connection = OpenRawConnection(path);
-        Equal(48L, ScalarLong(connection, "PRAGMA user_version"), "schema version after repeated initialization");
-        Equal(1L, ScalarLong(connection, "SELECT COUNT(*) FROM schema_migrations"), "migration history row count");
+        Equal(49L, ScalarLong(connection, "PRAGMA user_version"), "schema version after repeated initialization");
+        Equal(2L, ScalarLong(connection, "SELECT COUNT(*) FROM schema_migrations"), "migration history row count");
         Equal("Create migration history", ScalarString(
             connection,
             "SELECT name FROM schema_migrations WHERE version=48"), "migration 48 name");
+        Equal("Create saved collections", ScalarString(
+            connection,
+            "SELECT name FROM schema_migrations WHERE version=49"), "migration 49 name");
     }
     finally
     {
@@ -251,7 +260,7 @@ static void Schema43UpgradesSafely()
             "library_truth_adoption_items", "library_truth_adoption_conflicts"
         ]);
 
-        var backups = Directory.GetFiles(directory, "schema43.pre-schema-48-*.sqlite");
+        var backups = Directory.GetFiles(directory, "schema43.pre-schema-49-*.sqlite");
         Equal(1, backups.Length, "pre-migration backup count");
         using var backup = OpenRawConnection(backups[0]);
         Equal(43L, ScalarLong(backup, "PRAGMA user_version"), "backup schema version");

@@ -25,6 +25,7 @@ public static class ServiceCollectionExtensions
         services.AddSingleton<ILibraryActionService, LibraryActionService>();
         services.AddSingleton<IMomentsService, MomentsService>();
         services.AddSingleton<IQueueService, QueueService>();
+        services.AddSingleton<ISavedCollectionService, SavedCollectionService>();
         services.AddSingleton<ILibraryFolderService, LibraryFolderService>();
         services.AddSingleton<IArchiveHealthService, ArchiveHealthService>();
         services.AddSingleton<ILibraryBrowseService, LibraryBrowseService>();

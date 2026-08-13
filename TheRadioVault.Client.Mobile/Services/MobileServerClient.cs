@@ -309,6 +309,86 @@ public sealed class MobileServerClient : IDisposable
             cancellationToken).ConfigureAwait(false)).Suggestions;
     }
 
+    public async Task<IReadOnlyList<WebSavedCollectionSummary>> GetSavedCollectionsAsync(
+        CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.ClientSavedCollections,
+            MobileJsonContext.Default.SavedCollectionsEnvelope,
+            cancellationToken).ConfigureAwait(false)).Collections;
+
+    public async Task<WebSavedCollectionDetails> GetSavedCollectionAsync(
+        long collectionId,
+        CancellationToken cancellationToken = default)
+        => (await GetJsonAsync(
+            WebApiRoutes.ClientSavedCollection(collectionId),
+            MobileJsonContext.Default.SavedCollectionEnvelope,
+            cancellationToken).ConfigureAwait(false)).Collection;
+
+    public async Task<WebSavedCollectionMutationResult> CreateSavedCollectionAsync(
+        WebSavedCollectionCreateRequest request,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientSavedCollections,
+            request,
+            MobileJsonContext.Default.WebSavedCollectionCreateRequest,
+            MobileJsonContext.Default.SavedCollectionMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebSavedCollectionMutationResult> UpdateSavedCollectionAsync(
+        long collectionId,
+        WebSavedCollectionUpdateRequest request,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientSavedCollectionUpdate(collectionId),
+            request,
+            MobileJsonContext.Default.WebSavedCollectionUpdateRequest,
+            MobileJsonContext.Default.SavedCollectionMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebSavedCollectionMutationResult> AddSavedCollectionItemAsync(
+        long collectionId,
+        WebSavedCollectionItemMutation request,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientSavedCollectionAdd(collectionId),
+            request,
+            MobileJsonContext.Default.WebSavedCollectionItemMutation,
+            MobileJsonContext.Default.SavedCollectionMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebSavedCollectionMutationResult> RemoveSavedCollectionItemAsync(
+        long collectionId,
+        WebSavedCollectionItemMutation request,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientSavedCollectionRemove(collectionId),
+            request,
+            MobileJsonContext.Default.WebSavedCollectionItemMutation,
+            MobileJsonContext.Default.SavedCollectionMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebSavedCollectionMutationResult> MoveSavedCollectionItemAsync(
+        long collectionId,
+        WebSavedCollectionItemMutation request,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientSavedCollectionMove(collectionId),
+            request,
+            MobileJsonContext.Default.WebSavedCollectionItemMutation,
+            MobileJsonContext.Default.SavedCollectionMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
+    public async Task<WebSavedCollectionMutationResult> DeleteSavedCollectionAsync(
+        long collectionId,
+        WebSavedCollectionDeleteRequest request,
+        CancellationToken cancellationToken = default)
+        => (await PostJsonAsync(
+            WebApiRoutes.ClientSavedCollectionDelete(collectionId),
+            request,
+            MobileJsonContext.Default.WebSavedCollectionDeleteRequest,
+            MobileJsonContext.Default.SavedCollectionMutationEnvelope,
+            cancellationToken).ConfigureAwait(false)).Result;
+
     public async Task<IReadOnlyList<WebClientLibraryArchivePeriodSummary>> GetArchivePeriodsAsync(
         int? collectionId,
         int? year = null,

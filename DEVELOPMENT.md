@@ -56,6 +56,8 @@ dotnet build TheRadioVault.Tests/TheRadioVault.Tests.csproj \
   -c Release --no-restore -warnaserror
 dotnet build TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj \
   -c Release --no-restore -warnaserror
+dotnet build TheRadioVault.Services.Tests/TheRadioVault.Services.Tests.csproj \
+  -c Release --no-restore -warnaserror
 dotnet build TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj \
   -c Release --no-restore -warnaserror
 dotnet build TheRadioVault.Transcription.Tests/TheRadioVault.Transcription.Tests.csproj \
@@ -67,6 +69,8 @@ dotnet build TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj \
 dotnet run --project TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj \
   -c Release --no-build
 dotnet run --project TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj \
+  -c Release --no-build
+dotnet run --project TheRadioVault.Services.Tests/TheRadioVault.Services.Tests.csproj \
   -c Release --no-build
 dotnet run --project TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj \
   -c Release --no-build
@@ -99,6 +103,8 @@ dotnet build TheRadioVault.Tests/TheRadioVault.Tests.csproj \
   -c Release --no-restore -warnaserror
 dotnet build TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj \
   -c Release --no-restore -warnaserror
+dotnet build TheRadioVault.Services.Tests/TheRadioVault.Services.Tests.csproj \
+  -c Release --no-restore -warnaserror
 dotnet build TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj \
   -c Release --no-restore -warnaserror
 dotnet build TheRadioVault.Transcription.Tests/TheRadioVault.Transcription.Tests.csproj \
@@ -110,6 +116,8 @@ dotnet build TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj \
 dotnet run --project TheRadioVault.SourceChecks/TheRadioVault.SourceChecks.csproj \
   -c Release --no-build
 dotnet run --project TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj \
+  -c Release --no-build
+dotnet run --project TheRadioVault.Services.Tests/TheRadioVault.Services.Tests.csproj \
   -c Release --no-build
 dotnet run --project TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj \
   -c Release --no-build

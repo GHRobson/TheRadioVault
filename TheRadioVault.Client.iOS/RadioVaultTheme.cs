@@ -106,7 +106,8 @@ public enum RadioVaultIcon
     SkipForward,
     Moment,
     Offline,
-    Sync
+    Sync,
+    Add
 }
 
 public static class RadioVaultIcons
@@ -327,6 +328,10 @@ public static class RadioVaultIcons
                 break;
             case RadioVaultIcon.Sync:
                 DrawSync(context);
+                break;
+            case RadioVaultIcon.Add:
+                Lines(context, (12, 4), (12, 20));
+                Lines(context, (4, 12), (20, 12));
                 break;
         }
     }

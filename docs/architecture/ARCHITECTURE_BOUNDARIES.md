@@ -22,6 +22,7 @@
 | `TheRadioVault.Tests` | Cross-platform capability/regression console suite | Neutral |
 | `TheRadioVault.Web.Tests` | Compiled Web query, HTTP/server, embedded-asset and playback-transfer behaviour | Neutral; Web only |
 | `TheRadioVault.Data.Tests` | Compiled database seed, schema, upgrade and migration behaviour | Neutral; Core and Data only |
+| `TheRadioVault.Services.Tests` | Compiled service policy, transaction and saved-collection behaviour | Neutral; Services and Data only |
 | `TheRadioVault.Transcription.Tests` | Compiled transcription download, timeout, cleanup and asset-installation behaviour | Neutral; Transcription only |
 | `TheRadioVault.SourceChecks` | Dependency-free source, route-order and packaging boundary checks | Neutral |
 
@@ -121,7 +122,7 @@ The resolver must not consume specialised client, playback, queue or media paths
 
 ## 0.44 test-runner boundary
 
-`TheRadioVault.Tests` remains the broad capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.Web.Tests` references only `TheRadioVault.Web` and owns Web query/model contracts, declarative route resolution, canonical routes, live HTTP behavior, server lifecycle, embedded assets and transactional playback integration. Its 93 checks use focused API, routing, infrastructure, playback, shell and media groups plus reusable server, source-tree and archive-provider fixtures. `TheRadioVault.Data.Tests` references only Core and Data and owns database seed, latest-schema, legacy-upgrade, pre-upgrade backup and numbered-migration behavior through eight compiled checks with reusable declarative schema assertions. `TheRadioVault.Transcription.Tests` references the Transcription subsystem and owns official-asset installation, network progress, worker activity, timeout, cancellation, process-tree termination, cleanup and retry behavior through twelve compiled checks. All three focused suites are release-gated. Migrated tests must be removed from the broad runner rather than duplicated.
+`TheRadioVault.Tests` remains the broad capability and regression runner while those tests are migrated by subsystem. `TheRadioVault.Web.Tests` references only `TheRadioVault.Web` and owns Web query/model contracts, declarative route resolution, canonical routes, live HTTP behavior, server lifecycle, embedded assets and transactional playback integration. Its focused checks use API, routing, infrastructure, playback, shell and media groups plus reusable server, source-tree and archive-provider fixtures. `TheRadioVault.Data.Tests` references only Core and Data and owns database seed, latest-schema, legacy-upgrade, pre-upgrade backup and numbered-migration behavior through compiled checks with reusable declarative schema assertions. `TheRadioVault.Services.Tests` owns compiled service policy and transaction behavior, including ordered manual playlists, live smart-collection materialization, revision conflicts and atomic rollback. `TheRadioVault.Transcription.Tests` references the Transcription subsystem and owns official-asset installation, network progress, worker activity, timeout, cancellation, process-tree termination, cleanup and retry behavior. All focused suites are release-gated. Migrated tests must be removed from the broad runner rather than duplicated.
 
 ## 0.44 SQLite migration boundary
 
@@ -151,7 +152,13 @@ Large Research and Wiki package routes opt into staged request bodies. `WebHttpR
 
 `SqliteDatabase` remains the only connection, initialization and migration owner. `PersonalStateRepository` may open connections through it, but it may not initialize or migrate a database. A failure on any canonical member must roll back playback rows and episode projections for all members; the cross-platform smoke suite exercises that forced-failure path.
 
-All four shared runners are required by the complete Windows release gate. The local macOS gate and hosted macOS and Linux jobs run the complete Data, Transcription and Web suites; the iOS job runs the portable transactional subset alongside its device architecture checks. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.
+All shared runners are required by the complete Windows release gate. The local macOS gate and hosted macOS and Linux jobs run the complete Data, Services, Transcription and Web suites; the iOS job runs the portable transactional subset alongside its device architecture checks. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.
+
+## 0.46 saved collection boundary
+
+`SavedCollectionService` is the sole owner of saved-playlist and smart-collection policy. Manual playlists persist an explicit, deduplicated order; smart collections persist a Library rule and materialize it at read time. Every mutation validates an expected revision and updates the collection and its items in one SQLite transaction, so clients cannot silently overwrite changes made by another device.
+
+Schema 49 owns the durable `saved_collections` and `saved_collection_items` tables. The client API exposes additive saved-collection routes and returns the current canonical collection with a conflict response. Desktop, iOS and future clients consume that same service contract and may cache canonical results for offline reading, but they must not create a second collection store or duplicate smart-filter policy in presentation code.
 
 ## 0.43 durable sync and backup boundary
 

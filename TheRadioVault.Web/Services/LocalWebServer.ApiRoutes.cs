@@ -39,7 +39,7 @@ public sealed partial class LocalWebServer
         }
 
         if (await TryHandleClientRouteAsync(
-                stream, path, query, request, isHead, cancellationToken)
+                stream, path, query, request, method, cancellationToken)
             .ConfigureAwait(false))
         {
             return true;

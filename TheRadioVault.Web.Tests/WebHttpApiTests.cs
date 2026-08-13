@@ -19,6 +19,7 @@ internal static class WebHttpApiTests
     [
         ("Web API serves versioned broadcast details", WebApiServesVersionedBroadcastDetails),
         ("Full client API preserves native Library and Broadcast Info fields", FullClientApiPreservesNativeLibraryFields),
+        ("Full client API manages revisioned saved collections", FullClientApiManagesSavedCollections),
         ("Full client API serves Research and transcription through the server", FullClientApiServesResearchAndTranscription),
         ("Full client API previews Research pack uploads", FullClientApiPreviewsResearchPackUploads),
         ("Web API exposes Anywhere server identity", WebApiExposesAnywhereServerIdentity),
@@ -112,6 +113,59 @@ static void FullClientApiPreservesNativeLibraryFields()
         Equal("Show", entityLinks[1].GetProperty("kind").GetString());
         Equal("1", entityLinks[1].GetProperty("targetId").GetString());
         Equal("host", entityLinks[2].GetProperty("relationship").GetString());
+    });
+}
+
+static void FullClientApiManagesSavedCollections()
+{
+    Equal("/api/v1/client/saved-collections", WebApiRoutes.ClientSavedCollections);
+    Equal("/api/v1/client/saved-collections/7/items/move", WebApiRoutes.ClientSavedCollectionMove(7));
+
+    WithWebServer(async (port, token) =>
+    {
+        using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
+        client.DefaultRequestHeaders.Add("X-RadioVault-Token", token);
+        var baseUrl = $"http://127.0.0.1:{port}";
+
+        using var createResponse = await client.PostAsJsonAsync(
+            baseUrl + WebApiRoutes.ClientSavedCollections,
+            new WebSavedCollectionCreateRequest("Drive home", FromQueue: true));
+        createResponse.EnsureSuccessStatusCode();
+        var created = await createResponse.Content.ReadFromJsonAsync<JsonElement>();
+        var collection = created.GetProperty("result").GetProperty("collection");
+        var id = collection.GetProperty("summary").GetProperty("id").GetInt64();
+        Equal(1, collection.GetProperty("broadcasts").GetArrayLength());
+        Equal(1L, collection.GetProperty("summary").GetProperty("revision").GetInt64());
+
+        var all = await client.GetFromJsonAsync<JsonElement>(baseUrl + WebApiRoutes.ClientSavedCollections);
+        Equal(1, all.GetProperty("collections").GetArrayLength());
+
+        using var renameResponse = await client.PostAsJsonAsync(
+            baseUrl + WebApiRoutes.ClientSavedCollectionUpdate(id),
+            new WebSavedCollectionUpdateRequest("Evening drive", null, 1));
+        renameResponse.EnsureSuccessStatusCode();
+        var renamed = await renameResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Equal(2L, renamed.GetProperty("result").GetProperty("currentRevision").GetInt64());
+
+        using var staleResponse = await client.PostAsJsonAsync(
+            baseUrl + WebApiRoutes.ClientSavedCollectionDelete(id),
+            new WebSavedCollectionDeleteRequest(1));
+        Equal(System.Net.HttpStatusCode.Conflict, staleResponse.StatusCode);
+        var stale = await staleResponse.Content.ReadFromJsonAsync<JsonElement>();
+        Equal(2L, stale.GetProperty("result").GetProperty("currentRevision").GetInt64());
+
+        using var deleteResponse = await client.PostAsJsonAsync(
+            baseUrl + WebApiRoutes.ClientSavedCollectionDelete(id),
+            new WebSavedCollectionDeleteRequest(2));
+        deleteResponse.EnsureSuccessStatusCode();
+
+        using var missingResponse = await client.GetAsync(baseUrl + WebApiRoutes.ClientSavedCollection(id));
+        Equal(System.Net.HttpStatusCode.NotFound, missingResponse.StatusCode);
+
+        using var wrongMethod = await client.PutAsJsonAsync(
+            baseUrl + WebApiRoutes.ClientSavedCollections,
+            new WebSavedCollectionCreateRequest("Nope"));
+        Equal(System.Net.HttpStatusCode.MethodNotAllowed, wrongMethod.StatusCode);
     });
 }
 

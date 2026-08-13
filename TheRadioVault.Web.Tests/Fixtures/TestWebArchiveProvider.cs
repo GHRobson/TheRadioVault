@@ -14,6 +14,7 @@ internal sealed partial class TestWebArchiveProvider : IWebArchiveProvider
         new DateTime(2026, 7, 16), new DateTime(2026, 7, 16), "C:\\Audio\\9.mp3", string.Empty);
     private readonly List<WebChangeEvent> _changes = new();
     private readonly List<WebQueueItem> _queue = new();
+    private readonly Dictionary<long, WebSavedCollectionDetails> _savedCollections = new();
     private WebPlaybackState _desktop;
     private WebPlaybackState _web = new(null, string.Empty, string.Empty, 0, 0, "Idle", null, false, null, "Phone");
     private string _webClient = string.Empty;
@@ -22,6 +23,7 @@ internal sealed partial class TestWebArchiveProvider : IWebArchiveProvider
     private long _generation;
     private long _sequence;
     private long _queueId;
+    private long _savedCollectionId;
     private readonly bool _throwPlayback;
     private readonly PlaybackTransferCoordinator _playbackTransfers = new();
     private WebPlaybackCommittedTransfer? _committedTransfer;
@@ -70,6 +72,100 @@ internal sealed partial class TestWebArchiveProvider : IWebArchiveProvider
         => new(new[] { 2005 }, 1);
     public IReadOnlyList<WebClientLibrarySearchSuggestion> GetClientLibrarySearchSuggestions(string prefix, int limit)
         => new[] { new WebClientLibrarySearchSuggestion(_episode.Title, "Broadcast", 1) };
+    public IReadOnlyList<WebSavedCollectionSummary> GetSavedCollections()
+        => _savedCollections.Values.Select(value => value.Summary).OrderBy(value => value.Name).ToArray();
+    public WebSavedCollectionDetails? GetSavedCollection(long collectionId)
+        => _savedCollections.GetValueOrDefault(collectionId);
+    public WebSavedCollectionMutationResult CreateSavedCollection(WebSavedCollectionCreateRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Name)) return SavedInvalid("A name is required.");
+        if (_savedCollections.Values.Any(value => value.Summary.Name.Equals(request.Name.Trim(), StringComparison.OrdinalIgnoreCase)))
+            return SavedInvalid("A saved collection with that name already exists.");
+        var kind = request.Kind.Equals("Smart", StringComparison.OrdinalIgnoreCase) ? "Smart" : "Manual";
+        var broadcasts = kind == "Manual" && (request.FromQueue || request.EpisodeIds?.Contains(_episode.Id) == true)
+            ? new[] { ClientSummary() }
+            : Array.Empty<WebClientLibraryBroadcastSummary>();
+        var now = DateTimeOffset.UtcNow;
+        var summary = new WebSavedCollectionSummary(++_savedCollectionId, request.Name.Trim(), kind, kind == "Manual" ? broadcasts.Length : null, 1, now, now);
+        var details = new WebSavedCollectionDetails(summary, request.Rule, broadcasts);
+        _savedCollections[summary.Id] = details;
+        return SavedSuccess(details, "Created.");
+    }
+    public WebSavedCollectionMutationResult UpdateSavedCollection(long collectionId, WebSavedCollectionUpdateRequest request)
+    {
+        if (!TrySaved(collectionId, request.ExpectedRevision, out var current, out var error)) return error;
+        var summary = current!.Summary with { Name = request.Name.Trim(), Revision = current.Summary.Revision + 1, UpdatedAt = DateTimeOffset.UtcNow };
+        var updated = current with { Summary = summary, Rule = request.Rule };
+        _savedCollections[collectionId] = updated;
+        return SavedSuccess(updated, "Updated.");
+    }
+    public WebSavedCollectionMutationResult AddSavedCollectionItem(long collectionId, WebSavedCollectionItemMutation request)
+    {
+        if (!TrySaved(collectionId, request.ExpectedRevision, out var current, out var error)) return error;
+        if (current!.Summary.Kind == "Smart") return SavedInvalid("Smart collections cannot be edited manually.");
+        var broadcasts = current.Broadcasts.Any(value => value.RepresentativeEpisodeId == request.EpisodeId)
+            ? current.Broadcasts
+            : current.Broadcasts.Append(ClientSummary()).ToArray();
+        return SaveTestCollection(current, broadcasts, "Added.");
+    }
+    public WebSavedCollectionMutationResult RemoveSavedCollectionItem(long collectionId, WebSavedCollectionItemMutation request)
+    {
+        if (!TrySaved(collectionId, request.ExpectedRevision, out var current, out var error)) return error;
+        return SaveTestCollection(current!, current!.Broadcasts.Where(value => value.RepresentativeEpisodeId != request.EpisodeId).ToArray(), "Removed.");
+    }
+    public WebSavedCollectionMutationResult MoveSavedCollectionItem(long collectionId, WebSavedCollectionItemMutation request)
+    {
+        if (!TrySaved(collectionId, request.ExpectedRevision, out var current, out var error)) return error;
+        return SaveTestCollection(current!, current!.Broadcasts, "Moved.");
+    }
+    public WebSavedCollectionMutationResult DeleteSavedCollection(long collectionId, WebSavedCollectionDeleteRequest request)
+    {
+        if (!TrySaved(collectionId, request.ExpectedRevision, out _, out var error)) return error;
+        _savedCollections.Remove(collectionId);
+        return new WebSavedCollectionMutationResult(true, false, false, "Deleted.", null);
+    }
+
+    private WebSavedCollectionMutationResult SaveTestCollection(
+        WebSavedCollectionDetails current,
+        IReadOnlyList<WebClientLibraryBroadcastSummary> broadcasts,
+        string message)
+    {
+        var summary = current.Summary with
+        {
+            ItemCount = broadcasts.Count,
+            Revision = current.Summary.Revision + 1,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+        var updated = current with { Summary = summary, Broadcasts = broadcasts };
+        _savedCollections[summary.Id] = updated;
+        return SavedSuccess(updated, message);
+    }
+
+    private bool TrySaved(
+        long collectionId,
+        long expectedRevision,
+        out WebSavedCollectionDetails? current,
+        out WebSavedCollectionMutationResult error)
+    {
+        current = GetSavedCollection(collectionId);
+        if (current is null)
+        {
+            error = new WebSavedCollectionMutationResult(false, false, true, "Not found.", null);
+            return false;
+        }
+        if (current.Summary.Revision != expectedRevision)
+        {
+            error = new WebSavedCollectionMutationResult(false, true, false, "Revision conflict.", current, current.Summary.Revision);
+            return false;
+        }
+        error = SavedSuccess(current, string.Empty);
+        return true;
+    }
+
+    private static WebSavedCollectionMutationResult SavedSuccess(WebSavedCollectionDetails collection, string message)
+        => new(true, false, false, message, collection, collection.Summary.Revision);
+    private static WebSavedCollectionMutationResult SavedInvalid(string message)
+        => new(false, false, false, message, null);
     public WebClientBroadcastDetails? GetClientBroadcastDetails(long episodeId)
         => episodeId == _episode.Id
             ? new WebClientBroadcastDetails(

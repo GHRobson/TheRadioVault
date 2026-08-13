@@ -177,7 +177,7 @@ var tests = new (string Name, Action Run)[]
         Equal(10_000L, (state with { IsPlaying = false }).ProjectedPositionMs(now));
         Equal(60_000L, (state with { PositionMs = 59_500, Speed = 3d }).ProjectedPositionMs(now));
     }),
-    ("Native server client advances capability generation 39", () => Equal(39, new WebServerOptions().CapabilityGeneration)),
+    ("Native server client advances capability generation 41", () => Equal(41, new WebServerOptions().CapabilityGeneration)),
     ("Native pairing normalizes pinned certificate identities", () =>
         Equal("AABBCCDDEEFF", NativeServerConnectionPreferences.NormalizeThumbprint("aa:bb cc-dd ee:ff"))),
     ("Native server cache encrypts and authenticates read-only responses", NativeServerCacheEncryptsResponses),
@@ -2195,8 +2195,8 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 
     var foundation = File.ReadAllText(Path.Combine(SourceRoot(), "tools", "Test-AvaloniaFoundation.ps1"));
     True(foundation.Contains("foundationVersion = '0.35-alpha9-knowledge-portability'", StringComparison.Ordinal));
-    True(foundation.Contains("databaseSchema = 48", StringComparison.Ordinal));
-    True(foundation.Contains("lanCapabilityGeneration = 40", StringComparison.Ordinal));
+    True(foundation.Contains("databaseSchema = 49", StringComparison.Ordinal));
+    True(foundation.Contains("lanCapabilityGeneration = 41", StringComparison.Ordinal));
     foreach (var marker in new[]
              {
                  "remoteClientMigrated = $true", "connectedAccessWorkspaceMigrated = $true",

@@ -9,9 +9,13 @@ public sealed partial class LocalWebServer
         string path,
         IReadOnlyDictionary<string, string> query,
         HttpRequest request,
-        bool isHead,
+        WebRequestMethod method,
         CancellationToken cancellationToken)
     {
+        var isHead = method == WebRequestMethod.Head;
+        if (await TryHandleSavedCollectionRouteAsync(stream, path, request, method, cancellationToken).ConfigureAwait(false))
+            return true;
+
         if (path.Equals(WebApiRoutes.Bootstrap, StringComparison.OrdinalIgnoreCase))
         {
             await HandleBootstrapApiAsync(stream, query, isHead, cancellationToken).ConfigureAwait(false);

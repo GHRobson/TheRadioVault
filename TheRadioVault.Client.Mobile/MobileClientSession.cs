@@ -164,6 +164,7 @@ public sealed class MobileClientSession : IDisposable
     public IReadOnlyList<MobileBroadcastItem> LibraryBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> DownloadedBroadcasts => _downloads.Broadcasts;
     public IReadOnlyList<WebMomentSummary> SavedMoments { get; private set; } = [];
+    public IReadOnlyList<WebSavedCollectionSummary> SavedCollections { get; private set; } = [];
     public MobileKnowledgeSnapshot? Knowledge => _knowledgeQueries.Knowledge;
     public IReadOnlyList<WebQueueItem> QueueItems { get; private set; } = [];
     public IReadOnlyList<DiscoveredRadioVaultServer> Servers => _pairing.Servers;
@@ -370,6 +371,15 @@ public sealed class MobileClientSession : IDisposable
             await _downloads.RefreshAsync().ConfigureAwait(false);
             QueueItems = await _server.GetQueueAsync().ConfigureAwait(false);
             _metadataCache.SetQueue(QueueItems);
+            try
+            {
+                SavedCollections = await _server.GetSavedCollectionsAsync().ConfigureAwait(false);
+                _metadataCache.SetSavedCollections(SavedCollections);
+            }
+            catch (HttpRequestException)
+            {
+                SavedCollections = _metadataCache.Snapshot.SavedCollections ?? [];
+            }
             await _metadataCache.SaveAsync().ConfigureAwait(false);
             await ObserveSharedPlaybackSafelyAsync(
                 await _server.GetPlaybackSessionAsync().ConfigureAwait(false)).ConfigureAwait(false);
@@ -637,6 +647,193 @@ public sealed class MobileClientSession : IDisposable
                 : "Saved items could not be loaded: " + exception.Message;
         }
         finally { Notify(); }
+    }
+
+    public async Task RefreshSavedCollectionsAsync()
+    {
+        if (!IsPaired || !IsLiveConnected || IsBusy) return;
+        SetBusy(true, "Refreshing playlists…");
+        try
+        {
+            SavedCollections = await _server.GetSavedCollectionsAsync().ConfigureAwait(false);
+            _metadataCache.SetSavedCollections(SavedCollections);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            StatusText = SavedCollections.Count == 0
+                ? "No playlists or smart collections yet."
+                : $"{SavedCollections.Count:N0} saved collection{(SavedCollections.Count == 1 ? string.Empty : "s")}.";
+        }
+        catch (Exception exception) { StatusText = "Saved collections could not be loaded: " + exception.Message; }
+        finally { SetBusy(false); }
+    }
+
+    public async Task<WebSavedCollectionDetails?> LoadSavedCollectionAsync(long collectionId)
+    {
+        if (!IsPaired || collectionId <= 0) return null;
+        if (!IsLiveConnected)
+        {
+            var cached = _metadataCache.FindSavedCollection(collectionId);
+            StatusText = cached is null
+                ? "This saved collection has not been opened on this iPhone yet."
+                : $"Offline · {cached.Summary.Name} · {cached.Broadcasts.Count:N0} broadcasts";
+            Notify();
+            return cached;
+        }
+        try
+        {
+            var details = await _server.GetSavedCollectionAsync(collectionId).ConfigureAwait(false);
+            ReconcileSavedCollection(details);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            StatusText = $"{details.Summary.Name} · {details.Broadcasts.Count:N0} broadcast{(details.Broadcasts.Count == 1 ? string.Empty : "s")}";
+            Notify();
+            return details;
+        }
+        catch (Exception exception)
+        {
+            var cached = _metadataCache.FindSavedCollection(collectionId);
+            StatusText = cached is null
+                ? "Saved collection could not be loaded: " + exception.Message
+                : $"Offline · {cached.Summary.Name} · {cached.Broadcasts.Count:N0} broadcasts";
+            Notify();
+            return cached;
+        }
+    }
+
+    public async Task<WebSavedCollectionDetails?> CreateSavedCollectionAsync(string name, bool fromQueue = false)
+    {
+        if (!IsPaired || !IsLiveConnected || IsBusy) return null;
+        SetBusy(true, fromQueue ? "Saving Up Next as a playlist…" : "Creating playlist…");
+        try
+        {
+            var result = await _server.CreateSavedCollectionAsync(
+                new WebSavedCollectionCreateRequest(name, FromQueue: fromQueue)).ConfigureAwait(false);
+            return ApplySavedCollectionResult(result, fromQueue ? "Up Next saved as a playlist." : "Playlist created.");
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Playlist could not be created: " + exception.Message;
+            return null;
+        }
+        finally { SetBusy(false); }
+    }
+
+    public async Task<WebSavedCollectionDetails?> CreateSmartCollectionAsync(
+        string name,
+        string filter,
+        string? searchText = null)
+    {
+        if (!IsPaired || !IsLiveConnected || IsBusy) return null;
+        SetBusy(true, "Creating smart collection…");
+        try
+        {
+            var result = await _server.CreateSavedCollectionAsync(
+                new WebSavedCollectionCreateRequest(
+                    name,
+                    Kind: "Smart",
+                    Rule: new WebSavedCollectionRule(
+                        SearchText: string.IsNullOrWhiteSpace(searchText) ? null : searchText.Trim(),
+                        Filter: filter,
+                        Limit: 500))).ConfigureAwait(false);
+            return ApplySavedCollectionResult(result, "Smart collection created.");
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Smart collection could not be created: " + exception.Message;
+            return null;
+        }
+        finally { SetBusy(false); }
+    }
+
+    public async Task<WebSavedCollectionDetails?> AddToSavedCollectionAsync(
+        MobileBroadcastItem broadcast,
+        WebSavedCollectionSummary collection)
+    {
+        ArgumentNullException.ThrowIfNull(broadcast);
+        ArgumentNullException.ThrowIfNull(collection);
+        if (!IsPaired || !IsLiveConnected || IsBusy || !collection.Kind.Equals("Manual", StringComparison.OrdinalIgnoreCase)) return null;
+        SetBusy(true, $"Adding to {collection.Name}…");
+        try
+        {
+            var result = await _server.AddSavedCollectionItemAsync(
+                collection.Id,
+                new WebSavedCollectionItemMutation(broadcast.EpisodeId, collection.Revision)).ConfigureAwait(false);
+            return ApplySavedCollectionResult(result, $"Added to {collection.Name}.");
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Playlist could not be updated: " + exception.Message;
+            return null;
+        }
+        finally { SetBusy(false); }
+    }
+
+    public async Task<WebSavedCollectionDetails?> RemoveFromSavedCollectionAsync(
+        WebSavedCollectionDetails collection,
+        long episodeId)
+    {
+        ArgumentNullException.ThrowIfNull(collection);
+        if (!IsPaired || !IsLiveConnected || IsBusy) return null;
+        SetBusy(true, $"Removing from {collection.Summary.Name}…");
+        try
+        {
+            var result = await _server.RemoveSavedCollectionItemAsync(
+                collection.Summary.Id,
+                new WebSavedCollectionItemMutation(episodeId, collection.Summary.Revision)).ConfigureAwait(false);
+            return ApplySavedCollectionResult(result, "Removed from playlist.");
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Playlist could not be updated: " + exception.Message;
+            return null;
+        }
+        finally { SetBusy(false); }
+    }
+
+    public async Task<bool> DeleteSavedCollectionAsync(WebSavedCollectionSummary collection)
+    {
+        ArgumentNullException.ThrowIfNull(collection);
+        if (!IsPaired || !IsLiveConnected || IsBusy) return false;
+        SetBusy(true, $"Deleting {collection.Name}…");
+        try
+        {
+            var result = await _server.DeleteSavedCollectionAsync(
+                collection.Id,
+                new WebSavedCollectionDeleteRequest(collection.Revision)).ConfigureAwait(false);
+            if (!result.Changed)
+            {
+                if (result.Collection is not null) ReconcileSavedCollection(result.Collection);
+                StatusText = result.Message;
+                return false;
+            }
+            SavedCollections = SavedCollections.Where(value => value.Id != collection.Id).ToArray();
+            _metadataCache.RemoveSavedCollection(collection.Id);
+            await _metadataCache.SaveAsync().ConfigureAwait(false);
+            StatusText = "Saved collection deleted.";
+            return true;
+        }
+        catch (Exception exception)
+        {
+            StatusText = "Saved collection could not be deleted: " + exception.Message;
+            return false;
+        }
+        finally { SetBusy(false); }
+    }
+
+    private WebSavedCollectionDetails? ApplySavedCollectionResult(WebSavedCollectionMutationResult result, string successMessage)
+    {
+        if (result.Collection is not null) ReconcileSavedCollection(result.Collection);
+        StatusText = result.Changed ? successMessage : result.Message;
+        return result.Changed ? result.Collection : null;
+    }
+
+    private void ReconcileSavedCollection(WebSavedCollectionDetails details)
+    {
+        SavedCollections = SavedCollections
+            .Where(value => value.Id != details.Summary.Id)
+            .Append(details.Summary)
+            .OrderByDescending(value => value.UpdatedAt)
+            .ThenBy(value => value.Name, StringComparer.CurrentCultureIgnoreCase)
+            .ToArray();
+        _metadataCache.UpsertSavedCollection(details);
     }
 
     public async Task PlayMomentAsync(WebMomentSummary moment)
@@ -1089,6 +1286,7 @@ public sealed class MobileClientSession : IDisposable
         _incompleteLibraryCollections = [];
         QueueItems = [];
         SavedMoments = [];
+        SavedCollections = [];
         _knowledgeQueries.Clear();
         TotalBroadcasts = 0;
         CompletedBroadcasts = 0;
@@ -2033,6 +2231,7 @@ public sealed class MobileClientSession : IDisposable
         if (projection is not null) ApplyLibraryProjection(projection);
         QueueItems = snapshot.Queue;
         SavedMoments = snapshot.Moments ?? [];
+        SavedCollections = snapshot.SavedCollections ?? [];
         _knowledgeQueries.AdoptCachedSnapshot();
         Notify();
     }

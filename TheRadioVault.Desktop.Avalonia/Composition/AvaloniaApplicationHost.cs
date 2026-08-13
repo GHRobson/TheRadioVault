@@ -125,6 +125,7 @@ public sealed class AvaloniaApplicationHost : IDisposable
                 registry.GetRequiredService<ServerMediaProxy>(),
                 downloads: registry.GetRequiredService<INativeDownloadService>()))
             .RegisterSingleton<IQueueService>(registry => new LoopbackQueueService(registry.GetRequiredService<LoopbackServerClient>()))
+            .RegisterSingleton<ISavedCollectionService>(registry => new LoopbackSavedCollectionService(registry.GetRequiredService<LoopbackServerClient>()))
             .RegisterSingleton<IMomentsService>(registry => new LoopbackMomentsService(registry.GetRequiredService<LoopbackServerClient>()))
             .RegisterSingleton<IResearchWorkspaceService>(registry => new LoopbackResearchWorkspaceService(registry.GetRequiredService<LoopbackServerClient>()))
             .RegisterSingleton<IWikiService>(registry => new LoopbackWikiService(registry.GetRequiredService<LoopbackServerClient>()))
@@ -164,6 +165,10 @@ public sealed class AvaloniaApplicationHost : IDisposable
                 registry.GetRequiredService<PlaybackViewModel>()))
             .RegisterSingleton(registry => new MomentsViewModel(
                 registry.GetRequiredService<IMomentsService>(),
+                registry.GetRequiredService<PlaybackViewModel>()))
+            .RegisterSingleton(registry => new CollectionsViewModel(
+                registry.GetRequiredService<ISavedCollectionService>(),
+                registry.GetRequiredService<IQueueService>(),
                 registry.GetRequiredService<PlaybackViewModel>()))
             .RegisterSingleton(registry => new TranscriptsViewModel(
                 registry.GetRequiredService<ITranscriptRepository>(),
@@ -257,6 +262,7 @@ public sealed class AvaloniaApplicationHost : IDisposable
                 search: registry.GetRequiredService<SearchViewModel>(),
                 queue: registry.GetRequiredService<QueueViewModel>(),
                 moments: registry.GetRequiredService<MomentsViewModel>(),
+                collections: registry.GetRequiredService<CollectionsViewModel>(),
                 transcripts: registry.GetRequiredService<TranscriptsViewModel>(),
                 research: registry.GetRequiredService<ResearchWorkspaceViewModel>(),
                 wiki: registry.GetRequiredService<WikiViewModel>(),
@@ -275,11 +281,11 @@ public sealed class AvaloniaApplicationHost : IDisposable
             typeof(ITranscriptRepository),
             typeof(IBackgroundJobQueue), typeof(ITranscriptionCoordinator), typeof(IServerTranscriptionAdministrationService),
             typeof(LoopbackServerClient), typeof(ServerMediaProxy), typeof(INativeDownloadService), typeof(ILibraryBrowseService), typeof(ILibraryActionService), typeof(ILocalPlaybackLibraryService),
-            typeof(IQueueService), typeof(IMomentsService), typeof(IResearchWorkspaceService), typeof(IResearchPackTransferService), typeof(IWikiService), typeof(IWikiPackTransferService),
+            typeof(IQueueService), typeof(ISavedCollectionService), typeof(IMomentsService), typeof(IResearchWorkspaceService), typeof(IResearchPackTransferService), typeof(IWikiService), typeof(IWikiPackTransferService),
             typeof(IBroadcastDetailsService), typeof(ILibraryFolderService), typeof(IArchiveHealthService),
             typeof(ILibraryMaintenanceService), typeof(IPlaybackHandoffService),
             typeof(IRadioVaultAnywhereService), typeof(IConnectedAccessService), typeof(IConnectedPlaybackDiagnosticsService),
-            typeof(PlaybackSessionCoordinator), typeof(PlaybackViewModel), typeof(DownloadsViewModel), typeof(QueueViewModel), typeof(MomentsViewModel), typeof(TranscriptsViewModel),
+            typeof(PlaybackSessionCoordinator), typeof(PlaybackViewModel), typeof(DownloadsViewModel), typeof(QueueViewModel), typeof(MomentsViewModel), typeof(CollectionsViewModel), typeof(TranscriptsViewModel),
             typeof(SearchViewModel), typeof(ResearchWorkspaceViewModel), typeof(WikiViewModel),
             typeof(NowPlayingViewModel), typeof(FullBroadcastInfoViewModel), typeof(DesktopToolsViewModel),
             typeof(ApplicationStartupCoordinator), typeof(ApplicationShutdownCoordinator),

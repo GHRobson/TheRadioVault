@@ -11,7 +11,7 @@ public sealed class WebServerOptions
     public string ServerInstanceId { get; init; } = string.Empty;
     public string ServerDisplayName { get; init; } = "Radio Vault";
     public int DatabaseSchemaVersion { get; init; }
-    public int CapabilityGeneration { get; init; } = 39;
+    public int CapabilityGeneration { get; init; } = 41;
     public int Port { get; init; } = 8765;
     public string AccessToken { get; init; } = string.Empty;
     public bool LoopbackOnly { get; init; }
@@ -336,6 +336,59 @@ public sealed record WebClientLibraryBrowseResult(
 
 public sealed record WebClientLibrarySearchFacets(IReadOnlyList<int> Years, int TranscriptCount);
 public sealed record WebClientLibrarySearchSuggestion(string Value, string Kind, int MatchCount);
+
+public sealed record WebSavedCollectionRule(
+    string? SearchText = null,
+    int? CollectionId = null,
+    string Filter = "All",
+    int? Year = null,
+    int? Month = null,
+    string SearchScope = "All",
+    bool HasTranscript = false,
+    bool HideCompleted = false,
+    bool NewestFirst = true,
+    int Limit = 250);
+
+public sealed record WebSavedCollectionSummary(
+    long Id,
+    string Name,
+    string Kind,
+    int? ItemCount,
+    long Revision,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record WebSavedCollectionDetails(
+    WebSavedCollectionSummary Summary,
+    WebSavedCollectionRule? Rule,
+    IReadOnlyList<WebClientLibraryBroadcastSummary> Broadcasts);
+
+public sealed record WebSavedCollectionCreateRequest(
+    string Name,
+    string Kind = "Manual",
+    WebSavedCollectionRule? Rule = null,
+    bool FromQueue = false,
+    IReadOnlyList<long>? EpisodeIds = null);
+
+public sealed record WebSavedCollectionUpdateRequest(
+    string Name,
+    WebSavedCollectionRule? Rule,
+    long ExpectedRevision);
+
+public sealed record WebSavedCollectionItemMutation(
+    long EpisodeId,
+    long ExpectedRevision,
+    int? TargetIndex = null);
+
+public sealed record WebSavedCollectionDeleteRequest(long ExpectedRevision);
+
+public sealed record WebSavedCollectionMutationResult(
+    bool Changed,
+    bool Conflict,
+    bool NotFound,
+    string Message,
+    WebSavedCollectionDetails? Collection,
+    long? CurrentRevision = null);
 
 public sealed record WebClientBroadcastDetails(
     long RepresentativeEpisodeId,

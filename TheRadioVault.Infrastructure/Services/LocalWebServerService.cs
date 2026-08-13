@@ -217,7 +217,7 @@ public sealed class LocalWebServerService : IDisposable
             ServerInstanceId = preferences.ServerInstanceId,
             ServerDisplayName = preferences.ServerDisplayName,
             DatabaseSchemaVersion = TheRadioVault.Data.Database.SqliteDatabase.CurrentSchemaVersion,
-            CapabilityGeneration = 40,
+            CapabilityGeneration = 41,
             Port = preferences.Port,
             AccessToken = preferences.AccessToken,
             SecureAccessEnabled = preferences.SecureAccessEnabled,

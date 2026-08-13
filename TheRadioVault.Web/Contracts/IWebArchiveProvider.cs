@@ -14,6 +14,14 @@ public interface IWebArchiveProvider
     IReadOnlyList<WebClientLibraryArchivePeriodSummary> GetClientLibraryArchivePeriods(int? collectionId, int? year, bool hideCompleted);
     WebClientLibrarySearchFacets GetClientLibrarySearchFacets();
     IReadOnlyList<WebClientLibrarySearchSuggestion> GetClientLibrarySearchSuggestions(string prefix, int limit);
+    IReadOnlyList<WebSavedCollectionSummary> GetSavedCollections();
+    WebSavedCollectionDetails? GetSavedCollection(long collectionId);
+    WebSavedCollectionMutationResult CreateSavedCollection(WebSavedCollectionCreateRequest request);
+    WebSavedCollectionMutationResult UpdateSavedCollection(long collectionId, WebSavedCollectionUpdateRequest request);
+    WebSavedCollectionMutationResult AddSavedCollectionItem(long collectionId, WebSavedCollectionItemMutation request);
+    WebSavedCollectionMutationResult RemoveSavedCollectionItem(long collectionId, WebSavedCollectionItemMutation request);
+    WebSavedCollectionMutationResult MoveSavedCollectionItem(long collectionId, WebSavedCollectionItemMutation request);
+    WebSavedCollectionMutationResult DeleteSavedCollection(long collectionId, WebSavedCollectionDeleteRequest request);
     WebClientBroadcastDetails? GetClientBroadcastDetails(long episodeId);
     Task<object?> ExecuteClientResearchAsync(string operation, JsonElement payload, CancellationToken cancellationToken = default);
     Task<object?> ExecuteClientTranscriptAsync(string operation, JsonElement payload, CancellationToken cancellationToken = default);

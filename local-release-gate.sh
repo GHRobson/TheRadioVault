@@ -141,6 +141,8 @@ fi
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 "$DOTNET_EXE" build "$ROOT/TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj" \
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
+"$DOTNET_EXE" build "$ROOT/TheRadioVault.Services.Tests/TheRadioVault.Services.Tests.csproj" \
+  -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 "$DOTNET_EXE" build "$ROOT/TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj" \
   -c "$CONFIGURATION" --no-restore -warnaserror -p:ContinuousIntegrationBuild=true
 "$DOTNET_EXE" build "$ROOT/TheRadioVault.Transcription.Tests/TheRadioVault.Transcription.Tests.csproj" \
@@ -169,6 +171,9 @@ fi
   "Canonical personal state writes roll back atomically"
 
 "$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Data.Tests/TheRadioVault.Data.Tests.csproj" \
+  -c "$CONFIGURATION" --no-build
+
+"$DOTNET_EXE" run --project "$ROOT/TheRadioVault.Services.Tests/TheRadioVault.Services.Tests.csproj" \
   -c "$CONFIGURATION" --no-build
 
 "$DOTNET_EXE" run --project "$ROOT/TheRadioVault.LibraryTruth.Tests/TheRadioVault.LibraryTruth.Tests.csproj" \

@@ -17,6 +17,7 @@
     <DataTemplate DataType="{x:Type vm:QueueViewModel}"><views:QueueView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:MomentsViewModel}"><views:MomentsView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:SavedViewModel}"><views:SavedView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:CollectionsViewModel}"><views:CollectionsView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:TranscriptsViewModel}"><views:TranscriptsView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:ResearchWorkspaceViewModel}"><views:ResearchWorkspaceView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:WikiViewModel}"><views:WikiView /></DataTemplate>

@@ -27,6 +27,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         SearchViewModel search,
         QueueViewModel queue,
         MomentsViewModel moments,
+        CollectionsViewModel collections,
         TranscriptsViewModel transcripts,
         ResearchWorkspaceViewModel research,
         WikiViewModel wiki,
@@ -44,7 +45,8 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         Search = search ?? throw new ArgumentNullException(nameof(search));
         Queue = queue;
         Moments = moments;
-        Saved = new SavedViewModel(Library, Moments);
+        Collections = collections ?? throw new ArgumentNullException(nameof(collections));
+        Saved = new SavedViewModel(Library, Moments, Collections);
         Transcripts = transcripts ?? throw new ArgumentNullException(nameof(transcripts));
         Research = research ?? throw new ArgumentNullException(nameof(research));
         Wiki = wiki ?? throw new ArgumentNullException(nameof(wiki));
@@ -121,6 +123,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
     public SearchViewModel Search { get; }
     public QueueViewModel Queue { get; }
     public MomentsViewModel Moments { get; }
+    public CollectionsViewModel Collections { get; }
     public SavedViewModel Saved { get; }
     public TranscriptsViewModel Transcripts { get; }
     public ResearchWorkspaceViewModel Research { get; }
@@ -188,6 +191,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
             await Task.WhenAll(
                 Search.LoadAsync(),
                 Moments.LoadAsync(),
+                Collections.LoadAsync(),
                 Queue.LoadAsync()).ConfigureAwait(true);
         }
         catch
@@ -218,6 +222,13 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
                 await Saved.LoadAsync(force: true).ConfigureAwait(true);
             else
                 await Moments.LoadAsync(force: true).ConfigureAwait(true);
+        }
+        if (Changed("saved-collection"))
+        {
+            if (string.Equals(CurrentRoute, "saved", StringComparison.OrdinalIgnoreCase) && Saved.IsCollectionsSelected)
+                await Saved.LoadAsync(force: true).ConfigureAwait(true);
+            else
+                await Collections.LoadAsync(force: true).ConfigureAwait(true);
         }
         if (Changed("queue"))
             await Queue.LoadAsync(force: true).ConfigureAwait(true);
@@ -252,10 +263,13 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         if (string.Equals(route, "transcripts", StringComparison.OrdinalIgnoreCase)) route = "research/transcription";
         SavedSection? savedSection = string.Equals(route, "moments", StringComparison.OrdinalIgnoreCase)
             ? SavedSection.Moments
+            : string.Equals(route, "collections", StringComparison.OrdinalIgnoreCase)
+                ? SavedSection.Collections
             : string.Equals(route, "favourites", StringComparison.OrdinalIgnoreCase)
                 ? SavedSection.Favourites
                 : null;
         if (string.Equals(route, "moments", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(route, "collections", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(route, "favourites", StringComparison.OrdinalIgnoreCase))
             route = "saved";
         if (string.Equals(route, LibraryRoute, StringComparison.OrdinalIgnoreCase))

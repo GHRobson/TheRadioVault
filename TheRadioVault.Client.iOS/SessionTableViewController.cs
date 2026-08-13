@@ -76,6 +76,21 @@ public abstract class SessionTableViewController : UITableViewController
                 RadioVaultIcons.Image(RadioVaultIcon.Queue),
                 "radiovault.queue",
                 action => _ = Session.AddToQueueAsync(broadcast));
+            var playlistActions = Session.SavedCollections
+                .Where(collection => collection.Kind.Equals("Manual", StringComparison.OrdinalIgnoreCase))
+                .Select(collection => UIAction.Create(
+                    collection.Name,
+                    RadioVaultIcons.Image(RadioVaultIcon.UpNext),
+                    "radiovault.playlist." + collection.Id,
+                    action => _ = Session.AddToSavedCollectionAsync(broadcast, collection)))
+                .Cast<UIMenuElement>()
+                .ToArray();
+            var addToPlaylist = UIMenu.Create(
+                "Add to Playlist",
+                RadioVaultIcons.Image(RadioVaultIcon.UpNext),
+                UIMenuIdentifier.None,
+                UIMenuOptions.DisplayInline,
+                playlistActions);
             var favourite = UIAction.Create(
                 broadcast.Source.Favourite ? "Remove from Favourites" : "Add to Favourites",
                 RadioVaultIcons.Image(RadioVaultIcon.Favourite),
@@ -107,7 +122,10 @@ public abstract class SessionTableViewController : UITableViewController
                 "radiovault.information",
                 action => NavigationController?.PushViewController(
                     new BroadcastDetailsViewController(Session, broadcast), true));
-            return UIMenu.Create("", [play, playNext, addToQueue, favourite, markListened, markUnlistened, download, information]);
+            var actions = new List<UIMenuElement> { play, playNext, addToQueue };
+            if (playlistActions.Length > 0) actions.Add(addToPlaylist);
+            actions.AddRange([favourite, markListened, markUnlistened, download, information]);
+            return UIMenu.Create("", actions.ToArray());
         });
     }
 

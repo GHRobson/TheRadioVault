@@ -226,8 +226,8 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA9-
     throw "Alpha 9 full-parity acceptance guide is missing."
 }
 $webModelsContractText = Get-Content (Join-Path $root "TheRadioVault.Web\Models\WebModels.cs") -Raw
-if ($webModelsContractText -notmatch 'CapabilityGeneration \{ get; init; \} = 39') {
-    throw "Connected server-client capability generation was not advanced to 39."
+if ($webModelsContractText -notmatch 'CapabilityGeneration \{ get; init; \} = 41') {
+    throw "Connected server-client capability generation was not advanced to 41."
 }
 $wikiServicePath = Join-Path $root "TheRadioVault.Services\Services\WikiService.cs"
 $wikiPackPath = Join-Path $root "TheRadioVault.Services\Services\WikiAuthoringPackService.cs"
@@ -1049,7 +1049,7 @@ if ($stableReadmeText -match [regex]::Escape('repository is currently private'))
 foreach ($marker in @('# Building Radio Vault 0.41.0', 'local-release-gate.sh', 'package-macos-local.sh', 'package-server-installer.ps1', 'package-client-installer.ps1', 'SOURCE_MANIFEST.sha256.json')) {
     if ($stableBuildingText -notmatch [regex]::Escape($marker)) { throw "0.41 build-guide marker missing: $marker" }
 }
-foreach ($marker in @("foundationVersion = '0.35-alpha9-knowledge-portability'", 'databaseSchema = 48', 'lanCapabilityGeneration = 40', 'remoteClientMigrated = $true', 'encryptedRemoteCache = $true', 'automaticReconnect = $true', 'remotePlaybackMigrated = $true')) {
+foreach ($marker in @("foundationVersion = '0.35-alpha9-knowledge-portability'", 'databaseSchema = 49', 'lanCapabilityGeneration = 41', 'remoteClientMigrated = $true', 'encryptedRemoteCache = $true', 'automaticReconnect = $true', 'remotePlaybackMigrated = $true')) {
     if ($stableFoundationText -notmatch [regex]::Escape($marker)) { throw "0.35 Alpha 1 architecture-report marker missing: $marker" }
 }
 $stableAdoptionText = (Get-Content (Join-Path $root "TheRadioVault.Services\Services\LibraryTruthAdoptionService.cs") -Raw) +

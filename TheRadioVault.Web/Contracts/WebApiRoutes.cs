@@ -53,6 +53,7 @@ public static class WebApiRoutes
     public const string ClientLibraryArchivePeriods = ClientLibrary + "/archive-periods";
     public const string ClientLibrarySearchFacets = ClientLibrary + "/search-facets";
     public const string ClientLibrarySearchSuggestions = ClientLibrary + "/search-suggestions";
+    public const string ClientSavedCollections = Root + "/client/saved-collections";
     public const string ClientBroadcastDetails = Root + "/client/broadcast-details";
     public const string ClientResearch = Root + "/client/research";
     public const string ClientTranscripts = Root + "/client/transcripts";
@@ -79,6 +80,12 @@ public static class WebApiRoutes
     public static string BroadcastMetadata(long episodeId) => Broadcast(episodeId) + "/metadata";
     public static string OfflineProgress(long episodeId) => Broadcast(episodeId) + "/offline-progress";
     public static string ClientLibraryBroadcast(long episodeId) => ClientLibrary + "/broadcasts/" + episodeId;
+    public static string ClientSavedCollection(long collectionId) => ClientSavedCollections + "/" + collectionId;
+    public static string ClientSavedCollectionUpdate(long collectionId) => ClientSavedCollection(collectionId) + "/update";
+    public static string ClientSavedCollectionDelete(long collectionId) => ClientSavedCollection(collectionId) + "/delete";
+    public static string ClientSavedCollectionAdd(long collectionId) => ClientSavedCollection(collectionId) + "/items/add";
+    public static string ClientSavedCollectionRemove(long collectionId) => ClientSavedCollection(collectionId) + "/items/remove";
+    public static string ClientSavedCollectionMove(long collectionId) => ClientSavedCollection(collectionId) + "/items/move";
     public static string ClientBroadcast(long episodeId) => ClientBroadcastDetails + "/" + episodeId;
     public static string ClientResearchOperation(string operation) => ClientResearch + "/" + operation;
     public static string ClientTranscriptOperation(string operation) => ClientTranscripts + "/" + operation;

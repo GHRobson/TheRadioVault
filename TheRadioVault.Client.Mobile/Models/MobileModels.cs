@@ -165,6 +165,8 @@ public sealed record MobileMetadataCacheSnapshot(
     IReadOnlyList<MobileWikiPageDocument> ExploreDocuments,
     IReadOnlyList<WebMomentSummary>? Moments,
     MobileKnowledgeSnapshot? Knowledge,
+    IReadOnlyList<WebSavedCollectionSummary>? SavedCollections,
+    IReadOnlyList<WebSavedCollectionDetails>? SavedCollectionDetails,
     DateTimeOffset UpdatedAt)
 {
     public static MobileMetadataCacheSnapshot Empty(string serverInstanceId) => new(
@@ -182,6 +184,8 @@ public sealed record MobileMetadataCacheSnapshot(
         [],
         [],
         null,
+        [],
+        [],
         DateTimeOffset.MinValue);
 }
 

@@ -10,6 +10,9 @@ public sealed record BrowseEnvelope(WebClientLibraryBrowseResult Result);
 public sealed record ArchivePeriodsEnvelope(IReadOnlyList<WebClientLibraryArchivePeriodSummary> Periods);
 public sealed record SearchFacetsEnvelope(WebClientLibrarySearchFacets Facets);
 public sealed record SearchSuggestionsEnvelope(IReadOnlyList<WebClientLibrarySearchSuggestion> Suggestions);
+public sealed record SavedCollectionsEnvelope(IReadOnlyList<WebSavedCollectionSummary> Collections);
+public sealed record SavedCollectionEnvelope(WebSavedCollectionDetails Collection);
+public sealed record SavedCollectionMutationEnvelope(WebSavedCollectionMutationResult Result);
 public sealed record BroadcastSummaryEnvelope(WebClientLibraryBroadcastSummary Broadcast);
 public sealed record BroadcastDetailsEnvelope(WebClientBroadcastDetails Broadcast);
 public sealed record MutationEnvelope(WebMutationResult Result);
@@ -40,6 +43,13 @@ public sealed record MobileKnowledgeMutationEnvelope(bool Value);
 [JsonSerializable(typeof(ArchivePeriodsEnvelope))]
 [JsonSerializable(typeof(SearchFacetsEnvelope))]
 [JsonSerializable(typeof(SearchSuggestionsEnvelope))]
+[JsonSerializable(typeof(SavedCollectionsEnvelope))]
+[JsonSerializable(typeof(SavedCollectionEnvelope))]
+[JsonSerializable(typeof(SavedCollectionMutationEnvelope))]
+[JsonSerializable(typeof(WebSavedCollectionCreateRequest))]
+[JsonSerializable(typeof(WebSavedCollectionUpdateRequest))]
+[JsonSerializable(typeof(WebSavedCollectionItemMutation))]
+[JsonSerializable(typeof(WebSavedCollectionDeleteRequest))]
 [JsonSerializable(typeof(BroadcastSummaryEnvelope))]
 [JsonSerializable(typeof(BroadcastDetailsEnvelope))]
 [JsonSerializable(typeof(MutationEnvelope))]

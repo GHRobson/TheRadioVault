@@ -97,6 +97,8 @@ Goal: improve long-term listening and make every desktop platform straightforwar
 
 Exit criteria: installers are signed where appropriate, upgrades preserve data, and saved collections/queues work across devices.
 
+Progress: the server-owned, revisioned saved-collection model is implemented through schema 49, with ordered manual playlists, live smart collections, queue snapshots, conflict-safe mutations, desktop and iPhone surfaces, and offline iPhone reads. Signing, service installation and update-notification work remain before 0.46 is complete.
+
 ## 0.47 — Secure away-from-home listening
 
 Goal: make remote listening possible without weakening the private-library design.

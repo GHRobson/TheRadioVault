@@ -73,6 +73,29 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
         return snapshot.Broadcasts.FirstOrDefault(x => x.RepresentativeEpisodeId == representativeEpisodeId);
     }
 
+    public async Task<IReadOnlyList<LibraryBroadcastSummary>> GetBroadcastsAsync(
+        IReadOnlyList<long> episodeIds,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(episodeIds);
+        if (episodeIds.Count == 0) return [];
+        var snapshot = await LoadSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        var byId = snapshot.Broadcasts.ToDictionary(value => value.RepresentativeEpisodeId);
+        var result = new List<LibraryBroadcastSummary>(episodeIds.Count);
+        foreach (var requestedId in episodeIds)
+        {
+            if (byId.TryGetValue(requestedId, out var direct))
+            {
+                result.Add(direct);
+                continue;
+            }
+            var resolution = snapshot.UsesCanonicalLibrary ? _canonical.ResolveEpisode(requestedId) : null;
+            if (resolution is not null && byId.TryGetValue(resolution.RepresentativeEpisodeId, out var canonical))
+                result.Add(canonical);
+        }
+        return result;
+    }
+
     public async Task<LibraryBrowseResult> BrowseAsync(
         LibraryBrowseRequest request,
         CancellationToken cancellationToken = default)

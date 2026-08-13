@@ -48,7 +48,9 @@ internal sealed class MobileMetadataCache
                 _snapshot = value with
                 {
                     Broadcasts = NormalizeBroadcasts(value.Broadcasts),
-                    Moments = value.Moments ?? []
+                    Moments = value.Moments ?? [],
+                    SavedCollections = value.SavedCollections ?? [],
+                    SavedCollectionDetails = value.SavedCollectionDetails ?? []
                 };
             }
         }
@@ -151,6 +153,69 @@ internal sealed class MobileMetadataCache
     {
         lock (_gate)
             _snapshot = _snapshot with { Knowledge = knowledge, UpdatedAt = DateTimeOffset.UtcNow };
+    }
+
+    public void SetSavedCollections(IReadOnlyList<WebSavedCollectionSummary> collections)
+    {
+        lock (_gate)
+        {
+            var collectionIds = collections.Select(value => value.Id).ToHashSet();
+            _snapshot = _snapshot with
+            {
+                SavedCollections = collections,
+                SavedCollectionDetails = (_snapshot.SavedCollectionDetails ?? [])
+                    .Where(value => collectionIds.Contains(value.Summary.Id))
+                    .ToArray(),
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+        }
+    }
+
+    public void UpsertSavedCollection(WebSavedCollectionDetails details)
+    {
+        lock (_gate)
+        {
+            var summaries = (_snapshot.SavedCollections ?? [])
+                .Where(value => value.Id != details.Summary.Id)
+                .Append(details.Summary)
+                .OrderByDescending(value => value.UpdatedAt)
+                .ThenBy(value => value.Name, StringComparer.CurrentCultureIgnoreCase)
+                .ToArray();
+            var detailValues = (_snapshot.SavedCollectionDetails ?? [])
+                .Where(value => value.Summary.Id != details.Summary.Id)
+                .Append(details)
+                .ToArray();
+            _snapshot = _snapshot with
+            {
+                SavedCollections = summaries,
+                SavedCollectionDetails = detailValues,
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+        }
+    }
+
+    public WebSavedCollectionDetails? FindSavedCollection(long collectionId)
+    {
+        lock (_gate)
+            return (_snapshot.SavedCollectionDetails ?? [])
+                .FirstOrDefault(value => value.Summary.Id == collectionId);
+    }
+
+    public void RemoveSavedCollection(long collectionId)
+    {
+        lock (_gate)
+        {
+            _snapshot = _snapshot with
+            {
+                SavedCollections = (_snapshot.SavedCollections ?? [])
+                    .Where(value => value.Id != collectionId)
+                    .ToArray(),
+                SavedCollectionDetails = (_snapshot.SavedCollectionDetails ?? [])
+                    .Where(value => value.Summary.Id != collectionId)
+                    .ToArray(),
+                UpdatedAt = DateTimeOffset.UtcNow
+            };
+        }
     }
 
     public void UpsertBroadcast(WebClientLibraryBroadcastSummary broadcast)

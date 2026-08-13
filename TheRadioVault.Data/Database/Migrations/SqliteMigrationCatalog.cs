@@ -7,6 +7,7 @@ internal static class SqliteMigrationCatalog
     public static SqliteMigrationRunner Runner { get; } = new(
         LegacySchemaVersion,
         [
-            new Migration048CreateMigrationHistory()
+            new Migration048CreateMigrationHistory(),
+            new Migration049CreateSavedCollections()
         ]);
 }
