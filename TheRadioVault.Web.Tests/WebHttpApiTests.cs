@@ -107,6 +107,11 @@ static void FullClientApiPreservesNativeLibraryFields()
         Equal("WJFK", broadcast.GetProperty("station").GetString());
         Equal("Ron Bennington", broadcast.GetProperty("hosts").GetString());
         Equal(2, broadcast.GetProperty("physicalFileCount").GetInt32());
+        var entityLinks = broadcast.GetProperty("entityLinks");
+        Equal(4, entityLinks.GetArrayLength());
+        Equal("Show", entityLinks[1].GetProperty("kind").GetString());
+        Equal("1", entityLinks[1].GetProperty("targetId").GetString());
+        Equal("host", entityLinks[2].GetProperty("relationship").GetString());
     });
 }
 

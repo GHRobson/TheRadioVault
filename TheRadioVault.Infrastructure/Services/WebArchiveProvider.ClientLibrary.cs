@@ -1,3 +1,4 @@
+using TheRadioVault.Core.Domain;
 using TheRadioVault.Services.Models;
 using TheRadioVault.Services.Services;
 using TheRadioVault.Web.Models;
@@ -123,11 +124,31 @@ internal sealed partial class WebArchiveProvider
             value.ArtworkPath,
             value.RecordingCount,
             value.SegmentCount,
-            value.PhysicalFileCount);
+            value.PhysicalFileCount,
+            BuildEntityLinks(value));
     }
 
     private LibraryBrowseService CreateLibraryBrowseService()
         => new(_database.PlatformDatabase);
+
+    private static IReadOnlyList<ArchiveEntityLink> BuildEntityLinks(BroadcastDetails value)
+    {
+        var links = new List<ArchiveEntityLink>
+        {
+            ArchiveEntityLinkFactory.ForBroadcast(value.CanonicalKey, value.RepresentativeEpisodeId, value.Title),
+            ArchiveEntityLinkFactory.ForShow(value.CollectionId, value.CollectionName)
+        };
+        links.AddRange(ArchiveEntityLinkFactory.ForDelimitedNames(value.Hosts, "host"));
+        links.AddRange(ArchiveEntityLinkFactory.ForDelimitedNames(value.Guests, "guest"));
+        links.AddRange(ArchiveEntityLinkFactory.ForDelimitedNames(value.Callers, "caller"));
+        links.AddRange(ArchiveEntityLinkFactory.ForDelimitedNames(value.MentionedPeople, "mentioned"));
+        links.AddRange(value.Topics
+            .Where(topic => !string.IsNullOrWhiteSpace(topic))
+            .Select(ArchiveEntityLinkFactory.ForTopic));
+        return links
+            .DistinctBy(link => (link.EntityKey, link.Relationship))
+            .ToArray();
+    }
 
     private static WebClientLibraryCollectionSummary Map(LibraryCollectionSummary value)
         => new(value.CollectionId, value.CollectionName, value.BroadcastCount);

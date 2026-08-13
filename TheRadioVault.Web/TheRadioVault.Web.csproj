@@ -14,6 +14,7 @@
   <ItemGroup>
     <Compile Remove="Contracts\WebApiRoutes.cs" />
     <Compile Remove="Models\WebModels.cs" />
+    <ProjectReference Include="..\TheRadioVault.Core\TheRadioVault.Core.csproj" />
     <ProjectReference Include="..\TheRadioVault.Protocol\TheRadioVault.Protocol.csproj" />
   </ItemGroup>
   <ItemGroup>

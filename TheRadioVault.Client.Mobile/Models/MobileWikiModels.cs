@@ -1,3 +1,5 @@
+using TheRadioVault.Core.Domain;
+
 namespace TheRadioVault.Client.Mobile.Models;
 
 public sealed record MobileWikiOverview(
@@ -130,7 +132,9 @@ public sealed record MobileWikiPageDocument(
     string LastEditor,
     IReadOnlyList<string> Aliases,
     IReadOnlyList<MobileWikiPageImageLink> Images,
-    IReadOnlyList<MobileWikiTimelineEvent> Timeline);
+    IReadOnlyList<MobileWikiTimelineEvent> Timeline,
+    ArchiveEntityLink? EntityLink = null,
+    IReadOnlyList<ArchiveEntityLink>? EntityLinks = null);
 
 public sealed record MobileWikiOverviewEnvelope(MobileWikiOverview Value);
 public sealed record MobileWikiBrowseEnvelope(IReadOnlyList<MobileWikiPageSummary> Value);

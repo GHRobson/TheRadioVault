@@ -3,6 +3,7 @@ using System.Text.RegularExpressions;
 using System.Text;
 using System.Globalization;
 using Microsoft.Data.Sqlite;
+using TheRadioVault.Core.Domain;
 using TheRadioVault.Data.Database;
 using TheRadioVault.Services.Contracts;
 using TheRadioVault.Services.Models;
@@ -130,10 +131,66 @@ public sealed class WikiService : IWikiService
         var citations = await ReadCitationsAsync(connection, pageId, cancellationToken).ConfigureAwait(false);
         var images = await ReadPageImagesAsync(connection, pageId, cancellationToken).ConfigureAwait(false);
         var timeline = await ReadTimelineAsync(connection, pageId, cancellationToken).ConfigureAwait(false);
+        var entityLink = ArchiveEntityLinkFactory.ForWikiPage(core.PageId, core.PageType, core.Title);
+        var entityLinks = await ReadEntityLinksAsync(
+            connection, core.BodyMarkdown, images, timeline, cancellationToken).ConfigureAwait(false);
         return new WikiPageDocument(
             core.PageId, core.Slug, core.Title, core.PageType, core.Summary, core.BodyMarkdown,
             core.Status, core.Revision, core.CreatedAt, core.UpdatedAt, core.CreatedBy, core.LastEditor,
-            aliases, relationships, citations, images, timeline);
+            aliases, relationships, citations, images, timeline, entityLink, entityLinks);
+    }
+
+    private static async Task<IReadOnlyList<ArchiveEntityLink>> ReadEntityLinksAsync(
+        SqliteConnection connection,
+        string bodyMarkdown,
+        IReadOnlyList<WikiPageImageLink> images,
+        IReadOnlyList<WikiTimelineEventRecord> timeline,
+        CancellationToken cancellationToken)
+    {
+        var targets = WikiLinkPattern.Matches(bodyMarkdown ?? string.Empty)
+            .Select(match => match.Groups["target"].Success
+                ? match.Groups["target"].Value
+                : match.Groups["target2"].Value)
+            .Select(NormalizeLinkKey)
+            .Where(target => target.Length > 0)
+            .ToHashSet(StringComparer.Ordinal);
+        var pageLinks = new Dictionary<string, ArchiveEntityLink>(StringComparer.Ordinal);
+        if (targets.Count > 0)
+        {
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT id,slug,title,page_type FROM wiki_pages WHERE status<>'Archived'";
+            await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+            while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+            {
+                var link = ArchiveEntityLinkFactory.ForWikiPage(
+                    Guid.Parse(reader.GetString(0)), reader.GetString(3), reader.GetString(2)) with
+                {
+                    Relationship = "inline"
+                };
+                pageLinks.TryAdd(NormalizeLinkKey(reader.GetString(1)), link);
+                pageLinks.TryAdd(NormalizeLinkKey(reader.GetString(2)), link);
+            }
+        }
+
+        var links = new List<ArchiveEntityLink>();
+        foreach (var target in targets)
+            if (pageLinks.TryGetValue(target, out var link)) links.Add(link);
+        links.AddRange(images.Select(image => ArchiveEntityLinkFactory.ForImage(
+            image.ImageId,
+            image.Image?.Caption ?? image.Image?.AltText ?? image.Image?.OriginalFileName ?? "Explore image") with
+        {
+            Relationship = string.IsNullOrWhiteSpace(image.Role) ? "image" : image.Role.Trim().ToLowerInvariant()
+        }));
+        foreach (var item in timeline)
+        {
+            links.Add(ArchiveEntityLinkFactory.ForTimeline(item.EventId, item.Title) with { Relationship = "timeline" });
+            links.AddRange(item.Broadcasts.Select(broadcast =>
+                ArchiveEntityLinkFactory.ForBroadcast(broadcast.EpisodeId, broadcast.Label) with
+                {
+                    Relationship = "timeline-broadcast"
+                }));
+        }
+        return links.DistinctBy(link => (link.EntityKey, link.Relationship)).ToArray();
     }
 
     public async Task<WikiImageContent?> GetImageAsync(Guid imageId, CancellationToken cancellationToken = default)

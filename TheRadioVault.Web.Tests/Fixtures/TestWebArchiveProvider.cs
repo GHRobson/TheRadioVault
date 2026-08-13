@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TheRadioVault.Core.Domain;
 using TheRadioVault.Web.Contracts;
 using TheRadioVault.Web.Models;
 using TheRadioVault.Web.Services;
@@ -78,7 +79,13 @@ internal sealed partial class TestWebArchiveProvider : IWebArchiveProvider
                 string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
                 string.Empty, string.Empty, string.Empty, string.Empty, string.Empty, string.Empty,
                 string.Empty, "Ron Bennington", string.Empty, string.Empty, string.Empty, new[] { "Comedy" },
-                null, 1, 2, 2)
+                null, 1, 2, 2,
+                [
+                    ArchiveEntityLinkFactory.ForBroadcast("CANONICAL-9", _episode.Id, _episode.Title),
+                    ArchiveEntityLinkFactory.ForShow(1, _episode.Show),
+                    ArchiveEntityLinkFactory.ForPerson("Ron Bennington", "host"),
+                    ArchiveEntityLinkFactory.ForTopic("Comedy")
+                ])
             : null;
     private WebClientLibraryBroadcastSummary ClientSummary() => new(
         "CANONICAL-9", _episode.Id, "RON-FEZ-2005-05-12", 1, _episode.Show,
@@ -124,4 +131,3 @@ internal sealed partial class TestWebArchiveProvider : IWebArchiveProvider
     public Task<WebLibraryScanSnapshot> RunLibraryScanAsync(string trigger, CancellationToken cancellationToken = default)
         => Task.FromResult(GetLibraryScanStatus() with { Trigger = trigger });
 }
-

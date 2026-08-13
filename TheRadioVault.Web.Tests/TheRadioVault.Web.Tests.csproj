@@ -7,6 +7,7 @@
     <RootNamespace>TheRadioVault.Web.Tests</RootNamespace>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\TheRadioVault.Core\TheRadioVault.Core.csproj" />
     <ProjectReference Include="..\TheRadioVault.Web\TheRadioVault.Web.csproj" />
   </ItemGroup>
 </Project>

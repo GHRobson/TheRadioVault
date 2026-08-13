@@ -88,6 +88,7 @@ var tests = new (string Name, Action Run)[]
     ("Completion final window", () => True(PlaybackProgressService.IsCompletionThresholdReached(58 * 60_000, 60 * 60_000))),
     ("Unplayed status", () => Equal(ListeningStatus.Unplayed, PlaybackProgressService.GetStatus(0, 10000))),
     ("Record stable ID", () => Equal("BENNINGTON-2016-05-17", new BroadcastIdentity("Bennington", new DateOnly(2016, 5, 17)).StableId)),
+    ("Archive entity links preserve identity across clients", ArchiveEntityLinksPreserveIdentity),
     ("Research audit catches show guest", ResearchAuditCatchesShowGuest),
     ("Research audit marks safe repairs", ResearchAuditMarksSafeRepairs),
     ("Research audit marks duplicate source repair", ResearchAuditMarksDuplicateSourceRepair),
@@ -387,6 +388,25 @@ static void ScheduledBackupsAreVerified()
     {
         try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
     }
+}
+
+static void ArchiveEntityLinksPreserveIdentity()
+{
+    var person = ArchiveEntityLinkFactory.ForPerson("Ron Bennington", "Host");
+    Equal(ArchiveEntityKind.Person, person.Kind);
+    Equal("ron-bennington", person.EntityId);
+    Equal("host", person.Relationship);
+    True(ArchiveEntityLinkFactory.TryParse(person.Route, out var personKind, out var personId, out var personTarget));
+    Equal(ArchiveEntityKind.Person, personKind);
+    Equal(person.EntityId, personId);
+    Equal(person.TargetId, personTarget);
+
+    var broadcast = ArchiveEntityLinkFactory.ForBroadcast("BENNINGTON-2016-05-17", 42, "A broadcast");
+    True(ArchiveEntityLinkFactory.TryParse(broadcast.Route, out var broadcastKind, out var broadcastId, out var episodeId));
+    Equal(ArchiveEntityKind.Broadcast, broadcastKind);
+    Equal("BENNINGTON-2016-05-17", broadcastId);
+    Equal("42", episodeId);
+    Equal("broadcast:BENNINGTON-2016-05-17", broadcast.EntityKey);
 }
 
 static void CanonicalPersonalStateWritesRollBackAtomically()
@@ -2850,9 +2870,12 @@ static void WikiPagesProtectNewerHumanRevisions()
         var created = service.SavePageAsync(new WikiPageDraft(
             null, "ron-and-fez", "Ron & Fez", "Show", "A radio show.", "# Ron & Fez", "Draft", 0,
             "Created baseline", "Human editor", new[] { "Ron and Fez" })).GetAwaiter().GetResult();
+        _ = service.SavePageAsync(new WikiPageDraft(
+            null, "ron-bennington", "Ron Bennington", "Person", "A radio host.", "# Ron Bennington", "Published", 0,
+            "Created person", "Human editor")).GetAwaiter().GetResult();
         Equal(1, created.Revision);
         var updated = service.SavePageAsync(new WikiPageDraft(
-            created.PageId, "ron-and-fez", "Ron & Fez", "Show", "A long-running radio show.", "# Ron & Fez\n\nHistory.",
+            created.PageId, "ron-and-fez", "Ron & Fez", "Show", "A long-running radio show.", "# Ron & Fez\n\nHistory with [[Ron Bennington]].",
             "Published", 1, "Expanded history", "Human editor", new[] { "Ron and Fez", "R&F" })).GetAwaiter().GetResult();
         Equal(2, updated.Revision);
         Throws<WikiConcurrencyException>(() => service.SavePageAsync(new WikiPageDraft(
@@ -2862,6 +2885,8 @@ static void WikiPagesProtectNewerHumanRevisions()
         Equal(2, page.Revision);
         Equal("A long-running radio show.", page.Summary);
         Equal(2, page.Aliases.Count);
+        Equal(ArchiveEntityKind.Show, page.EntityLink!.Kind);
+        True(page.EntityLinks!.Any(link => link.Kind == ArchiveEntityKind.Person && link.Relationship == "inline"));
     }
     finally { try { Directory.Delete(directory, true); } catch { } }
 }

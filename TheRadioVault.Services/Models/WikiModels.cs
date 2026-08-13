@@ -1,3 +1,5 @@
+using TheRadioVault.Core.Domain;
+
 namespace TheRadioVault.Services.Models;
 
 public sealed record WikiPackOperationProgress(
@@ -423,7 +425,9 @@ public sealed record WikiPageDocument(
     IReadOnlyList<WikiRelationshipRecord> Relationships,
     IReadOnlyList<WikiCitationRecord> Citations,
     IReadOnlyList<WikiPageImageLink> Images,
-    IReadOnlyList<WikiTimelineEventRecord> Timeline);
+    IReadOnlyList<WikiTimelineEventRecord> Timeline,
+    ArchiveEntityLink? EntityLink = null,
+    IReadOnlyList<ArchiveEntityLink>? EntityLinks = null);
 
 public sealed record WikiAuthoringPackManifest(
     int SchemaVersion,

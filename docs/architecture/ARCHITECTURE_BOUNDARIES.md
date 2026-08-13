@@ -9,6 +9,7 @@
 | Project | Role | Platform policy |
 |---|---|---|
 | `TheRadioVault.Core` | Domain models, parsing, identity and policy | Neutral |
+| `TheRadioVault.Protocol` | Additive remote-client contracts shared by server and native clients | Neutral; Core only |
 | `TheRadioVault.Application` | Use-case coordinators, composition primitives and UI/platform ports | Neutral; Core only |
 | `TheRadioVault.Data` | SQLite persistence primitives | Neutral |
 | `TheRadioVault.Media` | Media metadata and playback-neutral helpers | Neutral |
@@ -151,3 +152,15 @@ Large Research and Wiki package routes opt into staged request bodies. `WebHttpR
 `SqliteDatabase` remains the only connection, initialization and migration owner. `PersonalStateRepository` may open connections through it, but it may not initialize or migrate a database. A failure on any canonical member must roll back playback rows and episode projections for all members; the cross-platform smoke suite exercises that forced-failure path.
 
 All four shared runners are required by the complete Windows release gate. The local macOS gate and hosted macOS and Linux jobs run the complete Data, Transcription and Web suites; the iOS job runs the portable transactional subset alongside its device architecture checks. Each runner supports optional name filters so platform workflows can select an intentional subset without coupling source inspection back to product dependencies.
+
+## 0.43 durable sync and backup boundary
+
+`MobileOfflineMutationStore` owns stable IDs for queued favourite, listening-state and Moment decisions. Those IDs must survive restarts and must be sent unchanged on every retry. `WebMutationLedger` is the server acknowledgement boundary: it combines device identity with mutation identity, persists the bounded acknowledgement ledger atomically and exposes per-device counts and latest acknowledgement time. A retried mutation must not be interpreted as a new decision.
+
+`ScheduledBackupService` owns the daily eligibility check, single-flight execution and archive verification policy. Timer callbacks may report errors but must not escape unobserved failures. Server administration observes its immutable status contract; it must not start another backup path or infer health from filesystem timestamps independently.
+
+## 0.45 archive entity-link boundary
+
+`ArchiveEntityLink` is the neutral identity and navigation contract for articles, shows, broadcasts, people, topics, images and timelines. `EntityId` is canonical identity, `TargetId` is the actionable platform value, `Relationship` describes context such as host or guest, and `Route` is the deterministic `radiovault://entity/...` representation. Labels are presentation only and must never become identity.
+
+Broadcast Info and Explore documents expose this contract additively while preserving existing protocol fields. New Library, Explore, Knowledge and transcript-search navigation must consume these links or extend the factory; it must not introduce another string-only deep-link format.

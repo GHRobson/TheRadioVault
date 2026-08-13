@@ -10,4 +10,7 @@
     <Compile Include="..\TheRadioVault.Web\Contracts\WebApiRoutes.cs" Link="Contracts\WebApiRoutes.cs" />
     <Compile Include="..\TheRadioVault.Web\Models\WebModels.cs" Link="Models\WebModels.cs" />
   </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\TheRadioVault.Core\TheRadioVault.Core.csproj" />
+  </ItemGroup>
 </Project>

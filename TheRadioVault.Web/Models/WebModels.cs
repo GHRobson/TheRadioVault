@@ -1,6 +1,7 @@
 using System.Net.Security;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Serialization;
+using TheRadioVault.Core.Domain;
 
 namespace TheRadioVault.Web.Models;
 
@@ -373,7 +374,8 @@ public sealed record WebClientBroadcastDetails(
     string? ArtworkPath,
     int RecordingCount,
     int SegmentCount,
-    int PhysicalFileCount);
+    int PhysicalFileCount,
+    IReadOnlyList<ArchiveEntityLink>? EntityLinks = null);
 
 
 public sealed record WebTranscriptSummary(
