@@ -14,4 +14,8 @@
     <ProjectReference Include="..\TheRadioVault.Data\TheRadioVault.Data.csproj" />
     <ProjectReference Include="..\TheRadioVault.Media\TheRadioVault.Media.csproj" />
   </ItemGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="TheRadioVault.Infrastructure" />
+    <InternalsVisibleTo Include="TheRadioVault.Tests" />
+  </ItemGroup>
 </Project>

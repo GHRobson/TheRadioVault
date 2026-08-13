@@ -166,6 +166,8 @@ Schema 49 owns the durable `saved_collections` and `saved_collection_items` tabl
 
 `ScheduledBackupService` owns the daily eligibility check, single-flight execution and archive verification policy. Timer callbacks may report errors but must not escape unobserved failures. Server administration observes its immutable status contract; it must not start another backup path or infer health from filesystem timestamps independently.
 
+`RssFeedIngestionService` owns server-side feed polling and audio acquisition. Subscription metadata and item identities are durable in schema 50, while the complete source URL and optional Basic credentials are authenticated-encrypted and never projected into clients, diagnostics or display text. A new subscription establishes a no-download baseline unless the administrator explicitly opts into importing existing entries. Conditional requests, stable item keys and content hashes prevent duplicate ingestion. Audio is streamed to a hidden `.part` file with an inactivity deadline and size bound, then atomically moved into a registered Library folder; completed downloads remain pending until a successful normal Library scan, so restart recovery cannot strand an unindexed recording.
+
 ## 0.45 archive entity-link boundary
 
 `ArchiveEntityLink` is the neutral identity and navigation contract for articles, shows, broadcasts, people, topics, images and timelines. `EntityId` is canonical identity, `TargetId` is the actionable platform value, `Relationship` describes context such as host or guest, and `Route` is the deterministic `radiovault://entity/...` representation. Labels are presentation only and must never become identity.

@@ -24,6 +24,7 @@ public sealed class RadioVaultServerRuntime : IDisposable
     private readonly HeadlessWebPlaybackController _playback;
     private readonly LocalWebServerService _server;
     private readonly ILibraryFolderService _libraryFolders;
+    private readonly RssFeedIngestionService _rssFeeds;
     private bool _disposed;
 
     public RadioVaultServerRuntime(
@@ -45,6 +46,15 @@ public sealed class RadioVaultServerRuntime : IDisposable
         _playback = new HeadlessWebPlaybackController();
         Preferences = preferences ?? WebServerPreferences.Load();
         _server = new LocalWebServerService(_database, Preferences, _events, _livePlayback, _jobs, _playback, _transcription);
+        _rssFeeds = new RssFeedIngestionService(
+            _platformDatabase,
+            Preferences,
+            async cancellationToken =>
+            {
+                var result = await _server.RunLibraryScanAsync("rss-feed-download", cancellationToken).ConfigureAwait(false);
+                return result.Started && !result.IsRunning;
+            });
+        _rssFeeds.Start();
 
         if (honorAutomaticStart && Preferences.Enabled && Preferences.StartAutomatically)
             Start();
@@ -95,6 +105,16 @@ public sealed class RadioVaultServerRuntime : IDisposable
         => _server.CancelResearchPackImport(sessionId);
     public Task<WebResearchPackExportPayload> ExportKnowledgeDatabaseAsync(CancellationToken cancellationToken = default)
         => _server.ExportResearchPackAsync(cancellationToken);
+    public Task<IReadOnlyList<RssFeedSubscription>> GetRssFeedsAsync(CancellationToken cancellationToken = default)
+        => _rssFeeds.GetAllAsync(cancellationToken);
+    public Task<RssFeedSubscription> AddRssFeedAsync(RssFeedSaveRequest request, CancellationToken cancellationToken = default)
+        => _rssFeeds.CreateAsync(request, cancellationToken);
+    public Task SetRssFeedEnabledAsync(long feedId, bool enabled, CancellationToken cancellationToken = default)
+        => _rssFeeds.SetEnabledAsync(feedId, enabled, cancellationToken);
+    public Task DeleteRssFeedAsync(long feedId, CancellationToken cancellationToken = default)
+        => _rssFeeds.DeleteAsync(feedId, cancellationToken);
+    public Task<RssFeedCheckResult> CheckRssFeedsNowAsync(long? feedId = null, CancellationToken cancellationToken = default)
+        => _rssFeeds.CheckNowAsync(feedId, cancellationToken);
 
     public WebDesktopPairingSession BeginDesktopPairing()
     {
@@ -174,6 +194,7 @@ public sealed class RadioVaultServerRuntime : IDisposable
     {
         if (_disposed) return;
         _disposed = true;
+        _rssFeeds.Dispose();
         _server.Dispose();
         _transcription.Dispose();
         _jobs.Dispose();
