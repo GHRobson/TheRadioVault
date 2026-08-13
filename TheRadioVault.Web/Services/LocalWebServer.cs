@@ -1,4 +1,3 @@
-using System.Collections.Concurrent;
 using System.Globalization;
 using System.IO;
 using System.Net;
@@ -6,7 +5,6 @@ using System.Net.NetworkInformation;
 using System.Net.Security;
 using System.Net.Sockets;
 using System.Security.Authentication;
-using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using TheRadioVault.Web.Contracts;
@@ -31,14 +29,8 @@ public sealed partial class LocalWebServer : IDisposable
     private Task? _discoveryLoop;
     private WebServerOptions _options;
     private DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
-    private readonly ConcurrentDictionary<string, WebPairedDesktopClient> _pairedDesktopClients = new(StringComparer.Ordinal);
-    private readonly object _pairingGate = new();
-    private string _pairingCode = string.Empty;
-    private DateTimeOffset _pairingExpiresAt = DateTimeOffset.MinValue;
-    private int _pairingAttemptsRemaining;
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _processedMutationIds = new(StringComparer.Ordinal);
-    private readonly ConcurrentQueue<string> _processedMutationOrder = new();
-    private const int ProcessedMutationLimit = 2048;
+    private readonly WebDesktopPairingCoordinator _pairing;
+    private readonly WebMutationLedger _mutations = new();
     private readonly object _positionedWaveSessionsGate = new();
     private readonly Dictionary<string, PositionedWaveSession> _positionedWaveSessions = new(StringComparer.Ordinal);
     private static readonly TimeSpan PositionedWaveSessionIdleLifetime = TimeSpan.FromMinutes(10);
@@ -48,7 +40,7 @@ public sealed partial class LocalWebServer : IDisposable
     {
         _archive = archive ?? throw new ArgumentNullException(nameof(archive));
         _options = options ?? throw new ArgumentNullException(nameof(options));
-        ReplacePairedDesktopClients(_options.PairedDesktopClients);
+        _pairing = new WebDesktopPairingCoordinator(_options.PairedDesktopClients);
         _log = log;
     }
 
@@ -74,23 +66,9 @@ public sealed partial class LocalWebServer : IDisposable
     public string RootCertificateThumbprint => _options.RootCertificateThumbprint;
     public bool LanFederationEnabled => _options.LanFederationEnabled && IsSecure;
     public int LanDiscoveryPort => _options.LanDiscoveryPort;
-    public int PairedDesktopClientCount => _pairedDesktopClients.Count;
-    public IReadOnlyList<WebPairedDesktopClient> PairedDesktopClients => _pairedDesktopClients.Values
-        .OrderBy(client => client.DisplayName, StringComparer.OrdinalIgnoreCase)
-        .ToArray();
-
-    public WebDesktopPairingSession? CurrentDesktopPairing
-    {
-        get
-        {
-            lock (_pairingGate)
-            {
-                return IsPairingActiveUnsafe()
-                    ? new WebDesktopPairingSession(_pairingCode, _pairingExpiresAt)
-                    : null;
-            }
-        }
-    }
+    public int PairedDesktopClientCount => _pairing.Count;
+    public IReadOnlyList<WebPairedDesktopClient> PairedDesktopClients => _pairing.Clients;
+    public WebDesktopPairingSession? CurrentDesktopPairing => _pairing.Current;
 
     public WebDesktopPairingSession BeginDesktopPairing()
     {
@@ -98,27 +76,16 @@ public sealed partial class LocalWebServer : IDisposable
         if (!IsSecure) throw new InvalidOperationException("HTTPS must be enabled before pairing another remote client.");
         if (!_options.LanFederationEnabled) throw new InvalidOperationException("Enable Multi-Device Library Access before creating a pairing code.");
 
-        lock (_pairingGate)
-        {
-            _pairingCode = RandomNumberGenerator.GetInt32(0, 1_000_000).ToString("D6", CultureInfo.InvariantCulture);
-            _pairingExpiresAt = DateTimeOffset.UtcNow.AddMinutes(5);
-            _pairingAttemptsRemaining = 10;
-            return new WebDesktopPairingSession(_pairingCode, _pairingExpiresAt);
-        }
+        return _pairing.Begin();
     }
 
     public void CancelDesktopPairing()
     {
-        lock (_pairingGate)
-        {
-            _pairingCode = string.Empty;
-            _pairingExpiresAt = DateTimeOffset.MinValue;
-            _pairingAttemptsRemaining = 0;
-        }
+        _pairing.Cancel();
     }
 
     public bool RevokeDesktopClient(string clientId)
-        => !string.IsNullOrWhiteSpace(clientId) && _pairedDesktopClients.TryRemove(clientId.Trim(), out _);
+        => _pairing.Revoke(clientId);
 
     public IReadOnlyList<string> GetAccessUrls()
     {
@@ -149,7 +116,7 @@ public sealed partial class LocalWebServer : IDisposable
         lock (_gate)
         {
             _options = options;
-            ReplacePairedDesktopClients(options.PairedDesktopClients);
+            _pairing.Replace(options.PairedDesktopClients);
         }
     }
 
@@ -242,12 +209,7 @@ public sealed partial class LocalWebServer : IDisposable
             _discoveryLoop = null;
         }
 
-        lock (_pairingGate)
-        {
-            _pairingCode = string.Empty;
-            _pairingExpiresAt = DateTimeOffset.MinValue;
-            _pairingAttemptsRemaining = 0;
-        }
+        _pairing.Cancel();
 
         try { cancellation?.Cancel(); } catch (ObjectDisposedException) { }
         try { listener?.Stop(); } catch (ObjectDisposedException) { }
@@ -390,7 +352,7 @@ public sealed partial class LocalWebServer : IDisposable
             SecurePort,
             _options.ServerCertificateThumbprint,
             pairing is not null,
-            _pairedDesktopClients.Count,
+            _pairing.Count,
             DateTimeOffset.UtcNow);
     }
 
@@ -596,64 +558,21 @@ public sealed partial class LocalWebServer : IDisposable
             return;
         }
 
-        var code = pairing.Code?.Trim() ?? string.Empty;
-        if (code.Length != 6 || code.Any(ch => !char.IsDigit(ch)))
+        var decision = _pairing.TryPair(pairing);
+        if (decision.Kind != WebPairingDecisionKind.Paired || decision.Client is null)
         {
+            var badRequest = decision.Kind is WebPairingDecisionKind.InvalidCode or WebPairingDecisionKind.InvalidIdentity;
             await WriteDesktopPairingResultAsync(
-                stream, 400, "Bad Request", false,
-                "The pairing code must contain exactly six digits.",
-                null, cancellationToken).ConfigureAwait(false);
+                stream, badRequest ? 400 : 403, badRequest ? "Bad Request" : "Forbidden", false,
+                decision.Message, null, cancellationToken).ConfigureAwait(false);
             return;
         }
 
-        var clientId = NormalizeDesktopClientId(pairing.ClientId);
-        var displayName = NormalizeDesktopDisplayName(pairing.DisplayName);
-        if (clientId.Length == 0 || displayName.Length == 0)
-        {
-            await WriteDesktopPairingResultAsync(
-                stream, 400, "Bad Request", false,
-                "The remote-client identity is invalid. Restart Radio Vault on the remote client and generate a fresh pairing code.",
-                null, cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        WebPairedDesktopClient? pairedClient = null;
-        var message = "The pairing code is invalid or has expired.";
-        lock (_pairingGate)
-        {
-            if (IsPairingActiveUnsafe() && _pairingAttemptsRemaining > 0 && FixedTimeEquals(code, _pairingCode))
-            {
-                var token = Convert.ToHexString(RandomNumberGenerator.GetBytes(32)).ToLowerInvariant();
-                pairedClient = new WebPairedDesktopClient(clientId, displayName, token, DateTimeOffset.UtcNow);
-                _pairedDesktopClients[clientId] = pairedClient;
-                _pairingCode = string.Empty;
-                _pairingExpiresAt = DateTimeOffset.MinValue;
-                _pairingAttemptsRemaining = 0;
-                message = "This remote client is now trusted by the Radio Vault server.";
-            }
-            else
-            {
-                _pairingAttemptsRemaining = Math.Max(0, _pairingAttemptsRemaining - 1);
-                if (_pairingAttemptsRemaining == 0)
-                {
-                    _pairingCode = string.Empty;
-                    _pairingExpiresAt = DateTimeOffset.MinValue;
-                }
-            }
-        }
-
-        if (pairedClient is null)
-        {
-            await WriteDesktopPairingResultAsync(
-                stream, 403, "Forbidden", false, message, null, cancellationToken).ConfigureAwait(false);
-            return;
-        }
-
-        try { _options.PairedDesktopClientAdded?.Invoke(pairedClient); }
-        catch (Exception ex) { _log?.Invoke($"Could not persist remote client {pairedClient.ClientId}: {ex.Message}"); }
+        try { _options.PairedDesktopClientAdded?.Invoke(decision.Client); }
+        catch (Exception ex) { _log?.Invoke($"Could not persist remote client {decision.Client.ClientId}: {ex.Message}"); }
 
         await WriteDesktopPairingResultAsync(
-            stream, 200, "OK", true, message, pairedClient, cancellationToken).ConfigureAwait(false);
+            stream, 200, "OK", true, decision.Message, decision.Client, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task WriteDesktopPairingResultAsync(
@@ -696,7 +615,7 @@ public sealed partial class LocalWebServer : IDisposable
                 enabled = LanFederationEnabled,
                 discoveryProtocol = "radiovault-lan-v1",
                 discoveryPort = _options.LanDiscoveryPort,
-                pairedDesktopClients = _pairedDesktopClients.Count,
+                pairedDesktopClients = _pairing.Count,
                 pairingAvailable = pairing is not null,
                 pairingExpiresAt = pairing?.ExpiresAt,
                 server = BuildServerInfo()
@@ -1457,99 +1376,17 @@ public sealed partial class LocalWebServer : IDisposable
     }
 
     private bool IsAuthorizedRequest(HttpRequest request, IReadOnlyDictionary<string, string> query)
-    {
-        if (query.TryGetValue("token", out var queryToken) && FixedTimeEquals(queryToken, _options.AccessToken))
-            return true;
-
-        string? headerToken = null;
-        if (request.Headers.TryGetValue("X-RadioVault-Token", out var directToken))
-            headerToken = directToken.Trim();
-        else if (request.Headers.TryGetValue("Authorization", out var authorization) &&
-                 authorization.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase))
-            headerToken = authorization[7..].Trim();
-
-        if (string.IsNullOrWhiteSpace(headerToken)) return false;
-        if (FixedTimeEquals(headerToken, _options.AccessToken)) return true;
-        return _pairedDesktopClients.Values.Any(client => FixedTimeEquals(headerToken, client.Token));
-    }
-
-    private void ReplacePairedDesktopClients(IEnumerable<WebPairedDesktopClient> clients)
-    {
-        _pairedDesktopClients.Clear();
-        foreach (var client in clients ?? Array.Empty<WebPairedDesktopClient>())
-        {
-            var clientId = NormalizeDesktopClientId(client.ClientId);
-            var displayName = NormalizeDesktopDisplayName(client.DisplayName);
-            var token = client.Token?.Trim() ?? string.Empty;
-            if (clientId.Length == 0 || displayName.Length == 0 || token.Length < 32) continue;
-            _pairedDesktopClients[clientId] = client with
-            {
-                ClientId = clientId,
-                DisplayName = displayName,
-                Token = token
-            };
-        }
-    }
-
-    private bool IsPairingActiveUnsafe()
-    {
-        if (string.IsNullOrWhiteSpace(_pairingCode) || _pairingAttemptsRemaining <= 0) return false;
-        if (_pairingExpiresAt > DateTimeOffset.UtcNow) return true;
-        _pairingCode = string.Empty;
-        _pairingExpiresAt = DateTimeOffset.MinValue;
-        _pairingAttemptsRemaining = 0;
-        return false;
-    }
-
-    private static string NormalizeDesktopClientId(string? value)
-    {
-        var trimmed = value?.Trim() ?? string.Empty;
-        if (trimmed.Length is < 8 or > 128) return string.Empty;
-        return trimmed.All(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.')
-            ? trimmed
-            : string.Empty;
-    }
-
-    private static string NormalizeDesktopDisplayName(string? value)
-    {
-        var trimmed = value?.Trim() ?? string.Empty;
-        if (trimmed.Length is < 1 or > 80) return string.Empty;
-        return new string(trimmed.Where(ch => !char.IsControl(ch)).ToArray()).Trim();
-    }
-
-    private static bool FixedTimeEquals(string left, string right)
-    {
-        var a = Encoding.UTF8.GetBytes(left);
-        var b = Encoding.UTF8.GetBytes(right);
-        return a.Length == b.Length && CryptographicOperations.FixedTimeEquals(a, b);
-    }
+        => WebRequestAuthorizer.IsAuthorized(request, query, _options.AccessToken, _pairing.Clients);
 
     private static string JavaScriptString(string value) => value.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("'", "\\'", StringComparison.Ordinal);
 
     public void Dispose() => Stop();
 
-    private static bool TryGetMutationId(HttpRequest request, out string mutationId)
-    {
-        mutationId = string.Empty;
-        if (!request.Headers.TryGetValue("X-Radio-Vault-Mutation-Id", out var raw)) return false;
-        var value = raw.Trim();
-        if (value.Length is < 8 or > 128) return false;
-        if (value.Any(ch => !char.IsLetterOrDigit(ch) && ch != '-' && ch != '_' && ch != '.' && ch != ':')) return false;
-        mutationId = value;
-        return true;
-    }
-
     private bool IsProcessedMutation(HttpRequest request)
-        => TryGetMutationId(request, out var mutationId) && _processedMutationIds.ContainsKey(mutationId);
+        => _mutations.Contains(request);
 
     private void MarkMutationProcessed(HttpRequest request)
-    {
-        if (!TryGetMutationId(request, out var mutationId)) return;
-        if (!_processedMutationIds.TryAdd(mutationId, DateTimeOffset.UtcNow)) return;
-        _processedMutationOrder.Enqueue(mutationId);
-        while (_processedMutationIds.Count > ProcessedMutationLimit && _processedMutationOrder.TryDequeue(out var oldest))
-            _processedMutationIds.TryRemove(oldest, out _);
-    }
+        => _mutations.Record(request);
 
     private async Task<bool> TryWriteDuplicateMutationResponseAsync(Stream stream, HttpRequest request, CancellationToken cancellationToken)
     {

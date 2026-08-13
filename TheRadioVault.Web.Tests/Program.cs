@@ -26,6 +26,7 @@ var tests = new (string Name, Action Run)[]
     .Concat(WebApiRouteResolverTests.Cases)
     .Concat(WebHttpApiTests.Cases)
     .Concat(WebHttpInfrastructureTests.Cases)
+    .Concat(WebRequestSecurityTests.Cases)
     .Concat(WebPlaybackIntegrationTests.Cases)
     .Concat(WebShellContractTests.Cases)
     .Concat(WebMediaServerTests.Cases)
