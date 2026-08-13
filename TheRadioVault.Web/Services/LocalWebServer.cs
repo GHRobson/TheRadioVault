@@ -30,7 +30,7 @@ public sealed partial class LocalWebServer : IDisposable
     private WebServerOptions _options;
     private DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
     private readonly WebDesktopPairingCoordinator _pairing;
-    private readonly WebMutationLedger _mutations = new();
+    private readonly WebMutationLedger _mutations;
     private readonly object _positionedWaveSessionsGate = new();
     private readonly Dictionary<string, PositionedWaveSession> _positionedWaveSessions = new(StringComparer.Ordinal);
     private static readonly TimeSpan PositionedWaveSessionIdleLifetime = TimeSpan.FromMinutes(10);
@@ -41,6 +41,7 @@ public sealed partial class LocalWebServer : IDisposable
         _archive = archive ?? throw new ArgumentNullException(nameof(archive));
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _pairing = new WebDesktopPairingCoordinator(_options.PairedDesktopClients);
+        _mutations = new WebMutationLedger(path: _options.MutationLedgerPath);
         _log = log;
     }
 

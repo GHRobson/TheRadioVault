@@ -166,6 +166,8 @@ static async Task OfflineMutationsStayIsolatedAsync()
         Ensure(pending.Single(value => value.EpisodeId == 202).BooleanValue == false,
             "Episode 202 inherited another broadcast's decision.");
         Ensure(pending.All(value => value.ServerInstanceId == "server-a"), "A different server's mutations leaked into this queue.");
+        Ensure(pending.All(value => !string.IsNullOrWhiteSpace(value.MutationId)),
+            "An offline decision was stored without a durable mutation id.");
 
         var reopened = new MobileOfflineMutationStore(root);
         Equal(4, (await reopened.GetPendingAsync("server-a")).Count, "Persisted pending mutations");
@@ -529,6 +531,8 @@ static async Task OfflineMutationSyncPreservesOrderAsync()
         Ensure(result.FailedMutation is null, "An ordered mutation unexpectedly failed.");
         Ensure(transport.MutationCalls.SequenceEqual(["Favourite:101", "Listening:202", "Moment:303"]),
             "Offline mutations were not sent in captured order.");
+        Equal(3, transport.MutationIds.Distinct(StringComparer.Ordinal).Count(),
+            "Stable mutation ids sent to the server");
         Ensure(reconciled.SequenceEqual([101L, 202L]), "Canonical broadcasts were not reconciled in order.");
         Equal(0, result.Diagnostics.PendingChanges, "Pending mutations after ordered flush");
     }
@@ -1937,13 +1941,16 @@ file sealed class FakeOfflineMutationTransport(
     public HashSet<long> FailedListeningEpisodeIds { get; } = [];
     public HashSet<long> DuplicateMomentEpisodeIds { get; } = [];
     public List<string> MutationCalls { get; } = [];
+    public List<string> MutationIds { get; } = [];
 
     public Task<WebMutationResult> SetFavouriteAsync(
         long episodeId,
         bool favourite,
+        string mutationId,
         CancellationToken cancellationToken = default)
     {
         MutationCalls.Add($"Favourite:{episodeId}");
+        MutationIds.Add(mutationId);
         if (FailedFavouriteEpisodeIds.Contains(episodeId))
             throw new HttpRequestException("Simulated favourite failure.");
         if (_summaries.TryGetValue(episodeId, out var summary))
@@ -1954,9 +1961,11 @@ file sealed class FakeOfflineMutationTransport(
     public Task<WebMutationResult> SetListeningStatusAsync(
         long episodeId,
         bool played,
+        string mutationId,
         CancellationToken cancellationToken = default)
     {
         MutationCalls.Add($"Listening:{episodeId}");
+        MutationIds.Add(mutationId);
         if (FailedListeningEpisodeIds.Contains(episodeId))
             throw new HttpRequestException("Simulated listening-status failure.");
         if (_summaries.TryGetValue(episodeId, out var summary))
@@ -1975,6 +1984,7 @@ file sealed class FakeOfflineMutationTransport(
         CancellationToken cancellationToken = default)
     {
         MutationCalls.Add($"Moment:{episodeId}");
+        MutationIds.Add(mutation.ClientMutationId);
         var duplicate = DuplicateMomentEpisodeIds.Contains(episodeId);
         return Task.FromResult(new WebMomentMutationResult(
             Changed: !duplicate,

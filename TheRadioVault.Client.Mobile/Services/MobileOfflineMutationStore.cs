@@ -44,14 +44,20 @@ internal sealed class MobileOfflineMutationStore
     }
 
     public Task EnqueueFavouriteAsync(string serverInstanceId, long episodeId, bool favourite)
-        => EnqueueReplacingAsync(new MobileOfflineMutation(
-            Guid.NewGuid(), MobileOfflineMutationKind.Favourite, serverInstanceId, episodeId,
-            DateTimeOffset.UtcNow, BooleanValue: favourite));
+    {
+        var id = Guid.NewGuid();
+        return EnqueueReplacingAsync(new MobileOfflineMutation(
+            id, MobileOfflineMutationKind.Favourite, serverInstanceId, episodeId,
+            DateTimeOffset.UtcNow, BooleanValue: favourite, MutationId: id.ToString("N")));
+    }
 
     public Task EnqueueListeningStatusAsync(string serverInstanceId, long episodeId, bool played)
-        => EnqueueReplacingAsync(new MobileOfflineMutation(
-            Guid.NewGuid(), MobileOfflineMutationKind.ListeningStatus, serverInstanceId, episodeId,
-            DateTimeOffset.UtcNow, BooleanValue: played));
+    {
+        var id = Guid.NewGuid();
+        return EnqueueReplacingAsync(new MobileOfflineMutation(
+            id, MobileOfflineMutationKind.ListeningStatus, serverInstanceId, episodeId,
+            DateTimeOffset.UtcNow, BooleanValue: played, MutationId: id.ToString("N")));
+    }
 
     public async Task EnqueueMomentAsync(
         string serverInstanceId, long episodeId, long positionMs,

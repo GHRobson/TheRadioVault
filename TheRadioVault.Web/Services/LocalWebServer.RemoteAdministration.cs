@@ -58,7 +58,12 @@ public sealed partial class LocalWebServer
             var bytes = JsonSerializer.SerializeToUtf8Bytes(new
             {
                 apiVersion = WebApiRoutes.Version,
-                settings = snapshot
+                settings = snapshot,
+                operations = new
+                {
+                    scheduledBackup = _options.ScheduledBackupStatus?.Invoke(),
+                    deviceSync = _mutations.GetDeviceStatuses()
+                }
             }, JsonOptions);
             await WriteBytesResponseAsync(stream, 200, "OK", bytes, "application/json; charset=utf-8", headOnly,
                 cancellationToken, "Cache-Control: no-store\r\n").ConfigureAwait(false);

@@ -20,6 +20,7 @@ public sealed class LocalWebServerService : IDisposable
 {
     private readonly LocalWebServer _server;
     private readonly WebArchiveProvider _provider;
+    private readonly ScheduledBackupService _scheduledBackups;
     private SecureWebCertificateBundle? _certificates;
     private WebServerPreferences _preferences;
 
@@ -35,6 +36,7 @@ public sealed class LocalWebServerService : IDisposable
         ArgumentNullException.ThrowIfNull(database);
         _preferences = preferences ?? throw new ArgumentNullException(nameof(preferences));
         _provider = new WebArchiveProvider(database, events, livePlayback, jobs, playbackController, transcription);
+        _scheduledBackups = new ScheduledBackupService();
         _certificates = CreateCertificates(_preferences);
         _server = new LocalWebServer(
             _provider,
@@ -182,12 +184,22 @@ public sealed class LocalWebServerService : IDisposable
         return new SecureCertificateValidationResult(valid, checks);
     }
 
-    public void Start() => _server.Start();
-    public void Stop() => _server.Stop();
+    public void Start()
+    {
+        _server.Start();
+        _scheduledBackups.Start();
+    }
+
+    public void Stop()
+    {
+        _scheduledBackups.Stop();
+        _server.Stop();
+    }
 
     public void Dispose()
     {
         _server.Dispose();
+        _scheduledBackups.Dispose();
         _certificates?.Dispose();
         _certificates = null;
         _provider.Dispose();
@@ -198,7 +210,7 @@ public sealed class LocalWebServerService : IDisposable
             ? SecureWebCertificateService.EnsureCertificates(preferences.CertificatePassword)
             : null;
 
-    private static WebServerOptions ToOptions(WebServerPreferences preferences, SecureWebCertificateBundle? certificates)
+    private WebServerOptions ToOptions(WebServerPreferences preferences, SecureWebCertificateBundle? certificates)
         => new()
         {
             AppVersion = AppVersionService.Version,
@@ -228,6 +240,8 @@ public sealed class LocalWebServerService : IDisposable
                 : Array.Empty<WebPairedDesktopClient>(),
             PairedDesktopClientAdded = preferences.LanFederationEnabled
                 ? (Action<WebPairedDesktopClient>)preferences.AddOrUpdatePairedDesktopClient
-                : null
+                : null,
+            MutationLedgerPath = Path.Combine(AppPaths.DataDirectory, "server-mutation-acknowledgements.json"),
+            ScheduledBackupStatus = () => _scheduledBackups.Status
         };
 }

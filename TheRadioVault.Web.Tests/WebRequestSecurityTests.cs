@@ -10,7 +10,7 @@ internal static class WebRequestSecurityTests
     [
         ("Request authorization accepts only server or paired credentials", RequestAuthorizationAcceptsTrustedCredentials),
         ("Desktop pairing expires and normalizes trusted clients", DesktopPairingExpiresAndNormalizesClients),
-        ("Mutation ledger validates ids and evicts oldest acknowledgements", MutationLedgerValidatesAndEvicts)
+        ("Mutation ledger validates ids, persists acknowledgements and evicts oldest entries", MutationLedgerPersistsAndEvicts)
     ];
 
     private static void RequestAuthorizationAcceptsTrustedCredentials()
@@ -64,31 +64,49 @@ internal static class WebRequestSecurityTests
         Equal(0, pairing.Count);
     }
 
-    private static void MutationLedgerValidatesAndEvicts()
+    private static void MutationLedgerPersistsAndEvicts()
     {
-        var ledger = new WebMutationLedger(capacity: 2);
-        using var invalid = Request(("X-Radio-Vault-Mutation-Id", "bad id"));
-        ledger.Record(invalid);
-        True(!ledger.Contains(invalid));
+        var directory = Path.Combine(Path.GetTempPath(), "RadioVaultWebTests", Guid.NewGuid().ToString("N"));
+        var path = Path.Combine(directory, "mutation-acks.json");
+        try
+        {
+            var ledger = new WebMutationLedger(capacity: 2, path: path);
+            using var invalid = Request(("X-Radio-Vault-Mutation-Id", "bad id"));
+            ledger.Record(invalid);
+            True(!ledger.Contains(invalid));
 
-        using var first = Mutation("device:first");
-        using var second = Mutation("device:second");
-        using var third = Mutation("device:third");
-        ledger.Record(first);
-        ledger.Record(second);
-        True(ledger.Contains(first));
-        True(ledger.Contains(second));
-        ledger.Record(third);
-        True(!ledger.Contains(first));
-        True(ledger.Contains(second));
-        True(ledger.Contains(third));
+            using var first = Mutation("device:first", "iphone-01");
+            using var second = Mutation("device:second", "iphone-01");
+            using var third = Mutation("device:third", "laptop-01");
+            ledger.Record(first, new DateTimeOffset(2026, 8, 13, 10, 0, 0, TimeSpan.Zero));
+            ledger.Record(second, new DateTimeOffset(2026, 8, 13, 10, 1, 0, TimeSpan.Zero));
+            True(ledger.Contains(first));
+            True(ledger.Contains(second));
+
+            var reloaded = new WebMutationLedger(capacity: 2, path: path);
+            True(reloaded.Contains(first));
+            True(reloaded.Contains(second));
+            Equal(2, reloaded.GetDeviceStatuses().Single().AcknowledgedChanges);
+
+            reloaded.Record(third, new DateTimeOffset(2026, 8, 13, 10, 2, 0, TimeSpan.Zero));
+            True(!reloaded.Contains(first));
+            True(reloaded.Contains(second));
+            True(reloaded.Contains(third));
+            Equal(2, reloaded.GetDeviceStatuses().Count);
+        }
+        finally
+        {
+            try { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); } catch { }
+        }
     }
 
     private static readonly IReadOnlyDictionary<string, string> EmptyQuery =
         new Dictionary<string, string>();
 
-    private static HttpRequest Mutation(string mutationId)
-        => Request(("X-Radio-Vault-Mutation-Id", mutationId));
+    private static HttpRequest Mutation(string mutationId, string clientId)
+        => Request(
+            ("X-Radio-Vault-Mutation-Id", mutationId),
+            ("X-RadioVault-Client-Id", clientId));
 
     private static HttpRequest Request(params (string Name, string Value)[] headers)
         => new("GET", "/", headers.ToDictionary(x => x.Name, x => x.Value, StringComparer.OrdinalIgnoreCase), []);

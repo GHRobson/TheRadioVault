@@ -76,6 +76,7 @@ var tests = new (string Name, Action Run)[]
         Equal("Yesterday", ArchiveHealthPresentationPolicy.FormatBackupAge(now.AddHours(-30), now));
         Equal("Overdue · 45 days ago", ArchiveHealthPresentationPolicy.FormatBackupAge(now.AddDays(-45), now));
     }),
+    ("Scheduled backups are verified and report their next run", ScheduledBackupsAreVerified),
     ("Moment deduplication keeps one near-identical save", () =>
     {
         True(MomentDeduplicationPolicy.IsEquivalent("BENNINGTON-2026-06-22", 4_498_945, "The old slave hanging tree", "", "BENNINGTON-2026-06-22", 4_498_000, "The old slave hanging tree", ""));
@@ -350,6 +351,43 @@ foreach (var test in selectedTests)
 
 Console.WriteLine($"{selectedTests.Length - failures.Count}/{selectedTests.Length} smoke tests passed.");
 return failures.Count == 0 ? 0 : 1;
+
+static void ScheduledBackupsAreVerified()
+{
+    var root = Path.Combine(Path.GetTempPath(), "RadioVaultScheduledBackupTests", Guid.NewGuid().ToString("N"));
+    var now = new DateTimeOffset(2026, 8, 13, 10, 0, 0, TimeSpan.Zero);
+    try
+    {
+        using var scheduler = new ScheduledBackupService(
+            interval: TimeSpan.FromDays(1),
+            utcNow: () => now,
+            createBackup: destination =>
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+                using var archive = ZipFile.Open(destination, ZipArchiveMode.Create);
+                var database = archive.CreateEntry("radio_vault.db");
+                using var stream = database.Open();
+                stream.Write([1, 2, 3, 4]);
+                return destination;
+            },
+            backupDirectory: root);
+
+        var completed = scheduler.RunIfDueAsync(force: true).GetAwaiter().GetResult();
+        True(completed.LastBackupVerified);
+        Equal(now, completed.LastCompletedAt);
+        Equal(now.AddDays(1), completed.NextDueAt);
+        True(File.Exists(completed.LatestBackupPath));
+
+        now = now.AddHours(1);
+        var notDue = scheduler.RunIfDueAsync().GetAwaiter().GetResult();
+        Equal(completed.LatestBackupPath, notDue.LatestBackupPath);
+        Equal(completed.LastCompletedAt, notDue.LastCompletedAt);
+    }
+    finally
+    {
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
 
 static void CanonicalPersonalStateWritesRollBackAtomically()
 {

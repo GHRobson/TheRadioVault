@@ -399,23 +399,39 @@ public sealed class MobileServerClient : IDisposable
         long episodeId,
         bool favourite,
         CancellationToken cancellationToken = default)
+        => await SetFavouriteAsync(episodeId, favourite, null, cancellationToken).ConfigureAwait(false);
+
+    public async Task<WebMutationResult> SetFavouriteAsync(
+        long episodeId,
+        bool favourite,
+        string? mutationId,
+        CancellationToken cancellationToken = default)
         => (await PostJsonAsync(
             WebApiRoutes.Favourite(episodeId),
             new MobileFavouriteMutation(favourite),
             MobileJsonContext.Default.MobileFavouriteMutation,
             MobileJsonContext.Default.MutationEnvelope,
-            cancellationToken).ConfigureAwait(false)).Result;
+            cancellationToken,
+            mutationId).ConfigureAwait(false)).Result;
 
     public async Task<WebMutationResult> SetListeningStatusAsync(
         long episodeId,
         bool played,
+        CancellationToken cancellationToken = default)
+        => await SetListeningStatusAsync(episodeId, played, null, cancellationToken).ConfigureAwait(false);
+
+    public async Task<WebMutationResult> SetListeningStatusAsync(
+        long episodeId,
+        bool played,
+        string? mutationId,
         CancellationToken cancellationToken = default)
         => (await PostJsonAsync(
             WebApiRoutes.ListeningStatus(episodeId),
             new MobileListeningStatusMutation(played),
             MobileJsonContext.Default.MobileListeningStatusMutation,
             MobileJsonContext.Default.MutationEnvelope,
-            cancellationToken).ConfigureAwait(false)).Result;
+            cancellationToken,
+            mutationId).ConfigureAwait(false)).Result;
 
     public async Task<WebMomentMutationResult> AddMomentAsync(
         long episodeId,
@@ -426,7 +442,8 @@ public sealed class MobileServerClient : IDisposable
             mutation,
             MobileJsonContext.Default.WebMomentMutation,
             MobileJsonContext.Default.MomentMutationEnvelope,
-            cancellationToken).ConfigureAwait(false)).Result;
+            cancellationToken,
+            mutation.ClientMutationId).ConfigureAwait(false)).Result;
 
     public async Task<IReadOnlyList<WebMomentSummary>> GetMomentsAsync(CancellationToken cancellationToken = default)
         => (await GetJsonAsync(
@@ -692,13 +709,19 @@ public sealed class MobileServerClient : IDisposable
         TRequest request,
         JsonTypeInfo<TRequest> requestType,
         JsonTypeInfo<TResponse> responseType,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        string? mutationId = null)
     {
         HttpResponseMessage response;
         try
         {
-            response = await RequiredClient.PostAsJsonAsync(
-                path, request, requestType, cancellationToken).ConfigureAwait(false);
+            using var message = new HttpRequestMessage(HttpMethod.Post, path)
+            {
+                Content = JsonContent.Create(request, requestType)
+            };
+            if (!string.IsNullOrWhiteSpace(mutationId))
+                message.Headers.TryAddWithoutValidation("X-Radio-Vault-Mutation-Id", mutationId.Trim());
+            response = await RequiredClient.SendAsync(message, cancellationToken).ConfigureAwait(false);
         }
         catch
         {
@@ -738,6 +761,8 @@ public sealed class MobileServerClient : IDisposable
         };
         if (includeToken && !string.IsNullOrWhiteSpace(connection.AccessToken))
             client.DefaultRequestHeaders.Add("X-RadioVault-Token", connection.AccessToken);
+        if (includeToken && !string.IsNullOrWhiteSpace(connection.ClientId))
+            client.DefaultRequestHeaders.Add("X-RadioVault-Client-Id", connection.ClientId);
         return client;
     }
 

@@ -26,6 +26,8 @@ public sealed class WebServerOptions
     public int LanDiscoveryPort { get; init; } = 30829;
     public IReadOnlyList<WebPairedDesktopClient> PairedDesktopClients { get; init; } = Array.Empty<WebPairedDesktopClient>();
     public Action<WebPairedDesktopClient>? PairedDesktopClientAdded { get; init; }
+    public string MutationLedgerPath { get; init; } = string.Empty;
+    public Func<WebScheduledBackupStatus>? ScheduledBackupStatus { get; init; }
 }
 
 public sealed record WebPairedDesktopClient(
@@ -53,6 +55,26 @@ public sealed record WebDesktopPairingResult(
     int SecurePort,
     int CapabilityGeneration,
     DateTimeOffset? PairedAt);
+
+public sealed record WebMutationAcknowledgement(
+    string ClientId,
+    string MutationId,
+    DateTimeOffset ProcessedAt);
+
+public sealed record WebDeviceSyncStatus(
+    string ClientId,
+    int AcknowledgedChanges,
+    DateTimeOffset? LastAcknowledgedAt,
+    string PersistenceError = "");
+
+public sealed record WebScheduledBackupStatus(
+    bool Enabled,
+    bool IsRunning,
+    DateTimeOffset? LastCompletedAt,
+    DateTimeOffset? NextDueAt,
+    string LatestBackupPath,
+    bool LastBackupVerified,
+    string LastError);
 
 public sealed record WebLanDiscoveryAnnouncement(
     string Protocol,

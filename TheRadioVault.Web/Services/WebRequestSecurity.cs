@@ -2,6 +2,7 @@ using System.Collections.Concurrent;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using TheRadioVault.Web.Models;
 
 namespace TheRadioVault.Web.Services;
@@ -177,23 +178,46 @@ internal sealed class WebDesktopPairingCoordinator
     }
 }
 
-internal sealed class WebMutationLedger(int capacity = 2048)
+internal sealed class WebMutationLedger
 {
-    private readonly ConcurrentDictionary<string, DateTimeOffset> _processed = new(StringComparer.Ordinal);
+    private readonly ConcurrentDictionary<string, WebMutationAcknowledgement> _processed = new(StringComparer.Ordinal);
     private readonly ConcurrentQueue<string> _order = new();
-    private readonly int _capacity = Math.Max(1, capacity);
+    private readonly int _capacity;
+    private readonly string _path;
+    private readonly object _persistenceGate = new();
+    private string _persistenceError = string.Empty;
+
+    public WebMutationLedger(int capacity = 2048, string? path = null)
+    {
+        _capacity = Math.Max(1, capacity);
+        _path = path?.Trim() ?? string.Empty;
+        Load();
+    }
 
     public bool Contains(HttpRequest request)
-        => TryGetMutationId(request, out var mutationId) && _processed.ContainsKey(mutationId);
+        => TryGetIdentity(request, out var key, out _, out _) && _processed.ContainsKey(key);
 
     public void Record(HttpRequest request, DateTimeOffset? processedAt = null)
     {
-        if (!TryGetMutationId(request, out var mutationId)) return;
-        if (!_processed.TryAdd(mutationId, processedAt ?? DateTimeOffset.UtcNow)) return;
-        _order.Enqueue(mutationId);
+        if (!TryGetIdentity(request, out var key, out var clientId, out var mutationId)) return;
+        var acknowledgement = new WebMutationAcknowledgement(clientId, mutationId, processedAt ?? DateTimeOffset.UtcNow);
+        if (!_processed.TryAdd(key, acknowledgement)) return;
+        _order.Enqueue(key);
         while (_processed.Count > _capacity && _order.TryDequeue(out var oldest))
             _processed.TryRemove(oldest, out _);
+        Save();
     }
+
+    public IReadOnlyList<WebDeviceSyncStatus> GetDeviceStatuses()
+        => _processed.Values
+            .GroupBy(value => value.ClientId, StringComparer.Ordinal)
+            .Select(group => new WebDeviceSyncStatus(
+                group.Key,
+                group.Count(),
+                group.Max(value => value.ProcessedAt),
+                _persistenceError))
+            .OrderByDescending(value => value.LastAcknowledgedAt)
+            .ToArray();
 
     public static bool TryGetMutationId(HttpRequest request, out string mutationId)
     {
@@ -204,5 +228,82 @@ internal sealed class WebMutationLedger(int capacity = 2048)
         if (value.Any(ch => !char.IsLetterOrDigit(ch) && ch is not ('-' or '_' or '.' or ':'))) return false;
         mutationId = value;
         return true;
+    }
+
+    private static bool TryGetIdentity(
+        HttpRequest request,
+        out string key,
+        out string clientId,
+        out string mutationId)
+    {
+        key = string.Empty;
+        clientId = "unknown";
+        if (!TryGetMutationId(request, out mutationId)) return false;
+        if (request.Headers.TryGetValue("X-RadioVault-Client-Id", out var rawClientId))
+        {
+            var normalized = rawClientId.Trim();
+            if (normalized.Length is >= 8 and <= 128 &&
+                normalized.All(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.'))
+                clientId = normalized;
+        }
+        key = clientId + "|" + mutationId;
+        return true;
+    }
+
+    private void Load()
+    {
+        if (_path.Length == 0 || !File.Exists(_path)) return;
+        try
+        {
+            var acknowledgements = JsonSerializer.Deserialize<WebMutationAcknowledgement[]>(File.ReadAllBytes(_path)) ?? [];
+            foreach (var acknowledgement in acknowledgements
+                         .OrderBy(value => value.ProcessedAt)
+                         .TakeLast(_capacity))
+            {
+                var key = acknowledgement.ClientId + "|" + acknowledgement.MutationId;
+                _processed[key] = acknowledgement;
+                _order.Enqueue(key);
+            }
+            _persistenceError = string.Empty;
+        }
+        catch (Exception exception) when (exception is IOException or JsonException or UnauthorizedAccessException)
+        {
+            _persistenceError = exception.Message;
+        }
+    }
+
+    private void Save()
+    {
+        if (_path.Length == 0) return;
+        lock (_persistenceGate)
+        {
+            var temporary = _path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(_path)
+                    ?? throw new InvalidOperationException("The mutation-ledger path has no parent directory."));
+                var payload = JsonSerializer.SerializeToUtf8Bytes(
+                    _processed.Values.OrderBy(value => value.ProcessedAt).ToArray());
+                using (var stream = new FileStream(
+                           temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None,
+                           16 * 1024, FileOptions.WriteThrough))
+                {
+                    stream.Write(payload);
+                    stream.Flush(flushToDisk: true);
+                }
+                File.Move(temporary, _path, overwrite: true);
+                _persistenceError = string.Empty;
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or InvalidOperationException)
+            {
+                _persistenceError = exception.Message;
+            }
+            finally
+            {
+                try { if (File.Exists(temporary)) File.Delete(temporary); }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+        }
     }
 }

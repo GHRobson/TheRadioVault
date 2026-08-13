@@ -1,3 +1,5 @@
+using TheRadioVault.Core.Services;
+
 namespace TheRadioVault.Transcription.Models;
 
 public sealed class WhisperCppEngineSettings
@@ -33,7 +35,7 @@ public sealed class WhisperCppEngineSettings
 
     public string ModelId => string.IsNullOrWhiteSpace(ModelPath)
         ? ""
-        : Path.GetFileNameWithoutExtension(ModelPath);
+        : ArchivePath.GetFileNameWithoutExtension(ModelPath);
 
     public bool MultiSpeakerDiarizationModelsAvailable
         => File.Exists(DiarizationSegmentationModelPath) && File.Exists(DiarizationEmbeddingModelPath);
