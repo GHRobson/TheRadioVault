@@ -491,14 +491,22 @@ public sealed class MobileServerClient : IDisposable
         long episodeId,
         bool favourite,
         string? mutationId,
+        DateTimeOffset? capturedAt,
         CancellationToken cancellationToken = default)
         => (await PostJsonAsync(
             WebApiRoutes.Favourite(episodeId),
-            new MobileFavouriteMutation(favourite),
+            new MobileFavouriteMutation(favourite, capturedAt),
             MobileJsonContext.Default.MobileFavouriteMutation,
             MobileJsonContext.Default.MutationEnvelope,
             cancellationToken,
             mutationId).ConfigureAwait(false)).Result;
+
+    public Task<WebMutationResult> SetFavouriteAsync(
+        long episodeId,
+        bool favourite,
+        string? mutationId,
+        CancellationToken cancellationToken = default)
+        => SetFavouriteAsync(episodeId, favourite, mutationId, null, cancellationToken);
 
     public async Task<WebMutationResult> SetListeningStatusAsync(
         long episodeId,
@@ -510,14 +518,22 @@ public sealed class MobileServerClient : IDisposable
         long episodeId,
         bool played,
         string? mutationId,
+        DateTimeOffset? capturedAt,
         CancellationToken cancellationToken = default)
         => (await PostJsonAsync(
             WebApiRoutes.ListeningStatus(episodeId),
-            new MobileListeningStatusMutation(played),
+            new MobileListeningStatusMutation(played, capturedAt),
             MobileJsonContext.Default.MobileListeningStatusMutation,
             MobileJsonContext.Default.MutationEnvelope,
             cancellationToken,
             mutationId).ConfigureAwait(false)).Result;
+
+    public Task<WebMutationResult> SetListeningStatusAsync(
+        long episodeId,
+        bool played,
+        string? mutationId,
+        CancellationToken cancellationToken = default)
+        => SetListeningStatusAsync(episodeId, played, mutationId, null, cancellationToken);
 
     public async Task<WebMomentMutationResult> AddMomentAsync(
         long episodeId,

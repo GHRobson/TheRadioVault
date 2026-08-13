@@ -242,6 +242,7 @@ public sealed class LocalWebServerService : IDisposable
                 ? (Action<WebPairedDesktopClient>)preferences.AddOrUpdatePairedDesktopClient
                 : null,
             MutationLedgerPath = Path.Combine(AppPaths.DataDirectory, "server-mutation-acknowledgements.json"),
+            PersonalStateDecisionLedgerPath = Path.Combine(AppPaths.DataDirectory, "server-personal-state-decisions.json"),
             ScheduledBackupStatus = () => _scheduledBackups.Status
         };
 }

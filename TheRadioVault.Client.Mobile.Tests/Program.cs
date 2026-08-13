@@ -2051,6 +2051,7 @@ file sealed class FakeOfflineMutationTransport(
         long episodeId,
         bool favourite,
         string mutationId,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
     {
         MutationCalls.Add($"Favourite:{episodeId}");
@@ -2066,6 +2067,7 @@ file sealed class FakeOfflineMutationTransport(
         long episodeId,
         bool played,
         string mutationId,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
     {
         MutationCalls.Add($"Listening:{episodeId}");

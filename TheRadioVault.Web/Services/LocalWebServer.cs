@@ -31,6 +31,7 @@ public sealed partial class LocalWebServer : IDisposable
     private DateTimeOffset _startedAt = DateTimeOffset.UtcNow;
     private readonly WebDesktopPairingCoordinator _pairing;
     private readonly WebMutationLedger _mutations;
+    private readonly WebPersonalStateDecisionLedger _personalStateDecisions;
     private readonly object _positionedWaveSessionsGate = new();
     private readonly Dictionary<string, PositionedWaveSession> _positionedWaveSessions = new(StringComparer.Ordinal);
     private static readonly TimeSpan PositionedWaveSessionIdleLifetime = TimeSpan.FromMinutes(10);
@@ -42,6 +43,7 @@ public sealed partial class LocalWebServer : IDisposable
         _options = options ?? throw new ArgumentNullException(nameof(options));
         _pairing = new WebDesktopPairingCoordinator(_options.PairedDesktopClients);
         _mutations = new WebMutationLedger(path: _options.MutationLedgerPath);
+        _personalStateDecisions = new WebPersonalStateDecisionLedger(_options.PersonalStateDecisionLedgerPath);
         _log = log;
     }
 
@@ -1025,7 +1027,9 @@ public sealed partial class LocalWebServer : IDisposable
             await WriteTextResponseAsync(stream, 400, "Bad Request", "A Moment position and title are required.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
             return;
         }
+        if (await TryWriteDuplicateMutationResponseAsync(stream, request, cancellationToken).ConfigureAwait(false)) return;
         var result = _archive.AddMoment(episodeId, mutation);
+        if (result.Changed) MarkMutationProcessed(request);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(new { apiVersion = WebApiRoutes.Version, result }, JsonOptions);
         await WriteBytesResponseAsync(stream, result.Changed ? 200 : 404, result.Changed ? "OK" : "Not Found", bytes, "application/json; charset=utf-8", false, cancellationToken, "Cache-Control: no-store\r\n").ConfigureAwait(false);
     }
@@ -1118,7 +1122,34 @@ public sealed partial class LocalWebServer : IDisposable
         }
 
         if (await TryWriteDuplicateMutationResponseAsync(stream, request, cancellationToken).ConfigureAwait(false)) return;
-        var result = _archive.SetFavourite(episodeId, mutation.Favourite);
+        var receivedAt = DateTimeOffset.UtcNow;
+        WebMutationLedger.TryGetMutationId(request, out var mutationId);
+        var decision = _personalStateDecisions.TryApply(
+            WebConflictDomain.Favourite,
+            episodeId,
+            mutation.Favourite ? "true" : "false",
+            mutation.CapturedAt,
+            receivedAt,
+            WebMutationLedger.GetClientId(request),
+            mutationId,
+            () => _archive.SetFavourite(episodeId, mutation.Favourite),
+            out var appliedResult);
+        if (!decision.Accepted)
+        {
+            var conflict = new WebMutationResult(
+                false,
+                decision.Message,
+                _archive.GetEpisode(episodeId),
+                Conflict: decision.Resolution is WebConflictResolution.RejectStale or WebConflictResolution.RejectClockSkew,
+                Resolution: decision.Resolution.ToString());
+            var conflictCode = conflict.Conflict ? 409 : 200;
+            var conflictBytes = JsonSerializer.SerializeToUtf8Bytes(new { apiVersion = WebApiRoutes.Version, result = conflict }, JsonOptions);
+            await WriteBytesResponseAsync(stream, conflictCode, conflictCode == 409 ? "Conflict" : "OK", conflictBytes,
+                "application/json; charset=utf-8", false, cancellationToken, "Cache-Control: no-store\r\n").ConfigureAwait(false);
+            return;
+        }
+        var result = appliedResult ?? new WebMutationResult(false, "Broadcast not found.");
+        result = result with { Resolution = decision.Resolution.ToString() };
         var status = result.Changed ? (200, "OK") : (404, "Not Found");
         if (status.Item1 == 200) MarkMutationProcessed(request);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(new { apiVersion = WebApiRoutes.Version, result }, JsonOptions);
@@ -1134,7 +1165,34 @@ public sealed partial class LocalWebServer : IDisposable
         }
 
         if (await TryWriteDuplicateMutationResponseAsync(stream, request, cancellationToken).ConfigureAwait(false)) return;
-        var result = _archive.SetPlayed(episodeId, mutation.Played);
+        var receivedAt = DateTimeOffset.UtcNow;
+        WebMutationLedger.TryGetMutationId(request, out var mutationId);
+        var decision = _personalStateDecisions.TryApply(
+            WebConflictDomain.ListeningStatus,
+            episodeId,
+            mutation.Played ? "true" : "false",
+            mutation.CapturedAt,
+            receivedAt,
+            WebMutationLedger.GetClientId(request),
+            mutationId,
+            () => _archive.SetPlayed(episodeId, mutation.Played),
+            out var appliedResult);
+        if (!decision.Accepted)
+        {
+            var conflict = new WebMutationResult(
+                false,
+                decision.Message,
+                _archive.GetEpisode(episodeId),
+                Conflict: decision.Resolution is WebConflictResolution.RejectStale or WebConflictResolution.RejectClockSkew,
+                Resolution: decision.Resolution.ToString());
+            var conflictCode = conflict.Conflict ? 409 : 200;
+            var conflictBytes = JsonSerializer.SerializeToUtf8Bytes(new { apiVersion = WebApiRoutes.Version, result = conflict }, JsonOptions);
+            await WriteBytesResponseAsync(stream, conflictCode, conflictCode == 409 ? "Conflict" : "OK", conflictBytes,
+                "application/json; charset=utf-8", false, cancellationToken, "Cache-Control: no-store\r\n").ConfigureAwait(false);
+            return;
+        }
+        var result = appliedResult ?? new WebMutationResult(false, "Broadcast not found.");
+        result = result with { Resolution = decision.Resolution.ToString() };
         var status = result.Changed ? (200, "OK") : (404, "Not Found");
         if (status.Item1 == 200) MarkMutationProcessed(request);
         var bytes = JsonSerializer.SerializeToUtf8Bytes(new { apiVersion = WebApiRoutes.Version, result }, JsonOptions);
@@ -1423,8 +1481,8 @@ public sealed partial class LocalWebServer : IDisposable
         }
     }
 
-    private sealed record FavouriteMutation(bool Favourite);
-    private sealed record ListeningStatusMutation(bool Played);
+    private sealed record FavouriteMutation(bool Favourite, DateTimeOffset? CapturedAt = null);
+    private sealed record ListeningStatusMutation(bool Played, DateTimeOffset? CapturedAt = null);
     private sealed record QueueAddMutation(long EpisodeId, bool PlayNext = false);
     private sealed record QueueMoveMutation(int Direction);
 

@@ -28,6 +28,7 @@ public sealed class WebServerOptions
     public IReadOnlyList<WebPairedDesktopClient> PairedDesktopClients { get; init; } = Array.Empty<WebPairedDesktopClient>();
     public Action<WebPairedDesktopClient>? PairedDesktopClientAdded { get; init; }
     public string MutationLedgerPath { get; init; } = string.Empty;
+    public string PersonalStateDecisionLedgerPath { get; init; } = string.Empty;
     public Func<WebScheduledBackupStatus>? ScheduledBackupStatus { get; init; }
 }
 
@@ -786,7 +787,12 @@ public sealed record WebJobSummary(
     DateTimeOffset? StartedAt,
     DateTimeOffset? FinishedAt);
 
-public sealed record WebMutationResult(bool Changed, string Message, WebEpisode? Episode = null);
+public sealed record WebMutationResult(
+    bool Changed,
+    string Message,
+    WebEpisode? Episode = null,
+    bool Conflict = false,
+    string Resolution = "");
 
 public sealed record WebJobActionResult(bool Changed, string Message);
 

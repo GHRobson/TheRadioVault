@@ -230,6 +230,16 @@ internal sealed class WebMutationLedger
         return true;
     }
 
+    public static string GetClientId(HttpRequest request)
+    {
+        if (!request.Headers.TryGetValue("X-RadioVault-Client-Id", out var rawClientId)) return "unknown";
+        var normalized = rawClientId.Trim();
+        return normalized.Length is >= 8 and <= 128 &&
+               normalized.All(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.')
+            ? normalized
+            : "unknown";
+    }
+
     private static bool TryGetIdentity(
         HttpRequest request,
         out string key,
@@ -237,15 +247,8 @@ internal sealed class WebMutationLedger
         out string mutationId)
     {
         key = string.Empty;
-        clientId = "unknown";
+        clientId = GetClientId(request);
         if (!TryGetMutationId(request, out mutationId)) return false;
-        if (request.Headers.TryGetValue("X-RadioVault-Client-Id", out var rawClientId))
-        {
-            var normalized = rawClientId.Trim();
-            if (normalized.Length is >= 8 and <= 128 &&
-                normalized.All(ch => char.IsLetterOrDigit(ch) || ch is '-' or '_' or '.'))
-                clientId = normalized;
-        }
         key = clientId + "|" + mutationId;
         return true;
     }

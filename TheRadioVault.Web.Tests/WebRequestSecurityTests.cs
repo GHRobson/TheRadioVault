@@ -10,7 +10,9 @@ internal static class WebRequestSecurityTests
     [
         ("Request authorization accepts only server or paired credentials", RequestAuthorizationAcceptsTrustedCredentials),
         ("Desktop pairing expires and normalizes trusted clients", DesktopPairingExpiresAndNormalizesClients),
-        ("Mutation ledger validates ids, persists acknowledgements and evicts oldest entries", MutationLedgerPersistsAndEvicts)
+        ("Mutation ledger validates ids, persists acknowledgements and evicts oldest entries", MutationLedgerPersistsAndEvicts),
+        ("Conflict matrix defines progress, personal-state, Moment and queue authority", ConflictMatrixDefinesEveryPersonalStateDomain),
+        ("Offline decisions converge when devices reconnect in either order", OfflineDecisionsConvergeAcrossReconnectOrder)
     ];
 
     private static void RequestAuthorizationAcceptsTrustedCredentials()
@@ -97,6 +99,77 @@ internal static class WebRequestSecurityTests
         finally
         {
             try { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); } catch { }
+        }
+    }
+
+    private static void ConflictMatrixDefinesEveryPersonalStateDomain()
+    {
+        var received = new DateTimeOffset(2026, 8, 13, 12, 0, 0, TimeSpan.Zero);
+        var canonical = received.AddMinutes(-5);
+        Equal(WebConflictResolution.Accept,
+            PersonalStateConflictPolicy.Decide(WebConflictDomain.Progress, received.AddMinutes(-1), received, canonical).Resolution);
+        Equal(WebConflictResolution.RejectStale,
+            PersonalStateConflictPolicy.Decide(WebConflictDomain.Favourite, received.AddMinutes(-10), received, canonical).Resolution);
+        Equal(WebConflictResolution.Accept,
+            PersonalStateConflictPolicy.Decide(WebConflictDomain.ListeningStatus, received.AddMinutes(-1), received, canonical).Resolution);
+        Equal(WebConflictResolution.Append,
+            PersonalStateConflictPolicy.Decide(WebConflictDomain.Moment, received, received, canonical).Resolution);
+        Equal(WebConflictResolution.ServerAuthoritative,
+            PersonalStateConflictPolicy.Decide(WebConflictDomain.Queue, received, received, canonical).Resolution);
+        Equal(WebConflictResolution.RejectClockSkew,
+            PersonalStateConflictPolicy.Decide(WebConflictDomain.Favourite, received.AddMinutes(6), received, canonical).Resolution);
+    }
+
+    private static void OfflineDecisionsConvergeAcrossReconnectOrder()
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "RadioVaultWebTests", Guid.NewGuid().ToString("N"));
+        try
+        {
+            var earlier = new DateTimeOffset(2026, 8, 13, 8, 0, 0, TimeSpan.Zero);
+            var later = earlier.AddHours(1);
+            var received = later.AddHours(2);
+
+            var firstPath = Path.Combine(directory, "first.json");
+            var first = new WebPersonalStateDecisionLedger(firstPath);
+            Equal(WebConflictResolution.Accept,
+                Apply(first, false, later, received, "iphone-01", "newer").Resolution);
+            Equal(WebConflictResolution.RejectStale,
+                Apply(first, true, earlier, received.AddSeconds(1), "laptop-01", "older").Resolution);
+
+            var secondPath = Path.Combine(directory, "second.json");
+            var second = new WebPersonalStateDecisionLedger(secondPath);
+            Equal(WebConflictResolution.Accept,
+                Apply(second, true, earlier, received, "laptop-01", "older").Resolution);
+            Equal(WebConflictResolution.Accept,
+                Apply(second, false, later, received.AddSeconds(1), "iphone-01", "newer").Resolution);
+
+            var reloaded = new WebPersonalStateDecisionLedger(secondPath);
+            Equal(WebConflictResolution.RejectStale,
+                Apply(reloaded, true, earlier, received.AddSeconds(2), "laptop-01", "old-retry").Resolution);
+        }
+        finally
+        {
+            try { if (Directory.Exists(directory)) Directory.Delete(directory, recursive: true); } catch { }
+        }
+
+        static WebConflictDecision Apply(
+            WebPersonalStateDecisionLedger ledger,
+            bool value,
+            DateTimeOffset capturedAt,
+            DateTimeOffset receivedAt,
+            string clientId,
+            string mutationId)
+        {
+            return ledger.TryApply(
+                WebConflictDomain.Favourite,
+                42,
+                value ? "true" : "false",
+                capturedAt,
+                receivedAt,
+                clientId,
+                mutationId,
+                () => new WebMutationResult(true, "Applied"),
+                out _);
         }
     }
 
