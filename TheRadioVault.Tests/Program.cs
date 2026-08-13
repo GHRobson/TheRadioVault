@@ -79,6 +79,7 @@ var tests = new (string Name, Action Run)[]
     }),
     ("Scheduled backups are verified and report their next run", ScheduledBackupsAreVerified),
     ("RSS archive inbox baselines, encrypts and deduplicates private feeds", RssArchiveInboxIsSafeAndIncremental),
+    ("Backup restore rehearsal validates a disposable clean-server restore", BackupRestoreRehearsalValidatesCleanRestore),
     ("Moment deduplication keeps one near-identical save", () =>
     {
         True(MomentDeduplicationPolicy.IsEquivalent("BENNINGTON-2026-06-22", 4_498_945, "The old slave hanging tree", "", "BENNINGTON-2026-06-22", 4_498_000, "The old slave hanging tree", ""));
@@ -374,7 +375,8 @@ static void ScheduledBackupsAreVerified()
                 stream.Write([1, 2, 3, 4]);
                 return destination;
             },
-            backupDirectory: root);
+            backupDirectory: root,
+            verifyBackup: _ => true);
 
         var completed = scheduler.RunIfDueAsync(force: true).GetAwaiter().GetResult();
         True(completed.LastBackupVerified);
@@ -504,6 +506,62 @@ static void RssArchiveInboxIsSafeAndIncremental()
     }
     finally
     {
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void BackupRestoreRehearsalValidatesCleanRestore()
+{
+    var root = Path.Combine(Path.GetTempPath(), "RadioVaultRestoreRehearsalTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var databasePath = Path.Combine(root, "radio_vault.db");
+        var database = new SqliteDatabase(databasePath);
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        {
+            using var collection = connection.CreateCommand();
+            collection.CommandText = "INSERT INTO collections(name,sort_name) VALUES('Rehearsal Show','Rehearsal Show') RETURNING id";
+            var collectionId = Convert.ToInt64(collection.ExecuteScalar());
+            using var episode = connection.CreateCommand();
+            episode.CommandText = "INSERT INTO episodes(collection_id,title,status,date_added,updated_at) VALUES($collection,'Restore rehearsal','Unplayed',$now,$now)";
+            episode.Parameters.AddWithValue("$collection", collectionId);
+            episode.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            episode.ExecuteNonQuery();
+        }
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+        var backupPath = Path.Combine(root, "verified.trvbackup");
+        using (var archive = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            archive.CreateEntryFromFile(databasePath, "radio_vault.db");
+            var artwork = archive.CreateEntry("Artwork/rehearsal.png");
+            using var artworkStream = artwork.Open();
+            artworkStream.Write([1, 2, 3]);
+        }
+
+        var result = new BackupRestoreRehearsalService().Rehearse(backupPath);
+        True(result.CanRestore);
+        Equal("ok", result.QuickCheck);
+        Equal(0, result.ForeignKeyViolations);
+        True(result.SchemaVersion > 0);
+        True(result.TableCount > 0);
+        Equal(1L, result.BroadcastCount);
+        Equal(1, result.ArtworkFiles);
+
+        var invalidPath = Path.Combine(root, "invalid.trvbackup");
+        using (var archive = ZipFile.Open(invalidPath, ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("radio_vault.db");
+            using var stream = entry.Open();
+            stream.Write([1, 2, 3, 4]);
+        }
+        True(!new BackupRestoreRehearsalService().Verify(invalidPath));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
     }
 }

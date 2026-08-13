@@ -1,4 +1,3 @@
-using System.IO.Compression;
 using TheRadioVault.Web.Models;
 
 namespace TheRadioVault.Services;
@@ -38,7 +37,7 @@ public sealed class ScheduledBackupService : IDisposable
                 "TheRadioVault",
                 "Backups")
             : Path.GetFullPath(backupDirectory);
-        _verifyBackup = verifyBackup ?? Verify;
+        _verifyBackup = verifyBackup ?? (path => new BackupRestoreRehearsalService().Verify(path));
         var latest = FindLatestBackup();
         _status = new WebScheduledBackupStatus(
             Enabled: false,
@@ -155,17 +154,4 @@ public sealed class ScheduledBackupService : IDisposable
         }
     }
 
-    private static bool Verify(string path)
-    {
-        try
-        {
-            using var archive = ZipFile.OpenRead(path);
-            var database = archive.GetEntry("radio_vault.db");
-            return database is { Length: > 0 };
-        }
-        catch (Exception exception) when (exception is IOException or InvalidDataException or UnauthorizedAccessException)
-        {
-            return false;
-        }
-    }
 }
