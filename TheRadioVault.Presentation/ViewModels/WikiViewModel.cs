@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.Windows.Input;
 using TheRadioVault.Application.Abstractions;
 using TheRadioVault.Application.Models;
+using TheRadioVault.Core.Domain;
 using TheRadioVault.Presentation.Infrastructure;
 using TheRadioVault.Services.Contracts;
 using TheRadioVault.Services.Models;
@@ -15,6 +16,7 @@ public sealed class WikiViewModel : ObservableObject
     private readonly IWikiPackTransferService _packs;
     private readonly IFileSelectionService _files;
     private Func<long, Task>? _openBroadcastInfo;
+    private Func<ArchiveEntityLink, Task>? _openEntityLink;
     private readonly AsyncCommand _saveCommand;
     private readonly AsyncCommand _revertCommand;
     private readonly AsyncCommand _applyImportCommand;
@@ -211,6 +213,8 @@ public sealed class WikiViewModel : ObservableObject
 
     public void SetOpenBroadcastInfoHandler(Func<long, Task> handler)
         => _openBroadcastInfo = handler ?? throw new ArgumentNullException(nameof(handler));
+    public void SetOpenEntityLinkHandler(Func<ArchiveEntityLink, Task> handler)
+        => _openEntityLink = handler ?? throw new ArgumentNullException(nameof(handler));
     public ObservableCollection<WikiTimelineExplorerEvent> FilteredTimelineEvents { get; } = new();
     public ObservableCollection<WikiTimelineBroadcastLink> TimelineLinks { get; } = new();
     public ObservableCollection<WikiPageSummary> OrphanPages { get; } = new();
@@ -558,9 +562,7 @@ public sealed class WikiViewModel : ObservableObject
         var all = await _wiki.BrowseAsync(new WikiBrowseQuery(Limit: 5000)).ConfigureAwait(true);
         _allPages.Clear();
         _allPages.AddRange(all);
-        InlineLinkTargets.Clear();
-        foreach (var title in all.Select(x => x.Title).Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Length))
-            InlineLinkTargets.Add(title);
+        ReplaceInlineLinkTargets(_document);
         UpdateSearchSuggestions();
         ReplaceDashboardCollection(FeaturedPages, all
             .OrderByDescending(x => string.Equals(x.Status, "Published", StringComparison.OrdinalIgnoreCase))
@@ -793,10 +795,7 @@ public sealed class WikiViewModel : ObservableObject
     private void ApplyDocument(WikiPageDocument page)
     {
         _document = page;
-        InlineLinkTargets.Clear();
-        foreach (var title in _allPages.Where(x => x.PageId != page.PageId).Select(x => x.Title)
-                     .Distinct(StringComparer.OrdinalIgnoreCase).OrderByDescending(x => x.Length))
-            InlineLinkTargets.Add(title);
+        ReplaceInlineLinkTargets(page);
         _editorPageId = page.PageId;
         _editorRevision = page.Revision;
         EditorTitle = page.Title;
@@ -811,6 +810,22 @@ public sealed class WikiViewModel : ObservableObject
         IsReadingMode = true;
         RaiseReaderState();
         RaiseEditorState();
+    }
+
+    private void ReplaceInlineLinkTargets(WikiPageDocument? page)
+    {
+        InlineLinkTargets.Clear();
+        var targets = (page?.EntityLinks ?? [])
+            .Where(value => value.Relationship.StartsWith("inline", StringComparison.OrdinalIgnoreCase))
+            .Select(value => value.Label)
+            .Concat(_allPages
+                .Where(value => page is null || value.PageId != page.PageId)
+                .Select(value => value.Title))
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderByDescending(value => value.Length);
+        foreach (var title in targets)
+            InlineLinkTargets.Add(title);
     }
 
     private void ReplaceEvidence(WikiPageDocument? page)
@@ -1212,6 +1227,10 @@ public sealed class WikiViewModel : ObservableObject
             if (normalized.StartsWith("wiki:", StringComparison.OrdinalIgnoreCase)) normalized = normalized[5..];
             normalized = Uri.UnescapeDataString(normalized).Replace('-', ' ');
             if (normalized.Length == 0) return;
+            var typedLink = (_document?.EntityLinks ?? []).FirstOrDefault(value =>
+                value.Relationship.StartsWith("inline", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(value.Label.Trim(), normalized, StringComparison.CurrentCultureIgnoreCase));
+            if (typedLink is not null && await TryOpenEntityLinkAsync(typedLink).ConfigureAwait(true)) return;
             var candidates = await _wiki.BrowseAsync(new WikiBrowseQuery(normalized, Limit: 50)).ConfigureAwait(true);
             var page = candidates.FirstOrDefault(x => string.Equals(x.Slug, target?.Replace("wiki:", string.Empty, StringComparison.OrdinalIgnoreCase), StringComparison.OrdinalIgnoreCase))
                 ?? candidates.FirstOrDefault(x => string.Equals(x.Title, normalized, StringComparison.OrdinalIgnoreCase))
@@ -1226,6 +1245,28 @@ public sealed class WikiViewModel : ObservableObject
             else await OpenPageAsync(page, true).ConfigureAwait(true);
         }
         catch (Exception exception) { SetError(exception); }
+    }
+
+    private async Task<bool> TryOpenEntityLinkAsync(ArchiveEntityLink link)
+    {
+        var destination = ArchiveEntityNavigation.Resolve(link);
+        if (destination.Destination == ArchiveEntityDestination.Explore &&
+            Guid.TryParse(destination.TargetId, out var pageId) &&
+            _allPages.FirstOrDefault(value => value.PageId == pageId) is { } page)
+        {
+            await OpenPageAsync(page, true).ConfigureAwait(true);
+            return true;
+        }
+        if (destination.Destination == ArchiveEntityDestination.Broadcast &&
+            long.TryParse(destination.TargetId, out var episodeId) &&
+            _openBroadcastInfo is not null)
+        {
+            await _openBroadcastInfo(episodeId).ConfigureAwait(true);
+            return true;
+        }
+        if (_openEntityLink is null) return false;
+        await _openEntityLink(link).ConfigureAwait(true);
+        return true;
     }
 
     public Task OpenEntityAsync(string entity)

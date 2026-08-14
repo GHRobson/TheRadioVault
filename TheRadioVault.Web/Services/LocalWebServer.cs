@@ -415,21 +415,29 @@ public sealed partial class LocalWebServer : IDisposable
                     return;
                 }
                 using var request = requestRead.Request;
-                if (!WebApiRouteResolver.TryParseMethod(request.Method, out var requestMethod))
+                var provisional = WebRequestLifecycleResolver.Resolve(
+                    request.Method, request.Target, secure, _options.SecureAccessEnabled, authorized: true);
+                if (provisional.Kind == WebRequestLifecycleKind.InvalidMethod)
                 {
                     await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Only GET, HEAD and selected POST actions are supported.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
                     return;
                 }
-                var isGet = requestMethod == WebRequestMethod.Get;
-                var isHead = requestMethod == WebRequestMethod.Head;
-                var isPost = requestMethod == WebRequestMethod.Post;
-
-                var uri = new Uri((secure ? "https" : "http") + "://radiovault.local" + request.Target);
-                var query = ParseQuery(uri.Query);
-
-                if (uri.AbsolutePath.Equals(WebApiRoutes.FederationPair, StringComparison.OrdinalIgnoreCase))
+                if (provisional.Kind == WebRequestLifecycleKind.MalformedTarget || provisional.Context is null)
                 {
-                    if (!isPost)
+                    await WriteTextResponseAsync(stream, 400, "Bad Request", "The HTTP request target is malformed.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
+                    return;
+                }
+
+                var lifecycle = WebRequestLifecycleResolver.Resolve(
+                    request.Method,
+                    request.Target,
+                    secure,
+                    _options.SecureAccessEnabled,
+                    IsAuthorizedRequest(request, provisional.Context.Query));
+                var context = lifecycle.Context!;
+                if (lifecycle.Kind == WebRequestLifecycleKind.Pairing)
+                {
+                    if (!context.IsPost)
                     {
                         await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Remote-client pairing requires POST.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
                         return;
@@ -437,76 +445,66 @@ public sealed partial class LocalWebServer : IDisposable
                     await HandleDesktopPairingAsync(stream, request, secure, cancellationToken).ConfigureAwait(false);
                     return;
                 }
-
-                if (!IsAuthorizedRequest(request, query))
+                if (lifecycle.Kind == WebRequestLifecycleKind.Unauthorized)
                 {
                     await WriteTextResponseAsync(stream, 401, "Unauthorized", "A valid Radio Vault access link or remote-client token is required.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
                     return;
                 }
-
-                if (_options.SecureAccessEnabled && !secure)
+                if (lifecycle.Kind == WebRequestLifecycleKind.SecureSetup)
                 {
-                    if ((isGet || isHead) && uri.AbsolutePath.Equals("/secure-setup", StringComparison.OrdinalIgnoreCase))
-                    {
-                        const string setupHeaders = "Cache-Control: no-store\r\nContent-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'\r\n";
-                        var setupHtml = BuildSecureSetupHtml(request);
-                        await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(setupHtml), "text/html; charset=utf-8", isHead, cancellationToken, setupHeaders).ConfigureAwait(false);
-                        return;
-                    }
-                    if ((isGet || isHead) && uri.AbsolutePath.Equals("/secure-profile.mobileconfig", StringComparison.OrdinalIgnoreCase))
-                    {
-                        const string profileHeaders = "Cache-Control: no-store\r\nContent-Disposition: attachment; filename=RadioVault-Secure-Offline-Access.mobileconfig\r\n";
-                        await WriteBytesResponseAsync(stream, 200, "OK", _options.MobileConfigurationProfile, "application/x-apple-aspen-config", isHead, cancellationToken, profileHeaders).ConfigureAwait(false);
-                        return;
-                    }
-                    if ((isGet || isHead) && uri.AbsolutePath.Equals("/secure-root.cer", StringComparison.OrdinalIgnoreCase))
-                    {
-                        const string certificateHeaders = "Cache-Control: no-store\r\nContent-Disposition: attachment; filename=RadioVault-Local-Root-CA.cer\r\n";
-                        await WriteBytesResponseAsync(stream, 200, "OK", _options.RootCertificateDer, "application/x-x509-ca-cert", isHead, cancellationToken, certificateHeaders).ConfigureAwait(false);
-                        return;
-                    }
-
+                    const string setupHeaders = "Cache-Control: no-store\r\nContent-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; base-uri 'none'; frame-ancestors 'none'\r\n";
+                    var setupHtml = BuildSecureSetupHtml(request);
+                    await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(setupHtml), "text/html; charset=utf-8", context.IsHead, cancellationToken, setupHeaders).ConfigureAwait(false);
+                    return;
+                }
+                if (lifecycle.Kind == WebRequestLifecycleKind.SecureProfile)
+                {
+                    const string profileHeaders = "Cache-Control: no-store\r\nContent-Disposition: attachment; filename=RadioVault-Secure-Offline-Access.mobileconfig\r\n";
+                    await WriteBytesResponseAsync(stream, 200, "OK", _options.MobileConfigurationProfile, "application/x-apple-aspen-config", context.IsHead, cancellationToken, profileHeaders).ConfigureAwait(false);
+                    return;
+                }
+                if (lifecycle.Kind == WebRequestLifecycleKind.SecureRootCertificate)
+                {
+                    const string certificateHeaders = "Cache-Control: no-store\r\nContent-Disposition: attachment; filename=RadioVault-Local-Root-CA.cer\r\n";
+                    await WriteBytesResponseAsync(stream, 200, "OK", _options.RootCertificateDer, "application/x-x509-ca-cert", context.IsHead, cancellationToken, certificateHeaders).ConfigureAwait(false);
+                    return;
+                }
+                if (lifecycle.Kind == WebRequestLifecycleKind.RedirectToSecure)
+                {
                     await WriteRedirectAsync(stream, BuildSecureTarget(request), cancellationToken).ConfigureAwait(false);
                     return;
                 }
-
-                if (secure && (isGet || isHead) && uri.AbsolutePath.Equals("/manifest.webmanifest", StringComparison.OrdinalIgnoreCase))
+                if (lifecycle.Kind == WebRequestLifecycleKind.WebManifest)
                 {
                     const string manifestHeaders = "Cache-Control: no-cache\r\n";
-                    await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(BuildWebManifest()), "application/manifest+json; charset=utf-8", isHead, cancellationToken, manifestHeaders).ConfigureAwait(false);
+                    await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(BuildWebManifest()), "application/manifest+json; charset=utf-8", context.IsHead, cancellationToken, manifestHeaders).ConfigureAwait(false);
                     return;
                 }
-
-                // The shell itself is also allowed when secure access is deliberately
-                // disabled (for example, a same-PC browser). Its brand artwork must
-                // therefore remain available on that authenticated HTTP surface too.
-                if ((isGet || isHead) && TryGetWebAppIcon(uri.AbsolutePath, out var iconBytes))
+                if (lifecycle.Kind == WebRequestLifecycleKind.AppIcon && TryGetWebAppIcon(context.Path, out var iconBytes))
                 {
                     const string iconHeaders = "Cache-Control: public, max-age=86400\r\n";
-                    await WriteBytesResponseAsync(stream, 200, "OK", iconBytes, "image/png", isHead, cancellationToken, iconHeaders).ConfigureAwait(false);
+                    await WriteBytesResponseAsync(stream, 200, "OK", iconBytes, "image/png", context.IsHead, cancellationToken, iconHeaders).ConfigureAwait(false);
                     return;
                 }
-
-                if (secure && (isGet || isHead) && uri.AbsolutePath.Equals("/service-worker.js", StringComparison.OrdinalIgnoreCase))
+                if (lifecycle.Kind == WebRequestLifecycleKind.ServiceWorker)
                 {
                     const string workerHeaders = "Cache-Control: no-cache\r\nService-Worker-Allowed: /\r\n";
-                    await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(ServiceWorkerJavaScript), "text/javascript; charset=utf-8", isHead, cancellationToken, workerHeaders).ConfigureAwait(false);
+                    await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(ServiceWorkerJavaScript), "text/javascript; charset=utf-8", context.IsHead, cancellationToken, workerHeaders).ConfigureAwait(false);
                     return;
                 }
-
-                if ((isGet || isHead) && (uri.AbsolutePath == "/" || uri.AbsolutePath.Equals("/index.html", StringComparison.OrdinalIgnoreCase) || uri.AbsolutePath.StartsWith("/broadcast/", StringComparison.OrdinalIgnoreCase)))
+                if (lifecycle.Kind == WebRequestLifecycleKind.WebShell)
                 {
                     var securityHeaders = (secure ? "Cache-Control: no-cache\r\n" : "Cache-Control: no-store\r\n") + "Content-Security-Policy: default-src 'self'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'self'; worker-src 'self'; base-uri 'none'; frame-ancestors 'none'\r\n";
-                    await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(BuildIndexHtml()), "text/html; charset=utf-8", isHead, cancellationToken, securityHeaders).ConfigureAwait(false);
+                    await WriteBytesResponseAsync(stream, 200, "OK", Encoding.UTF8.GetBytes(BuildIndexHtml()), "text/html; charset=utf-8", context.IsHead, cancellationToken, securityHeaders).ConfigureAwait(false);
                     return;
                 }
 
                 if (await TryHandleAuthorizedRouteAsync(
                         stream,
-                        uri.AbsolutePath,
-                        query,
+                        context.Path,
+                        context.Query,
                         request,
-                        requestMethod,
+                        context.Method,
                         cancellationToken).ConfigureAwait(false))
                 {
                     return;
@@ -649,7 +647,7 @@ public sealed partial class LocalWebServer : IDisposable
 
             var snapshot = new WebFederationBootstrap(
                 BuildServerInfo(),
-                BuildLibrarySummary(episodes, showCount),
+                WebArchiveDiscoveryProjection.BuildLibrarySummary(episodes, showCount),
                 queueCount,
                 DateTimeOffset.UtcNow);
             var bytes = JsonSerializer.SerializeToUtf8Bytes(new
@@ -684,20 +682,18 @@ public sealed partial class LocalWebServer : IDisposable
                 ? Math.Clamp(parsedLimit, 1, 50)
                 : 12;
             var episodes = _archive.GetEpisodes();
-            var shows = WebEpisodeQuery.GetShows(episodes)
-                .Select(x => new WebShowSummary(x.Show, x.Count))
-                .ToArray();
+            var discovery = WebArchiveDiscoveryProjection.Build(episodes, limit, DateTime.Today);
             var bootstrap = new WebAnywhereBootstrap
             {
                 Server = BuildServerInfo(),
-                Library = BuildLibrarySummary(episodes, shows.Length),
-                Shows = shows,
-                Years = WebEpisodeQuery.GetYears(episodes),
-                ContinueListening = WebEpisodeQuery.Apply(episodes, "continue", string.Empty, string.Empty, limit, DateTime.Today),
-                Recent = WebEpisodeQuery.Apply(episodes, "recent", string.Empty, string.Empty, limit, DateTime.Today),
-                Favourites = WebEpisodeQuery.Apply(episodes, "favorites", string.Empty, string.Empty, limit, DateTime.Today),
-                OnThisDay = WebEpisodeQuery.Apply(episodes, "onthisday", string.Empty, string.Empty, limit, DateTime.Today),
-                Unheard = WebEpisodeQuery.Apply(episodes, "recent", string.Empty, string.Empty, null, null, null, "unplayed", limit, DateTime.Today),
+                Library = discovery.Library,
+                Shows = discovery.Shows,
+                Years = discovery.Years,
+                ContinueListening = discovery.ContinueListening,
+                Recent = discovery.Recent,
+                Favourites = discovery.Favourites,
+                OnThisDay = discovery.OnThisDay,
+                Unheard = discovery.Unheard,
                 Playback = _archive.GetPlaybackSession(),
                 Queue = _archive.GetQueue().Take(200).ToArray(),
                 GeneratedAt = DateTimeOffset.UtcNow
@@ -873,16 +869,6 @@ public sealed partial class LocalWebServer : IDisposable
                 LanFederationEnabled,
                 LanFederationEnabled ? $"UDP discovery is active on port {_options.LanDiscoveryPort}." : "Discovery is disabled.")
         };
-
-    private static WebLibrarySummary BuildLibrarySummary(IReadOnlyList<WebEpisode> episodes, int showCount)
-        => new(
-            episodes.Count,
-            showCount,
-            episodes.Count(x => x.Favourite),
-            episodes.Count(x => x.PositionMs > 0 && !x.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase)),
-            episodes.Count(x => x.Status.Equals("Completed", StringComparison.OrdinalIgnoreCase)),
-            episodes.Select(x => x.AirDate).Max(),
-            episodes.Select(x => x.LastPlayedAt).Max());
 
     private async Task HandleEpisodesApiAsync(Stream stream, IReadOnlyDictionary<string, string> query, bool headOnly, CancellationToken cancellationToken, bool forceSearchView = false, string? forcedView = null)
     {
@@ -1352,17 +1338,6 @@ public sealed partial class LocalWebServer : IDisposable
 
     private static Task WriteRedirectAsync(Stream stream, string location, CancellationToken cancellationToken)
         => WebHttpResponseWriter.WriteRedirectAsync(stream, location, cancellationToken);
-
-    private static IReadOnlyDictionary<string, string> ParseQuery(string query)
-    {
-        var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var pair in query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries))
-        {
-            var parts = pair.Split('=', 2);
-            result[Uri.UnescapeDataString(parts[0].Replace('+', ' '))] = parts.Length > 1 ? Uri.UnescapeDataString(parts[1].Replace('+', ' ')) : "";
-        }
-        return result;
-    }
 
     private static bool TryParseRange(string value, long fileLength, out long start, out long end)
     {

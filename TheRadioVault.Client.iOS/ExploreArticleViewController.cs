@@ -1,6 +1,7 @@
 using Foundation;
 using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Models;
+using TheRadioVault.Core.Domain;
 using UIKit;
 
 namespace TheRadioVault.Client.iOS;
@@ -152,9 +153,12 @@ public sealed class ExploreArticleViewController : SessionTableViewController
     }
 
     private IReadOnlyList<string> InlineLinkTargets()
-        => _linkPages
+        => (_document?.EntityLinks ?? [])
+            .Where(value => value.Relationship.StartsWith("inline", StringComparison.OrdinalIgnoreCase))
+            .Select(value => value.Label)
+            .Concat(_linkPages
             .Where(value => value.PageId != _summary.PageId)
-            .Select(value => value.Title)
+            .Select(value => value.Title))
             .Concat(Session.LibraryCollectionsFor(false).Select(value => value.CollectionName))
             .Where(value => !string.IsNullOrWhiteSpace(value) && value.Trim().Length >= 3)
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
@@ -164,6 +168,15 @@ public sealed class ExploreArticleViewController : SessionTableViewController
     private async Task OpenInlineLinkAsync(string target)
     {
         var normalized = NormalizeTarget(target);
+        var typedLink = (_document?.EntityLinks ?? []).FirstOrDefault(value =>
+            value.Relationship.StartsWith("inline", StringComparison.OrdinalIgnoreCase) &&
+            NormalizeTarget(value.Label) == normalized);
+        if (typedLink is not null)
+        {
+            await OpenEntityLinkAsync(typedLink).ConfigureAwait(false);
+            return;
+        }
+
         var page = _linkPages.FirstOrDefault(value =>
             NormalizeTarget(value.Title) == normalized || NormalizeTarget(value.Slug) == normalized);
         if (page is not null)
@@ -185,6 +198,55 @@ public sealed class ExploreArticleViewController : SessionTableViewController
         await Task.Yield();
         BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
             new EntityBroadcastsViewController(Session, target), true));
+    }
+
+    private async Task OpenEntityLinkAsync(ArchiveEntityLink link)
+    {
+        var target = ArchiveEntityNavigation.Resolve(link);
+        if (target.Destination == ArchiveEntityDestination.Broadcast &&
+            long.TryParse(target.TargetId, out var episodeId))
+        {
+            var broadcast = await Session.LoadBroadcastAsync(episodeId).ConfigureAwait(false);
+            if (broadcast is not null)
+            {
+                BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+                    new BroadcastDetailsViewController(Session, broadcast), true));
+                return;
+            }
+        }
+        if (target.Destination == ArchiveEntityDestination.LibraryShow &&
+            int.TryParse(target.TargetId, out var collectionId))
+        {
+            BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+                new ShowLibraryViewController(Session, collectionId, target.Label), true));
+            return;
+        }
+        if (Guid.TryParse(target.TargetId, out var pageId))
+        {
+            var page = _linkPages.FirstOrDefault(value => value.PageId == pageId);
+            if (page is not null)
+            {
+                BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+                    new ExploreArticleViewController(Session, page), true));
+                return;
+            }
+        }
+        await OpenInlineLinkFallbackAsync(target.Label).ConfigureAwait(false);
+    }
+
+    private async Task OpenInlineLinkFallbackAsync(string label)
+    {
+        await Task.Yield();
+        BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+            new EntityBroadcastsViewController(Session, label), true));
+    }
+
+    protected override void ReloadSession()
+    {
+        // Playback and catalogue synchronization do not change the immutable
+        // article currently being read. Rebuilding its attributed text and
+        // image cells on every sync tick caused visible flashes and scroll
+        // jumps. Explicit article refreshes still update the table in LoadAsync.
     }
 
     private static string NormalizeTarget(string value)

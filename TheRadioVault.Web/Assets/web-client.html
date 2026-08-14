@@ -4422,6 +4422,24 @@
         raw = raw.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, target, label) => linked(target, label));
         raw = raw.replace(/\[([^\]]+)\]\((wiki:[^)]+)\)/g, (_, label, target) => linked(target.slice(5), label));
         raw = raw.replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, (_, label, url) => token(`<a href="${esc(url)}" target="_blank" rel="noreferrer">${esc(label)}</a>`));
+        (wikiCurrentPage?.entityLinks || [])
+          .filter((link) => String(link.relationship || "").toLowerCase().startsWith("inline"))
+          .slice()
+          .sort((a,b) => String(b.label || "").length - String(a.label || "").length)
+          .forEach((link) => {
+            const label = String(link.label || "").trim();
+            if (label.length < 3) return;
+            const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), expression = new RegExp(`(^|[^A-Za-z0-9])(${escaped})(?=$|[^A-Za-z0-9])`, "gi");
+            raw = raw.replace(expression, (_, before, shown) => {
+              const kind = String(link.kind || "").toLowerCase(), target = String(link.targetId || "");
+              if (kind === "broadcast" && /^\d+$/.test(target))
+                return `${before}${token(`<button class="wikiLink ghost" data-info="${Number(target)}">${esc(shown)}</button>`)}`;
+              const page = wikiPages.find((item) => String(item.pageId) === target);
+              if (page)
+                return `${before}${token(`<button class="wikiLink ghost" data-wiki-page="${esc(page.pageId)}">${esc(shown)}</button>`)}`;
+              return `${before}${token(`<button class="wikiLink ghost" data-wiki-entity="${esc(label)}">${esc(shown)}</button>`)}`;
+            });
+          });
         wikiPages.slice().sort((a,b) => String(b.title || "").length - String(a.title || "").length).forEach((page) => {
           const title = String(page.title || "").trim(); if (title.length < 3 || wikiCurrentPage && String(page.pageId) === String(wikiCurrentPage.pageId)) return;
           const escaped = title.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), expression = new RegExp(`(^|[^A-Za-z0-9])(${escaped})(?=$|[^A-Za-z0-9])`, "gi");

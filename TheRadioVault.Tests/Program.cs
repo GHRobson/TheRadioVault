@@ -1011,6 +1011,16 @@ static void ArchiveEntityLinksPreserveIdentity()
 
     var personNavigation = ArchiveEntityNavigation.Resolve(person);
     Equal(ArchiveEntityDestination.Explore, personNavigation.Destination);
+    Equal(ArchiveEntityDestination.LibraryShow, ArchiveEntityNavigation.Resolve(show).Destination);
+
+    var showArticle = ArchiveEntityLinkFactory.ForWikiPage(
+        Guid.Parse("b8dd3ea4-f5f1-4ddd-bfb5-1fd29619757d"), "Show", "Bennington history") with
+    {
+        Relationship = "inline"
+    };
+    var showArticleNavigation = ArchiveEntityNavigation.Resolve(showArticle);
+    Equal(ArchiveEntityDestination.Explore, showArticleNavigation.Destination);
+    Equal("b8dd3ea4-f5f1-4ddd-bfb5-1fd29619757d", showArticleNavigation.TargetId);
     Equal("Ron Bennington", personNavigation.Label);
 }
 
@@ -2120,6 +2130,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultArtwork.cs"));
     True(iosArtwork.Contains("session.LoadArtworkAsync", StringComparison.Ordinal));
     True(iosArtwork.Contains("UIViewContentMode.ScaleAspectFill", StringComparison.Ordinal));
+    True(!iosArtwork.Contains("broadcast.Source.ArtworkPath", StringComparison.Ordinal));
 
     var iosTableBase = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SessionTableViewController.cs"));
@@ -2173,6 +2184,14 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(exploreArticle.Contains("LoadExploreImagesAsync", StringComparison.Ordinal));
     True(exploreArticle.Contains("InlineLinkTargets", StringComparison.Ordinal));
     True(exploreArticle.Contains("ShowLibraryViewController", StringComparison.Ordinal));
+    True(exploreArticle.Contains("ArchiveEntityNavigation.Resolve", StringComparison.Ordinal));
+    True(exploreArticle.Contains("LoadBroadcastAsync", StringComparison.Ordinal));
+
+    var desktopExplore = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "WikiViewModel.cs"));
+    True(desktopExplore.Contains("SetOpenEntityLinkHandler", StringComparison.Ordinal));
+    True(desktopExplore.Contains("ArchiveEntityNavigation.Resolve", StringComparison.Ordinal));
+    True(desktopExplore.Contains("TryOpenEntityLinkAsync", StringComparison.Ordinal));
 
     var exploreCells = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreCells.cs"));
@@ -2266,6 +2285,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(knowledgeView.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
     True(knowledgeView.Contains("KnowledgeStatusText", StringComparison.Ordinal));
     True(knowledgeView.Contains("IsLibraryFallback", StringComparison.Ordinal));
+    True(knowledgeView.Contains("KnowledgeCoverageMonthViewController", StringComparison.Ordinal));
+    True(knowledgeView.Contains("RepresentativeEpisodeId", StringComparison.Ordinal));
+    True(knowledgeView.Contains("Missing weekday", StringComparison.Ordinal));
 
     var metadataPills = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "MetadataPillsCell.cs"));
@@ -2733,8 +2755,8 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
     True(web.Contains("height:calc(100dvh - (max(14px, env(safe-area-inset-top)) + 76px))", StringComparison.Ordinal));
     True(web.Contains("class=\"libraryPrimaryAction\"", StringComparison.Ordinal));
     True(web.Contains("/app-icon-180.png?token=__TOKEN__&v=__APP_VERSION__", StringComparison.Ordinal));
-    True(web.Contains("if ((isGet || isHead) && TryGetWebAppIcon", StringComparison.Ordinal));
-    True(!web.Contains("if (secure && (isGet || isHead) && TryGetWebAppIcon", StringComparison.Ordinal));
+    True(web.Contains("WebRequestLifecycleKind.AppIcon", StringComparison.Ordinal));
+    True(web.Contains("TryGetWebAppIcon(context.Path", StringComparison.Ordinal));
 
     var generator = File.ReadAllText(Path.Combine(
         SourceRoot(), "design", "logo", "generate-brand-assets.py"));
@@ -3516,7 +3538,7 @@ static void OfflineProgressOrderingPreservesNewerManualChanges()
     True(mobileTimeline.Contains("public bool Completed", StringComparison.Ordinal));
     True(mobileSession.Contains("_playbackTimeline.IsCompleted()", StringComparison.Ordinal));
     True(mobileSession.Contains("changed || snapshot.IncrementPlayCount", StringComparison.Ordinal));
-    var playAsync = mobileSession.IndexOf("public async Task PlayAsync", StringComparison.Ordinal);
+    var playAsync = mobileSession.IndexOf("private async Task PlayCoreAsync", StringComparison.Ordinal);
     var flushPrevious = mobileSession.IndexOf(
         "await FlushPlaybackAsync().WaitAsync(cancellationToken).ConfigureAwait(false);",
         playAsync,

@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using TheRadioVault.Client.Mobile.Artwork;
 using TheRadioVault.Client.Mobile.Downloads;
 using TheRadioVault.Client.Mobile.Explore;
 using TheRadioVault.Client.Mobile.Knowledge;
@@ -41,7 +42,7 @@ public sealed class MobileClientSession : IDisposable
     private readonly MobileMetadataSynchronizationCoordinator _metadataSynchronization;
     private readonly MobileExploreQueryCoordinator _exploreQueries;
     private readonly MobileKnowledgeQueryCoordinator _knowledgeQueries;
-    private readonly ConcurrentDictionary<long, Task<byte[]?>> _artworkRequests = new();
+    private readonly MobileArtworkCoordinator _artwork;
     private readonly ConcurrentDictionary<long, WebClientBroadcastDetails> _broadcastDetails = new();
     private readonly ConcurrentDictionary<long, byte> _pendingPlayCountEpisodes = new();
     private MobileMediaProxy? _mediaProxy;
@@ -103,6 +104,9 @@ public sealed class MobileClientSession : IDisposable
             "TheRadioVault",
             "MetadataCache");
         _metadataCache = new MobileMetadataCache(metadataRoot, _server.Connection?.ServerInstanceId ?? string.Empty);
+        _artwork = new MobileArtworkCoordinator(
+            new MobileArtworkTransport(_server),
+            new MobileArtworkStore(_metadataCache));
         _libraryQueries = new MobileLibraryQueryCoordinator(
             new MobileLibraryQueryTransport(_server),
             _metadataCache);
@@ -161,6 +165,36 @@ public sealed class MobileClientSession : IDisposable
     public IReadOnlyList<MobileBroadcastItem> ContinueListening { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> RecentBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> OnThisDay { get; private set; } = [];
+
+    public MobileBroadcastItem? FindBroadcast(long episodeId)
+    {
+        if (episodeId <= 0) return null;
+        if (SelectedBroadcast?.EpisodeId == episodeId) return SelectedBroadcast;
+        return _libraryQueries.FindBroadcast(episodeId);
+    }
+
+    public async Task<MobileBroadcastItem?> LoadBroadcastAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        var cached = FindBroadcast(episodeId);
+        if (cached is not null) return cached;
+        try
+        {
+            return await _libraryQueries
+                .LoadBroadcastAsync(episodeId, IsLiveConnected, cancellationToken)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            System.Diagnostics.Trace.WriteLine($"[iOS broadcast lookup] {exception}");
+            return cached;
+        }
+    }
     public IReadOnlyList<MobileBroadcastItem> UnheardBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> LibraryBroadcasts { get; private set; } = [];
     public IReadOnlyList<MobileBroadcastItem> DownloadedBroadcasts => _downloads.Broadcasts;
@@ -265,23 +299,11 @@ public sealed class MobileClientSession : IDisposable
     public async Task<byte[]?> LoadArtworkAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        if (string.IsNullOrWhiteSpace(broadcast.Source.ArtworkPath)) return null;
-        var task = _artworkRequests.GetOrAdd(
-            broadcast.EpisodeId,
-            episodeId => LoadArtworkCoreAsync(episodeId));
-        var content = await task.ConfigureAwait(false);
-        if (content is null) _artworkRequests.TryRemove(broadcast.EpisodeId, out _);
-        return content;
+        return await _artwork.LoadAsync(broadcast.EpisodeId, IsPaired && IsLiveConnected).ConfigureAwait(false);
     }
 
-    public async Task<byte[]?> LoadArtworkAsync(long episodeId)
-    {
-        if (episodeId <= 0) return null;
-        var task = _artworkRequests.GetOrAdd(episodeId, LoadArtworkCoreAsync);
-        var content = await task.ConfigureAwait(false);
-        if (content is null) _artworkRequests.TryRemove(episodeId, out _);
-        return content;
-    }
+    public Task<byte[]?> LoadArtworkAsync(long episodeId)
+        => _artwork.LoadAsync(episodeId, IsPaired && IsLiveConnected);
 
     public async Task InitializeAsync()
     {
@@ -1410,7 +1432,7 @@ public sealed class MobileClientSession : IDisposable
         _pairing.Forget();
         _metadataCache.Clear();
         _ = _offlineMutationSynchronization.ClearAsync();
-        _artworkRequests.Clear();
+        _artwork.Clear();
         _mediaProxy?.Dispose();
         _mediaProxy = null;
         ContinueListening = [];
@@ -1468,15 +1490,20 @@ public sealed class MobileClientSession : IDisposable
             return;
         }
         if (link.StartMs is { } startMs)
-            broadcast = new MobileBroadcastItem(broadcast.Source with
-            {
-                PositionMs = Math.Max(0, startMs),
-                Completed = false
-            });
+        {
+            await PlayAtAsync(broadcast, startMs).ConfigureAwait(false);
+            return;
+        }
         await PlayAsync(broadcast).ConfigureAwait(false);
     }
 
-    public async Task PlayAsync(MobileBroadcastItem broadcast)
+    public Task PlayAsync(MobileBroadcastItem broadcast)
+        => PlayCoreAsync(broadcast, requestedPositionMs: null);
+
+    public Task PlayAtAsync(MobileBroadcastItem broadcast, long positionMs)
+        => PlayCoreAsync(broadcast, Math.Max(0, positionMs));
+
+    private async Task PlayCoreAsync(MobileBroadcastItem broadcast, long? requestedPositionMs)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
         TracePlayback($"Play requested: episode={broadcast.EpisodeId}; title={broadcast.Title}; paired={IsPaired}; preparing={IsPreparingPlayback}; busy={IsBusy}");
@@ -1521,6 +1548,8 @@ public sealed class MobileClientSession : IDisposable
             {
                 System.Diagnostics.Trace.WriteLine($"[iOS playback summary refresh] {exception}");
             }
+            broadcast = new MobileBroadcastItem(
+                MobilePlaybackStartPosition.Apply(broadcast.Source, requestedPositionMs));
             _offlinePlayback = false;
             _activeDownload = null;
             _ownsPlayback = false;
@@ -2370,25 +2399,6 @@ public sealed class MobileClientSession : IDisposable
             _speed,
             DateTimeOffset.UtcNow,
             _pendingPlayCountEpisodes.ContainsKey(episodeId));
-    }
-
-    private async Task<byte[]?> LoadArtworkCoreAsync(long episodeId)
-    {
-        var cached = _metadataCache.ReadArtwork(episodeId);
-        if (cached is { Length: > 0 }) return cached;
-        if (!IsPaired || !IsLiveConnected) return null;
-        try
-        {
-            var content = await _server.GetArtworkAsync(episodeId).ConfigureAwait(false);
-            if (content.Length == 0) return null;
-            await _metadataCache.SaveArtworkAsync(episodeId, content).ConfigureAwait(false);
-            return content;
-        }
-        catch (Exception exception)
-        {
-            System.Diagnostics.Trace.WriteLine($"[iOS artwork load] {exception}");
-            return null;
-        }
     }
 
     private MobileBroadcastItem ApplyPlaybackProgress(

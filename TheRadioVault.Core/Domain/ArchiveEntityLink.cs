@@ -51,8 +51,10 @@ public static class ArchiveEntityNavigation
         ArgumentNullException.ThrowIfNull(link);
         return link.Kind switch
         {
-            ArchiveEntityKind.Broadcast => new(ArchiveEntityDestination.Broadcast, link.TargetId, link.Label),
-            ArchiveEntityKind.Show => new(ArchiveEntityDestination.LibraryShow, link.TargetId, link.Label),
+            ArchiveEntityKind.Broadcast when long.TryParse(link.TargetId, out _)
+                => new(ArchiveEntityDestination.Broadcast, link.TargetId, link.Label),
+            ArchiveEntityKind.Show when int.TryParse(link.TargetId, out _)
+                => new(ArchiveEntityDestination.LibraryShow, link.TargetId, link.Label),
             _ => new(ArchiveEntityDestination.Explore, link.TargetId, link.Label)
         };
     }

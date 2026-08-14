@@ -107,6 +107,7 @@ public sealed class MainWindowViewModel : ObservableObject, IDisposable
         Research.SetOpenTranscriptionHandler(() => NavigateToAsync("research/transcription"));
         Transcripts.SetOpenResearchHandler(() => NavigateToAsync("research"));
         Wiki.SetOpenBroadcastInfoHandler(OpenBroadcastInfoAsync);
+        Wiki.SetOpenEntityLinkHandler(OpenArchiveEntityAsync);
         foreach (var relatedWiki in new[]
                  {
                      Dashboard.RelatedWiki, Library.RelatedWiki, Search.RelatedWiki, NowPlaying.RelatedWiki,

@@ -24,6 +24,8 @@ var tests = new (string Name, Action Run)[]
     ("Transactional handoff survives repeated device moves", TransactionalHandoffSurvivesRepeatedDeviceMoves)
 }
     .Concat(WebApiRouteResolverTests.Cases)
+    .Concat(WebRequestLifecycleResolverTests.Cases)
+    .Concat(WebArchiveDiscoveryProjectionTests.Cases)
     .Concat(WebHttpApiTests.Cases)
     .Concat(WebHttpInfrastructureTests.Cases)
     .Concat(WebRequestSecurityTests.Cases)

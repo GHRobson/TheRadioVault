@@ -26,6 +26,29 @@ internal sealed class MobileLibraryQueryCoordinator
 
     public bool HasCachedLibrary => _cache.Snapshot.Broadcasts.Count > 0;
 
+    public MobileBroadcastItem? FindBroadcast(long episodeId)
+    {
+        if (episodeId <= 0) return null;
+        var cached = _cache.Snapshot.Broadcasts.FirstOrDefault(
+            value => value.RepresentativeEpisodeId == episodeId);
+        return cached is null ? null : new MobileBroadcastItem(cached);
+    }
+
+    public async Task<MobileBroadcastItem?> LoadBroadcastAsync(
+        long episodeId,
+        bool allowNetwork,
+        CancellationToken cancellationToken = default)
+    {
+        var cached = FindBroadcast(episodeId);
+        if (cached is not null || !allowNetwork || episodeId <= 0) return cached;
+        var summary = await _transport
+            .GetBroadcastSummaryAsync(episodeId, cancellationToken)
+            .ConfigureAwait(false);
+        _cache.UpsertBroadcast(summary);
+        await _cache.SaveAsync().ConfigureAwait(false);
+        return new MobileBroadcastItem(summary);
+    }
+
     public MobileLibraryProjection? ProjectSnapshot()
     {
         var snapshot = _cache.Snapshot;
@@ -473,6 +496,9 @@ internal sealed record MobileLibraryExploreQueryResult(
 
 internal interface IMobileLibraryQueryTransport
 {
+    Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default);
     Task<WebClientLibraryBrowseResult> BrowseAsync(
         string? searchText,
         int limit,
@@ -500,6 +526,11 @@ internal interface IMobileLibraryQueryTransport
 internal sealed class MobileLibraryQueryTransport(MobileServerClient server) : IMobileLibraryQueryTransport
 {
     private readonly MobileServerClient _server = server ?? throw new ArgumentNullException(nameof(server));
+
+    public Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+        => _server.GetBroadcastSummaryAsync(episodeId, cancellationToken);
 
     public Task<WebClientLibraryBrowseResult> BrowseAsync(
         string? searchText,

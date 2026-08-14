@@ -88,9 +88,13 @@ The proof does not claim that WPF views have disappeared. Remaining windows, XAM
 
 `MobileLibraryQueryCoordinator` owns deterministic catalogue projection from `MobileMetadataCache`, cache-first filtering, normalized duplicate-show identities, archive-period aggregation and the equivalent live browse/facet/suggestion contracts. It returns data and status without selecting a screen or mutating UI busy state. Library controllers and the session must not recreate collection-name normalization, progress aggregation or separate cached/live query branches.
 
+Direct broadcast lookup also belongs to `MobileLibraryQueryCoordinator`. It must return cached metadata immediately when available, refresh from the server only when allowed and persist successful live results back into the same metadata cache. `MobileArtworkCoordinator` owns cache-first artwork hydration and coalesces concurrent requests for the same key. A transient response with no artwork path must not discard a previously cached image.
+
 ## 0.44 web playback and queue route boundary
 
 `LocalWebServer` remains the HTTP listener and request-lifecycle coordinator. It owns authentication, pairing-before-authentication, secure setup/static-shell handling and shared response helpers. `LocalWebServer.ApiRoutes.cs` owns the ordered relationship between authenticated route families and the final API/media fallbacks. `LocalWebServer.PlaybackQueue.cs` owns the contiguous player-transfer, playback-command, player-state and queue route family, including its HTTP method checks, queue action matcher and response handlers. The authenticated dispatcher reaches this family through exactly one `TryHandlePlaybackQueueRouteAsync` call.
+
+`WebRequestLifecycleResolver` is the pure policy for request ordering before authenticated route dispatch: method validation, pairing, authorization, secure setup/profile/root routes, HTTP-to-HTTPS redirect and public shell assets. `WebArchiveDiscoveryProjection` is the canonical projection for bootstrap and federation Library discovery data. Request handlers must consume these policies rather than duplicate their ordering or independently rebuild dashboard collections.
 
 Route order and observable protocol behaviour are compatibility boundaries. Moving a handler must not rename a route, widen an allowed method, change a status code or reorder the family relative to broadcast details, archive health, Moments, artwork and audio. Playback or queue routes must not be added back inline to `LocalWebServer.cs`; extend the focused partial instead.
 
@@ -187,3 +191,5 @@ Paths, `media_files.id`, legacy manifest `FileKey` and insertion-order collision
 Broadcast Info and Explore documents expose this contract additively while preserving existing protocol fields. New Library, Explore, Knowledge and transcript-search navigation must consume these links or extend the factory; it must not introduce another string-only deep-link format.
 
 `ArchiveEntityNavigation` is the client-neutral dispatch policy: broadcasts open Broadcast Info, shows open their Library collection, and people/topics/articles/images/timeline entries open Explore. Presentation layers may adapt those destinations to native navigation controllers, but labels remain display text and never become identity where a typed link is available.
+
+Desktop, iOS and web Explore prose must resolve inline destinations from document `EntityLinks` before falling back to title-based lookup. iOS transcript search must preserve `SearchStartMs` and start playback through `MobilePlaybackStartPosition`, so selecting a result begins at the matching passage. Knowledge coverage drill-down must use `RepresentativeEpisodeId` to open a real Broadcast Info destination rather than attempting to reconstruct one from labels.

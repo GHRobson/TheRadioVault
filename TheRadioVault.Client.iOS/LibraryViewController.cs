@@ -66,8 +66,15 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
                 return DetailCell("empty-library", Session.IsPaired ? "No broadcasts found" : "Pair a server first", Session.StatusText);
             var item = Session.LibraryBroadcasts[indexPath.Row];
             var resultCell = new BroadcastProgressCell("library-broadcast");
-            resultCell.Configure(Session, item);
+            var searchDetail = string.IsNullOrWhiteSpace(item.Source.SearchContext)
+                ? null
+                : item.Source.SearchStartMs is { } startMs
+                    ? $"{item.Source.SearchContext} · Tap to play from {FormatSearchTime(startMs)}"
+                    : item.Source.SearchContext;
+            resultCell.Configure(Session, item, searchDetail);
             resultCell.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+            if (item.Source.SearchStartMs is { } matchStart)
+                resultCell.AccessibilityHint = $"Plays this transcript match from {FormatSearchTime(matchStart)}";
             return resultCell;
         }
 
@@ -130,8 +137,14 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
         if (IsShowingSearchResults)
         {
             if (indexPath.Row < Session.LibraryBroadcasts.Count)
-                NavigationController?.PushViewController(
-                    new BroadcastDetailsViewController(Session, Session.LibraryBroadcasts[indexPath.Row]), true);
+            {
+                var broadcast = Session.LibraryBroadcasts[indexPath.Row];
+                if (broadcast.Source.SearchStartMs is { } startMs)
+                    _ = Session.PlayAtAsync(broadcast, startMs);
+                else
+                    NavigationController?.PushViewController(
+                        new BroadcastDetailsViewController(Session, broadcast), true);
+            }
             return;
         }
 
@@ -301,6 +314,12 @@ public sealed class LibraryViewController : SessionTableViewController, IUISearc
     private void UpdateHideCompletedButton()
     {
         _header.SetHideCompleted(_hideCompleted);
+    }
+
+    private static string FormatSearchTime(long milliseconds)
+    {
+        var value = TimeSpan.FromMilliseconds(Math.Max(0, milliseconds));
+        return value.TotalHours >= 1 ? value.ToString(@"h\:mm\:ss") : value.ToString(@"m\:ss");
     }
 
     protected override void Dispose(bool disposing)

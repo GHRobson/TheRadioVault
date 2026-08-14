@@ -22,7 +22,22 @@ internal static class WebShellContractTests
         ("Web client includes final recovery and accessibility", WebClientIncludesFinalRecoveryAndAccessibility),
         ("Web client keeps Live Radio outside personal playback", WebClientKeepsLiveRadioOutsidePersonalPlayback),
         ("Web client caches downloaded artwork", WebClientCachesDownloadedArtwork),
+        ("Web Explore prose follows typed entity links", WebExploreProseFollowsTypedEntityLinks),
     ];
+
+static void WebExploreProseFollowsTypedEntityLinks()
+{
+    WithWebServer(async (port, token) =>
+    {
+        using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
+        var html = await client.GetStringAsync($"http://127.0.0.1:{port}/?token={Uri.EscapeDataString(token)}");
+        True(html.Contains("wikiCurrentPage?.entityLinks", StringComparison.Ordinal));
+        True(html.Contains(".toLowerCase().startsWith(\"inline\")", StringComparison.Ordinal));
+        True(html.Contains("data-info=", StringComparison.Ordinal));
+        True(html.Contains("data-wiki-page=", StringComparison.Ordinal));
+        True(html.Contains("data-wiki-entity=", StringComparison.Ordinal));
+    });
+}
 
 static void WebPlayerIsRadioVaultBranded()
 {
