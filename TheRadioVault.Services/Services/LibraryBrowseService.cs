@@ -383,7 +383,10 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
         if (canonicalSummary.IsCutoverReady)
         {
             var canonical = await Task.Run(_canonical.GetBroadcasts, cancellationToken).ConfigureAwait(false);
-            return new LibrarySnapshot(canonical.Select(MapCanonical).ToArray(), true);
+            var playable = IndexByRepresentativeEpisodeId(canonical.Select(MapCanonical))
+                .Values
+                .ToArray();
+            return new LibrarySnapshot(playable, true);
         }
 
         var legacy = new List<LibraryBroadcastSummary>();

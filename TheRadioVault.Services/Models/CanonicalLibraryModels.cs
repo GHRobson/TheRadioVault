@@ -168,10 +168,14 @@ public sealed record CanonicalLibraryAuditSnapshot(
     int CloudOnlyPhysicalFiles,
     int LegacyFallbackBroadcasts,
     int InvalidPreferredRecordingBroadcasts,
+    int DuplicatePlayableIdentityGroups,
+    int DuplicateCanonicalAliases,
     DateTimeOffset GeneratedAt)
 {
     public bool IsClean =>
         InvalidPreferredRecordingBroadcasts == 0 &&
+        DuplicatePlayableIdentityGroups == 0 &&
+        DuplicateCanonicalAliases == 0 &&
         IncompleteRecordings == 0 &&
         ReviewRequiredCoverageRows == 0;
 }

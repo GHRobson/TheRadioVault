@@ -724,7 +724,13 @@ public sealed class CanonicalLibraryQueryService
     {
         var summary = GetSummary();
         if (!summary.IsCutoverReady)
-            return new CanonicalLibraryAuditSnapshot(0,0,0,0,0,0,0,0,0,0,0,0,0,0,DateTimeOffset.UtcNow);
+            return new CanonicalLibraryAuditSnapshot(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,DateTimeOffset.UtcNow);
+
+        var duplicateIdentities = GetBroadcasts()
+            .GroupBy(value => value.RepresentativeEpisodeId)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Count())
+            .ToArray();
 
         using var connection = _database.OpenConnection();
         var run = summary.LatestTruthRunId;
@@ -755,7 +761,8 @@ public sealed class CanonicalLibraryQueryService
             run, summary.Broadcasts, summary.AdoptedBroadcasts, summary.NeedsAttentionBroadcasts,
             summary.ReviewRecommendedBroadcasts, summary.BlockedBroadcasts, summary.Recordings,
             multipart, incomplete, reviewCoverage, missing, cloudOnly, summary.NeedsAttentionBroadcasts,
-            invalidPreferred, DateTimeOffset.UtcNow);
+            invalidPreferred, duplicateIdentities.Length,
+            duplicateIdentities.Sum(count => count - 1), DateTimeOffset.UtcNow);
     }
 
     public CanonicalDownloadManifest? GetDownloadManifest(string canonicalKey, string? recordingKey = null)

@@ -4462,6 +4462,44 @@ static void CanonicalLibraryCutoverProjectsBroadcasts()
         Equal(1, audit.HeldBroadcasts);
         Equal(0, audit.InvalidPreferredRecordingBroadcasts);
 
+        var guardedPromotion = new CanonicalScanPromotionService(database).PromoteUnmappedEpisodes();
+        Equal(0, guardedPromotion.BroadcastsAdded);
+        Equal(0, guardedPromotion.EpisodesMapped);
+
+        // Older servers could append a second canonical key for an episode that
+        // was already represented by the sealed, held Library Truth baseline.
+        // Preserve that historical anomaly in this fixture to prove the public
+        // Library still projects one playable broadcast identity.
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES(2005,1001,'/archive/a-alias.mp3','a-alias.mp3',100,$now,0,$now,2200,'AvailableOffline',0);
+                INSERT INTO library_truth_broadcasts(run_id,canonical_key,collection_name,air_date,broadcast_slot,file_count,segment_count,recording_count,current_episode_count,status,confidence_score,adoption_state,adoption_reason,preferred_recording_key)
+                VALUES(3001,'CANONICAL-ALIAS','Canonical Test','2001-01-01','PM',1,1,1,1,'Needs attention',60,'Review recommended','Duplicate playable identity','REC-ALIAS');
+                INSERT INTO library_truth_files(run_id,media_file_id,current_episode_id,path,original_filename,canonical_broadcast_key,recording_key,proposed_part)
+                VALUES(3001,2005,1001,'/archive/a-alias.mp3','a-alias.mp3','CANONICAL-ALIAS','REC-ALIAS',1);
+                INSERT INTO library_truth_recordings(run_id,canonical_broadcast_key,recording_key,label,file_count,segment_count,duration_ms,role,is_preferred_candidate)
+                VALUES(3001,'CANONICAL-ALIAS','REC-ALIAS','Alias',1,1,2200,'Full capture',1);
+                """;
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        Equal(3, service.GetBroadcasts().Count);
+        var conflictedAudit = service.GetAuditSnapshot();
+        Equal(1, conflictedAudit.DuplicatePlayableIdentityGroups);
+        Equal(1, conflictedAudit.DuplicateCanonicalAliases);
+        True(!conflictedAudit.IsClean);
+
+        var browse = new LibraryBrowseService(database);
+        var overview = browse.GetOverviewAsync().GetAwaiter().GetResult();
+        Equal(2, overview.TotalBroadcasts);
+        var browseResult = browse.BrowseAsync(new LibraryBrowseRequest(Limit: 100)).GetAwaiter().GetResult();
+        Equal(2, browseResult.TotalMatching);
+        Equal(2, browseResult.Broadcasts.Select(value => value.RepresentativeEpisodeId).Distinct().Count());
+
     }
     finally
     {
