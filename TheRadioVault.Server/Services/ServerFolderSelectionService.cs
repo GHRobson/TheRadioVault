@@ -10,11 +10,15 @@ public sealed class ServerFolderSelectionService
     public ServerFolderSelectionService(Window owner)
         => _owner = owner ?? throw new ArgumentNullException(nameof(owner));
 
-    public async Task<string?> PickLibraryFolderAsync(CancellationToken cancellationToken = default)
+    public async Task<string?> PickLibraryFolderAsync(
+        string? title = null,
+        CancellationToken cancellationToken = default)
     {
         var results = await _owner.StorageProvider.OpenFolderPickerAsync(new FolderPickerOpenOptions
         {
-            Title = "Choose a Library folder on this server computer",
+            Title = string.IsNullOrWhiteSpace(title)
+                ? "Choose a Library folder on this server computer"
+                : title,
             AllowMultiple = false
         }).WaitAsync(cancellationToken).ConfigureAwait(true);
         return results.FirstOrDefault()?.TryGetLocalPath();

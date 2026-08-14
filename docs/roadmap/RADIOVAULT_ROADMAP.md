@@ -35,7 +35,7 @@ Exit criteria: no critical accessibility failures, a 24-hour offline/reconnect s
 
 Goal: make multi-device state boringly reliable.
 
-Status: implementation complete, physical soak and clean-machine release validation pending. Offline favourite, listened/unlistened and Moment writes retain stable mutation IDs and captured decision times through mobile replay. The server durably records per-device acknowledgements and accepted decisions, rejects stale or future-skewed changes, and exposes device checkpoints. Scheduled backups now undergo an isolated restore rehearsal with archive limits, SQLite integrity, foreign-key and schema checks before live restore; failed live validation rolls back automatically. The server UI reports database, storage, media-root, certificate, client and backup health and exports a privacy-safe diagnostic report with paths, tokens and client identities redacted.
+Status: implementation complete, physical soak and clean-machine release validation pending. Offline favourite, listened/unlistened and Moment writes retain stable mutation IDs and captured decision times through mobile replay. The server durably records per-device acknowledgements and accepted decisions, rejects stale or future-skewed changes, and exposes device checkpoints. Scheduled backups now undergo an isolated restore rehearsal with archive limits, SQLite integrity, foreign-key and schema checks before live restore; failed live validation rolls back automatically. The server UI reports database, storage, media-root, certificate, client and backup health and exports a privacy-safe diagnostic report with paths, tokens and client identities redacted. A separate signed, rehearsed media-consolidation workflow can build a logical archive from Library Truth while retaining every original and rejected duplicate in a recoverable quarantine.
 
 - Formal conflict rules for progress, listened/unlistened, favourites, Moments and queue changes.
 - Durable mutation ids and acknowledgements for every offline write.
@@ -44,6 +44,7 @@ Status: implementation complete, physical soak and clean-machine release validat
 - Scheduled backups, integrity checks and a guided restore rehearsal.
 - Server health dashboard covering database, storage, certificates, clients and media roots.
 - Structured handoff/sync diagnostics with secret redaction.
+- Full-hash media consolidation with deterministic longest-runtime/highest-bitrate selection, no-delete quarantine, restart recovery and legacy file-identity audit.
 - Multi-device tests for simultaneous online/offline edits and manual overrides.
 
 Exit criteria: conflict suites pass, a backup restores onto a clean server, and stale progress cannot resurrect an old state.

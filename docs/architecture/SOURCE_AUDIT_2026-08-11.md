@@ -1,7 +1,7 @@
 # Radio Vault source audit
 
 Date: 11 August 2026
-Last updated: 13 August 2026
+Last updated: 14 August 2026
 Original branch audited: `ios/dashboard-library-refresh`
 Original baseline commit: `6920c3f`
 
@@ -54,6 +54,12 @@ The schema has reached version 48 and the database is one of the most important 
 
 The server now exports a privacy-conscious diagnostic report containing version, platform, sync checkpoints, recent errors, backup state and database/storage/certificate/client/media health. Client identifiers are pseudonymized and tokens, profile paths, recordings and transcript contents are excluded. The next diagnostics work is to include a bounded playback-ownership transition trail without exposing library content.
 
+### 6. Consolidate physical media only through a no-delete boundary
+
+The server now has a distinct `MediaConsolidationService` rather than extending ordinary scanning or tag synchronization with bulk moves. It consumes Library Truth, computes complete file hashes, ranks alternates by runtime then estimated bitrate, rehearses every path and storage requirement, creates a verified pre-change SQLite backup and journals an idempotent commit. Managed copies are verified before all originals are moved to a non-indexed quarantine; the product exposes no quarantine deletion command. Interrupted plans can be recovered after a Server restart.
+
+The related identity audit found and removed an older scanner rule that treated partial hash plus byte length as sufficient to reattach a moved file. Full SHA-256 is now preferred; partial matches also require runtime and remain strong candidates rather than exact identities. Both are constrained to compatible collection/date/slot/part claims so exact audio with conflicting dates remains separate for review. Portable manifests retain their old machine-row `FileKey` for compatibility and add a path-independent `ContentKey`.
+
 ## Major refactoring targets
 
 | Priority | Area | Evidence | Safe extraction path |
@@ -72,7 +78,7 @@ The server now exports a privacy-conscious diagnostic report containing version,
 
 ### Server
 
-The server remains authoritative for library metadata, playback ownership and conflict resolution. Database/storage/certificate/client/media health, per-device sync state, scheduled backup, isolated restore rehearsal and redacted diagnostics are now implemented. The next operational work is bounded structured logging, background-service installation on every desktop platform, maintenance mode for migration/restore, and rate limits and expiry around pairing.
+The server remains authoritative for library metadata, playback ownership and conflict resolution. Database/storage/certificate/client/media health, per-device sync state, scheduled backup, isolated restore rehearsal, redacted diagnostics and rehearsed no-delete media consolidation are now implemented. The next operational work is bounded structured logging, background-service installation on every desktop platform, maintenance mode for migration/restore, and rate limits and expiry around pairing.
 
 The server should not be exposed directly to the public internet. Remote access needs a designed relay or private-network approach with short-lived credentials, not port forwarding.
 

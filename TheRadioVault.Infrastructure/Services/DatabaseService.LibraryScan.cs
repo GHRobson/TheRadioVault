@@ -34,7 +34,8 @@ public sealed partial class DatabaseService
         ParsedFilename parsed,
         EpisodeStorageState storageState = EpisodeStorageState.AvailableOffline,
         string? partialHash = null,
-        string? fullHash = null)
+        string? fullHash = null,
+        long? durationMs = null)
     {
         using var connection = OpenConnection();
         using var transaction = connection.BeginTransaction();
@@ -61,6 +62,7 @@ public sealed partial class DatabaseService
                     storageState,
                     partialHash,
                     fullHash,
+                    durationMs,
                     now);
                 ApplyParsedIdentityToEpisode(
                     connection,
@@ -83,7 +85,9 @@ public sealed partial class DatabaseService
             collectionId,
             parsed,
             Path.GetFileName(path),
-            partialHash);
+            partialHash,
+            fullHash,
+            durationMs);
         if (matchedEpisodeId.HasValue)
         {
             using (var oldPreferred = connection.CreateCommand())
@@ -104,6 +108,7 @@ public sealed partial class DatabaseService
                 storageState,
                 partialHash,
                 fullHash,
+                durationMs,
                 now,
                 includeMissingColumn: true);
             ApplyParsedIdentityToEpisode(
@@ -168,6 +173,7 @@ public sealed partial class DatabaseService
             storageState,
             partialHash,
             fullHash,
+            durationMs,
             now,
             includeMissingColumn: false);
 
@@ -192,6 +198,7 @@ public sealed partial class DatabaseService
         EpisodeStorageState storageState,
         string? partialHash,
         string? fullHash,
+        long? durationMs,
         string now)
     {
         using var command = connection.CreateCommand();
@@ -205,6 +212,7 @@ public sealed partial class DatabaseService
                    storage_state=$storage,
                    partial_hash=COALESCE($partial,partial_hash),
                    full_hash=COALESCE($full,full_hash),
+                   duration_ms=COALESCE($duration,duration_ms),
                    fingerprinted_at=CASE WHEN $partial IS NOT NULL THEN $now ELSE fingerprinted_at END,
                    full_hashed_at=CASE WHEN $full IS NOT NULL THEN $now ELSE full_hashed_at END,
                    inspection_error=CASE WHEN $partial IS NOT NULL THEN '' ELSE inspection_error END,
@@ -217,6 +225,7 @@ public sealed partial class DatabaseService
         command.Parameters.AddWithValue("$storage", storageState.ToString());
         command.Parameters.AddWithValue("$partial", partialHash ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$full", fullHash ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$duration", durationMs is > 0 ? durationMs.Value : (object)DBNull.Value);
         command.Parameters.AddWithValue("$now", now);
         command.Parameters.AddWithValue("$id", mediaId);
         command.ExecuteNonQuery();
@@ -229,26 +238,44 @@ public sealed partial class DatabaseService
         int collectionId,
         ParsedFilename parsed,
         string originalFilename,
-        string? partialHash)
+        string? partialHash,
+        string? fullHash,
+        long? durationMs)
     {
-        if (!string.IsNullOrWhiteSpace(partialHash))
+        // A full-file digest is the only path-independent content identity that
+        // is safe on its own. If it is ambiguous across multiple episodes, do
+        // not guess which database row owns the returning file.
+        if (!string.IsNullOrWhiteSpace(fullHash))
         {
-            using var fingerprintMatch = connection.CreateCommand();
-            fingerprintMatch.Transaction = transaction;
-            fingerprintMatch.CommandText = """
-                SELECT episode_id
-                  FROM media_files
-                 WHERE file_size=$size AND partial_hash=$hash
-                 ORDER BY is_missing DESC,is_preferred DESC
-                 LIMIT 2
-                """;
-            fingerprintMatch.Parameters.AddWithValue("$size", size);
-            fingerprintMatch.Parameters.AddWithValue("$hash", partialHash);
-            var ids = new List<long>();
-            using var reader = fingerprintMatch.ExecuteReader();
-            while (reader.Read()) ids.Add(reader.GetInt64(0));
-            var distinctIds = ids.Distinct().ToArray();
-            if (distinctIds.Length == 1) return distinctIds[0];
+            var fullMatch = FindUniqueFingerprintEpisode(
+                connection,
+                transaction,
+                "full_hash=$hash COLLATE NOCASE",
+                collectionId,
+                parsed,
+                command => command.Parameters.AddWithValue("$hash", fullHash.Trim()));
+            if (fullMatch.HasValue) return fullMatch;
+        }
+
+        // The partial digest samples only the beginning and end of a file. The
+        // old scanner treated partial hash + byte length as unique, which could
+        // attach different recordings with identical outer blocks. Duration is
+        // now required as the third part of this strong (but not exact) key.
+        if (!string.IsNullOrWhiteSpace(partialHash) && durationMs is > 0)
+        {
+            var strongMatch = FindUniqueFingerprintEpisode(
+                connection,
+                transaction,
+                "file_size=$size AND partial_hash=$hash COLLATE NOCASE AND ABS(duration_ms-$duration)<=1000",
+                collectionId,
+                parsed,
+                command =>
+                {
+                    command.Parameters.AddWithValue("$size", size);
+                    command.Parameters.AddWithValue("$hash", partialHash.Trim());
+                    command.Parameters.AddWithValue("$duration", durationMs.Value);
+                });
+            if (strongMatch.HasValue) return strongMatch;
         }
 
         if (!parsed.AirDate.HasValue || parsed.DateConfidence != "High") return null;
@@ -293,6 +320,49 @@ public sealed partial class DatabaseService
         return null;
     }
 
+    private static long? FindUniqueFingerprintEpisode(
+        Microsoft.Data.Sqlite.SqliteConnection connection,
+        Microsoft.Data.Sqlite.SqliteTransaction transaction,
+        string predicate,
+        int collectionId,
+        ParsedFilename parsed,
+        Action<Microsoft.Data.Sqlite.SqliteCommand> bind)
+    {
+        using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"""
+            SELECT DISTINCT mf.episode_id
+              FROM media_files mf
+              JOIN episodes e ON e.id=mf.episode_id
+             WHERE {predicate}
+               AND e.collection_id=$collection
+               AND COALESCE(e.part_number,1)=$part
+               AND ($date IS NULL OR e.air_date=$date)
+               AND (
+                    trim(COALESCE($slot,''))=''
+                    OR lower(trim(COALESCE(e.broadcast_slot,'')))=lower(trim($slot))
+                    OR (
+                        lower(trim($slot))='opieradio edition'
+                        AND trim(COALESCE(e.broadcast_slot,''))=''
+                        AND lower(trim(COALESCE(e.edition,'')))='opieradio edition'
+                    )
+               )
+             ORDER BY mf.episode_id
+             LIMIT 2
+            """;
+        command.Parameters.AddWithValue("$collection", collectionId);
+        command.Parameters.AddWithValue("$part", Math.Max(1, parsed.PartNumber));
+        command.Parameters.AddWithValue("$date", parsed.AirDate.HasValue && parsed.DateConfidence == "High"
+            ? parsed.AirDate.Value.ToString("yyyy-MM-dd")
+            : (object)DBNull.Value);
+        command.Parameters.AddWithValue("$slot", parsed.BroadcastSlot ?? string.Empty);
+        bind(command);
+        var ids = new List<long>(2);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) ids.Add(reader.GetInt64(0));
+        return ids.Count == 1 ? ids[0] : null;
+    }
+
     private static void InsertMediaFile(
         Microsoft.Data.Sqlite.SqliteConnection connection,
         Microsoft.Data.Sqlite.SqliteTransaction transaction,
@@ -303,6 +373,7 @@ public sealed partial class DatabaseService
         EpisodeStorageState storageState,
         string? partialHash,
         string? fullHash,
+        long? durationMs,
         string now,
         bool includeMissingColumn)
     {
@@ -312,22 +383,22 @@ public sealed partial class DatabaseService
             ? """
                 INSERT INTO media_files(
                     episode_id,path,original_filename,file_size,modified_time,
-                    storage_state,is_preferred,is_missing,partial_hash,full_hash,
+                    storage_state,is_preferred,is_missing,partial_hash,full_hash,duration_ms,
                     fingerprinted_at,full_hashed_at,last_seen_at)
                 VALUES(
                     $episode,$path,$name,$size,$modified,
-                    $storage,1,0,$partial,$full,
+                    $storage,1,0,$partial,$full,COALESCE($duration,0),
                     CASE WHEN $partial IS NOT NULL THEN $now ELSE NULL END,
                     CASE WHEN $full IS NOT NULL THEN $now ELSE NULL END,$now)
                 """
             : """
                 INSERT INTO media_files(
                     episode_id,path,original_filename,file_size,modified_time,
-                    storage_state,is_preferred,partial_hash,full_hash,
+                    storage_state,is_preferred,partial_hash,full_hash,duration_ms,
                     fingerprinted_at,full_hashed_at,last_seen_at)
                 VALUES(
                     $episode,$path,$name,$size,$modified,
-                    $storage,1,$partial,$full,
+                    $storage,1,$partial,$full,COALESCE($duration,0),
                     CASE WHEN $partial IS NOT NULL THEN $now ELSE NULL END,
                     CASE WHEN $full IS NOT NULL THEN $now ELSE NULL END,$now)
                 """;
@@ -339,6 +410,7 @@ public sealed partial class DatabaseService
         command.Parameters.AddWithValue("$storage", storageState.ToString());
         command.Parameters.AddWithValue("$partial", partialHash ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("$full", fullHash ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("$duration", durationMs is > 0 ? durationMs.Value : (object)DBNull.Value);
         command.Parameters.AddWithValue("$now", now);
         command.ExecuteNonQuery();
     }

@@ -25,6 +25,7 @@ public sealed class RadioVaultServerRuntime : IDisposable
     private readonly LocalWebServerService _server;
     private readonly ILibraryFolderService _libraryFolders;
     private readonly RssFeedIngestionService _rssFeeds;
+    private readonly MediaConsolidationService _mediaConsolidation;
     private bool _disposed;
 
     public RadioVaultServerRuntime(
@@ -54,6 +55,7 @@ public sealed class RadioVaultServerRuntime : IDisposable
                 var result = await _server.RunLibraryScanAsync("rss-feed-download", cancellationToken).ConfigureAwait(false);
                 return result.Started && !result.IsRunning;
             });
+        _mediaConsolidation = new MediaConsolidationService(_platformDatabase);
         _rssFeeds.Start();
 
         if (honorAutomaticStart && Preferences.Enabled && Preferences.StartAutomatically)
@@ -121,6 +123,31 @@ public sealed class RadioVaultServerRuntime : IDisposable
     public Task ExportRedactedDiagnosticsAsync(string destinationPath, CancellationToken cancellationToken = default)
         => new ServerHealthDiagnosticsService().ExportAsync(
             GetHealthSnapshot(), AppVersionService.Version, destinationPath, cancellationToken);
+    public MediaConsolidationPlan PrepareMediaConsolidation(
+        string managedRoot,
+        string quarantineRoot,
+        IProgress<MediaConsolidationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+        => _mediaConsolidation.CreatePlan(managedRoot, quarantineRoot, progress, cancellationToken);
+    public MediaConsolidationPlan? LoadInterruptedMediaConsolidation(string quarantineRoot)
+        => _mediaConsolidation.LoadLatestInterruptedPlan(quarantineRoot);
+    public MediaConsolidationRehearsalResult RehearseMediaConsolidation(
+        MediaConsolidationPlan plan,
+        IProgress<MediaConsolidationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+        => _mediaConsolidation.Rehearse(plan, progress, cancellationToken);
+    public MediaConsolidationCommitResult CommitMediaConsolidation(
+        MediaConsolidationPlan plan,
+        MediaConsolidationRehearsalResult rehearsal,
+        string confirmationText,
+        IProgress<MediaConsolidationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (_server.IsRunning)
+            throw new InvalidOperationException("Stop Radio Vault Server before committing media consolidation.");
+        return _mediaConsolidation.Commit(plan, rehearsal, confirmationText, progress, cancellationToken);
+    }
 
     public WebDesktopPairingSession BeginDesktopPairing()
     {

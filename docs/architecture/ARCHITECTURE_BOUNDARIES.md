@@ -176,6 +176,10 @@ Schema 49 owns the durable `saved_collections` and `saved_collection_items` tabl
 
 `ServerHealthDiagnosticsService` assembles immutable database, storage, media-root, certificate, paired-client and backup health. Its exported JSON must pseudonymize device identities and remove credentials and user-specific paths; UI code may render this snapshot but must not implement a second health or redaction policy.
 
+`MediaConsolidationService` is the only boundary allowed to plan or commit physical archive consolidation. It consumes only a completed Library Truth snapshot, assigns exact identity from full SHA-256, ranks recording variants deterministically, creates verified managed copies and retains every original in a plan-specific quarantine. Its signed manifest, stopped-server guard, exact confirmation, database backup and durable journal are mandatory. Presentation code must not move media, reinterpret duplicate ranks or expose deletion of quarantine contents. The complete safety and identity rules are documented in [MEDIA_CONSOLIDATION_SAFETY.md](MEDIA_CONSOLIDATION_SAFETY.md).
+
+Paths, `media_files.id`, legacy manifest `FileKey` and insertion-order collision suffixes on `broadcast_uid` are not cross-machine content identities. Exact content identity is a complete SHA-256. Partial hash, byte length and duration form only a strong candidate key. Library Truth canonical keys remain the authoritative show/date/slot/part identity used for reconciliation.
+
 ## 0.45 archive entity-link boundary
 
 `ArchiveEntityLink` is the neutral identity and navigation contract for articles, shows, broadcasts, people, topics, images and timelines. `EntityId` is canonical identity, `TargetId` is the actionable platform value, `Relationship` describes context such as host or guest, and `Route` is the deterministic `radiovault://entity/...` representation. Labels are presentation only and must never become identity.

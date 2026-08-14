@@ -1,5 +1,8 @@
 # Unreleased — 0.44 architecture and testability
 
+- Adds a Server-guided physical-media consolidation workflow driven by Library Truth: complete SHA-256 verification, deterministic longest-runtime/highest-bitrate selection, logical Show/Year/Month paths, a signed no-move rehearsal, exact confirmation and a stopped-server commit.
+- Retains every source—including selected originals, exact duplicates and alternate recordings—in a plan-specific non-indexed quarantine, creates a verified pre-change SQLite backup, journals every phase and can recover an interrupted plan after the Server app restarts. Radio Vault exposes no quarantine deletion action.
+- Re-audits legacy file identity: moved-file matching now prefers an unambiguous full hash and requires duration alongside partial hash and size; portable archive manifests add a path-independent content key while preserving their legacy machine-row key.
 - Adds server-owned saved playlists and smart collections with ordered items, queue snapshots, revision-conflict protection, desktop/iPhone management and cached offline iPhone reading.
 - Advances the durable database to schema 49 and the connected client/server capability generation to 41 for the new collection contract.
 - Adds a server-owned RSS Archive Inbox for private or public feeds, including encrypted credentials, first-check back-catalogue protection, conditional polling, atomic downloads, content-hash deduplication and automatic Library ingestion; advances the durable database to schema 50 without changing the client protocol generation.

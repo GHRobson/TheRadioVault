@@ -127,6 +127,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         RemoveLibraryFolderCommand = _removeLibraryFolderCommand;
         ScanLibraryCommand = _scanLibraryCommand;
         InitializeRssFeedCommands();
+        InitializeMediaConsolidationCommands();
         _chooseKnowledgeImportCommand = new ServerCommand(() => _ = ChooseKnowledgeImportAsync(), () => !IsKnowledgeBusy);
         _applyKnowledgeImportCommand = new ServerCommand(() => _ = ApplyKnowledgeImportAsync(), () => HasKnowledgeImportPreview && !IsKnowledgeBusy);
         _cancelKnowledgeImportCommand = new ServerCommand(CancelKnowledgeImport, () => HasKnowledgeImportPreview);
@@ -157,7 +158,8 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             GeneratePairingCodeCommand = CancelPairingCommand = RevokeClientCommand = RevokeAllClientsCommand = AddLibraryFolderCommand =
             ToggleLibraryFolderCommand = AssignLibraryFolderCommand = RemoveLibraryFolderCommand = ScanLibraryCommand =
             ChooseKnowledgeImportCommand = ApplyKnowledgeImportCommand = CancelKnowledgeImportCommand = ExportKnowledgeCommand =
-            RehearseBackupCommand = ExportDiagnosticsCommand =
+            RehearseBackupCommand = ExportDiagnosticsCommand = ChooseManagedArchiveCommand = ChooseQuarantineCommand =
+            PrepareMediaConsolidationCommand = RehearseMediaConsolidationCommand = CommitMediaConsolidationCommand = CancelMediaConsolidationCommand =
                 new ServerCommand(() => { }, () => false);
     }
 
@@ -285,6 +287,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             (StartCommand as ServerCommand)?.RaiseCanExecuteChanged();
             (StopCommand as ServerCommand)?.RaiseCanExecuteChanged();
             (RegenerateWebLinkCommand as ServerCommand)?.RaiseCanExecuteChanged();
+            RaiseMediaConsolidationCommandState();
         }
     }
     public bool IsServerStopped => !IsServerRunning;
@@ -1023,6 +1026,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
 
     public void Dispose()
     {
+        DisposeMediaConsolidation();
         _refreshTimer?.Stop();
         _transcriptionCancellation?.Cancel();
         _transcriptionCancellation?.Dispose();

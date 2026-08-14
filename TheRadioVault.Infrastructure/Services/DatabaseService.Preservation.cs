@@ -342,9 +342,12 @@ public sealed partial class DatabaseService
                 var path = reader.GetString(8);
                 var root = FindMostSpecificRoot(path, roots);
                 var relative = root is null ? reader.GetString(9) : SafeRelativePath(root.Path, path);
+                var fileKey = $"{machine.MachineId}:{reader.GetInt64(0)}";
                 manifest.Files.Add(new ArchiveManifestFile
                 {
-                    FileKey = $"{machine.MachineId}:{reader.GetInt64(0)}",
+                    FileKey = fileKey,
+                    ContentKey = ArchiveContentIdentity.Create(
+                        reader.GetString(13), reader.GetString(12), reader.GetInt64(10), reader.GetInt64(11), fileKey),
                     BroadcastUid = reader.GetString(1),
                     Show = reader.GetString(2),
                     AirDate = reader.IsDBNull(3) ? null : reader.GetString(3),
