@@ -10,7 +10,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Saved collection revisions reject stale device edits", RevisionsRejectStaleEdits),
     ("Smart collections materialize current Library state", SmartCollectionsRemainLive),
     ("Saved collection creation is atomic and names are unique", CreationIsAtomicAndNamesAreUnique),
-    ("Live Radio schedule is stable and never mutates listening state", LiveRadioScheduleIsStableAndReadOnly)
+    ("Live Radio schedule is stable and never mutates listening state", LiveRadioScheduleIsStableAndReadOnly),
+    ("Live Radio distinguishes duplicate representative episode IDs", LiveRadioDistinguishesDuplicateRepresentativeIds)
 };
 
 var selected = args.Length == 0
@@ -176,6 +177,45 @@ static async Task LiveRadioScheduleIsStableAndReadOnly()
         Equal(before, ReadListeningState(database), "unchanged listening state");
     });
 }
+
+static Task LiveRadioDistinguishesDuplicateRepresentativeIds()
+{
+    var first = BroadcastSummary("DUPLICATE-A", 7601, "First canonical broadcast");
+    var second = BroadcastSummary("DUPLICATE-B", 7601, "Second canonical broadcast");
+    var byIdentity = LibraryBrowseService.IndexByCanonicalIdentity([first, second]);
+    var byEpisode = LibraryBrowseService.IndexByRepresentativeEpisodeId([first, second]);
+
+    Equal(2, byIdentity.Count, "canonical identity count");
+    Equal("First canonical broadcast", byIdentity[(7601, "DUPLICATE-A")].Title, "first canonical identity");
+    Equal("Second canonical broadcast", byIdentity[(7601, "DUPLICATE-B")].Title, "second canonical identity");
+    Equal(1, byEpisode.Count, "duplicate-safe episode fallback count");
+    return Task.CompletedTask;
+}
+
+static LibraryBroadcastSummary BroadcastSummary(string canonicalKey, long episodeId, string title)
+    => new(
+        canonicalKey,
+        episodeId,
+        canonicalKey,
+        1,
+        "Duplicate test",
+        new DateOnly(2026, 8, 14),
+        DateTimeOffset.UtcNow,
+        "",
+        title,
+        "",
+        false,
+        false,
+        false,
+        0,
+        3_600_000,
+        null,
+        null,
+        1,
+        1,
+        1,
+        false,
+        "");
 
 static string ReadListeningState(SqliteDatabase database)
 {

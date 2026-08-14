@@ -16,6 +16,7 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="TheRadioVault.Infrastructure" />
+    <InternalsVisibleTo Include="TheRadioVault.Services.Tests" />
     <InternalsVisibleTo Include="TheRadioVault.Tests" />
   </ItemGroup>
 </Project>

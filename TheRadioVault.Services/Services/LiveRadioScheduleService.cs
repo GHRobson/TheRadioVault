@@ -56,13 +56,20 @@ public sealed class LiveRadioScheduleService : ILiveRadioService, IDisposable
             var rows = currentRow is null
                 ? stored.Where(value => value.StartsAt > now).Take(6).ToArray()
                 : new[] { currentRow }.Concat(stored.Where(value => value.StartsAt >= currentRow.EndsAt).Take(5)).ToArray();
-            var broadcasts = await _library.GetBroadcastsAsync(
-                rows.Select(value => value.EpisodeId).Distinct().ToArray(),
+            var identities = rows
+                .Select(value => (value.EpisodeId, value.CanonicalKey))
+                .Distinct()
+                .ToArray();
+            var broadcasts = await _library.GetBroadcastsByIdentityAsync(
+                identities,
                 cancellationToken).ConfigureAwait(false);
-            var byId = broadcasts.ToDictionary(value => value.RepresentativeEpisodeId);
+            var byIdentity = LibraryBrowseService.IndexByCanonicalIdentity(broadcasts);
+            var byId = LibraryBrowseService.IndexByRepresentativeEpisodeId(broadcasts);
             LiveRadioProgramme? Map(StoredEntry row)
             {
-                if (!byId.TryGetValue(row.EpisodeId, out var broadcast)) return null;
+                if (!byIdentity.TryGetValue((row.EpisodeId, row.CanonicalKey), out var broadcast) &&
+                    !byId.TryGetValue(row.EpisodeId, out broadcast))
+                    return null;
                 var position = row.StartsAt <= now && row.EndsAt > now
                     ? Math.Clamp((long)(now - row.StartsAt).TotalMilliseconds, 0, Math.Max(0, broadcast.DurationMs - 1))
                     : 0;
