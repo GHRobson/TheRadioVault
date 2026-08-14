@@ -39,6 +39,7 @@ Radio Vault is not just a catalogue. It is a full player for long-form radio.
 - Save memorable points as Moments so you can return to them later.
 - Download broadcasts to your phone or computer for offline listening.
 - Control playback from the iPhone lock screen and Control Centre.
+- Tune in to Radio Vault Live, a shared virtual station that uses dates, show slots and archive metadata to rediscover broadcasts in context without changing their listened status.
 
 When another device is already playing, Radio Vault can hand playback over deliberately, keeping the same broadcast and listening position.
 

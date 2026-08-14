@@ -272,6 +272,30 @@ public sealed class MobileDownloadService
         finally { _gate.Release(); }
     }
 
+    public async Task<int> RemoveExpiredAsync(
+        DateTimeOffset cutoff,
+        long? protectedEpisodeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            var removals = _records.Values
+                .Where(value => value.EpisodeId != protectedEpisodeId &&
+                                LatestUse(value) < cutoff.ToUniversalTime())
+                .ToArray();
+            foreach (var record in removals)
+            {
+                _records.Remove(record.EpisodeId);
+                DeleteRecordMediaBestEffort(record);
+            }
+            if (removals.Length > 0) await SaveIndexUnsafeAsync(cancellationToken).ConfigureAwait(false);
+            return removals.Length;
+        }
+        finally { _gate.Release(); }
+    }
+
     public async Task<int> TrimToLimitAsync(
         long limitBytes,
         long? protectedEpisodeId = null,
@@ -286,7 +310,7 @@ public sealed class MobileDownloadService
             var removals = _records.Values
                 .Where(value => value.EpisodeId != protectedEpisodeId)
                 .OrderBy(value => value.Summary.Completed ? 0 : 1)
-                .ThenBy(value => value.DownloadedAt)
+                .ThenBy(LatestUse)
                 .TakeWhile(record =>
                 {
                     if (total <= limitBytes) return false;
@@ -441,6 +465,13 @@ public sealed class MobileDownloadService
             }
         }
         _loaded = true;
+    }
+
+    private static DateTimeOffset LatestUse(MobileDownloadRecord record)
+    {
+        var downloaded = record.DownloadedAt.ToUniversalTime();
+        var played = record.Summary.LastPlayedAt?.ToUniversalTime() ?? DateTimeOffset.MinValue;
+        return played > downloaded ? played : downloaded;
     }
 
     private async Task SaveIndexUnsafeAsync(CancellationToken cancellationToken)

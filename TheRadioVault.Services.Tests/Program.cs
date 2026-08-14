@@ -9,7 +9,9 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Manual saved collections preserve queue order", ManualCollectionsPreserveOrder),
     ("Saved collection revisions reject stale device edits", RevisionsRejectStaleEdits),
     ("Smart collections materialize current Library state", SmartCollectionsRemainLive),
-    ("Saved collection creation is atomic and names are unique", CreationIsAtomicAndNamesAreUnique)
+    ("Saved collection creation is atomic and names are unique", CreationIsAtomicAndNamesAreUnique),
+    ("Live Radio schedule is stable and never mutates listening state", LiveRadioScheduleIsStableAndReadOnly),
+    ("Live Radio distinguishes duplicate representative episode IDs", LiveRadioDistinguishesDuplicateRepresentativeIds)
 };
 
 var selected = args.Length == 0
@@ -133,6 +135,101 @@ static async Task CreationIsAtomicAndNamesAreUnique()
             service.CreateAsync(" unique ", SavedCollectionKind.Manual));
         Equal(1, (await service.GetAllAsync()).Count, "unique collection count");
     });
+}
+
+static async Task LiveRadioScheduleIsStableAndReadOnly()
+{
+    await WithDatabaseAsync("live-radio", async database =>
+    {
+        SeedLibrary(database,
+            (7501, "Morning archive", false),
+            (7502, "Midday archive", false),
+            (7503, "Evening archive", true));
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                SELECT id,'/archive/' || id || '.mp3',id || '.mp3',1000,$now,0,$now,3600000,'AvailableOffline',1
+                  FROM episodes WHERE id IN (7501,7502,7503);
+                """;
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture));
+            command.ExecuteNonQuery();
+        }
+
+        var before = ReadListeningState(database);
+        var at = DateTimeOffset.UtcNow;
+        LiveRadioSnapshot first;
+        using (var service = new LiveRadioScheduleService(database))
+        {
+            first = await service.GetSnapshotAsync(at);
+            var repeated = await service.GetSnapshotAsync(at);
+            Equal(first.Current?.ScheduleEntryId, repeated.Current?.ScheduleEntryId, "same programme within a persisted schedule");
+            Equal(first.ScheduleRevision, repeated.ScheduleRevision, "same schedule revision");
+        }
+        using (var restarted = new LiveRadioScheduleService(database))
+        {
+            var afterRestart = await restarted.GetSnapshotAsync(at);
+            Equal(first.Current?.ScheduleEntryId, afterRestart.Current?.ScheduleEntryId, "programme after service restart");
+            Equal(first.ScheduleRevision, afterRestart.ScheduleRevision, "schedule revision after service restart");
+        }
+        if (first.Current is null) throw new InvalidOperationException("Expected a live programme.");
+        Equal(before, ReadListeningState(database), "unchanged listening state");
+    });
+}
+
+static Task LiveRadioDistinguishesDuplicateRepresentativeIds()
+{
+    var first = BroadcastSummary("DUPLICATE-A", 7601, "First canonical broadcast");
+    var second = BroadcastSummary("DUPLICATE-B", 7601, "Second canonical broadcast");
+    var byIdentity = LibraryBrowseService.IndexByCanonicalIdentity([first, second]);
+    var byEpisode = LibraryBrowseService.IndexByRepresentativeEpisodeId([first, second]);
+
+    Equal(2, byIdentity.Count, "canonical identity count");
+    Equal("First canonical broadcast", byIdentity[(7601, "DUPLICATE-A")].Title, "first canonical identity");
+    Equal("Second canonical broadcast", byIdentity[(7601, "DUPLICATE-B")].Title, "second canonical identity");
+    Equal(1, byEpisode.Count, "duplicate-safe episode fallback count");
+    return Task.CompletedTask;
+}
+
+static LibraryBroadcastSummary BroadcastSummary(string canonicalKey, long episodeId, string title)
+    => new(
+        canonicalKey,
+        episodeId,
+        canonicalKey,
+        1,
+        "Duplicate test",
+        new DateOnly(2026, 8, 14),
+        DateTimeOffset.UtcNow,
+        "",
+        title,
+        "",
+        false,
+        false,
+        false,
+        0,
+        3_600_000,
+        null,
+        null,
+        1,
+        1,
+        1,
+        false,
+        "");
+
+static string ReadListeningState(SqliteDatabase database)
+{
+    using var connection = database.OpenConnection();
+    using var command = connection.CreateCommand();
+    command.CommandText = """
+        SELECT GROUP_CONCAT(value,'|') FROM (
+            SELECT e.id || ':' || e.status || ':' || p.position_ms || ':' || p.completed || ':' || p.play_count AS value
+              FROM episodes e JOIN playback_state p ON p.episode_id=e.id
+             WHERE e.id IN (7501,7502,7503)
+             ORDER BY e.id
+        );
+        """;
+    return Convert.ToString(command.ExecuteScalar(), CultureInfo.InvariantCulture) ?? string.Empty;
 }
 
 static async Task WithDatabaseAsync(string name, Func<SqliteDatabase, Task> test)

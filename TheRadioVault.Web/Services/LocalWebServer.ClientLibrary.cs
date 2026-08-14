@@ -10,6 +10,9 @@ public sealed partial class LocalWebServer
     private async Task HandleClientLibraryOverviewAsync(Stream stream, bool headOnly, CancellationToken cancellationToken)
         => await WriteClientJsonAsync(stream, new { apiVersion = WebApiRoutes.Version, overview = _archive.GetClientLibraryOverview() }, headOnly, cancellationToken).ConfigureAwait(false);
 
+    private async Task HandleClientLiveRadioAsync(Stream stream, bool headOnly, CancellationToken cancellationToken)
+        => await WriteClientJsonAsync(stream, new { apiVersion = WebApiRoutes.Version, station = _archive.GetLiveRadioSnapshot() }, headOnly, cancellationToken).ConfigureAwait(false);
+
     private async Task HandleClientLibraryBroadcastAsync(Stream stream, long episodeId, bool headOnly, CancellationToken cancellationToken)
     {
         var broadcast = _archive.GetClientLibraryBroadcast(episodeId);

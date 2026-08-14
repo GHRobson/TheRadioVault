@@ -20,6 +20,7 @@ internal static class WebShellContractTests
         ("Web download button has one click path", WebDownloadButtonHasOneClickPath),
         ("Web client registers secure offline shell", WebClientRegistersSecureOfflineShell),
         ("Web client includes final recovery and accessibility", WebClientIncludesFinalRecoveryAndAccessibility),
+        ("Web client keeps Live Radio outside personal playback", WebClientKeepsLiveRadioOutsidePersonalPlayback),
         ("Web client caches downloaded artwork", WebClientCachesDownloadedArtwork),
     ];
 
@@ -239,7 +240,7 @@ static void WebClientIncludesFinalRecoveryAndAccessibility()
         True(html.Contains("repairAppShell", StringComparison.Ordinal));
         True(html.Contains("Downloaded audio, artwork, listening progress and pending sync changes will be preserved", StringComparison.Ordinal));
         True(html.Contains("aria-live=\"polite\"", StringComparison.Ordinal));
-        True(html.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+        True(html.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
         True(html.Contains("radio-vault-anywhere-audio-v1", StringComparison.Ordinal));
         True(html.Contains("radio-vault-anywhere-artwork-v1", StringComparison.Ordinal));
     });
@@ -254,6 +255,23 @@ static void WebClientCachesDownloadedArtwork()
         True(html.Contains("/__offline_artwork__/", StringComparison.Ordinal));
         True(html.Contains("radio-vault-anywhere-artwork-v1", StringComparison.Ordinal));
         True(html.Contains("repairDownloadedArtwork", StringComparison.Ordinal));
+    });
+}
+
+static void WebClientKeepsLiveRadioOutsidePersonalPlayback()
+{
+    WithWebServer(async (port, token) =>
+    {
+        using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
+        var html = await client.GetStringAsync($"http://127.0.0.1:{port}/?token={Uri.EscapeDataString(token)}");
+        True(html.Contains("data-section=\"live-radio\"", StringComparison.Ordinal));
+        True(html.Contains("<audio id=\"liveAudio\"", StringComparison.Ordinal));
+        True(html.Contains("/client/live-radio", StringComparison.Ordinal));
+        True(html.Contains("liveRadioTunedIn", StringComparison.Ordinal));
+        True(html.Contains("Save This Moment", StringComparison.Ordinal));
+        True(html.Contains("never changes played status, progress, Continue Listening, play counts, your queue or playback handoff", StringComparison.Ordinal));
+        True(html.Contains("setActionHandler(action, null)", StringComparison.Ordinal));
+        True(html.Contains("Saved from Radio Vault Live", StringComparison.Ordinal));
     });
 }
 

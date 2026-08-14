@@ -214,6 +214,89 @@ public sealed class NativeDownloadService : INativeDownloadService
         }
     }
 
+    public async Task<NativeDownloadMaintenanceResult> MaintainAsync(
+        NativeDownloadMaintenancePolicy policy,
+        long? protectedEpisodeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(policy);
+        var removals = new List<NativeDownloadRecord>();
+        var completed = 0;
+        var expired = 0;
+        var storage = 0;
+        await _transferGate.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try
+        {
+            await _gate.WaitAsync(cancellationToken).ConfigureAwait(false);
+            try
+            {
+                await EnsureLoadedUnsafeAsync(cancellationToken).ConfigureAwait(false);
+                var selected = new HashSet<long>();
+                if (policy.DeleteCompleted)
+                {
+                    foreach (var record in _records.Values.Where(value =>
+                                 value.RepresentativeEpisodeId != protectedEpisodeId && value.Completed))
+                    {
+                        if (!selected.Add(record.RepresentativeEpisodeId)) continue;
+                        removals.Add(record);
+                        completed++;
+                    }
+                }
+
+                var expiryDays = policy.ExpiryDays is 1 or 7 or 30 or 90 ? policy.ExpiryDays : 0;
+                if (expiryDays > 0)
+                {
+                    var cutoff = policy.Now.ToUniversalTime().AddDays(-expiryDays);
+                    foreach (var record in _records.Values.Where(value =>
+                                 value.RepresentativeEpisodeId != protectedEpisodeId && LatestUse(value) < cutoff))
+                    {
+                        if (!selected.Add(record.RepresentativeEpisodeId)) continue;
+                        removals.Add(record);
+                        expired++;
+                    }
+                }
+
+                var limit = Math.Max(0, policy.StorageLimitBytes);
+                if (limit > 0)
+                {
+                    var total = _records.Values.Sum(value => Math.Max(0, value.SizeBytes)) -
+                                removals.Sum(value => Math.Max(0, value.SizeBytes));
+                    foreach (var record in _records.Values
+                                 .Where(value => value.RepresentativeEpisodeId != protectedEpisodeId &&
+                                                 !selected.Contains(value.RepresentativeEpisodeId))
+                                 .OrderBy(value => value.Completed ? 0 : 1)
+                                 .ThenBy(LatestUse))
+                    {
+                        if (total <= limit) break;
+                        selected.Add(record.RepresentativeEpisodeId);
+                        removals.Add(record);
+                        storage++;
+                        total -= Math.Max(0, record.SizeBytes);
+                    }
+                }
+
+                cancellationToken.ThrowIfCancellationRequested();
+                foreach (var record in removals)
+                {
+                    var recordPath = RecordPath(record.RepresentativeEpisodeId);
+                    if (File.Exists(recordPath)) File.Delete(recordPath);
+                    _records.Remove(record.RepresentativeEpisodeId);
+                }
+            }
+            finally { _gate.Release(); }
+
+            foreach (var record in removals) DeleteRecordMediaBestEffort(record);
+        }
+        finally { _transferGate.Release(); }
+
+        if (removals.Count > 0) NotifyDownloadsChanged();
+        return new NativeDownloadMaintenanceResult(
+            completed,
+            expired,
+            storage,
+            removals.Sum(value => Math.Max(0, value.SizeBytes)));
+    }
+
     public async Task UpdatePlaybackStateAsync(
         LocalPlaybackSaveRequest request,
         CancellationToken cancellationToken = default)
@@ -244,7 +327,8 @@ public sealed class NativeDownloadService : INativeDownloadService
                 ResumePositionMs = position,
                 DurationMs = duration,
                 PlaybackSpeed = speed,
-                Completed = request.Completed
+                Completed = request.Completed,
+                LastAccessedAt = DateTimeOffset.UtcNow
             };
             await SaveRecordUnsafeAsync(updated, cancellationToken).ConfigureAwait(false);
             _records.Remove(record.RepresentativeEpisodeId);
@@ -484,6 +568,13 @@ public sealed class NativeDownloadService : INativeDownloadService
             }
         }
         _loaded = true;
+    }
+
+    private static DateTimeOffset LatestUse(NativeDownloadRecord record)
+    {
+        var downloaded = record.DownloadedAt.ToUniversalTime();
+        var accessed = record.LastAccessedAt?.ToUniversalTime() ?? DateTimeOffset.MinValue;
+        return accessed > downloaded ? accessed : downloaded;
     }
 
     private async Task RefreshHealthUnsafeAsync(CancellationToken cancellationToken)

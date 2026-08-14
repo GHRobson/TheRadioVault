@@ -329,6 +329,24 @@ public sealed record WebClientLibraryOverview(
     IReadOnlyList<WebClientLibraryBroadcastSummary> RecentBroadcasts,
     IReadOnlyList<WebClientLibraryBroadcastSummary> OnThisDay);
 
+public sealed record WebLiveRadioProgramme(
+    long ScheduleEntryId,
+    DateTimeOffset StartsAt,
+    DateTimeOffset EndsAt,
+    long PositionMs,
+    long RemainingMs,
+    string SelectionReason,
+    WebClientLibraryBroadcastSummary Broadcast);
+
+public sealed record WebLiveRadioSnapshot(
+    string StationKey,
+    string StationName,
+    string TimeZoneId,
+    DateTimeOffset ServerTime,
+    long ScheduleRevision,
+    WebLiveRadioProgramme? Current,
+    IReadOnlyList<WebLiveRadioProgramme> Upcoming);
+
 public sealed record WebClientLibraryBrowseResult(
     IReadOnlyList<WebClientLibraryBroadcastSummary> Broadcasts,
     int TotalMatching,

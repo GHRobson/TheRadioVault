@@ -53,6 +53,7 @@ public sealed class MobileClientSession : IDisposable
     private long _playbackGeneration;
     private DateTimeOffset _lastDurableSave = DateTimeOffset.MinValue;
     private DateTimeOffset _lastOfflineSave = DateTimeOffset.MinValue;
+    private DateTimeOffset _lastLiveRadioRefresh = DateTimeOffset.MinValue;
     private bool _explicitSeekPending;
     private bool _ownsPlayback;
     private bool _offlinePlayback;
@@ -167,6 +168,13 @@ public sealed class MobileClientSession : IDisposable
     public IReadOnlyList<WebSavedCollectionSummary> SavedCollections { get; private set; } = [];
     public MobileKnowledgeSnapshot? Knowledge => _knowledgeQueries.Knowledge;
     public IReadOnlyList<WebQueueItem> QueueItems { get; private set; } = [];
+    public WebLiveRadioSnapshot? LiveRadio { get; private set; }
+    public bool IsLiveRadioTunedIn { get; private set; }
+    public bool IsLiveRadioLoading { get; private set; }
+    public MobileBroadcastItem? LiveRadioBroadcast => LiveRadio?.Current is { } current
+        ? CreateLiveRadioBroadcast(current)
+        : null;
+    public IReadOnlyList<WebLiveRadioProgramme> LiveRadioUpcoming => LiveRadio?.Upcoming ?? [];
     public IReadOnlyList<DiscoveredRadioVaultServer> Servers => _pairing.Servers;
     public MobileBroadcastItem? SelectedBroadcast { get; private set; }
     public string NowPlayingTitle { get; private set; } = "Nothing playing";
@@ -174,6 +182,7 @@ public sealed class MobileClientSession : IDisposable
     public string PlaybackStatus { get; private set; } = "Ready";
     public bool IsPlaying => _playback.Current.IsPlaying;
     public bool CanControlPlayback => _playback.Current.IsOpen && _ownsPlayback;
+    public bool CanSeekPlayback => CanControlPlayback && !IsLiveRadioTunedIn;
     public long? LocalPlaybackEpisodeId => SelectedBroadcast?.EpisodeId;
     public long? PreparingPlaybackEpisodeId { get; private set; }
     public bool IsPreparingPlayback => PreparingPlaybackEpisodeId is > 0;
@@ -217,11 +226,21 @@ public sealed class MobileClientSession : IDisposable
         }
     }
     public string DownloadStorageLimitText => _downloads.StorageLimitText;
-    public bool HasMiniPlayer => SelectedBroadcast is not null || _playbackSynchronization.RemoteBroadcast is not null;
-    public bool MiniPlayerShowsHandoff => _playbackSynchronization.RemoteBroadcast is not null && !_ownsPlayback;
-    public string MiniPlayerTitle => _playbackSynchronization.RemoteBroadcast?.Title ?? NowPlayingTitle;
+    public int DownloadExpiryDays
+    {
+        get => _downloads.DownloadExpiryDays;
+        set
+        {
+            _downloads.DownloadExpiryDays = value;
+            _ = MaintainDownloadStorageAsync();
+        }
+    }
+    public string DownloadExpiryText => _downloads.DownloadExpiryText;
+    public bool HasMiniPlayer => IsLiveRadioTunedIn || SelectedBroadcast is not null || _playbackSynchronization.RemoteBroadcast is not null;
+    public bool MiniPlayerShowsHandoff => !IsLiveRadioTunedIn && _playbackSynchronization.RemoteBroadcast is not null && !_ownsPlayback;
+    public string MiniPlayerTitle => IsLiveRadioTunedIn ? "Radio Vault Live" : _playbackSynchronization.RemoteBroadcast?.Title ?? NowPlayingTitle;
     public string MiniPlayerSubtitle => _playbackSynchronization.RemoteBroadcast is not null
-        ? $"Playing on {_playbackSynchronization.RemoteOwner}"
+        ? IsLiveRadioTunedIn ? NowPlayingTitle : $"Playing on {_playbackSynchronization.RemoteOwner}"
         : NowPlayingSubtitle;
     public double MiniPlayerProgress => _playbackSynchronization.RemoteBroadcast is not null
         ? _playbackSynchronization.RemoteBroadcast.Progress / 100d
@@ -234,8 +253,8 @@ public sealed class MobileClientSession : IDisposable
     public string MiniPlayerRemainingTime => $"-{FormatTime(TimeSpan.FromMilliseconds(
         Math.Max(0, MiniPlayerDurationMs - MiniPlayerPositionMs)))}";
     public string MiniPlayerTotalTime => FormatTime(TimeSpan.FromMilliseconds(MiniPlayerDurationMs));
-    public bool MiniPlayerCanAct => MiniPlayerShowsHandoff || CanControlPlayback;
-    public MobileBroadcastItem? CurrentBroadcast => _playbackSynchronization.RemoteBroadcast ?? SelectedBroadcast;
+    public bool MiniPlayerCanAct => IsLiveRadioTunedIn || MiniPlayerShowsHandoff || CanControlPlayback;
+    public MobileBroadcastItem? CurrentBroadcast => IsLiveRadioTunedIn ? LiveRadioBroadcast : _playbackSynchronization.RemoteBroadcast ?? SelectedBroadcast;
 
     public bool CanToggleBroadcast(long episodeId)
         => CanControlPlayback && SelectedBroadcast?.EpisodeId == episodeId;
@@ -343,6 +362,7 @@ public sealed class MobileClientSession : IDisposable
             WifiOnlyDownloads,
             AutoDownloadNewBroadcasts,
             DeleteCompletedDownloads,
+            DownloadExpiryDays,
             DownloadStorageLimitBytes);
     }
 
@@ -356,6 +376,7 @@ public sealed class MobileClientSession : IDisposable
             var bootstrap = await _server.TestConnectionAsync().ConfigureAwait(false);
             var overview = await _server.GetOverviewAsync().ConfigureAwait(false);
             ApplyOnlineOverview(overview);
+            await RefreshLiveRadioAsync(announce: false).ConfigureAwait(false);
             await SynchronizeMetadataCacheAsync(forceExploreRefresh: true).ConfigureAwait(false);
             if (_metadataCache.Snapshot.Broadcasts.Count == 0)
             {
@@ -397,6 +418,113 @@ public sealed class MobileClientSession : IDisposable
             metadataActivity.Dispose();
             SetBusy(false);
         }
+    }
+
+    public async Task RefreshLiveRadioAsync(bool announce = true)
+    {
+        if (!IsPaired || !IsLiveConnected) return;
+        try
+        {
+            LiveRadio = await _server.GetLiveRadioAsync().ConfigureAwait(false);
+            _lastLiveRadioRefresh = DateTimeOffset.UtcNow;
+            if (announce)
+                StatusText = LiveRadio.Current is null
+                    ? "Radio Vault Live is preparing its schedule."
+                    : $"{LiveRadio.StationName} is live now.";
+        }
+        catch (Exception exception)
+        {
+            if (announce) StatusText = "Live Radio could not be refreshed: " + exception.Message;
+        }
+        finally { Notify(); }
+    }
+
+    public async Task TuneIntoLiveRadioAsync()
+    {
+        if (!IsPaired || IsLiveRadioLoading) return;
+        IsLiveRadioLoading = true;
+        PlaybackStatus = "Tuning in to Radio Vault Live…";
+        Notify();
+        try
+        {
+            if (!IsLiveRadioTunedIn)
+            {
+                await FlushPlaybackAsync().ConfigureAwait(false);
+                if (_playback.Current.IsPlaying) _playback.Pause();
+            }
+            var station = await _server.GetLiveRadioAsync().ConfigureAwait(false);
+            LiveRadio = station;
+            _lastLiveRadioRefresh = DateTimeOffset.UtcNow;
+            var current = station.Current ?? throw new InvalidOperationException("The station does not have a programme on air yet.");
+            await OpenLiveRadioProgrammeAsync(current).ConfigureAwait(false);
+        }
+        catch (Exception exception)
+        {
+            IsLiveRadioTunedIn = false;
+            _ownsPlayback = false;
+            PlaybackStatus = "Live Radio could not start: " + exception.Message;
+        }
+        finally
+        {
+            IsLiveRadioLoading = false;
+            Notify();
+            NotifyPlayback();
+        }
+    }
+
+    public void LeaveLiveRadio()
+    {
+        if (!IsLiveRadioTunedIn && !IsLiveRadioLoading) return;
+        _playback.Pause();
+        IsLiveRadioTunedIn = false;
+        IsLiveRadioLoading = false;
+        _ownsPlayback = false;
+        SelectedBroadcast = null;
+        _activeDownload = null;
+        _playbackTimeline.Reset();
+        NowPlayingTitle = "Nothing playing";
+        NowPlayingSubtitle = "Choose a broadcast from Home or Library";
+        PlaybackStatus = "Left Radio Vault Live";
+        PlaybackProgress = 0;
+        PlaybackTime = "0:00 / 0:00";
+        _nowPlaying.Clear();
+        Notify();
+        PlaybackStateChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private async Task OpenLiveRadioProgrammeAsync(WebLiveRadioProgramme programme)
+    {
+        var broadcast = CreateLiveRadioBroadcast(programme);
+        var manifest = await _server.GetMediaManifestAsync(broadcast.EpisodeId).ConfigureAwait(false);
+        if (manifest.Parts.Count == 0)
+            throw new InvalidOperationException("The programme on air has no playable media.");
+        IsLiveRadioTunedIn = true;
+        _offlinePlayback = false;
+        _activeDownload = null;
+        _ownsPlayback = true;
+        _playbackSynchronization.ClearRemotePlayback();
+        SelectedBroadcast = broadcast;
+        _playbackTimeline.Load(manifest.Parts, manifest.DurationMs);
+        var stationPosition = ProjectLiveRadioPosition(programme, LiveRadio?.ServerTime ?? DateTimeOffset.UtcNow);
+        NowPlayingTitle = broadcast.Title;
+        NowPlayingSubtitle = "Radio Vault Live · " + broadcast.Subtitle;
+        OpenLogicalPosition(stationPosition, play: true, muted: false);
+        PlaybackStatus = "Live on Radio Vault Live";
+    }
+
+    private static MobileBroadcastItem CreateLiveRadioBroadcast(WebLiveRadioProgramme programme)
+        => new(programme.Broadcast with
+        {
+            PositionMs = programme.PositionMs,
+            Completed = false,
+            InProgress = false
+        });
+
+    private long ProjectLiveRadioPosition(WebLiveRadioProgramme programme, DateTimeOffset serverTime)
+    {
+        _ = serverTime;
+        var elapsedSinceSnapshot = Math.Max(0, (long)(DateTimeOffset.UtcNow - _lastLiveRadioRefresh).TotalMilliseconds);
+        return Math.Clamp(programme.PositionMs + elapsedSinceSnapshot, 0, Math.Max(0, programme.Broadcast.DurationMs - 1));
     }
 
     public async Task SearchAsync(string searchText, bool hideCompleted = false)
@@ -1088,7 +1216,7 @@ public sealed class MobileClientSession : IDisposable
 
     public async Task CleanupCompletedDownloadsAsync()
         => _ = await _downloads
-            .CleanupCompletedAsync(_activeDownload?.EpisodeId)
+            .CleanupCompletedAsync(ProtectedPlaybackEpisodeId())
             .ConfigureAwait(false);
 
     public async Task RepairDownloadsAsync()
@@ -1096,19 +1224,27 @@ public sealed class MobileClientSession : IDisposable
 
     private async Task EnforceDownloadStorageLimitAsync()
         => _ = await _downloads
-            .EnforceStorageLimitAsync(_activeDownload?.EpisodeId)
+            .EnforceStorageLimitAsync(ProtectedPlaybackEpisodeId())
+            .ConfigureAwait(false);
+
+    private async Task MaintainDownloadStorageAsync()
+        => _ = await _downloads
+            .MaintainStorageAsync(ProtectedPlaybackEpisodeId())
             .ConfigureAwait(false);
 
     public async Task RemoveDownloadAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
-        var protectedEpisodeId = _playback.Current.IsOpen ? _activeDownload?.EpisodeId : null;
-        _ = await _downloads.RemoveAsync(broadcast, protectedEpisodeId).ConfigureAwait(false);
+        _ = await _downloads.RemoveAsync(broadcast, ProtectedPlaybackEpisodeId()).ConfigureAwait(false);
     }
+
+    private long? ProtectedPlaybackEpisodeId()
+        => _playback.Current.IsOpen ? CurrentBroadcast?.EpisodeId : null;
 
     public async Task PlayDownloadedAsync(MobileBroadcastItem broadcast)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
+        if (IsLiveRadioTunedIn) LeaveLiveRadio();
         await using var startup = _playbackStartup.Begin();
         try
         {
@@ -1349,6 +1485,7 @@ public sealed class MobileClientSession : IDisposable
             TracePlayback("Play request ignored because the iPhone is not paired.");
             return;
         }
+        if (IsLiveRadioTunedIn) LeaveLiveRadio();
         await using var startup = _playbackStartup.Begin();
         try
         {
@@ -1535,24 +1672,36 @@ public sealed class MobileClientSession : IDisposable
 
     public void TogglePlayPause()
     {
+        if (IsLiveRadioTunedIn)
+        {
+            LeaveLiveRadio();
+            return;
+        }
         if (!CanControlPlayback) return;
         if (_playback.Current.IsPlaying) _playback.Pause(); else _playback.Play();
         PlaybackStatus = _playback.Current.IsPlaying ? "Playing" : "Paused";
         _ = FlushPlaybackAsync();
     }
 
-    public void SkipBack() => SeekRelative(TimeSpan.FromSeconds(-15));
-    public void SkipForward() => SeekRelative(TimeSpan.FromSeconds(30));
+    public void SkipBack()
+    {
+        if (!IsLiveRadioTunedIn) SeekRelative(TimeSpan.FromSeconds(-15));
+    }
+
+    public void SkipForward()
+    {
+        if (!IsLiveRadioTunedIn) SeekRelative(TimeSpan.FromSeconds(30));
+    }
 
     public void SeekToProgress(double progress)
     {
-        if (!CanControlPlayback || _playbackTimeline.DurationMs <= 0) return;
+        if (!CanSeekPlayback || _playbackTimeline.DurationMs <= 0) return;
         SeekLogical((long)Math.Round(Math.Clamp(progress, 0d, 1d) * _playbackTimeline.DurationMs));
     }
 
     public void CycleSpeed()
     {
-        if (!CanControlPlayback) return;
+        if (!CanSeekPlayback) return;
         var next = Array.FindIndex(PlaybackSpeeds, value => value > _speed + 0.001d);
         _speed = next < 0 ? PlaybackSpeeds[0] : PlaybackSpeeds[next];
         _playback.SetRate(_speed);
@@ -1562,7 +1711,9 @@ public sealed class MobileClientSession : IDisposable
     }
 
     public Task FlushPlaybackAsync()
-        => SynchronizePlaybackAsync(forceDurable: true, allowWhileBusy: true);
+        => IsLiveRadioTunedIn
+            ? Task.CompletedTask
+            : SynchronizePlaybackAsync(forceDurable: true, allowWhileBusy: true);
 
     private async Task<WebPlaybackTransferTicket> AlignTransferAsync(
         WebPlaybackTransferTicket transfer,
@@ -1682,7 +1833,7 @@ public sealed class MobileClientSession : IDisposable
 
     private void SeekLogical(long logicalPositionMs)
     {
-        if (!CanControlPlayback || SelectedBroadcast is null) return;
+        if (!CanSeekPlayback || SelectedBroadcast is null) return;
         logicalPositionMs = _playbackTimeline.ClampPosition(logicalPositionMs);
         var targetPart = _playbackTimeline.FindPartIndex(logicalPositionMs);
         var shouldPlay = _playback.Current.IsPlaying;
@@ -1706,6 +1857,11 @@ public sealed class MobileClientSession : IDisposable
         if (!await _syncGate.WaitAsync(0).ConfigureAwait(false)) return;
         try
         {
+            if (IsLiveRadioTunedIn)
+            {
+                await SynchronizeLiveRadioAsync().ConfigureAwait(false);
+                return;
+            }
             if (_offlinePlayback)
             {
                 if (IsPaired && IsLiveConnected && SelectedBroadcast is not null && _playback.Current.IsOpen)
@@ -1838,6 +1994,46 @@ public sealed class MobileClientSession : IDisposable
             System.Diagnostics.Trace.WriteLine($"[iOS playback sync] {exception}");
         }
         finally { _syncGate.Release(); }
+    }
+
+    private async Task SynchronizeLiveRadioAsync()
+    {
+        if (!IsLiveRadioTunedIn) return;
+        var position = CaptureLogicalPosition();
+        PlaybackProgress = _playbackTimeline.Progress;
+        PlaybackTime = $"{FormatTime(TimeSpan.FromMilliseconds(position))} / {FormatTime(TimeSpan.FromMilliseconds(_playbackTimeline.DurationMs))}";
+        if (!IsLiveConnected || DateTimeOffset.UtcNow - _lastLiveRadioRefresh < TimeSpan.FromSeconds(15))
+        {
+            NotifyPlayback();
+            return;
+        }
+
+        var previousEntryId = LiveRadio?.Current?.ScheduleEntryId;
+        var station = await _server.GetLiveRadioAsync().ConfigureAwait(false);
+        _lastLiveRadioRefresh = DateTimeOffset.UtcNow;
+        LiveRadio = station;
+        var current = station.Current;
+        if (current is null)
+        {
+            LeaveLiveRadio();
+            PlaybackStatus = "Radio Vault Live is preparing its next programme.";
+            return;
+        }
+
+        if (SelectedBroadcast?.EpisodeId != current.Broadcast.RepresentativeEpisodeId ||
+            previousEntryId != current.ScheduleEntryId)
+        {
+            await OpenLiveRadioProgrammeAsync(current).ConfigureAwait(false);
+            Notify();
+            NotifyPlayback();
+            return;
+        }
+
+        var authoritative = ProjectLiveRadioPosition(current, station.ServerTime);
+        if (Math.Abs(authoritative - position) > 5_000)
+            OpenLogicalPosition(authoritative, play: true, muted: false);
+        Notify();
+        NotifyPlayback();
     }
 
     private async Task ObserveSharedPlaybackAsync(WebPlaybackSession session)
@@ -1989,6 +2185,13 @@ public sealed class MobileClientSession : IDisposable
             OpenLogicalPosition(nextPart!.LogicalStartMs, play: true, muted: false);
             return;
         }
+        if (IsLiveRadioTunedIn)
+        {
+            PlaybackStatus = "Tuning to the next live programme…";
+            _lastLiveRadioRefresh = DateTimeOffset.MinValue;
+            _ = SynchronizePlaybackAsync();
+            return;
+        }
         _playbackTimeline.MarkCompleted(DateTimeOffset.UtcNow, TimeSpan.FromSeconds(15));
         PlaybackStatus = "Finished";
         NotifyPlayback();
@@ -2001,11 +2204,18 @@ public sealed class MobileClientSession : IDisposable
         PlaybackProgress = _playbackTimeline.Progress;
         PlaybackTime = $"{FormatTime(TimeSpan.FromMilliseconds(logicalMs))} / {FormatTime(TimeSpan.FromMilliseconds(_playbackTimeline.DurationMs))}";
         if (!string.IsNullOrWhiteSpace(snapshot.Error)) PlaybackStatus = "Playback failed: " + snapshot.Error;
+        else if (IsLiveRadioTunedIn) PlaybackStatus = snapshot.IsPlaying ? "Live on Radio Vault Live" : "Leaving Radio Vault Live…";
         NotifyPlayback();
     }
 
     private void NowPlayingOnCommandReceived(object? sender, MobileRemoteCommand command)
     {
+        if (IsLiveRadioTunedIn)
+        {
+            if (command.Kind is MobileRemoteCommandKind.Pause or MobileRemoteCommandKind.TogglePlayPause)
+                LeaveLiveRadio();
+            return;
+        }
         switch (command.Kind)
         {
             case MobileRemoteCommandKind.Play:
@@ -2068,16 +2278,21 @@ public sealed class MobileClientSession : IDisposable
         }
         if (warmExplore)
             _ = _exploreQueries.RefreshCacheAsync(warmEntireCache: true, IsPaired, IsLiveConnected);
-        if (DeleteCompletedDownloads) _ = CleanupCompletedDownloadsAsync();
+        await MaintainDownloadStorageAsync().ConfigureAwait(false);
         if (AutoDownloadNewBroadcasts) _ = TryAutomaticDownloadAsync();
     }
 
     private async Task TryAutomaticDownloadAsync()
     {
-        if (_disposed || !AutoDownloadNewBroadcasts || !IsLiveConnected || IsDownloading) return;
-        var candidate = _downloads.SelectAutomaticDownload(_metadataCache.Snapshot.Broadcasts);
-        if (candidate is null) return;
-        await DownloadAsync(candidate).ConfigureAwait(false);
+        while (!_disposed && AutoDownloadNewBroadcasts && IsLiveConnected && !IsDownloading)
+        {
+            var candidate = _downloads.SelectAutomaticDownload(_metadataCache.Snapshot.Broadcasts);
+            if (candidate is null) return;
+            var downloaded = await _downloads.DownloadAutomaticallyAsync(
+                candidate,
+                async value => _ = await LoadArtworkAsync(value).ConfigureAwait(false)).ConfigureAwait(false);
+            if (!downloaded) return;
+        }
     }
 
     private async Task FlushOfflineMutationsAsync()
@@ -2300,7 +2515,8 @@ public sealed class MobileClientSession : IDisposable
             _speed,
             _playback.Current.IsPlaying,
             SelectedBroadcast is not null && _playback.Current.IsOpen && _ownsPlayback,
-            _nowPlayingArtwork));
+            _nowPlayingArtwork,
+            IsLiveRadioTunedIn));
     }
 
     private void EnsureNowPlayingArtwork()

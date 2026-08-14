@@ -232,6 +232,7 @@ public sealed record MobileDiagnosticSnapshot(
     bool WifiOnlyDownloads,
     bool AutoDownloadNewBroadcasts,
     bool DeleteCompletedDownloads,
+    int DownloadExpiryDays,
     long DownloadStorageLimitBytes);
 
 public sealed class MobileBroadcastItem

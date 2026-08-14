@@ -87,6 +87,8 @@ Exit criteria: the same entity opens consistently from Library, Explore, Knowled
 Goal: improve long-term listening and make every desktop platform straightforward to install.
 
 - Smart collections and saved playlists/queues.
+- Radio Vault Live: one server-clock station that schedules archive broadcasts by date and historical show slot without changing personal listening progress.
+- Server RSS Archive Inbox for automatically collecting new broadcasts from private or public feeds.
 - Per-device automatic-download and expiry policies.
 - Exportable Moment citations and notes.
 - Windows signed installers and upgrade/downgrade validation.
@@ -97,7 +99,7 @@ Goal: improve long-term listening and make every desktop platform straightforwar
 
 Exit criteria: installers are signed where appropriate, upgrades preserve data, and saved collections/queues work across devices.
 
-Progress: the server-owned, revisioned saved-collection model is implemented through schema 49, with ordered manual playlists, live smart collections, queue snapshots, conflict-safe mutations, desktop and iPhone surfaces, and offline iPhone reads. Signing, service installation and update-notification work remain before 0.46 is complete.
+Progress: the server-owned, revisioned saved-collection model is implemented through schema 49, with ordered manual playlists, live smart collections, queue snapshots, conflict-safe mutations, desktop and iPhone surfaces, and offline iPhone reads. Schema 50 adds the Server RSS Archive Inbox with encrypted private-feed details, safe first-run baselining, scheduled conditional checks, atomic downloads and duplicate prevention. Schema 51 adds a persistent Radio Vault Live schedule: the server selects context-aware archive programmes once, publishes one clock to every client, and keeps station listening isolated from played status, progress, play counts, queues and handoff ownership. iPhone and desktop clients now have device-local new-broadcast watermarks, automatic downloads, completed/age-based cleanup, least-recently-used storage limits and active-playback protection. Signing, service installation and update notifications remain before 0.46 is complete.
 
 ## 0.47 — Secure away-from-home listening
 

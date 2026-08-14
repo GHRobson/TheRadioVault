@@ -80,7 +80,7 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
         ArgumentNullException.ThrowIfNull(episodeIds);
         if (episodeIds.Count == 0) return [];
         var snapshot = await LoadSnapshotAsync(cancellationToken).ConfigureAwait(false);
-        var byId = snapshot.Broadcasts.ToDictionary(value => value.RepresentativeEpisodeId);
+        var byId = IndexByRepresentativeEpisodeId(snapshot.Broadcasts);
         var result = new List<LibraryBroadcastSummary>(episodeIds.Count);
         foreach (var requestedId in episodeIds)
         {
@@ -95,6 +95,48 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
         }
         return result;
     }
+
+    internal async Task<IReadOnlyList<LibraryBroadcastSummary>> GetBroadcastsByIdentityAsync(
+        IReadOnlyList<(long EpisodeId, string CanonicalKey)> identities,
+        CancellationToken cancellationToken = default)
+    {
+        ArgumentNullException.ThrowIfNull(identities);
+        if (identities.Count == 0) return [];
+        var snapshot = await LoadSnapshotAsync(cancellationToken).ConfigureAwait(false);
+        var byIdentity = IndexByCanonicalIdentity(snapshot.Broadcasts);
+        var byId = IndexByRepresentativeEpisodeId(snapshot.Broadcasts);
+        var result = new List<LibraryBroadcastSummary>(identities.Count);
+        foreach (var identity in identities)
+        {
+            if (byIdentity.TryGetValue(identity, out var exact))
+                result.Add(exact);
+            else if (byId.TryGetValue(identity.EpisodeId, out var fallback))
+                result.Add(fallback);
+        }
+        return result;
+    }
+
+    internal static IReadOnlyDictionary<(long EpisodeId, string CanonicalKey), LibraryBroadcastSummary> IndexByCanonicalIdentity(
+        IEnumerable<LibraryBroadcastSummary> broadcasts)
+        => broadcasts
+            .Where(value => value.RepresentativeEpisodeId > 0 && !string.IsNullOrWhiteSpace(value.CanonicalKey))
+            .GroupBy(value => (value.RepresentativeEpisodeId, value.CanonicalKey))
+            .ToDictionary(group => group.Key, SelectPreferredDuplicate);
+
+    internal static IReadOnlyDictionary<long, LibraryBroadcastSummary> IndexByRepresentativeEpisodeId(
+        IEnumerable<LibraryBroadcastSummary> broadcasts)
+        => broadcasts
+            .Where(value => value.RepresentativeEpisodeId > 0)
+            .GroupBy(value => value.RepresentativeEpisodeId)
+            .ToDictionary(group => group.Key, SelectPreferredDuplicate);
+
+    private static LibraryBroadcastSummary SelectPreferredDuplicate(IEnumerable<LibraryBroadcastSummary> candidates)
+        => candidates
+            .OrderBy(value => value.NeedsAttention)
+            .ThenByDescending(value => value.PhysicalFileCount)
+            .ThenByDescending(value => value.DurationMs)
+            .ThenBy(value => value.CanonicalKey, StringComparer.Ordinal)
+            .First();
 
     public async Task<LibraryBrowseResult> BrowseAsync(
         LibraryBrowseRequest request,

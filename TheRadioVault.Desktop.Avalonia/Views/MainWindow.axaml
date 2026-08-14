@@ -12,6 +12,7 @@
         KeyDown="MainWindow_OnKeyDown">
   <Window.DataTemplates>
     <DataTemplate DataType="{x:Type vm:DashboardViewModel}"><views:DashboardView /></DataTemplate>
+    <DataTemplate DataType="{x:Type vm:LiveRadioViewModel}"><views:LiveRadioView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:LibraryViewModel}"><views:LibraryView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:SearchViewModel}"><views:SearchView /></DataTemplate>
     <DataTemplate DataType="{x:Type vm:QueueViewModel}"><views:QueueView /></DataTemplate>
@@ -33,6 +34,7 @@
         <NativeMenu>
           <NativeMenuItem Header="Open Dashboard" Gesture="Meta+1" CommandParameter="dashboard" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItem Header="Open Library" Gesture="Meta+2" CommandParameter="library" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Open Radio Vault Live" CommandParameter="live-radio" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItem Header="Search Radio Vault" Gesture="Meta+F" CommandParameter="search" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItemSeparator />
           <NativeMenuItem Header="Close Window" Gesture="Meta+W" Click="CloseWindowMenuItem_OnClick" />
@@ -52,6 +54,7 @@
       <NativeMenuItem Header="View">
         <NativeMenu NeedsUpdate="ViewNativeMenu_OnNeedsUpdate">
           <NativeMenuItem Header="Dashboard" ToggleType="Radio" Gesture="Meta+1" CommandParameter="dashboard" Click="NavigateMenuItem_OnClick" />
+          <NativeMenuItem Header="Radio Vault Live" ToggleType="Radio" CommandParameter="live-radio" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItem Header="Library" ToggleType="Radio" Gesture="Meta+2" CommandParameter="library" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItem Header="Search" ToggleType="Radio" CommandParameter="search" Click="NavigateMenuItem_OnClick" />
           <NativeMenuItem Header="Explore" ToggleType="Radio" CommandParameter="wiki" Click="NavigateMenuItem_OnClick" />

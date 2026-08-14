@@ -58,6 +58,17 @@ public sealed partial class LocalWebServer
             return true;
         }
 
+        if (path.Equals(WebApiRoutes.ClientLiveRadio, StringComparison.OrdinalIgnoreCase))
+        {
+            if (method is not WebRequestMethod.Get and not WebRequestMethod.Head)
+            {
+                await WriteTextResponseAsync(stream, 405, "Method Not Allowed", "Live Radio is a read-only endpoint.", "text/plain; charset=utf-8", cancellationToken).ConfigureAwait(false);
+                return true;
+            }
+            await HandleClientLiveRadioAsync(stream, isHead, cancellationToken).ConfigureAwait(false);
+            return true;
+        }
+
         if (path.Equals(WebApiRoutes.ClientLibraryBrowse, StringComparison.OrdinalIgnoreCase))
         {
             await HandleClientLibraryBrowseAsync(stream, query, isHead, cancellationToken).ConfigureAwait(false);

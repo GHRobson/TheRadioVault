@@ -170,6 +170,107 @@
 
       <Border Classes="card">
         <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+            <StackPanel Spacing="3">
+              <TextBlock Text="RSS ARCHIVE INBOX" Classes="eyebrow" />
+              <TextBlock Text="Automatically collect new broadcasts" FontSize="17" FontWeight="SemiBold" />
+              <TextBlock Text="Radio Vault checks private or public RSS feeds while the Server app is running, downloads new audio into a registered Library folder, then indexes it normally. Feed addresses and credentials remain encrypted on this server."
+                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Check all now" Classes="secondary"
+                    Command="{Binding CheckAllRssFeedsCommand}" VerticalAlignment="Center" />
+          </Grid>
+
+          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
+            <TextBlock Text="{Binding RssStatusText}" FontSize="11" TextWrapping="Wrap" />
+          </Border>
+
+          <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+            <StackPanel Spacing="5">
+              <TextBlock Text="Feed name" Classes="muted" FontSize="10" />
+              <TextBox Text="{Binding RssFeedName, Mode=TwoWay}" PlaceholderText="Bennington private feed" />
+            </StackPanel>
+            <StackPanel Grid.Column="1" Spacing="5">
+              <TextBlock Text="Private RSS address" Classes="muted" FontSize="10" />
+              <TextBox Text="{Binding RssFeedUrl, Mode=TwoWay}" PlaceholderText="https://…" />
+            </StackPanel>
+            <StackPanel Grid.Row="1" Spacing="5">
+              <TextBlock Text="Username (optional)" Classes="muted" FontSize="10" />
+              <TextBox Text="{Binding RssUsername, Mode=TwoWay}" />
+            </StackPanel>
+            <StackPanel Grid.Row="1" Grid.Column="1" Spacing="5">
+              <TextBlock Text="Password (optional)" Classes="muted" FontSize="10" />
+              <TextBox Text="{Binding RssPassword, Mode=TwoWay}" PasswordChar="●" />
+            </StackPanel>
+            <StackPanel Grid.Row="2" Spacing="5">
+              <TextBlock Text="Archive destination" Classes="muted" FontSize="10" />
+              <ComboBox ItemsSource="{Binding RssDestinationFolders}"
+                        SelectedItem="{Binding RssDestinationFolder, Mode=TwoWay}"
+                        IsEnabled="{Binding HasRssDestinationFolders}">
+                <ComboBox.ItemTemplate>
+                  <DataTemplate>
+                    <StackPanel Spacing="2">
+                      <TextBlock Text="{Binding AssignmentDisplayName}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding Path}" Classes="muted" FontSize="9" TextTrimming="CharacterEllipsis" />
+                    </StackPanel>
+                  </DataTemplate>
+                </ComboBox.ItemTemplate>
+              </ComboBox>
+            </StackPanel>
+            <StackPanel Grid.Row="2" Grid.Column="1" Spacing="5">
+              <TextBlock Text="Check every (minutes)" Classes="muted" FontSize="10" />
+              <TextBox Text="{Binding RssIntervalMinutesText, Mode=TwoWay}" />
+            </StackPanel>
+          </Grid>
+
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <StackPanel Spacing="4">
+              <CheckBox Content="Import episodes already present on the first check"
+                        IsChecked="{Binding RssImportExisting, Mode=TwoWay}" />
+              <TextBlock Text="Leave this off to establish the current feed as a baseline and download only episodes published afterward."
+                         Classes="muted" FontSize="10" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Add RSS feed" Classes="primary"
+                    Command="{Binding AddRssFeedCommand}" VerticalAlignment="Center" />
+          </Grid>
+
+          <ListBox ItemsSource="{Binding RssFeeds}" SelectedItem="{Binding SelectedRssFeed, Mode=TwoWay}"
+                   MaxHeight="260" Background="Transparent" BorderThickness="0" IsVisible="{Binding HasRssFeeds}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Border Background="#151A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,6">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="3">
+                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+                      <TextBlock Text="{Binding DisplayUrl}" Classes="muted" FontSize="10" />
+                      <TextBlock Text="{Binding DestinationPath}" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+                      <TextBlock Text="{Binding StatusText}" FontSize="10" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center" HorizontalAlignment="Right">
+                      <TextBlock Text="{Binding IntervalText}" Classes="muted" FontSize="9" HorizontalAlignment="Right" />
+                      <TextBlock Text="ENABLED" Foreground="#52D6A2" FontWeight="Bold" FontSize="9"
+                                 HorizontalAlignment="Right" IsVisible="{Binding Enabled}" />
+                      <TextBlock Text="PAUSED" Foreground="#E2A84A" FontWeight="Bold" FontSize="9"
+                                 HorizontalAlignment="Right" IsVisible="{Binding !Enabled}" />
+                    </StackPanel>
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+
+          <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding HasRssFeeds}">
+            <Button Content="Check selected now" Classes="primary" Command="{Binding CheckSelectedRssFeedCommand}" />
+            <Button Content="Enable or pause selected" Classes="secondary" Command="{Binding ToggleRssFeedCommand}" />
+            <Button Content="Remove selected feed" Classes="secondary" Command="{Binding DeleteRssFeedCommand}" />
+          </WrapPanel>
+          <TextBlock Text="Removing a subscription never deletes broadcasts already downloaded into the archive."
+                     Classes="muted" FontSize="10" TextWrapping="Wrap" IsVisible="{Binding HasRssFeeds}" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="14">
           <StackPanel Spacing="3">
             <TextBlock Text="KNOWLEDGE DATABASE" Classes="eyebrow" />
             <TextBlock Text="Import, protect and export archive knowledge" FontSize="17" FontWeight="SemiBold" />

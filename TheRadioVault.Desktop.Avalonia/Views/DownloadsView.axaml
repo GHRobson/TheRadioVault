@@ -1,7 +1,7 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="TheRadioVault.Desktop.Avalonia.Views.DownloadsView">
-  <Grid Margin="{StaticResource RvPagePadding}" RowDefinitions="Auto,Auto,Auto,*,Auto" RowSpacing="14">
+  <Grid Margin="{StaticResource RvPagePadding}" RowDefinitions="Auto,Auto,Auto,Auto,*,Auto" RowSpacing="14">
     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
       <StackPanel Spacing="3">
         <TextBlock Text="Downloads" Classes="display-title" />
@@ -43,7 +43,32 @@
       </Border>
     </Grid>
 
-    <Border Grid.Row="2" IsVisible="{Binding IsDownloading}" Classes="card-raised" Padding="14,12"
+    <Border Grid.Row="2" Classes="card" Padding="15,13">
+      <Grid ColumnDefinitions="Auto,Auto,*,Auto" ColumnSpacing="18">
+        <StackPanel Spacing="4" VerticalAlignment="Center">
+          <CheckBox Content="Automatically download new broadcasts"
+                    IsChecked="{Binding AutomaticDownloadsEnabled, Mode=TwoWay}" />
+          <CheckBox Content="Remove completed downloads"
+                    IsChecked="{Binding DeleteCompletedDownloads, Mode=TwoWay}" />
+        </StackPanel>
+        <StackPanel Grid.Column="1" Spacing="4">
+          <TextBlock Text="EXPIRY" Classes="eyebrow" />
+          <ComboBox Width="150" ItemsSource="{Binding DownloadExpiryOptions}"
+                    SelectedItem="{Binding SelectedDownloadExpiry, Mode=TwoWay}" />
+        </StackPanel>
+        <StackPanel Grid.Column="2" Spacing="4">
+          <TextBlock Text="STORAGE LIMIT" Classes="eyebrow" />
+          <ComboBox Width="150" HorizontalAlignment="Left" ItemsSource="{Binding StorageLimitOptions}"
+                    SelectedItem="{Binding SelectedStorageLimit, Mode=TwoWay}" />
+        </StackPanel>
+        <StackPanel Grid.Column="3" Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+          <Button Content="Download new now" Classes="primary" Command="{Binding RunAutomaticDownloadsCommand}" />
+          <Button Content="Apply storage rules" Classes="secondary" Command="{Binding MaintainStorageCommand}" />
+        </StackPanel>
+      </Grid>
+    </Border>
+
+    <Border Grid.Row="3" IsVisible="{Binding IsDownloading}" Classes="card-raised" Padding="14,12"
             BorderBrush="{DynamicResource RvAccentMutedBrush}">
       <Grid RowDefinitions="Auto,Auto" RowSpacing="9">
         <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
@@ -57,7 +82,7 @@
       </Grid>
     </Border>
 
-    <Border Grid.Row="3" Classes="library-list-frame">
+    <Border Grid.Row="4" Classes="library-list-frame">
       <Grid RowDefinitions="Auto,*">
         <Grid Margin="14,10,14,8" ColumnDefinitions="72,*,110,230" ColumnSpacing="12">
           <TextBlock Grid.Column="1" Text="BROADCAST" Classes="eyebrow" />
@@ -120,7 +145,7 @@
       </Grid>
     </Border>
 
-    <TextBlock Grid.Row="4" Text="{Binding StatusText}" Classes="muted" FontSize="10"
+    <TextBlock Grid.Row="5" Text="{Binding StatusText}" Classes="muted" FontSize="10"
                HorizontalAlignment="Left" Margin="2,0,0,0" />
   </Grid>
 </UserControl>

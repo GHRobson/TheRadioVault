@@ -13,16 +13,22 @@ internal sealed class MobileDownloadCoordinator : IDisposable
 {
     private readonly IMobileDownloadStore _store;
     private readonly IMobileDownloadPolicy _policy;
+    private readonly Func<DateTimeOffset> _utcNow;
+    private readonly SemaphoreSlim _maintenanceGate = new(1, 1);
     private CancellationTokenSource? _cancellation;
     private MobileBroadcastItem? _pendingBroadcast;
     private bool _pauseRequested;
     private bool _cancelRequested;
     private bool _disposed;
 
-    public MobileDownloadCoordinator(IMobileDownloadStore store, IMobileDownloadPolicy policy)
+    public MobileDownloadCoordinator(
+        IMobileDownloadStore store,
+        IMobileDownloadPolicy policy,
+        Func<DateTimeOffset>? utcNow = null)
     {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _policy = policy ?? throw new ArgumentNullException(nameof(policy));
+        _utcNow = utcNow ?? (() => DateTimeOffset.UtcNow);
     }
 
     public event EventHandler? StateChanged;
@@ -53,7 +59,11 @@ internal sealed class MobileDownloadCoordinator : IDisposable
         {
             if (_policy.AutoDownloadNewBroadcasts == value) return;
             _policy.AutoDownloadNewBroadcasts = value;
-            if (value) _policy.AutoDownloadSince = DateTimeOffset.UtcNow;
+            if (value)
+            {
+                _policy.AutoDownloadSince = _utcNow();
+                _policy.AutoDownloadWatermarkEpisodeId = 0;
+            }
             Notify();
         }
     }
@@ -81,12 +91,28 @@ internal sealed class MobileDownloadCoordinator : IDisposable
         }
     }
 
+    public int DownloadExpiryDays
+    {
+        get => _policy.DownloadExpiryDays;
+        set
+        {
+            var normalized = value is 1 or 7 or 30 or 90 ? value : 0;
+            if (_policy.DownloadExpiryDays == normalized) return;
+            _policy.DownloadExpiryDays = normalized;
+            Notify();
+        }
+    }
+
     public string StorageText =>
         $"{Broadcasts.Count:N0} download{(Broadcasts.Count == 1 ? string.Empty : "s")} · {FormatBytes(Storage.TotalBytes)} stored";
 
     public string StorageLimitText => StorageLimitBytes <= 0
         ? "No storage limit"
         : $"Up to {FormatBytes(StorageLimitBytes)}";
+
+    public string DownloadExpiryText => DownloadExpiryDays <= 0
+        ? "Never"
+        : DownloadExpiryDays == 1 ? "After 1 day" : $"After {DownloadExpiryDays} days";
 
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
         => await RefreshAsync(cancellationToken).ConfigureAwait(false);
@@ -256,6 +282,32 @@ internal sealed class MobileDownloadCoordinator : IDisposable
         return removed;
     }
 
+    public async Task<int> MaintainStorageAsync(long? protectedEpisodeId = null)
+    {
+        if (IsDownloading || !await _maintenanceGate.WaitAsync(0).ConfigureAwait(false)) return 0;
+        try
+        {
+            var removed = 0;
+            if (DeleteCompletedDownloads)
+                removed += await _store.RemoveCompletedAsync(protectedEpisodeId).ConfigureAwait(false);
+            if (DownloadExpiryDays > 0)
+            {
+                var cutoff = _utcNow().AddDays(-DownloadExpiryDays);
+                removed += await _store.RemoveExpiredAsync(cutoff, protectedEpisodeId).ConfigureAwait(false);
+            }
+            if (StorageLimitBytes > 0)
+                removed += await _store.TrimToLimitAsync(StorageLimitBytes, protectedEpisodeId).ConfigureAwait(false);
+            if (removed > 0)
+            {
+                await RefreshStateAsync().ConfigureAwait(false);
+                Status = $"Freed space from {removed:N0} older download{(removed == 1 ? string.Empty : "s")} using this iPhone’s storage rules.";
+                Notify();
+            }
+            return removed;
+        }
+        finally { _maintenanceGate.Release(); }
+    }
+
     public async Task<bool> RemoveAsync(MobileBroadcastItem broadcast, long? protectedEpisodeId = null)
     {
         ArgumentNullException.ThrowIfNull(broadcast);
@@ -304,10 +356,25 @@ internal sealed class MobileDownloadCoordinator : IDisposable
         var candidate = summaries
             .Where(value => !value.Completed &&
                             !downloadedIds.Contains(value.RepresentativeEpisodeId) &&
-                            value.DateAdded >= _policy.AutoDownloadSince)
+                            (value.DateAdded > _policy.AutoDownloadSince ||
+                             (value.DateAdded == _policy.AutoDownloadSince &&
+                              value.RepresentativeEpisodeId > _policy.AutoDownloadWatermarkEpisodeId)))
             .OrderBy(value => value.DateAdded)
+            .ThenBy(value => value.RepresentativeEpisodeId)
             .FirstOrDefault();
         return candidate is null ? null : new MobileBroadcastItem(candidate);
+    }
+
+    public async Task<bool> DownloadAutomaticallyAsync(
+        MobileBroadcastItem broadcast,
+        Func<MobileBroadcastItem, Task>? cacheArtwork = null)
+    {
+        ArgumentNullException.ThrowIfNull(broadcast);
+        await DownloadAsync(broadcast, cacheArtwork).ConfigureAwait(false);
+        if (!await _store.IsDownloadedAsync(broadcast.EpisodeId).ConfigureAwait(false)) return false;
+        _policy.AutoDownloadSince = broadcast.Source.DateAdded;
+        _policy.AutoDownloadWatermarkEpisodeId = broadcast.EpisodeId;
+        return true;
     }
 
     public void ReplaceBroadcast(long episodeId, MobileBroadcastItem replacement)
@@ -359,6 +426,7 @@ internal interface IMobileDownloadStore
         CancellationToken cancellationToken = default);
     Task RemoveAsync(long episodeId, CancellationToken cancellationToken = default);
     Task<int> RemoveCompletedAsync(long? protectedEpisodeId = null, CancellationToken cancellationToken = default);
+    Task<int> RemoveExpiredAsync(DateTimeOffset cutoff, long? protectedEpisodeId = null, CancellationToken cancellationToken = default);
     Task<int> TrimToLimitAsync(long limitBytes, long? protectedEpisodeId = null, CancellationToken cancellationToken = default);
     Task<int> RepairAsync(CancellationToken cancellationToken = default);
     Task DiscardPendingAsync(long episodeId, CancellationToken cancellationToken = default);
@@ -394,6 +462,8 @@ internal sealed class MobileDownloadStore(MobileDownloadService service) : IMobi
         => _service.RemoveAsync(episodeId, cancellationToken);
     public Task<int> RemoveCompletedAsync(long? protectedEpisodeId = null, CancellationToken cancellationToken = default)
         => _service.RemoveCompletedAsync(protectedEpisodeId, cancellationToken);
+    public Task<int> RemoveExpiredAsync(DateTimeOffset cutoff, long? protectedEpisodeId = null, CancellationToken cancellationToken = default)
+        => _service.RemoveExpiredAsync(cutoff, protectedEpisodeId, cancellationToken);
     public Task<int> TrimToLimitAsync(long limitBytes, long? protectedEpisodeId = null, CancellationToken cancellationToken = default)
         => _service.TrimToLimitAsync(limitBytes, protectedEpisodeId, cancellationToken);
     public Task<int> RepairAsync(CancellationToken cancellationToken = default)

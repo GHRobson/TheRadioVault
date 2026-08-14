@@ -54,6 +54,7 @@ public static class WebApiRoutes
     public const string ClientLibrarySearchFacets = ClientLibrary + "/search-facets";
     public const string ClientLibrarySearchSuggestions = ClientLibrary + "/search-suggestions";
     public const string ClientSavedCollections = Root + "/client/saved-collections";
+    public const string ClientLiveRadio = Root + "/client/live-radio";
     public const string ClientBroadcastDetails = Root + "/client/broadcast-details";
     public const string ClientResearch = Root + "/client/research";
     public const string ClientTranscripts = Root + "/client/transcripts";

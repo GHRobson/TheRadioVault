@@ -110,6 +110,20 @@ public sealed class RadioVaultTabBarController : UITabBarController
     private void MiniPlayerOnTapped(object? sender, EventArgs eventArgs)
     {
         if (!_session.HasMiniPlayer || PresentedViewController is not null) return;
+        if (_session.IsLiveRadioTunedIn)
+        {
+            var live = new LiveRadioViewController(_session);
+            var liveNavigation = new UINavigationController(live)
+            {
+                ModalPresentationStyle = UIModalPresentationStyle.PageSheet
+            };
+            live.NavigationItem.RightBarButtonItem = new UIBarButtonItem(
+                RadioVaultIcons.Image(RadioVaultIcon.Close, RadioVaultTheme.MutedText),
+                UIBarButtonItemStyle.Plain,
+                (_, _) => liveNavigation.DismissViewController(true, null));
+            PresentViewController(liveNavigation, true, null);
+            return;
+        }
         var nowPlaying = new NowPlayingViewController(_session);
         var navigation = new UINavigationController(nowPlaying)
         {

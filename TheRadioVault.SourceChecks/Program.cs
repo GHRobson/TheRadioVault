@@ -254,7 +254,7 @@ static void WebClientAndMediaBoundariesRemainExtracted()
     True(project.Contains("<EmbeddedResource Include=\"Assets\\*.html\" />", StringComparison.Ordinal));
     True(project.Contains("<EmbeddedResource Include=\"Assets\\*.js\" />", StringComparison.Ordinal));
     True(File.ReadAllText(Path.Combine(assets, "web-client.html")).Contains("<title>Radio Vault Web</title>", StringComparison.Ordinal));
-    True(File.ReadAllText(Path.Combine(assets, "service-worker.js")).Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(File.ReadAllText(Path.Combine(assets, "service-worker.js")).Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
 }
 
 static void DesktopSavedAndTransportControlsMatchNativeParity()
@@ -393,7 +393,7 @@ static void WebHandoffPreservesAlignedSafariDecoder()
     var clockProof = prepare.IndexOf("await waitForIosDecoderClock()", StringComparison.Ordinal);
     var seekAfterProof = prepare.IndexOf("setLogicalPositionImmediately(positionMs)", StringComparison.Ordinal);
     True(clockProof >= 0 && seekAfterProof > clockProof);
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
 }
 
 static void IphoneBroadcastSwitchesReplaceStaleDecoderInTap()
@@ -465,7 +465,7 @@ static void IphonePositionedFailuresPreserveCanonicalGestureFallback()
     True(transfer.Contains(
         "The failed positioned play promise was replaced by a healthy canonical decoder",
         StringComparison.Ordinal));
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
 }
 
 static void RepeatedIphoneHandoffsBypassDormantDecoderGating()
@@ -496,7 +496,7 @@ static void RepeatedIphoneHandoffsBypassDormantDecoderGating()
         "mustPrimeTargetSourceInGesture = desiredPlaying && isIosWebKit",
         StringComparison.Ordinal));
     True(transfer.Contains("assignCanonicalGestureStartSource(id, shared.positionMs)", StringComparison.Ordinal));
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
 }
 
 static void CanonicalAudioRangesAreCacheCombinable()

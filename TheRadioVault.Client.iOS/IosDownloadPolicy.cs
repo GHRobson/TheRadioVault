@@ -10,7 +10,9 @@ public sealed class IosDownloadPolicy : IMobileDownloadPolicy, IDisposable
     private const string WifiOnlyKey = "RadioVault.Downloads.WifiOnly";
     private const string AutoDownloadKey = "RadioVault.Downloads.AutoDownloadNew";
     private const string AutoDownloadSinceKey = "RadioVault.Downloads.AutoDownloadSince";
+    private const string AutoDownloadWatermarkEpisodeKey = "RadioVault.Downloads.AutoDownloadWatermarkEpisode";
     private const string DeleteCompletedKey = "RadioVault.Downloads.DeleteCompleted";
+    private const string DownloadExpiryDaysKey = "RadioVault.Downloads.ExpiryDays";
     private const string StorageLimitKey = "RadioVault.Downloads.StorageLimitBytes";
     private readonly NWPathMonitor _monitor = new();
     private readonly DispatchQueue _queue = new("com.ghrobson.theradiovault.download-network");
@@ -52,10 +54,26 @@ public sealed class IosDownloadPolicy : IMobileDownloadPolicy, IDisposable
             value <= DateTimeOffset.MinValue ? 0 : value.ToUnixTimeSeconds(), AutoDownloadSinceKey);
     }
 
+    public long AutoDownloadWatermarkEpisodeId
+    {
+        get => Math.Max(0, (long)NSUserDefaults.StandardUserDefaults.DoubleForKey(AutoDownloadWatermarkEpisodeKey));
+        set => NSUserDefaults.StandardUserDefaults.SetDouble(Math.Max(0, value), AutoDownloadWatermarkEpisodeKey);
+    }
+
     public bool DeleteCompletedDownloads
     {
         get => NSUserDefaults.StandardUserDefaults.BoolForKey(DeleteCompletedKey);
         set => NSUserDefaults.StandardUserDefaults.SetBool(value, DeleteCompletedKey);
+    }
+
+    public int DownloadExpiryDays
+    {
+        get
+        {
+            var value = (int)NSUserDefaults.StandardUserDefaults.IntForKey(DownloadExpiryDaysKey);
+            return value is 1 or 7 or 30 or 90 ? value : 0;
+        }
+        set => NSUserDefaults.StandardUserDefaults.SetInt(value is 1 or 7 or 30 or 90 ? value : 0, DownloadExpiryDaysKey);
     }
 
     public long StorageLimitBytes

@@ -36,6 +36,7 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Download coordinator enforces network policy and selects new broadcasts", DownloadCoordinatorEnforcesPolicyAsync),
     ("Download coordinator preserves pause and resume state", DownloadCoordinatorPreservesPauseResumeAsync),
     ("Download coordinator protects active media and reconciles summaries", DownloadCoordinatorProtectsAndReconcilesAsync),
+    ("Download coordinator expires old media without redownload loops", DownloadCoordinatorExpiresWithoutRedownloadingAsync),
     ("Downloaded progress synchronization adopts the canonical result", DownloadedProgressSynchronizationAdoptsCanonicalAsync),
     ("Downloaded progress synchronization preserves conflicts and newer offline state", DownloadedProgressSynchronizationPreservesAuthorityAsync),
     ("Explore coordinator warms pages and images into the offline cache", ExploreCoordinatorWarmsOfflineCacheAsync),
@@ -50,7 +51,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Library coordinator keeps archive search queries explicit", LibraryCoordinatorKeepsArchiveSearchExplicitAsync),
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
-    ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync)
+    ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync),
+    ("Live Radio stays outside personal playback state", LiveRadioStaysOutsidePersonalPlaybackStateAsync)
 };
 
 var failures = new List<string>();
@@ -213,6 +215,35 @@ static Task HandoffKeepsTransactionalBoundaryAsync()
     Contains(downloadedBranch, "GetPlaybackSessionAsync", "downloaded playback ownership polling");
     Contains(downloadedBranch, "StopForCommittedTransferAsync", "downloaded playback source-stop acknowledgement");
     Contains(downloadedBranch, "ReportLivePlaybackAsync", "downloaded playback ownership publication");
+    return Task.CompletedTask;
+}
+
+static Task LiveRadioStaysOutsidePersonalPlaybackStateAsync()
+{
+    var root = FindRepositoryRoot();
+    var source = File.ReadAllText(Path.Combine(root, "TheRadioVault.Client.Mobile", "MobileClientSession.cs"));
+    var synchronizeStart = source.IndexOf("private async Task SynchronizePlaybackAsync", StringComparison.Ordinal);
+    var observeStart = source.IndexOf("private async Task ObserveSharedPlaybackAsync", synchronizeStart, StringComparison.Ordinal);
+    Ensure(synchronizeStart >= 0 && observeStart > synchronizeStart,
+        "The mobile playback synchronization boundary could not be located.");
+    var synchronization = source[synchronizeStart..observeStart];
+    var liveBranch = synchronization.IndexOf("if (IsLiveRadioTunedIn)", StringComparison.Ordinal);
+    var ordinaryBranch = synchronization.IndexOf("if (_offlinePlayback)", StringComparison.Ordinal);
+    Ensure(liveBranch >= 0 && ordinaryBranch > liveBranch,
+        "Live Radio did not exit before ordinary progress synchronization.");
+    Contains(synchronization[liveBranch..ordinaryBranch], "await SynchronizeLiveRadioAsync()", "isolated live synchronization");
+    Contains(synchronization[liveBranch..ordinaryBranch], "return;", "live synchronization early return");
+
+    var liveStart = source.IndexOf("private async Task SynchronizeLiveRadioAsync", StringComparison.Ordinal);
+    Ensure(liveStart >= 0 && observeStart > liveStart, "The Live Radio synchronization method could not be located.");
+    var liveSynchronization = source[liveStart..observeStart];
+    Ensure(!liveSynchronization.Contains("UpdateProgress", StringComparison.Ordinal),
+        "Live Radio synchronization writes personal progress.");
+    Ensure(!liveSynchronization.Contains("ReportLivePlayback", StringComparison.Ordinal),
+        "Live Radio synchronization publishes shared playback ownership.");
+    Ensure(!liveSynchronization.Contains("PlaybackTransfer", StringComparison.Ordinal),
+        "Live Radio synchronization participates in handoff.");
+    Contains(source, "IsLiveRadioTunedIn\n            ? Task.CompletedTask", "live progress flush suppression");
     return Task.CompletedTask;
 }
 
@@ -757,6 +788,48 @@ static async Task DownloadCoordinatorProtectsAndReconcilesAsync()
     Ensure(await coordinator.RemoveAsync(new MobileBroadcastItem(canonical)),
         "The inactive download was not removed.");
     Equal(0, coordinator.Broadcasts.Count, "Downloads after removal");
+}
+
+static async Task DownloadCoordinatorExpiresWithoutRedownloadingAsync()
+{
+    var now = new DateTimeOffset(2026, 8, 13, 12, 0, 0, TimeSpan.Zero);
+    var expired = DownloadRecord(Summary(101, "Expired", 0, false, null)) with
+    {
+        DownloadedAt = now.AddDays(-10)
+    };
+    var recentlyPlayedSummary = Summary(202, "Recently Played", 30_000, false, now.AddDays(-1));
+    var recentlyPlayed = DownloadRecord(recentlyPlayedSummary) with { DownloadedAt = now.AddDays(-20) };
+    var protectedOld = DownloadRecord(Summary(303, "Protected", 0, false, null)) with
+    {
+        DownloadedAt = now.AddDays(-20)
+    };
+    var store = new FakeDownloadStore(expired, recentlyPlayed, protectedOld);
+    var policy = new FakeDownloadPolicy { DownloadExpiryDays = 7 };
+    using var coordinator = new MobileDownloadCoordinator(store, policy, () => now);
+    await coordinator.InitializeAsync();
+
+    Equal(1, await coordinator.MaintainStorageAsync(303), "Expired download removals");
+    Ensure(coordinator.Broadcasts.Select(value => value.EpisodeId).Order().SequenceEqual([202L, 303L]),
+        "Expiry removed recently used or actively protected media.");
+
+    var first = Summary(404, "First Automatic", 0, false, null) with
+    {
+        DateAdded = now.AddMinutes(1)
+    };
+    var second = Summary(505, "Second Automatic", 0, false, null) with
+    {
+        DateAdded = now.AddMinutes(2)
+    };
+    policy.AutoDownloadNewBroadcasts = true;
+    policy.AutoDownloadSince = now;
+    policy.AutoDownloadWatermarkEpisodeId = 0;
+    var selected = coordinator.SelectAutomaticDownload([first, second])!;
+    Equal(404L, selected.EpisodeId, "First automatic candidate");
+    Ensure(await coordinator.DownloadAutomaticallyAsync(selected), "Automatic download did not complete.");
+    await store.RemoveAsync(404);
+    await coordinator.RefreshAsync();
+    Equal(505L, coordinator.SelectAutomaticDownload([first, second])?.EpisodeId ?? 0,
+        "An evicted automatic download was selected again.");
 }
 
 static async Task DownloadedProgressSynchronizationAdoptsCanonicalAsync()
@@ -2038,7 +2111,9 @@ file sealed class FakeDownloadPolicy : IMobileDownloadPolicy
     public bool IsUsingWifi { get; set; } = true;
     public bool AutoDownloadNewBroadcasts { get; set; }
     public DateTimeOffset AutoDownloadSince { get; set; } = DateTimeOffset.MinValue;
+    public long AutoDownloadWatermarkEpisodeId { get; set; }
     public bool DeleteCompletedDownloads { get; set; }
+    public int DownloadExpiryDays { get; set; }
     public long StorageLimitBytes { get; set; }
 }
 
@@ -2100,6 +2175,22 @@ file sealed class FakeDownloadStore(params MobileDownloadRecord[] records) : IMo
     {
         var removals = _records.Values
             .Where(value => value.Summary.Completed && value.EpisodeId != protectedEpisodeId)
+            .Select(value => value.EpisodeId)
+            .ToArray();
+        foreach (var episodeId in removals) _records.Remove(episodeId);
+        return Task.FromResult(removals.Length);
+    }
+
+    public Task<int> RemoveExpiredAsync(
+        DateTimeOffset cutoff,
+        long? protectedEpisodeId = null,
+        CancellationToken cancellationToken = default)
+    {
+        var removals = _records.Values
+            .Where(value => value.EpisodeId != protectedEpisodeId &&
+                            (value.Summary.LastPlayedAt is { } played && played > value.DownloadedAt
+                                ? played
+                                : value.DownloadedAt) < cutoff)
             .Select(value => value.EpisodeId)
             .ToArray();
         foreach (var episodeId in removals) _records.Remove(episodeId);

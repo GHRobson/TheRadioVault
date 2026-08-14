@@ -8,6 +8,8 @@ internal static class SqliteMigrationCatalog
         LegacySchemaVersion,
         [
             new Migration048CreateMigrationHistory(),
-            new Migration049CreateSavedCollections()
+            new Migration049CreateSavedCollections(),
+            new Migration050CreateRssFeedSubscriptions(),
+            new Migration051CreateLiveRadioSchedule()
         ]);
 }

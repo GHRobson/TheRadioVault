@@ -152,6 +152,11 @@ internal sealed class LibraryControlsHeaderView : UIView, IConnectionStatusView
         var blocks = new List<UIView>();
         if (includesPageHeading)
         {
+            ConfigureIconButton(
+                CollectionsButton,
+                RadioVaultIcons.Image(RadioVaultIcon.Add),
+                "Saved collections",
+                "Creates a playlist or smart collection");
             var title = new UILabel
             {
                 Text = "Library",
@@ -177,7 +182,9 @@ internal sealed class LibraryControlsHeaderView : UIView, IConnectionStatusView
             };
             _connectionIndicator.WidthAnchor.ConstraintEqualTo(26).Active = true;
             _connectionIndicator.HeightAnchor.ConstraintEqualTo(38).Active = true;
-            var heading = new UIStackView([headingText, _connectionIndicator])
+            CollectionsButton.WidthAnchor.ConstraintEqualTo(42).Active = true;
+            CollectionsButton.HeightAnchor.ConstraintEqualTo(38).Active = true;
+            var heading = new UIStackView([headingText, _connectionIndicator, CollectionsButton])
             {
                 Axis = UILayoutConstraintAxis.Horizontal,
                 Alignment = UIStackViewAlignment.Center,
@@ -221,6 +228,7 @@ internal sealed class LibraryControlsHeaderView : UIView, IConnectionStatusView
     }
 
     public UISearchBar SearchBar { get; } = new();
+    public UIButton CollectionsButton { get; } = UIButton.FromType(UIButtonType.System);
     public UIButton CompletedButton { get; } = UIButton.FromType(UIButtonType.System);
     public UIButton GridButton { get; } = UIButton.FromType(UIButtonType.System);
     public UIButton ListButton { get; } = UIButton.FromType(UIButtonType.System);
@@ -261,6 +269,19 @@ internal sealed class LibraryControlsHeaderView : UIView, IConnectionStatusView
         button.TitleLabel.AdjustsFontForContentSizeCategory = true;
         button.BackgroundColor = RadioVaultTheme.Surface;
         button.Layer.CornerRadius = 10;
+    }
+
+    private static void ConfigureIconButton(
+        UIButton button,
+        UIImage? image,
+        string accessibilityLabel,
+        string accessibilityHint)
+    {
+        button.SetImage(image, UIControlState.Normal);
+        button.BackgroundColor = RadioVaultTheme.Surface;
+        button.Layer.CornerRadius = 10;
+        button.AccessibilityLabel = accessibilityLabel;
+        button.AccessibilityHint = accessibilityHint;
     }
 
     private static void StyleModeButton(UIButton button, bool selected)

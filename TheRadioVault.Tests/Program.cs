@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Net;
 using System.Text;
 using System.Text.Json;
 using System.Net.Http.Json;
@@ -77,6 +78,7 @@ var tests = new (string Name, Action Run)[]
         Equal("Overdue · 45 days ago", ArchiveHealthPresentationPolicy.FormatBackupAge(now.AddDays(-45), now));
     }),
     ("Scheduled backups are verified and report their next run", ScheduledBackupsAreVerified),
+    ("RSS archive inbox baselines, encrypts and deduplicates private feeds", RssArchiveInboxIsSafeAndIncremental),
     ("Moment deduplication keeps one near-identical save", () =>
     {
         True(MomentDeduplicationPolicy.IsEquivalent("BENNINGTON-2026-06-22", 4_498_945, "The old slave hanging tree", "", "BENNINGTON-2026-06-22", 4_498_000, "The old slave hanging tree", ""));
@@ -128,6 +130,7 @@ var tests = new (string Name, Action Run)[]
     ("RC1 buildfix 4 unifies client UI and native downloads", Rc1Buildfix4UnifiesClientUiAndNativeDownloads),
     ("Alpha 0.35 begins the Wiki without breaking stable upgrades", Alpha035BeginsWikiWithoutBreakingStableUpgrades),
     ("Native downloads persist, audit and prepare local media", NativeDownloadsPersistAuditAndPrepareLocalMedia),
+    ("Native download policies expire and trim local media safely", NativeDownloadPoliciesExpireAndTrimSafely),
     ("Connected views refresh bounded stale data", ConnectedViewsRefreshBoundedStaleData),
     ("Avalonia incomplete progress overrun clamps to 99", () =>
     {
@@ -383,6 +386,121 @@ static void ScheduledBackupsAreVerified()
         var notDue = scheduler.RunIfDueAsync().GetAwaiter().GetResult();
         Equal(completed.LatestBackupPath, notDue.LatestBackupPath);
         Equal(completed.LastCompletedAt, notDue.LastCompletedAt);
+    }
+    finally
+    {
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void RssArchiveInboxIsSafeAndIncremental()
+{
+    var root = Path.Combine(Path.GetTempPath(), "RadioVaultRssTests", Guid.NewGuid().ToString("N"));
+    var archive = Path.Combine(root, "Bennington");
+    Directory.CreateDirectory(archive);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(root, "rss.sqlite"));
+        database.Initialize();
+        long folderId;
+        using (var connection = database.OpenConnection())
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
+                SELECT $path,id,1,1 FROM collections WHERE name='Bennington'
+                RETURNING id;
+                """;
+            command.Parameters.AddWithValue("$path", archive);
+            folderId = Convert.ToInt64(command.ExecuteScalar());
+        }
+
+        var handler = new RssScenarioHandler();
+        using var http = new HttpClient(handler);
+        var preferences = new WebServerPreferences
+        {
+            ServerInstanceId = Guid.NewGuid().ToString("D"),
+            CertificatePassword = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)).ToLowerInvariant()
+        };
+        var scanCount = 0;
+        using var service = new RssFeedIngestionService(
+            database,
+            preferences,
+            _ => { scanCount++; return Task.FromResult(true); },
+            http);
+        var feed = service.CreateAsync(new RssFeedSaveRequest(
+            "Bennington private feed",
+            new RssFeedSource("https://feeds.example/private.xml?token=do-not-store-plainly", "graham", "private-password"),
+            folderId,
+            CheckIntervalMinutes: 30,
+            ImportExistingOnFirstCheck: false)).GetAwaiter().GetResult();
+
+        var baseline = service.CheckNowAsync(feed.Id).GetAwaiter().GetResult();
+        Equal(0, baseline.NewDownloads);
+        Equal(0, Directory.EnumerateFiles(archive, "*.mp3").Count());
+
+        handler.IncludeNewEpisode = true;
+        var newItems = service.CheckNowAsync(feed.Id).GetAwaiter().GetResult();
+        Equal(1, newItems.NewDownloads);
+        Equal(1, Directory.EnumerateFiles(archive, "*.mp3").Count());
+        Equal(1, scanCount);
+        Equal(1, handler.AudioRequests);
+        True(handler.SawConditionalRequest, "The second RSS check did not use the saved ETag.");
+        True(handler.SawFeedBasicAuthentication, "Private RSS Basic authentication was not sent to the feed host.");
+        True(!handler.SentAuthenticationToMediaHost, "RSS credentials were forwarded to a different enclosure host.");
+
+        var repeated = service.CheckNowAsync(feed.Id).GetAwaiter().GetResult();
+        Equal(0, repeated.NewDownloads);
+        Equal(1, handler.AudioRequests);
+        Equal(1, scanCount);
+
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "UPDATE rss_feed_items SET status='Downloaded' WHERE feed_id=$id AND downloaded_at IS NOT NULL;";
+            command.Parameters.AddWithValue("$id", feed.Id);
+            command.ExecuteNonQuery();
+        }
+        _ = service.RunIfDueAsync().GetAwaiter().GetResult();
+        Equal(2, scanCount);
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT status FROM rss_feed_items WHERE feed_id=$id AND downloaded_at IS NOT NULL;";
+            command.Parameters.AddWithValue("$id", feed.Id);
+            Equal("Imported", Convert.ToString(command.ExecuteScalar()));
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT display_url,protected_source FROM rss_feed_subscriptions WHERE id=$id;";
+            command.Parameters.AddWithValue("$id", feed.Id);
+            using var reader = command.ExecuteReader();
+            True(reader.Read());
+            var display = reader.GetString(0);
+            var protectedSource = reader.GetString(1);
+            True(!display.Contains("token", StringComparison.OrdinalIgnoreCase));
+            True(!protectedSource.Contains("do-not-store-plainly", StringComparison.Ordinal));
+            True(!protectedSource.Contains("private-password", StringComparison.Ordinal));
+            True(!protectedSource.Contains("graham", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var downloadedPath = Directory.EnumerateFiles(archive, "*.mp3").Single();
+        service.DeleteAsync(feed.Id).GetAwaiter().GetResult();
+        True(File.Exists(downloadedPath), "Removing an RSS subscription deleted archive audio.");
+
+        handler.IncludeNewEpisode = false;
+        var backCatalogueFeed = service.CreateAsync(new RssFeedSaveRequest(
+            "Import existing test",
+            new RssFeedSource("https://feeds.example/private.xml?token=second-feed", "graham", "private-password"),
+            folderId,
+            CheckIntervalMinutes: 30,
+            ImportExistingOnFirstCheck: true)).GetAwaiter().GetResult();
+        var importedExisting = service.CheckNowAsync(backCatalogueFeed.Id).GetAwaiter().GetResult();
+        Equal(1, importedExisting.NewDownloads);
+        Equal(2, Directory.EnumerateFiles(archive, "*.mp3").Count());
+        service.DeleteAsync(backCatalogueFeed.Id).GetAwaiter().GetResult();
     }
     finally
     {
@@ -1022,7 +1140,7 @@ static void Alpha14RenamesWebAndRestoresPhoneConnectionControls()
     True(webServer.Contains("accessUrl = GetAccessUrls().FirstOrDefault()", StringComparison.Ordinal));
     True(webServer.Contains("secureSetupUrl = GetSecureSetupUrls().FirstOrDefault()", StringComparison.Ordinal));
     True(webServer.Contains("<title>Radio Vault Web</title>", StringComparison.Ordinal));
-    True(webServer.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(webServer.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
 
     var clientAdapter = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Anywhere", "DedicatedServerRadioVaultAnywhereService.cs"));
@@ -1212,7 +1330,7 @@ static void Alpha18HardensConnectedClientReliability()
     True(playback.Contains("_handoffSnapshot.IsOwnedByCurrentDevice == false", StringComparison.Ordinal));
 
     var web = ReadWebServerSourceBundle();
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
     True(!web.Contains("radio-vault-anywhere-shell-v42", StringComparison.Ordinal));
 
     foreach (var installerName in new[] { "RadioVault.Client.iss", "RadioVault.Server.iss" })
@@ -1472,6 +1590,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(library.Contains("DownloadsViewController", StringComparison.Ordinal));
     True(library.Contains("LibraryQuickAccessCell", StringComparison.Ordinal));
     True(library.Contains("RadioVaultIcon.Radio", StringComparison.Ordinal));
+    True(library.Contains("_header.CollectionsButton.TouchUpInside += CollectionsButtonTapped", StringComparison.Ordinal));
+    True(library.Contains("\"New Smart Collection\"", StringComparison.Ordinal));
+    True(library.Contains("popover.SourceView = _header.CollectionsButton", StringComparison.Ordinal));
 
     var showLibrary = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ShowLibraryViewController.cs"));
@@ -1491,6 +1612,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosCells.Contains("PageHeaderView", StringComparison.Ordinal));
     True(iosCells.Contains("LibraryControlsHeaderView", StringComparison.Ordinal));
     True(iosCells.Contains("CompletedButton", StringComparison.Ordinal));
+    True(iosCells.Contains("public UIButton CollectionsButton", StringComparison.Ordinal));
     True(iosCells.Contains("UITapGestureRecognizer", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardStatsCell", StringComparison.Ordinal));
     True(iosCells.Contains("DashboardOverviewCell", StringComparison.Ordinal));
@@ -1521,6 +1643,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosTableBase.Contains("RadioVaultIcon.Sync", StringComparison.Ordinal));
     True(iosTableBase.Contains("Mark as Listened", StringComparison.Ordinal));
     True(iosTableBase.Contains("Mark as Unlistened", StringComparison.Ordinal));
+    True(iosTableBase.Contains("\"New Playlist…\"", StringComparison.Ordinal));
+    True(iosTableBase.Contains("PromptForNewPlaylistAndAdd", StringComparison.Ordinal));
+    True(iosTableBase.Contains("actions.Add(addToPlaylist)", StringComparison.Ordinal));
     True(iosTableBase.Contains("new UIBarButtonItem(image)", StringComparison.Ordinal));
     True(iosTableBase.Contains("NavigationItem.Title = string.Empty", StringComparison.Ordinal));
     True(iosTableBase.Contains("UINavigationItemBackButtonDisplayMode.Minimal", StringComparison.Ordinal));
@@ -2113,7 +2238,7 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
     True(!splash.Contains("RvTranscriptBrush", StringComparison.Ordinal));
 
     var web = ReadWebServerSourceBundle();
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
     True(web.Contains("class=\"menuToggle\"", StringComparison.Ordinal));
     True(web.Contains("id=\"menuScrim\"", StringComparison.Ordinal));
     True(web.Contains("body.menuOpen", StringComparison.Ordinal));
@@ -2195,7 +2320,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 
     var foundation = File.ReadAllText(Path.Combine(SourceRoot(), "tools", "Test-AvaloniaFoundation.ps1"));
     True(foundation.Contains("foundationVersion = '0.35-alpha9-knowledge-portability'", StringComparison.Ordinal));
-    True(foundation.Contains("databaseSchema = 49", StringComparison.Ordinal));
+    True(foundation.Contains("databaseSchema = 51", StringComparison.Ordinal));
     True(foundation.Contains("lanCapabilityGeneration = 41", StringComparison.Ordinal));
     foreach (var marker in new[]
              {
@@ -2206,7 +2331,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
         True(foundation.Contains(marker, StringComparison.Ordinal));
 
     var web = ReadWebServerSourceBundle();
-    True(web.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal));
+    True(web.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal));
 
     var truthService = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Services", "Services", "LibraryTruthAdoptionService.cs"));
@@ -2291,6 +2416,76 @@ static void NativeDownloadsPersistAuditAndPrepareLocalMedia()
         Equal(1, audit.Checked);
         Equal(1, audit.NeedsRepair);
         True(service.TryPrepareAsync("CANONICAL-42", 42).GetAwaiter().GetResult() is null);
+    }
+    finally
+    {
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+    }
+}
+
+static void NativeDownloadPoliciesExpireAndTrimSafely()
+{
+    var root = Path.Combine(Path.GetTempPath(), "rv-native-retention-test-" + Guid.NewGuid().ToString("N"));
+    var now = new DateTimeOffset(2026, 8, 13, 12, 0, 0, TimeSpan.Zero);
+    try
+    {
+        var records = Path.Combine(root, "records");
+        Directory.CreateDirectory(records);
+        WriteRecord(1, completed: true, downloadedAt: now.AddHours(-1), lastAccessedAt: null);
+        WriteRecord(2, completed: false, downloadedAt: now.AddDays(-20), lastAccessedAt: null);
+        WriteRecord(3, completed: false, downloadedAt: now.AddDays(-20), lastAccessedAt: null);
+        WriteRecord(4, completed: false, downloadedAt: now.AddHours(-2), lastAccessedAt: now.AddHours(-1));
+
+        var preferencesPath = Path.Combine(root, "preferences.json");
+        var preferencesStore = new NativeDownloadPreferencesStore(preferencesPath);
+        preferencesStore.Save(new NativeDownloadPreferences
+        {
+            AutomaticDownloadsEnabled = true,
+            AutomaticDownloadSince = now,
+            AutomaticDownloadWatermarkEpisodeId = 44,
+            DeleteCompletedDownloads = true,
+            DownloadExpiryDays = 7,
+            StorageLimitBytes = 5
+        });
+        var restored = preferencesStore.Load();
+        True(restored.AutomaticDownloadsEnabled);
+        Equal(44L, restored.AutomaticDownloadWatermarkEpisodeId);
+        Equal(7, restored.DownloadExpiryDays);
+        Equal(5L, restored.StorageLimitBytes);
+
+        using var connection = new LoopbackServerClient(new WebServerPreferences { Enabled = false });
+        var service = new NativeDownloadService(connection, root);
+        var result = service.MaintainAsync(
+            new NativeDownloadMaintenancePolicy(true, 7, 5, now),
+            protectedEpisodeId: 3).GetAwaiter().GetResult();
+        Equal(1, result.RemovedCompleted);
+        Equal(1, result.RemovedExpired);
+        Equal(1, result.RemovedForStorage);
+        Equal(15L, result.BytesFreed);
+        var remaining = service.GetDownloadsAsync().GetAwaiter().GetResult();
+        Equal(1, remaining.Count);
+        Equal(3L, remaining[0].RepresentativeEpisodeId);
+
+        void WriteRecord(long episodeId, bool completed, DateTimeOffset downloadedAt, DateTimeOffset? lastAccessedAt)
+        {
+            var generation = Path.Combine(root, "media", episodeId.ToString(), "generation-a");
+            Directory.CreateDirectory(generation);
+            var fileName = $"part-001-{episodeId}.mp3";
+            File.WriteAllBytes(Path.Combine(generation, fileName), [1, 2, 3, 4, 5]);
+            var part = new NativeDownloadPart(
+                1, 1, 0, 60_000, episodeId, 5,
+                Path.Combine("media", episodeId.ToString(), "generation-a", fileName),
+                "audio/mpeg");
+            var record = new NativeDownloadRecord(
+                episodeId, $"CANONICAL-{episodeId}", $"RECORDING-{episodeId}", $"BROADCAST-{episodeId}",
+                $"Download {episodeId}", "Test", new DateOnly(2026, 8, 13), null,
+                0, 60_000, 1, completed, false, downloadedAt, 5, [part], string.Empty, lastAccessedAt);
+            File.WriteAllBytes(
+                Path.Combine(records, episodeId + ".json"),
+                JsonSerializer.SerializeToUtf8Bytes(record, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
+        }
     }
     finally
     {
@@ -5705,6 +5900,68 @@ sealed class SecondCompositionDisposable : IDisposable
     private readonly List<string> _disposed;
     public SecondCompositionDisposable(List<string> disposed) => _disposed = disposed;
     public void Dispose() => _disposed.Add("second");
+}
+
+sealed class RssScenarioHandler : HttpMessageHandler
+{
+    public bool IncludeNewEpisode { get; set; }
+    public bool SawConditionalRequest { get; private set; }
+    public bool SawFeedBasicAuthentication { get; private set; }
+    public bool SentAuthenticationToMediaHost { get; private set; }
+    public int AudioRequests { get; private set; }
+
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (request.RequestUri?.Host == "feeds.example")
+        {
+            SawConditionalRequest |= request.Headers.IfNoneMatch.Count > 0;
+            SawFeedBasicAuthentication |= request.Headers.Authorization?.Scheme == "Basic";
+            var newer = IncludeNewEpisode
+                ? """
+                  <item>
+                    <title>Bennington - New episode</title>
+                    <guid>bennington-new</guid>
+                    <pubDate>Thu, 13 Aug 2026 12:00:00 GMT</pubDate>
+                    <enclosure url="https://media.example/bennington-new.mp3?token=private-audio" type="audio/mpeg" />
+                  </item>
+                  """
+                : string.Empty;
+            var xml = $$"""
+                <?xml version="1.0" encoding="utf-8"?>
+                <rss version="2.0"><channel><title>Private Bennington</title>
+                  <item>
+                    <title>Bennington - Existing episode</title>
+                    <guid>bennington-existing</guid>
+                    <pubDate>Wed, 12 Aug 2026 12:00:00 GMT</pubDate>
+                    <enclosure url="https://media.example/bennington-existing.mp3?token=private-audio" type="audio/mpeg" />
+                  </item>
+                  {{newer}}
+                </channel></rss>
+                """;
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent(xml, Encoding.UTF8, "application/rss+xml"),
+                RequestMessage = request
+            };
+            response.Headers.ETag = new System.Net.Http.Headers.EntityTagHeaderValue("\"rss-v1\"");
+            return Task.FromResult(response);
+        }
+        if (request.RequestUri?.Host == "media.example")
+        {
+            AudioRequests++;
+            SentAuthenticationToMediaHost |= request.Headers.Authorization is not null;
+            var audio = Encoding.UTF8.GetBytes("radio-vault-test-audio:" + request.RequestUri.AbsolutePath);
+            var response = new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new ByteArrayContent(audio),
+                RequestMessage = request
+            };
+            response.Content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("audio/mpeg");
+            return Task.FromResult(response);
+        }
+        return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound) { RequestMessage = request });
+    }
 }
 
 sealed class CompositionCycleA

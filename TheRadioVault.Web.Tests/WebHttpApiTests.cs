@@ -19,6 +19,7 @@ internal static class WebHttpApiTests
     [
         ("Web API serves versioned broadcast details", WebApiServesVersionedBroadcastDetails),
         ("Full client API preserves native Library and Broadcast Info fields", FullClientApiPreservesNativeLibraryFields),
+        ("Full client API exposes the shared Live Radio clock", FullClientApiExposesLiveRadioClock),
         ("Full client API manages revisioned saved collections", FullClientApiManagesSavedCollections),
         ("Full client API serves Research and transcription through the server", FullClientApiServesResearchAndTranscription),
         ("Full client API previews Research pack uploads", FullClientApiPreviewsResearchPackUploads),
@@ -113,6 +114,24 @@ static void FullClientApiPreservesNativeLibraryFields()
         Equal("Show", entityLinks[1].GetProperty("kind").GetString());
         Equal("1", entityLinks[1].GetProperty("targetId").GetString());
         Equal("host", entityLinks[2].GetProperty("relationship").GetString());
+    });
+}
+
+static void FullClientApiExposesLiveRadioClock()
+{
+    Equal("/api/v1/client/live-radio", WebApiRoutes.ClientLiveRadio);
+    WithWebServer(async (port, token) =>
+    {
+        using var client = new HttpClient(new SocketsHttpHandler { UseProxy = false, UseCookies = false }) { Timeout = TimeSpan.FromSeconds(5) };
+        client.DefaultRequestHeaders.Add("X-RadioVault-Token", token);
+        var payload = await client.GetFromJsonAsync<JsonElement>(
+            $"http://127.0.0.1:{port}{WebApiRoutes.ClientLiveRadio}");
+        Equal("v1", payload.GetProperty("apiVersion").GetString());
+        var station = payload.GetProperty("station");
+        Equal("main", station.GetProperty("stationKey").GetString());
+        Equal("Radio Vault Live", station.GetProperty("stationName").GetString());
+        Equal(9L, station.GetProperty("current").GetProperty("broadcast").GetProperty("representativeEpisodeId").GetInt64());
+        True(station.GetProperty("current").GetProperty("positionMs").GetInt64() > 0);
     });
 }
 
@@ -621,7 +640,7 @@ static void EmbeddedWebAssetsLoadFromAssembly()
     var serviceWorker = serverType.GetProperty("ServiceWorkerJavaScript", flags)?.GetValue(null) as string;
     var secureSetup = serverType.GetProperty("SecureSetupHtml", flags)?.GetValue(null) as string;
     True(webClient?.Contains("<title>Radio Vault Web</title>", StringComparison.Ordinal) == true);
-    True(serviceWorker?.Contains("radio-vault-anywhere-shell-v67", StringComparison.Ordinal) == true);
+    True(serviceWorker?.Contains("radio-vault-anywhere-shell-v68", StringComparison.Ordinal) == true);
     True(secureSetup?.Contains("<title>Radio Vault secure setup</title>", StringComparison.Ordinal) == true);
 }
 

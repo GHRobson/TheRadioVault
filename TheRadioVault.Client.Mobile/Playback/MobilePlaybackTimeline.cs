@@ -41,6 +41,17 @@ internal sealed class MobilePlaybackTimeline
         _pendingDecoderPositionUntil = default;
     }
 
+    public void Reset()
+    {
+        Parts = [];
+        PartIndex = 0;
+        PositionMs = 0;
+        DurationMs = 0;
+        Completed = false;
+        _pendingDecoderLogicalPositionMs = null;
+        _pendingDecoderPositionUntil = default;
+    }
+
     public long ClampPosition(long logicalPositionMs)
         => Math.Clamp(logicalPositionMs, 0, Math.Max(0, DurationMs));
 

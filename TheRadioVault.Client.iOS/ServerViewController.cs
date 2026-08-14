@@ -78,7 +78,7 @@ public sealed class ServerViewController : SessionTableViewController
     public override nint RowsInSection(UITableView tableView, nint section) => section switch
     {
         0 => Session.IsPaired ? 2 : 1,
-        1 => 7,
+        1 => 8,
         2 => Session.IsPaired ? 1 : 3,
         3 => Math.Max(1, Session.Servers.Count),
         4 => Session.IsPaired ? 1 : 2,
@@ -147,6 +147,13 @@ public sealed class ServerViewController : SessionTableViewController
                 return limit;
             }
             if (indexPath.Row == 5)
+            {
+                var expiry = DetailCell(
+                    "settings-download-expiry", "Download Expiry", Session.DownloadExpiryText);
+                expiry.Accessory = UITableViewCellAccessory.DisclosureIndicator;
+                return expiry;
+            }
+            if (indexPath.Row == 6)
                 return ActionCell("settings-check-downloads", "Check Downloaded Files", RadioVaultTheme.Accent);
             return ActionCell("settings-clean-downloads", "Remove Completed Downloads Now", RadioVaultTheme.Danger);
         }
@@ -228,8 +235,9 @@ public sealed class ServerViewController : SessionTableViewController
         if (indexPath.Section == 1)
         {
             if (indexPath.Row == 4) PresentStorageLimitPicker();
-            else if (indexPath.Row == 5) _ = Session.RepairDownloadsAsync();
-            else if (indexPath.Row == 6) _ = Session.CleanupCompletedDownloadsAsync();
+            else if (indexPath.Row == 5) PresentDownloadExpiryPicker();
+            else if (indexPath.Row == 6) _ = Session.RepairDownloadsAsync();
+            else if (indexPath.Row == 7) _ = Session.CleanupCompletedDownloadsAsync();
             return;
         }
         if (indexPath.Section == 2)
@@ -357,6 +365,31 @@ public sealed class ServerViewController : SessionTableViewController
                  })
             sheet.AddAction(UIAlertAction.Create(option.Title, UIAlertActionStyle.Default, _ =>
                 Session.DownloadStorageLimitBytes = option.Bytes));
+        sheet.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
+        if (View is { } sourceView && sheet.PopoverPresentationController is { } popover)
+        {
+            popover.SourceView = sourceView;
+            popover.SourceRect = sourceView.Bounds;
+        }
+        PresentViewController(sheet, true, null);
+    }
+
+    private void PresentDownloadExpiryPicker()
+    {
+        var sheet = UIAlertController.Create(
+            "Download Expiry",
+            "Expiry is based on when a broadcast was downloaded or last played. The broadcast remains in your Radio Vault library.",
+            UIAlertControllerStyle.ActionSheet);
+        foreach (var option in new (string Title, int Days)[]
+                 {
+                     ("After 1 Day", 1),
+                     ("After 7 Days", 7),
+                     ("After 30 Days", 30),
+                     ("After 90 Days", 90),
+                     ("Never", 0)
+                 })
+            sheet.AddAction(UIAlertAction.Create(option.Title, UIAlertActionStyle.Default, _ =>
+                Session.DownloadExpiryDays = option.Days));
         sheet.AddAction(UIAlertAction.Create("Cancel", UIAlertActionStyle.Cancel, null));
         if (View is { } sourceView && sheet.PopoverPresentationController is { } popover)
         {

@@ -62,6 +62,14 @@ internal sealed partial class TestWebArchiveProvider : IWebArchiveProvider
         new[] { ClientSummary() },
         new[] { ClientSummary() },
         Array.Empty<WebClientLibraryBroadcastSummary>());
+    public WebLiveRadioSnapshot GetLiveRadioSnapshot()
+    {
+        var now = DateTimeOffset.UtcNow;
+        var programme = new WebLiveRadioProgramme(
+            1, now.AddMinutes(-2), now.AddMinutes(58), 120_000, 3_480_000,
+            "On this date · Historical show slot", ClientSummary());
+        return new WebLiveRadioSnapshot("main", "Radio Vault Live", TimeZoneInfo.Local.Id, now, 1, programme, Array.Empty<WebLiveRadioProgramme>());
+    }
     public WebClientLibraryBroadcastSummary? GetClientLibraryBroadcast(long episodeId)
         => episodeId == _episode.Id ? ClientSummary() : null;
     public WebClientLibraryBrowseResult BrowseClientLibrary(WebClientLibraryBrowseRequest request)

@@ -15,7 +15,7 @@ using TheRadioVault.Web.Models;
 
 namespace TheRadioVault.Server.ViewModels;
 
-public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposable
+public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, IDisposable
 {
     private readonly RadioVaultServerRuntime? _runtime;
     private readonly ServerStartupRegistrationService? _startup;
@@ -121,6 +121,7 @@ public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposabl
         AssignLibraryFolderCommand = _assignLibraryFolderCommand;
         RemoveLibraryFolderCommand = _removeLibraryFolderCommand;
         ScanLibraryCommand = _scanLibraryCommand;
+        InitializeRssFeedCommands();
         _chooseKnowledgeImportCommand = new ServerCommand(() => _ = ChooseKnowledgeImportAsync(), () => !IsKnowledgeBusy);
         _applyKnowledgeImportCommand = new ServerCommand(() => _ = ApplyKnowledgeImportAsync(), () => HasKnowledgeImportPreview && !IsKnowledgeBusy);
         _cancelKnowledgeImportCommand = new ServerCommand(CancelKnowledgeImport, () => HasKnowledgeImportPreview);
@@ -132,6 +133,7 @@ public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposabl
         LoadPreferences();
         RefreshStatus();
         _ = LoadLibraryFoldersAsync();
+        _ = LoadRssFeedsAsync();
         _refreshTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => RefreshStatus());
         _refreshTimer.Start();
     }
@@ -513,6 +515,7 @@ public sealed class ServerSettingsViewModel : INotifyPropertyChanged, IDisposabl
             var folders = await _runtime.GetLibraryFoldersAsync().ConfigureAwait(true);
             LibraryFolders.Clear();
             foreach (var folder in folders) LibraryFolders.Add(folder);
+            RefreshRssDestinationFolders();
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasLibraryFolders)));
             LibraryStatusText = folders.Count == 0
                 ? "No Library folders are registered. Add the main archive folder from this computer."

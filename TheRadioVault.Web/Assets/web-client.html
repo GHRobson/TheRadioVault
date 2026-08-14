@@ -1321,9 +1321,41 @@
       body[data-view="research"] .viewIntro h2 { color:var(--research); }
       body[data-view="moments"] .viewIntro h2 { color:var(--moment); }
       body[data-view="settings"] .viewIntro h2 { color:var(--settings); }
+      body[data-view="live-radio"] .viewIntro h2 { color:var(--accent); }
       .primaryTab.researchTab.active { border-color:var(--research); background:rgba(180,154,242,.08); }
       .primaryTab.momentTab.active { border-color:var(--moment); background:rgba(231,162,76,.07); }
       .primaryTab.settingsTab.active { border-color:var(--settings); background:rgba(169,176,184,.07); }
+      .primaryTab.liveRadioTab .navIcon { color:var(--accent); }
+      .liveRadioWorkspace { display:grid; gap:16px; }
+      .liveRadioHero { padding:clamp(20px,4vw,34px); border:1px solid rgba(242,201,76,.34); border-radius:22px; background:radial-gradient(circle at 88% 0,rgba(242,201,76,.16),transparent 38%),linear-gradient(145deg,#282719,var(--panel) 72%); }
+      .liveRadioEyebrow { display:flex; align-items:center; gap:8px; color:var(--accent); font-size:11px; font-weight:900; letter-spacing:.08em; }
+      .liveRadioDot { width:9px; height:9px; border-radius:50%; background:var(--accent); box-shadow:0 0 0 5px rgba(242,201,76,.1); }
+      .liveRadioHero h3 { margin:18px 0 5px; font-size:clamp(27px,5vw,42px); line-height:1.08; }
+      .liveRadioShow { color:var(--muted); font-size:15px; }
+      .liveRadioReason { margin-top:8px; color:var(--muted); font-size:12px; }
+      .liveRadioProgress { height:6px; margin-top:24px; border-radius:999px; overflow:hidden; background:#333840; }
+      .liveRadioProgress span { display:block; width:0; height:100%; border-radius:inherit; background:var(--accent); }
+      .liveRadioTimes { display:grid; grid-template-columns:1fr auto 1fr; margin-top:7px; color:var(--muted); font:650 12px ui-monospace,SFMono-Regular,Menlo,monospace; }
+      .liveRadioTimes span:nth-child(2) { text-align:center; }
+      .liveRadioTimes span:last-child { text-align:right; }
+      .liveRadioActions { display:flex; flex-wrap:wrap; gap:9px; margin-top:22px; }
+      .liveRadioActions button { padding:11px 17px; border:1px solid var(--line); border-radius:10px; background:var(--panel2); color:var(--text); font-weight:800; }
+      .liveRadioActions .primary { border-color:var(--accent); background:var(--accent); color:#111; }
+      .liveRadioDisclosure { padding:14px 16px; border:1px solid var(--line); border-radius:13px; background:var(--panel); color:var(--muted); font-size:12px; line-height:1.5; }
+      .liveRadioUpcoming { display:grid; gap:8px; }
+      .liveRadioProgramme { display:grid; grid-template-columns:62px minmax(0,1fr) auto; gap:12px; align-items:center; width:100%; padding:13px 14px; border:1px solid var(--line); border-radius:12px; background:var(--panel); color:var(--text); text-align:left; }
+      .liveRadioProgrammeTime { color:var(--accent); font-weight:850; }
+      .liveRadioProgrammeTitle { font-weight:750; }
+      .liveRadioProgrammeMeta { margin-top:3px; color:var(--muted); font-size:11px; }
+      .liveRadioProgrammeReason { max-width:240px; color:var(--muted); font-size:10px; text-align:right; }
+      .liveRadioDock { position:fixed; z-index:11; inset:auto 0 0; min-height:calc(68px + env(safe-area-inset-bottom)); padding:10px max(12px,env(safe-area-inset-right)) calc(10px + env(safe-area-inset-bottom)) max(12px,env(safe-area-inset-left)); display:grid; grid-template-columns:minmax(0,1fr) auto; gap:12px; align-items:center; border-top:1px solid rgba(242,201,76,.42); background:rgba(24,25,27,.96); box-shadow:0 -12px 36px rgba(0,0,0,.42); }
+      .liveRadioDock[hidden] { display:none; }
+      .liveRadioDockOpen { min-width:0; padding:0; border:0; background:transparent; color:var(--text); text-align:left; }
+      .liveRadioDockOpen strong,.liveRadioDockOpen span { display:block; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+      .liveRadioDockOpen strong { color:var(--accent); font-size:11px; letter-spacing:.05em; }
+      .liveRadioDockOpen span { margin-top:3px; font-size:13px; font-weight:720; }
+      .liveRadioDockLeave { padding:10px 14px; border:1px solid var(--accent); border-radius:10px; background:var(--accent); color:#111; font-weight:850; }
+      body.liveRadioTuned .rvMiniPlayer { display:none; }
       @media (max-width: 700px) {
         .stateRow { gap:6px; }
         #serverState { display:none; }
@@ -1347,6 +1379,7 @@
       }
       @media (min-width:1080px) {
         .primaryTab.transcriptsTab.active { box-shadow:inset 3px 0 0 var(--transcript); }
+        .liveRadioDock { left:224px; min-height:110px; padding:15px 28px; }
       }
 
       /* Alpha 8 native-shell parity: shared palette, navigation rail, page header and player. */
@@ -1814,6 +1847,7 @@
       </div>
       <nav id="primaryNav" class="primaryNav" aria-label="Radio Vault views">
         <button class="primaryTab active" data-section="dashboard" data-nav-key="dashboard"><svg class="navIcon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 12 12 5l8 7M6.5 10.5V20h11v-9.5M10 20v-6h4v6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Dashboard</span></button>
+        <button class="primaryTab liveRadioTab" data-section="live-radio" data-nav-key="live-radio"><svg class="navIcon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 19V9m4 10V5m4 14V8m4 11V3m3 16V7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M5 5c3.8-3.5 10.2-3.5 14 0" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg><span>Live Radio</span></button>
         <button class="primaryTab searchTab" data-nav-search data-nav-key="search"><svg class="navIcon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5" stroke="currentColor" stroke-width="1.9"/><path d="m15.2 15.2 4.8 4.8" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg><span>Search</span></button>
         <div class="navLibraryGroup">
           <button class="primaryTab" data-section="library" data-nav-key="library"><svg class="navIcon" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M5 3h14v18H5zM9 8h6M9 12h6M9 16h6" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Library</span><span class="navChevron">&#8964;</span></button>
@@ -1895,6 +1929,10 @@
       <div id="count" class="count"></div>
       <div id="list"><div class="empty">Loading your archive…</div></div>
     </main>
+    <div id="liveRadioDock" class="liveRadioDock" hidden>
+      <button id="liveRadioDockOpen" class="liveRadioDockOpen" type="button"><strong>● RADIO VAULT LIVE</strong><span id="liveRadioDockTitle">Your archive, broadcasting now</span></button>
+      <button id="liveRadioDockLeave" class="liveRadioDockLeave" type="button">Leave</button>
+    </div>
     <div id="miniPlayer" class="rvMiniPlayer visible idle">
       <button id="miniExpand" class="rvMiniIdentity" type="button">
         <img id="miniArt" class="rvMiniArt" alt="" />
@@ -1966,6 +2004,7 @@
       <div id="playerNotice" class="playerNotice"></div>
     </div>
     <audio id="audio" preload="metadata" playsinline></audio>
+    <audio id="liveAudio" preload="metadata" playsinline></audio>
     <div id="toast" class="toast" role="status" aria-live="polite" aria-atomic="true"></div>
     <section id="transferDiagnostic" class="transferDiagnostic" aria-modal="true" role="dialog" aria-label="Phone playback diagnostic" tabindex="-1">
       <div class="transferDiagnosticHeader"><strong>Phone playback diagnostic</strong><button id="transferDiagnosticClose">Close</button></div>
@@ -1990,7 +2029,7 @@
 
       const token = "__TOKEN__",
         api = "/api/v1",
-        shellCacheName = "radio-vault-anywhere-shell-v67";
+        shellCacheName = "radio-vault-anywhere-shell-v68";
       const $ = (id) => document.getElementById(id),
         mainContent = $("mainContent"),
         list = $("list"),
@@ -2010,6 +2049,7 @@
         statusFilter = $("status"),
         filterSummary = $("filterSummary"),
         audio = $("audio"),
+        liveAudio = $("liveAudio"),
         serverState = $("serverState"),
         syncStatus = $("syncStatus"),
         syncSheet = $("syncSheet"),
@@ -2078,6 +2118,7 @@
       $("viewIntro").after(libraryTools);
       for (const [selector, label] of [
         ['[data-nav-key="dashboard"]', "Dashboard"], ['[data-nav-search]', "Search"],
+        ['[data-nav-key="live-radio"]', "Live Radio"],
         ['[data-nav-key="library"]', "Library"], ['[data-nav-favourites]', "Favourites"],
         ['[data-nav-key="moments"]', "Moments"],
         ['[data-nav-player]', "Now Playing"], ['[data-nav-key="research"]', "Research"], ['[data-nav-key="wiki"]', "Wiki"],
@@ -2096,6 +2137,14 @@
         archiveCompletedCount = 0,
         dashboardSnapshot = null,
         dashboardOnThisDayIndex = 0,
+        liveRadioSnapshot = null,
+        liveRadioReceivedAt = 0,
+        liveRadioLastRefresh = 0,
+        liveRadioRefreshInFlight = false,
+        liveRadioTunedIn = false,
+        liveRadioLoading = false,
+        liveRadioEntryId = 0,
+        liveRadioAudioLogicalStartMs = 0,
         activeViewLoad = null,
         viewLoadGeneration = 0,
         resumeAt = 0,
@@ -3350,6 +3399,7 @@
             "Dashboard",
             "Continue listening and rediscover your archive.",
           ],
+          "live-radio": ["Radio Vault Live", "Your archive, playing like live radio."],
           library: ["Library", "Browse, filter and search every broadcast."],
           transcripts: [
             "Transcription studio",
@@ -4108,6 +4158,185 @@
           }
         }
       }
+      function liveRadioTitle(programme) {
+        const broadcast = programme?.broadcast || {};
+        return String(broadcast.title || broadcast.collectionName || "Radio Vault Live");
+      }
+      function liveRadioProjectedPosition(programme = liveRadioSnapshot?.current) {
+        if (!programme) return 0;
+        return Math.max(0, Math.min(
+          Math.max(0, Number(programme.broadcast?.durationMs || 0) - 1),
+          Number(programme.positionMs || 0) + Math.max(0, Date.now() - liveRadioReceivedAt),
+        ));
+      }
+      function liveRadioAudioPosition() {
+        return Math.max(0, liveRadioAudioLogicalStartMs + Number(liveAudio.currentTime || 0) * 1000);
+      }
+      function renderLiveRadioDock() {
+        const current = liveRadioSnapshot?.current;
+        const dock = $("liveRadioDock");
+        dock.hidden = !liveRadioTunedIn;
+        document.body.classList.toggle("liveRadioTuned", liveRadioTunedIn);
+        $("liveRadioDockTitle").textContent = current ? liveRadioTitle(current) : "Your archive, broadcasting now";
+      }
+      function updateLiveRadioClock() {
+        const current = liveRadioSnapshot?.current;
+        if (!current) return;
+        const position = liveRadioProjectedPosition(current),
+          duration = Math.max(0, Number(current.broadcast?.durationMs || 0)),
+          percent = duration > 0 ? Math.max(0, Math.min(100, position * 100 / duration)) : 0;
+        const fill = $("liveRadioProgressFill");
+        if (fill) fill.style.width = percent + "%";
+        if ($("liveRadioElapsed")) $("liveRadioElapsed").textContent = fmtMs(position);
+        if ($("liveRadioDuration")) $("liveRadioDuration").textContent = fmtMs(duration);
+        if ($("liveRadioRemaining")) $("liveRadioRemaining").textContent = "-" + fmtMs(Math.max(0, duration - position));
+        renderLiveRadioDock();
+      }
+      function renderLiveRadioPage() {
+        if (view !== "live-radio") return;
+        const station = liveRadioSnapshot,
+          current = station?.current,
+          upcoming = station?.upcoming || [];
+        count.textContent = station ? `${station.stationName} · one shared schedule on every device` : "";
+        if (!current) {
+          list.innerHTML = connectionBoundaryBanner() + '<div class="empty">Radio Vault Live is preparing its schedule. Try Refresh in a moment.</div>';
+          return;
+        }
+        const broadcast = current.broadcast || {},
+          date = broadcast.airDate ? String(broadcast.airDate).slice(0,10) : "Date unknown",
+          upcomingHtml = upcoming.length
+            ? upcoming.map((programme) => {
+                const item = programme.broadcast || {}, title = liveRadioTitle(programme),
+                  start = new Date(programme.startsAt).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+                return `<button class="liveRadioProgramme" data-info="${Number(item.representativeEpisodeId || 0)}"><span class="liveRadioProgrammeTime">${esc(start)}</span><span><span class="liveRadioProgrammeTitle">${esc(title)}</span><span class="liveRadioProgrammeMeta">${esc(item.collectionName || "Radio Vault")} · ${esc(item.airDate ? String(item.airDate).slice(0,10) : "Date unknown")}</span></span><span class="liveRadioProgrammeReason">${esc(programme.selectionReason || "Archive discovery")}</span></button>`;
+              }).join("")
+            : '<div class="empty">The next programmes are being selected.</div>';
+        list.innerHTML = connectionBoundaryBanner() + `<div class="liveRadioWorkspace"><section class="liveRadioHero"><div class="liveRadioEyebrow"><span class="liveRadioDot"></span>RADIO VAULT LIVE</div><h3>${esc(liveRadioTitle(current))}</h3><div class="liveRadioShow">${esc(broadcast.collectionName || "Radio Vault")} · ${esc(date)}</div><div class="liveRadioReason">${esc(current.selectionReason || "A discovery from your archive")}</div><div class="liveRadioProgress"><span id="liveRadioProgressFill"></span></div><div class="liveRadioTimes"><span id="liveRadioElapsed">0:00</span><span id="liveRadioDuration">0:00</span><span id="liveRadioRemaining">-0:00</span></div><div class="liveRadioActions"><button id="liveRadioTune" class="primary">${liveRadioLoading ? "Tuning…" : liveRadioTunedIn ? "Leave Live Radio" : "Tune In"}</button><button id="liveRadioSaveMoment" ${liveRadioTunedIn && !liveRadioLoading ? "" : "disabled"}>Save This Moment</button><button data-info="${Number(broadcast.representativeEpisodeId || 0)}">Broadcast Info</button><button id="liveRadioRefresh">Refresh schedule</button></div></section><div class="liveRadioDisclosure">Live listening is separate from your personal Library. It never changes played status, progress, Continue Listening, play counts, your queue or playback handoff. Save a Moment to return to this exact point later.</div><section><div class="dashboardSectionHead"><div><h3>Coming up</h3><p>The same programmes and times appear on every Radio Vault device.</p></div></div><div class="liveRadioUpcoming">${upcomingHtml}</div></section></div>`;
+        updateLiveRadioClock();
+      }
+      async function refreshLiveRadio(renderPage = true, forcePlaybackAlignment = false) {
+        if (liveRadioRefreshInFlight || !serverReachable) return liveRadioSnapshot;
+        liveRadioRefreshInFlight = true;
+        try {
+          const data = await request("/client/live-radio", { timeoutMs:12000 });
+          const station = data?.station || null,
+            current = station?.current || null,
+            previousEntryId = Number(liveRadioEntryId || 0),
+            actualPosition = liveRadioAudioPosition();
+          liveRadioSnapshot = station;
+          liveRadioReceivedAt = Date.now();
+          liveRadioLastRefresh = liveRadioReceivedAt;
+          if (liveRadioTunedIn) {
+            if (!current) leaveLiveRadio(false);
+            else {
+              const target = liveRadioProjectedPosition(current), changed = previousEntryId !== Number(current.scheduleEntryId || 0);
+              if (changed || forcePlaybackAlignment || Math.abs(target - actualPosition) > 5000)
+                await openLiveRadioAudio(current, false);
+            }
+          }
+          if (renderPage) renderLiveRadioPage(); else updateLiveRadioClock();
+          return station;
+        } finally {
+          liveRadioRefreshInFlight = false;
+        }
+      }
+      async function loadLiveRadio() {
+        count.textContent = "";
+        if (!liveRadioSnapshot) list.innerHTML = loadingSkeleton(3);
+        try {
+          await refreshLiveRadio(true);
+        } catch (error) {
+          list.innerHTML = connectionBoundaryBanner() + `<div class="empty">Radio Vault Live could not be loaded.<div class="muted" style="margin-top:7px">${esc(error.message || "Try again when the server is connected.")}</div></div>`;
+        }
+      }
+      async function openLiveRadioAudio(programme, fromGesture) {
+        const broadcastId = Number(programme?.broadcast?.representativeEpisodeId || 0);
+        if (!broadcastId) throw new Error("The programme on air has no playable broadcast.");
+        const position = liveRadioProjectedPosition(programme);
+        if (!audio.paused) audio.pause();
+        liveRadioLoading = true;
+        liveRadioEntryId = Number(programme.scheduleEntryId || 0);
+        liveRadioAudioLogicalStartMs = position;
+        liveAudio.volume = audio.volume;
+        liveAudio.src = auth(api + "/broadcasts/" + broadcastId + "/media-start?positionMs=" + Math.round(position) + "&positioned=1&streamSession=live-" + Date.now());
+        liveAudio.load();
+        const playPromise = liveAudio.play();
+        renderLiveRadioPage();
+        try {
+          await playPromise;
+          liveRadioTunedIn = true;
+          setLiveRadioMediaSession();
+        } catch (error) {
+          liveRadioTunedIn = false;
+          liveRadioEntryId = 0;
+          if (fromGesture) throw new Error(error?.message || "The live programme could not start.");
+        } finally {
+          liveRadioLoading = false;
+          renderLiveRadioDock();
+          renderLiveRadioPage();
+        }
+      }
+      async function tuneIntoLiveRadio() {
+        if (liveRadioLoading) return;
+        const current = liveRadioSnapshot?.current;
+        if (!current) {
+          await refreshLiveRadio(true);
+          if (!liveRadioSnapshot?.current) throw new Error("The station does not have a programme on air yet.");
+        }
+        await openLiveRadioAudio(liveRadioSnapshot.current, true);
+        notify("Tuned in to Radio Vault Live");
+      }
+      function leaveLiveRadio(showNotice = true) {
+        if (!liveRadioTunedIn && !liveRadioLoading) return;
+        liveAudio.pause();
+        liveAudio.removeAttribute("src");
+        liveAudio.load();
+        liveRadioTunedIn = false;
+        liveRadioLoading = false;
+        liveRadioEntryId = 0;
+        liveRadioAudioLogicalStartMs = 0;
+        renderLiveRadioDock();
+        renderLiveRadioPage();
+        applyMediaSessionOwnership(inactiveOutputIsActive());
+        if (showNotice) notify("Left Radio Vault Live");
+      }
+      async function saveLiveRadioMoment() {
+        const current = liveRadioSnapshot?.current,
+          episodeId = Number(current?.broadcast?.representativeEpisodeId || 0);
+        if (!liveRadioTunedIn || !episodeId) return;
+        const button = $("liveRadioSaveMoment");
+        if (button) { button.disabled = true; button.textContent = "Saving…"; }
+        try {
+          const positionMs = Math.round(liveRadioProjectedPosition(current));
+          await request("/broadcasts/" + episodeId + "/moments", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({ positionMs, title:`Live radio at ${fmtMs(positionMs)}`, notes:"Saved from Radio Vault Live", clientMutationId:crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) }),
+          });
+          notify("Moment saved from Radio Vault Live");
+          if (button) button.textContent = "Moment Saved";
+        } catch (error) {
+          notify(error?.message || "The Moment could not be saved.", true);
+          if (button) { button.disabled = false; button.textContent = "Try Again"; }
+        }
+      }
+      function setLiveRadioMediaSession() {
+        if (!("mediaSession" in navigator) || !liveRadioTunedIn || !liveRadioSnapshot?.current) return;
+        const current = liveRadioSnapshot.current, broadcast = current.broadcast || {}, episodeId = Number(broadcast.representativeEpisodeId || 0);
+        try {
+          navigator.mediaSession.metadata = new MediaMetadata({
+            title:liveRadioTitle(current),
+            artist:broadcast.collectionName || "Radio Vault",
+            album:"Radio Vault Live",
+            artwork:broadcast.hasArtwork && episodeId ? [{ src:auth("/artwork/" + episodeId), sizes:"512x512" }] : [],
+          });
+          navigator.mediaSession.playbackState = "playing";
+          navigator.mediaSession.setActionHandler("play", () => liveAudio.play());
+          navigator.mediaSession.setActionHandler("pause", () => leaveLiveRadio());
+          for (const action of ["seekbackward","seekforward","seekto","nexttrack","previoustrack"])
+            try { navigator.mediaSession.setActionHandler(action, null); } catch {}
+        } catch {}
+      }
       function currentLibraryPageKey() {
         return JSON.stringify([libraryView,show.value,year.value,month.value,exactDate.value,statusFilter.value,search.value.trim()]);
       }
@@ -4338,6 +4567,7 @@
       async function load() {
         updateViewChrome();
         if (view === "dashboard") return loadDashboard();
+        if (view === "live-radio") return loadLiveRadio();
         if (view === "library") return loadLibrary();
         if (view === "moments") return loadMoments();
         if (view === "transcripts") return loadTranscripts();
@@ -5390,6 +5620,7 @@
       }
       async function startLocalEpisodeFromGesture(id, positionMs = 0, desiredPlayingOverride = true) {
         id = Number(id);
+        if (liveRadioTunedIn || liveRadioLoading) leaveLiveRadio(false);
         if (activePhoneTransfer) {
           notify("Playback is already being prepared on this device.");
           return false;
@@ -5861,6 +6092,18 @@
           await syncPendingProgress();
         }
       });
+      liveAudio.addEventListener("ended", async () => {
+        if (!liveRadioTunedIn || liveRadioLoading) return;
+        try {
+          await refreshLiveRadio(view === "live-radio", true);
+        } catch (error) {
+          notify(error?.message || "The next live programme could not be opened.", true);
+        }
+      });
+      liveAudio.addEventListener("error", () => {
+        if (!liveRadioTunedIn || liveRadioLoading) return;
+        notify("The live programme was interrupted. Radio Vault will try to reconnect.", true);
+      });
       async function syncWebPlayback(completed = false, explicitSeek = false) {
         if (
           !localEpisode ||
@@ -6259,6 +6502,7 @@
         await seekLogical(currentLogicalPositionMs() + Number(seconds || 0) * 1000, true);
       }
       function setMediaSession() {
+        if (liveRadioTunedIn) return setLiveRadioMediaSession();
         if (!("mediaSession" in navigator) || !localEpisode) return;
         try {
           navigator.mediaSession.metadata = new MediaMetadata({
@@ -6286,6 +6530,10 @@
       }
       function applyMediaSessionOwnership(inactive) {
         if (!("mediaSession" in navigator)) return;
+        if (liveRadioTunedIn) {
+          setLiveRadioMediaSession();
+          return;
+        }
         try {
           if (inactive) {
             navigator.mediaSession.playbackState = "none";
@@ -6499,6 +6747,8 @@
         if (button.dataset.section === "library") libraryView = "library";
         setPrimaryView(button.dataset.section);
       });
+      $("liveRadioDockOpen").addEventListener("click", () => setPrimaryView("live-radio"));
+      $("liveRadioDockLeave").addEventListener("click", () => leaveLiveRadio());
       libraryViewChips.addEventListener("click", (e) => {
         const button = e.target.closest("[data-library-view]");
         if (!button) return;
@@ -6513,6 +6763,21 @@
       });
       document.body.addEventListener("click", async (e) => {
         e.target.closest(".libraryOverflowMenu button")?.closest("details")?.removeAttribute("open");
+        if (e.target.id === "liveRadioTune") {
+          try {
+            if (liveRadioTunedIn) leaveLiveRadio();
+            else await tuneIntoLiveRadio();
+          } catch (error) {
+            notify(error?.message || "Radio Vault Live could not start.", true);
+          }
+          return;
+        }
+        if (e.target.id === "liveRadioSaveMoment") { await saveLiveRadioMoment(); return; }
+        if (e.target.id === "liveRadioRefresh") {
+          try { await refreshLiveRadio(true, liveRadioTunedIn); }
+          catch (error) { notify(error?.message || "The live schedule could not be refreshed.", true); }
+          return;
+        }
         const wikiPageButton = e.target.closest("[data-wiki-page]");
         if (wikiPageButton) { await openWikiPage(wikiPageButton.dataset.wikiPage); return; }
         const wikiEntity = e.target.closest("[data-wiki-entity], .chip");
@@ -7104,6 +7369,7 @@
       window.addEventListener("offline", async () => {
         serverReachable = false;
         reconnecting = false;
+        leaveLiveRadio(false);
         recordDiagnostic("connectivity", "Browser entered offline mode", { view, downloads: downloadedRecords.size });
         applyConnectivityUi();
         renderPlayer();
@@ -7242,6 +7508,12 @@
       setInterval(() => {
         if (inactiveOutputIsActive()) renderPlayer();
       }, 250);
+      setInterval(() => {
+        if (!liveRadioSnapshot) return;
+        updateLiveRadioClock();
+        if (serverReachable && Date.now() - liveRadioLastRefresh >= 15000)
+          refreshLiveRadio(view === "live-radio").catch(() => {});
+      }, 1000);
       setInterval(() => {
         const now = Date.now(),
           ownsPhoneSession = !!localEpisode && thisPhoneOwnsSession(),

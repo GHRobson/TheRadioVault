@@ -6,6 +6,7 @@ namespace TheRadioVault.Client.Mobile.Models;
 public sealed record PairingEnvelope(WebDesktopPairingResult Result);
 public sealed record BootstrapEnvelope(WebFederationBootstrap FederationBootstrap);
 public sealed record OverviewEnvelope(WebClientLibraryOverview Overview);
+public sealed record LiveRadioEnvelope(WebLiveRadioSnapshot Station);
 public sealed record BrowseEnvelope(WebClientLibraryBrowseResult Result);
 public sealed record ArchivePeriodsEnvelope(IReadOnlyList<WebClientLibraryArchivePeriodSummary> Periods);
 public sealed record SearchFacetsEnvelope(WebClientLibrarySearchFacets Facets);
@@ -39,6 +40,7 @@ public sealed record MobileKnowledgeMutationEnvelope(bool Value);
 [JsonSerializable(typeof(PairingEnvelope))]
 [JsonSerializable(typeof(BootstrapEnvelope))]
 [JsonSerializable(typeof(OverviewEnvelope))]
+[JsonSerializable(typeof(LiveRadioEnvelope))]
 [JsonSerializable(typeof(BrowseEnvelope))]
 [JsonSerializable(typeof(ArchivePeriodsEnvelope))]
 [JsonSerializable(typeof(SearchFacetsEnvelope))]
