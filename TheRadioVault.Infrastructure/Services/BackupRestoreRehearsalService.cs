@@ -109,7 +109,18 @@ public sealed class BackupRestoreRehearsalService
 
     private static DatabaseInspection InspectDatabase(string databasePath)
     {
-        using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Cache=Private");
+        // Integrity inspection is also used for temporary backup files that are
+        // renamed immediately afterwards. A pooled read-only connection keeps
+        // the file handle alive on Windows even after disposal, which prevents
+        // that verified file from being moved into place.
+        var builder = new SqliteConnectionStringBuilder
+        {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadOnly,
+            Cache = SqliteCacheMode.Private,
+            Pooling = false
+        };
+        using var connection = new SqliteConnection(builder.ToString());
         connection.Open();
 
         using var quick = connection.CreateCommand();
