@@ -318,6 +318,7 @@ var tests = new (string Name, Action Run)[]
     ("Transcription ranges have stable display text", TranscriptionRangesHaveStableDisplayText),
     ("Long-form transcription protects continuity and timestamps", LongFormTranscriptionProtectsContinuityAndTimestamps),
     ("Dedicated server foundation is UI-isolated and revision-safe", DedicatedServerFoundationIsUiIsolatedAndRevisionSafe),
+    ("Dedicated server health polling never blocks the settings UI", DedicatedServerHealthPollingNeverBlocksSettingsUi),
     ("Dedicated server owns transcription workers and batch controls", DedicatedServerOwnsTranscriptionWorkers),
     ("Loopback native handoff maps server ownership", LoopbackNativeHandoffMapsServerOwnership),
     ("Transcription jobs preserve worker options", TranscriptionJobsPreserveWorkerOptions),
@@ -5015,6 +5016,17 @@ static void DedicatedServerFoundationIsUiIsolatedAndRevisionSafe()
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         Directory.Delete(directory, recursive: true);
     }
+}
+
+static void DedicatedServerHealthPollingNeverBlocksSettingsUi()
+{
+    var viewModel = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Server", "ViewModels", "ServerSettingsViewModel.cs"));
+    True(viewModel.Contains("HealthRefreshInterval = TimeSpan.FromMinutes(5)", StringComparison.Ordinal));
+    True(viewModel.Contains("_healthRefreshGate.WaitAsync(0)", StringComparison.Ordinal));
+    True(viewModel.Contains("Task.Run(runtime.GetHealthSnapshot", StringComparison.Ordinal));
+    True(viewModel.Contains("Task.Run(() => new ServerDetailSnapshot", StringComparison.Ordinal));
+    True(!viewModel.Contains("if (DateTimeOffset.UtcNow - _lastHealthRefresh >= TimeSpan.FromSeconds(5)) RefreshHealth();", StringComparison.Ordinal));
 }
 
 static void LoopbackNativeHandoffMapsServerOwnership()
