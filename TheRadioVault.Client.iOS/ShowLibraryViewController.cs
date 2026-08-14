@@ -285,7 +285,7 @@ public sealed class ShowLibraryViewController : SessionTableViewController, IUIS
         button.SetImage(RadioVaultIcons.Image(RadioVaultIcon.Back, RadioVaultTheme.Accent, 18), UIControlState.Normal);
         button.SetTitle($" {title}", UIControlState.Normal);
         button.SetTitleColor(RadioVaultTheme.Accent, UIControlState.Normal);
-        button.TitleLabel!.Font = UIFont.SystemFontOfSize(16, UIFontWeight.Medium)!;
+        button.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(16, UIFontWeight.Medium);
         button.AccessibilityLabel = $"Back to {title}";
         button.TouchUpInside += (_, _) => NavigateUp();
         button.SizeToFit();

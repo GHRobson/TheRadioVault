@@ -51,12 +51,12 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
         _artwork.Layer.CornerRadius = 13;
         _artwork.BackgroundColor = RadioVaultTheme.AccentSubtle;
         _artwork.TranslatesAutoresizingMaskIntoConstraints = false;
-        _title.Font = UIFont.SystemFontOfSize(18, UIFontWeight.Bold)!;
+        _title.Font = RadioVaultAccessibility.ScaledFont(18, UIFontWeight.Bold);
         _title.TextColor = RadioVaultTheme.Text;
         _title.Lines = 2;
-        _show.Font = UIFont.SystemFontOfSize(12, UIFontWeight.Semibold)!;
+        _show.Font = RadioVaultAccessibility.ScaledFont(12, UIFontWeight.Semibold);
         _show.TextColor = RadioVaultTheme.Accent;
-        _date.Font = UIFont.SystemFontOfSize(11)!;
+        _date.Font = RadioVaultAccessibility.ScaledFont(11);
         _date.TextColor = RadioVaultTheme.MutedText;
 
         _play.SetImage(RadioVaultIcons.Image(RadioVaultIcon.Play, RadioVaultTheme.Accent, 22, 2.3), UIControlState.Normal);
@@ -150,7 +150,7 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
             ConfigurePips();
             _card.AccessibilityLabel = $"On this day, {item.Title}, {item.Source.CollectionName}, item {_index + 1} of {_items.Count}";
         }
-        if (animated)
+        if (animated && !RadioVaultAccessibility.ReduceMotion)
             UIView.Transition(_card, 0.28, UIViewAnimationOptions.TransitionCrossDissolve, Apply, () => { });
         else Apply();
         _ = LoadMetadataAsync(item, ++_generation);
@@ -204,7 +204,7 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
             var button = UIButton.FromType(UIButtonType.System);
             button.SetTitle(value, UIControlState.Normal);
             button.SetTitleColor(color, UIControlState.Normal);
-            button.TitleLabel!.Font = UIFont.SystemFontOfSize(10, UIFontWeight.Semibold)!;
+            button.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Semibold);
             button.TitleLabel.AdjustsFontSizeToFitWidth = true;
             button.TitleLabel.MinimumScaleFactor = 0.72f;
             button.BackgroundColor = color.ColorWithAlpha(0.14f);
@@ -223,7 +223,7 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
         var label = new UILabel
         {
             Text = text,
-            Font = UIFont.SystemFontOfSize(10, UIFontWeight.Medium)!,
+            Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Medium),
             TextColor = color.ColorWithAlpha(0.8f),
             TextAlignment = UITextAlignment.Center
         };
@@ -245,7 +245,7 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
     {
         _timer?.Invalidate();
         _timer?.Dispose();
-        _timer = _items.Count > 1
+        _timer = _items.Count > 1 && !RadioVaultAccessibility.ReduceMotion
             ? NSTimer.CreateScheduledTimer(6d, true, _ => Advance())
             : null;
     }
@@ -266,7 +266,7 @@ internal sealed class DashboardOnThisDayCarouselCell : UITableViewCell
     private static UILabel SectionHeading(string value) => new()
     {
         Text = value,
-        Font = UIFont.SystemFontOfSize(9, UIFontWeight.Bold)!,
+        Font = RadioVaultAccessibility.ScaledFont(9, UIFontWeight.Bold),
         TextColor = RadioVaultTheme.MutedText
     };
 

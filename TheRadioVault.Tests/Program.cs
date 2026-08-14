@@ -1510,6 +1510,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(!iosProject.Contains("Avalonia", StringComparison.Ordinal));
     True(iosProject.Contains("TheRadioVault.Client.Mobile", StringComparison.Ordinal));
     True(iosProject.Contains("<AppIcon>AppIcon</AppIcon>", StringComparison.Ordinal));
+    True(iosProject.Contains("PrivacyInfo.xcprivacy", StringComparison.Ordinal));
     True(iosProject.Contains("'$(Configuration)' != 'DeviceTest'", StringComparison.Ordinal));
     True(iosProject.Contains("com.ghrobson.theradiovault.devicetest", StringComparison.Ordinal));
     True(iosProject.Contains("<CodesignProvision>Automatic</CodesignProvision>", StringComparison.Ordinal));
@@ -1541,6 +1542,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(tabs.Contains("appearance.Selected.TitleTextAttributes", StringComparison.Ordinal));
     True(tabs.Contains("UIModalPresentationStyle.PageSheet", StringComparison.Ordinal));
     True(tabs.Contains("PrefersGrabberVisible = true", StringComparison.Ordinal));
+    True(tabs.Contains("UITabBarControllerMode.TabSidebar", StringComparison.Ordinal));
     True(tabs.Contains("\"Dashboard\"", StringComparison.Ordinal));
     True(tabs.Contains("\"Saved\"", StringComparison.Ordinal));
     True(tabs.Contains("\"Knowledge\"", StringComparison.Ordinal));
@@ -1573,6 +1575,10 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(dashboard.Contains("Session.UnheardBroadcasts.Take(5)", StringComparison.Ordinal));
     True(dashboard.Contains("new NSMutableIndexSet", StringComparison.Ordinal));
     True(dashboard.Contains("changedSections.Add", StringComparison.Ordinal));
+
+    var onThisDay = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "DashboardOnThisDayCarouselCell.cs"));
+    True(onThisDay.Contains("!RadioVaultAccessibility.ReduceMotion", StringComparison.Ordinal));
 
     var library = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "LibraryViewController.cs"));
@@ -1650,6 +1656,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(iosTableBase.Contains("NavigationItem.Title = string.Empty", StringComparison.Ordinal));
     True(iosTableBase.Contains("UINavigationItemBackButtonDisplayMode.Minimal", StringComparison.Ordinal));
     True(!iosTableBase.Contains("UIImage.GetSystemImage", StringComparison.Ordinal));
+    True(iosTableBase.Contains("RadioVaultAccessibility.PrepareView", StringComparison.Ordinal));
 
     var upNext = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "UpNextViewController.cs"));
@@ -1725,6 +1732,19 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(!theme.Contains("(16, 7), (20, 8), (18.5, 11.8)", StringComparison.Ordinal));
     True(theme.Contains("(3, 10.5), (13, 10.5)", StringComparison.Ordinal));
 
+    var accessibility = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultAccessibility.cs"));
+    True(accessibility.Contains("UIFontMetrics.DefaultMetrics.GetScaledFont", StringComparison.Ordinal));
+    True(accessibility.Contains("UIAccessibility.IsReduceMotionEnabled", StringComparison.Ordinal));
+    True(accessibility.Contains("UIAccessibilityPostNotification.Announcement", StringComparison.Ordinal));
+
+    var outputRoute = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultOutputRouteView.cs"));
+    True(outputRoute.Contains("AVRoutePickerView", StringComparison.Ordinal));
+    True(outputRoute.Contains("ObserveRouteChange", StringComparison.Ordinal));
+    True(outputRoute.Contains("CurrentRoute.Outputs", StringComparison.Ordinal));
+    True(outputRoute.Contains("Choose audio output", StringComparison.Ordinal));
+
     var miniPlayer = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultMiniPlayerView.cs"));
     True(miniPlayer.Contains("MiniPlayerShowsHandoff", StringComparison.Ordinal));
@@ -1765,6 +1785,8 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(nowPlayingView.Contains("playerContent.HeightAnchor.ConstraintGreaterThanOrEqualTo", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_favouriteSaving", StringComparison.Ordinal));
     True(nowPlayingView.Contains("_momentSavedFeedback", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultOutputRouteView", StringComparison.Ordinal));
+    True(nowPlayingView.Contains("RadioVaultAccessibility.Announce", StringComparison.Ordinal));
 
     var savedView = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SavedViewController.cs"));
@@ -1778,6 +1800,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(knowledgeView.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
     True(knowledgeView.Contains("KnowledgeStatusText", StringComparison.Ordinal));
     True(knowledgeView.Contains("IsLibraryFallback", StringComparison.Ordinal));
+    True(knowledgeView.Contains("RadioVaultAccessibility.ReduceMotion", StringComparison.Ordinal));
 
     var metadataPills = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "MetadataPillsCell.cs"));
@@ -2039,6 +2062,21 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         SourceRoot(), "TheRadioVault.Client.iOS", "SyncDiagnosticsViewController.cs"));
     True(syncDiagnostics.Contains("Pending Changes", StringComparison.Ordinal));
     True(syncDiagnostics.Contains("RetrySyncAsync", StringComparison.Ordinal));
+    True(syncDiagnostics.Contains("network address omitted", StringComparison.Ordinal));
+
+    var diagnosticExport = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "IosPlaybackDiagnostics.cs"));
+    True(diagnosticExport.Contains("MobileDiagnosticRedactor.Redact", StringComparison.Ordinal));
+
+    var privacyManifest = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Client.iOS", "PrivacyInfo.xcprivacy"));
+    True(privacyManifest.Contains("NSPrivacyTracking", StringComparison.Ordinal));
+    True(privacyManifest.Contains("NSPrivacyAccessedAPICategoryUserDefaults", StringComparison.Ordinal));
+    True(privacyManifest.Contains("CA92.1", StringComparison.Ordinal));
+    True(privacyManifest.Contains("NSPrivacyAccessedAPICategoryFileTimestamp", StringComparison.Ordinal));
+    True(privacyManifest.Contains("C617.1", StringComparison.Ordinal));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs", "current", "IOS_PRIVACY.md")));
+    True(File.Exists(Path.Combine(SourceRoot(), "docs", "current", "V0.42.0_IOS_TESTFLIGHT.md")));
 
     var testFlight = File.ReadAllText(Path.Combine(
         SourceRoot(), "tools", "Build-iOS-TestFlight.command"));
@@ -2083,6 +2121,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(plist.Contains("<string>audio</string>", StringComparison.Ordinal));
     True(plist.Contains("UIApplicationSceneManifest", StringComparison.Ordinal));
     True(plist.Contains("UILaunchScreen", StringComparison.Ordinal));
+    True(plist.Contains("ITSAppUsesNonExemptEncryption", StringComparison.Ordinal));
     True(File.Exists(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "Assets.xcassets", "AppIcon.appiconset", "AppIcon-1024.png")));
 

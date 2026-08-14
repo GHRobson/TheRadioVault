@@ -28,6 +28,9 @@
 - Embeds the source commit in application informational versions, displays its short identity in About/Diagnostics and writes it into packaged build manifests.
 - Corrects stale Windows setup file metadata that still identified new installers as 0.35.0.9.
 - Adds explicit release-candidate acceptance coverage for Radio Vault Live, RSS ingestion, automatic downloads/storage management and saved collections.
+- Scales fixed iPhone typography with Dynamic Type, respects Reduce Motion on automatic and gesture-driven animation, and announces Favourite and Moment results to VoiceOver.
+- Adds a native audio-output picker and current AirPlay/Bluetooth route to Now Playing and Radio Vault Live, plus an adaptive iPad tab sidebar on iPadOS 18 or later.
+- Adds an Apple privacy manifest, privacy-safe diagnostic redaction, a public iPhone privacy notice and a TestFlight/physical-device acceptance checklist.
 
 # 0.41.0
 

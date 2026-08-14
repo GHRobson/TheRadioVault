@@ -1,3 +1,5 @@
+using TheRadioVault.Client.Mobile.Diagnostics;
+
 namespace TheRadioVault.Client.iOS;
 
 internal static class IosPlaybackDiagnostics
@@ -42,10 +44,10 @@ internal static class IosPlaybackDiagnostics
             var playbackLog = ReadLogUnsafe();
             File.WriteAllText(
                 exportPath,
-                report.TrimEnd() + Environment.NewLine + Environment.NewLine +
+                MobileDiagnosticRedactor.Redact(report).TrimEnd() + Environment.NewLine + Environment.NewLine +
                 "PLAYBACK LOG" + Environment.NewLine +
                 "============" + Environment.NewLine +
-                playbackLog);
+                MobileDiagnosticRedactor.Redact(playbackLog));
         }
         Write("[RadioVault iOS diagnostic] Diagnostic report exported");
         return exportPath;

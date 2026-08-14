@@ -30,7 +30,7 @@ internal sealed class PageHeaderView : UIView, IConnectionStatusView
         var title = new UILabel
         {
             Text = titleText,
-            Font = UIFont.SystemFontOfSize(32, UIFontWeight.Bold)!,
+            Font = RadioVaultAccessibility.ScaledFont(32, UIFontWeight.Bold),
             TextColor = RadioVaultTheme.Text,
             AdjustsFontForContentSizeCategory = true,
             AdjustsFontSizeToFitWidth = true,
@@ -160,7 +160,7 @@ internal sealed class LibraryControlsHeaderView : UIView, IConnectionStatusView
             var title = new UILabel
             {
                 Text = "Library",
-                Font = UIFont.SystemFontOfSize(32, UIFontWeight.Bold)!,
+                Font = RadioVaultAccessibility.ScaledFont(32, UIFontWeight.Bold),
                 TextColor = RadioVaultTheme.Text,
                 AdjustsFontForContentSizeCategory = true,
                 AdjustsFontSizeToFitWidth = true,
@@ -265,7 +265,7 @@ internal sealed class LibraryControlsHeaderView : UIView, IConnectionStatusView
         button.SetTitle($" {title}", UIControlState.Normal);
         button.SetImage(image, UIControlState.Normal);
         button.SetTitleColor(RadioVaultTheme.MutedText, UIControlState.Normal);
-        button.TitleLabel!.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
+        button.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(13, UIFontWeight.Semibold);
         button.TitleLabel.AdjustsFontForContentSizeCategory = true;
         button.BackgroundColor = RadioVaultTheme.Surface;
         button.Layer.CornerRadius = 10;
@@ -331,7 +331,7 @@ internal sealed class ExploreControlsHeaderView : UIView, IConnectionStatusView
 
         BrowseButton.SetTitle("Browse All", UIControlState.Normal);
         BrowseButton.SetTitleColor(RadioVaultTheme.Wiki, UIControlState.Normal);
-        BrowseButton.TitleLabel!.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
+        BrowseButton.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(13, UIFontWeight.Semibold);
         BrowseButton.BackgroundColor = RadioVaultTheme.Surface;
         BrowseButton.Layer.CornerRadius = 10;
         BrowseButton.WidthAnchor.ConstraintEqualTo(94).Active = true;
@@ -339,7 +339,7 @@ internal sealed class ExploreControlsHeaderView : UIView, IConnectionStatusView
         var title = new UILabel
         {
             Text = "Explore",
-            Font = UIFont.SystemFontOfSize(32, UIFontWeight.Bold)!,
+            Font = RadioVaultAccessibility.ScaledFont(32, UIFontWeight.Bold),
             TextColor = RadioVaultTheme.Text,
             AdjustsFontForContentSizeCategory = true,
             AdjustsFontSizeToFitWidth = true,
@@ -432,7 +432,7 @@ internal sealed class SavedControlsHeaderView : UIView, IConnectionStatusView
         var title = new UILabel
         {
             Text = "Saved",
-            Font = UIFont.SystemFontOfSize(32, UIFontWeight.Bold)!,
+            Font = RadioVaultAccessibility.ScaledFont(32, UIFontWeight.Bold),
             TextColor = RadioVaultTheme.Text,
             AdjustsFontForContentSizeCategory = true
         };
@@ -508,7 +508,7 @@ internal sealed class SavedControlsHeaderView : UIView, IConnectionStatusView
     {
         button.SetTitle($" {title}", UIControlState.Normal);
         button.SetImage(RadioVaultIcons.Image(icon, size: 19), UIControlState.Normal);
-        button.TitleLabel!.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
+        button.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(13, UIFontWeight.Semibold);
         button.Layer.CornerRadius = 11;
         button.AccessibilityLabel = title;
     }
@@ -544,7 +544,7 @@ internal sealed class LibraryQuickAccessCell : UITableViewCell
             var icon = new UIImageView { ContentMode = UIViewContentMode.ScaleAspectFit };
             var title = new UILabel
             {
-                Font = UIFont.SystemFontOfSize(10, UIFontWeight.Semibold)!,
+                Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Semibold),
                 TextColor = RadioVaultTheme.Text,
                 TextAlignment = UITextAlignment.Center,
                 Lines = 2,
@@ -553,7 +553,7 @@ internal sealed class LibraryQuickAccessCell : UITableViewCell
             };
             var detail = new UILabel
             {
-                Font = UIFont.MonospacedDigitSystemFontOfSize(11, UIFontWeight.Bold)!,
+                Font = RadioVaultAccessibility.ScaledMonospacedDigitFont(11, UIFontWeight.Bold),
                 TextColor = RadioVaultTheme.MutedText,
                 TextAlignment = UITextAlignment.Center,
                 Lines = 1,
@@ -664,14 +664,14 @@ internal sealed class DashboardOverviewCell : UITableViewCell
         var surpriseEyebrow = new UILabel
         {
             Text = "SURPRISE ME",
-            Font = UIFont.SystemFontOfSize(10, UIFontWeight.Bold)!,
+            Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Bold),
             TextColor = RadioVaultTheme.Accent,
             TextAlignment = UITextAlignment.Center
         };
         var surpriseTitle = new UILabel
         {
             Text = "Play something unexpected",
-            Font = UIFont.SystemFontOfSize(17, UIFontWeight.Bold)!,
+            Font = RadioVaultAccessibility.ScaledFont(17, UIFontWeight.Bold),
             TextColor = RadioVaultTheme.Text,
             TextAlignment = UITextAlignment.Center,
             Lines = 3,
@@ -681,7 +681,7 @@ internal sealed class DashboardOverviewCell : UITableViewCell
         var surpriseHint = new UILabel
         {
             Text = "An unheard broadcast",
-            Font = UIFont.SystemFontOfSize(11)!,
+            Font = RadioVaultAccessibility.ScaledFont(11),
             TextColor = RadioVaultTheme.MutedText,
             TextAlignment = UITextAlignment.Center,
             Lines = 2
@@ -710,7 +710,7 @@ internal sealed class DashboardOverviewCell : UITableViewCell
             var icon = new UIImageView { ContentMode = UIViewContentMode.ScaleAspectFit };
             var value = new UILabel
             {
-                Font = UIFont.SystemFontOfSize(18, UIFontWeight.Bold)!,
+                Font = RadioVaultAccessibility.ScaledFont(18, UIFontWeight.Bold),
                 TextColor = RadioVaultTheme.Text,
                 TextAlignment = UITextAlignment.Center,
                 AdjustsFontSizeToFitWidth = true,
@@ -718,7 +718,7 @@ internal sealed class DashboardOverviewCell : UITableViewCell
             };
             var title = new UILabel
             {
-                Font = UIFont.SystemFontOfSize(9, UIFontWeight.Semibold)!,
+                Font = RadioVaultAccessibility.ScaledFont(9, UIFontWeight.Semibold),
                 TextColor = RadioVaultTheme.MutedText,
                 TextAlignment = UITextAlignment.Center,
                 Lines = 1,
@@ -839,7 +839,7 @@ internal sealed class DashboardStatsCell : UITableViewCell
             var icon = new UIImageView { ContentMode = UIViewContentMode.ScaleAspectFit };
             var value = new UILabel
             {
-                Font = UIFont.SystemFontOfSize(19, UIFontWeight.Bold)!,
+                Font = RadioVaultAccessibility.ScaledFont(19, UIFontWeight.Bold),
                 TextColor = RadioVaultTheme.Text,
                 TextAlignment = UITextAlignment.Center,
                 AdjustsFontSizeToFitWidth = true,
@@ -847,7 +847,7 @@ internal sealed class DashboardStatsCell : UITableViewCell
             };
             var title = new UILabel
             {
-                Font = UIFont.SystemFontOfSize(10, UIFontWeight.Semibold)!,
+                Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Semibold),
                 TextColor = RadioVaultTheme.MutedText,
                 TextAlignment = UITextAlignment.Center,
                 Lines = 1,
@@ -961,15 +961,15 @@ internal sealed class DashboardContinueCell : UITableViewCell
             _artwork.BottomAnchor.ConstraintEqualTo(artwork.BottomAnchor)
         ]);
 
-        _collection.Font = UIFont.SystemFontOfSize(21, UIFontWeight.Bold)!;
+        _collection.Font = RadioVaultAccessibility.ScaledFont(21, UIFontWeight.Bold);
         _collection.TextColor = RadioVaultTheme.Text;
         _collection.Lines = 2;
-        _date.Font = UIFont.SystemFontOfSize(12)!;
+        _date.Font = RadioVaultAccessibility.ScaledFont(12);
         _date.TextColor = RadioVaultTheme.MutedText;
-        _title.Font = UIFont.ItalicSystemFontOfSize(16)!;
+        _title.Font = RadioVaultAccessibility.ScaledItalicFont(16);
         _title.TextColor = RadioVaultTheme.Text;
         _title.Lines = 2;
-        _progressText.Font = UIFont.MonospacedDigitSystemFontOfSize(11, UIFontWeight.Medium)!;
+        _progressText.Font = RadioVaultAccessibility.ScaledMonospacedDigitFont(11, UIFontWeight.Medium);
         _progressText.TextColor = RadioVaultTheme.MutedText;
         _progressText.TextAlignment = UITextAlignment.Right;
         _progress.ProgressTintColor = RadioVaultTheme.Progress;
@@ -977,7 +977,7 @@ internal sealed class DashboardContinueCell : UITableViewCell
 
         _resume.SetTitle("Resume", UIControlState.Normal);
         _resume.SetTitleColor(RadioVaultTheme.Background, UIControlState.Normal);
-        _resume.TitleLabel!.Font = UIFont.SystemFontOfSize(15, UIFontWeight.Bold)!;
+        _resume.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(15, UIFontWeight.Bold);
         _resume.BackgroundColor = RadioVaultTheme.Accent;
         _resume.Layer.CornerRadius = 10;
         _resume.TouchUpInside += (_, _) => _resumeAction?.Invoke();
@@ -1063,13 +1063,13 @@ internal sealed class BroadcastProgressCell : UITableViewCell
         BackgroundColor = RadioVaultTheme.Surface;
         TintColor = RadioVaultTheme.Accent;
 
-        _title.Font = UIFont.SystemFontOfSize(16, UIFontWeight.Semibold)!;
+        _title.Font = RadioVaultAccessibility.ScaledFont(16, UIFontWeight.Semibold);
         _title.TextColor = RadioVaultTheme.Text;
         _title.Lines = 2;
-        _subtitle.Font = UIFont.SystemFontOfSize(12)!;
+        _subtitle.Font = RadioVaultAccessibility.ScaledFont(12);
         _subtitle.TextColor = RadioVaultTheme.MutedText;
         _subtitle.Lines = 2;
-        _percentage.Font = UIFont.MonospacedDigitSystemFontOfSize(10, UIFontWeight.Medium)!;
+        _percentage.Font = RadioVaultAccessibility.ScaledMonospacedDigitFont(10, UIFontWeight.Medium);
         _percentage.TextColor = RadioVaultTheme.MutedText;
         _percentage.TextAlignment = UITextAlignment.Right;
         _progress.ProgressTintColor = RadioVaultTheme.Progress;
@@ -1209,18 +1209,18 @@ internal sealed class ArchiveTileControl : UIControl
             Alpha = 0.45f,
             TranslatesAutoresizingMaskIntoConstraints = false
         };
-        _shows.Font = UIFont.SystemFontOfSize(10, UIFontWeight.Semibold)!;
+        _shows.Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Semibold);
         _shows.TextColor = RadioVaultTheme.MutedText;
         _shows.Lines = 1;
         _shows.LineBreakMode = UILineBreakMode.TailTruncation;
-        _title.Font = UIFont.SystemFontOfSize(27, UIFontWeight.Bold)!;
+        _title.Font = RadioVaultAccessibility.ScaledFont(27, UIFontWeight.Bold);
         _title.TextColor = RadioVaultTheme.Text;
         _title.Lines = 2;
         _title.AdjustsFontSizeToFitWidth = true;
         _title.MinimumScaleFactor = 0.7f;
-        _count.Font = UIFont.SystemFontOfSize(12, UIFontWeight.Semibold)!;
+        _count.Font = RadioVaultAccessibility.ScaledFont(12, UIFontWeight.Semibold);
         _count.TextColor = RadioVaultTheme.Text;
-        _progressText.Font = UIFont.SystemFontOfSize(10)!;
+        _progressText.Font = RadioVaultAccessibility.ScaledFont(10);
         _progressText.TextColor = RadioVaultTheme.MutedText;
         _progress.ProgressTintColor = RadioVaultTheme.Progress;
         _progress.TrackTintColor = RadioVaultTheme.Border;
@@ -1292,14 +1292,14 @@ internal sealed class BroadcastHeroCell : UITableViewCell
             _artwork.BottomAnchor.ConstraintEqualTo(artwork.BottomAnchor)
         ]);
 
-        _collection.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
+        _collection.Font = RadioVaultAccessibility.ScaledFont(13, UIFontWeight.Semibold);
         _collection.TextColor = RadioVaultTheme.Accent;
-        _title.Font = UIFont.SystemFontOfSize(24, UIFontWeight.Bold)!;
+        _title.Font = RadioVaultAccessibility.ScaledFont(24, UIFontWeight.Bold);
         _title.TextColor = RadioVaultTheme.Text;
         _title.Lines = 3;
-        _date.Font = UIFont.SystemFontOfSize(13)!;
+        _date.Font = RadioVaultAccessibility.ScaledFont(13);
         _date.TextColor = RadioVaultTheme.MutedText;
-        _status.Font = UIFont.MonospacedDigitSystemFontOfSize(11, UIFontWeight.Medium)!;
+        _status.Font = RadioVaultAccessibility.ScaledMonospacedDigitFont(11, UIFontWeight.Medium);
         _status.TextColor = RadioVaultTheme.MutedText;
         _progress.ProgressTintColor = RadioVaultTheme.Progress;
         _progress.TrackTintColor = RadioVaultTheme.Border;
@@ -1402,7 +1402,7 @@ internal sealed class BroadcastActionStripCell : UITableViewCell
         var button = UIButton.FromType(UIButtonType.System);
         button.BackgroundColor = RadioVaultTheme.SurfaceRaised;
         button.Layer.CornerRadius = 10;
-        button.TitleLabel!.Font = UIFont.SystemFontOfSize(11, UIFontWeight.Semibold)!;
+        button.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(11, UIFontWeight.Semibold);
         return button;
     }
 
@@ -1468,7 +1468,7 @@ internal sealed class ExploreImageGalleryCell : UITableViewCell
             var caption = new UILabel
             {
                 Text = $"{image.Caption}\n{image.PageTitle}",
-                Font = UIFont.SystemFontOfSize(12, UIFontWeight.Semibold)!,
+                Font = RadioVaultAccessibility.ScaledFont(12, UIFontWeight.Semibold),
                 TextColor = RadioVaultTheme.Text,
                 Lines = 2
             };
@@ -1512,7 +1512,7 @@ internal sealed class ExploreArticleImageCell : UITableViewCell
         var caption = new UILabel
         {
             Text = image.Caption,
-            Font = UIFont.SystemFontOfSize(13)!,
+            Font = RadioVaultAccessibility.ScaledFont(13),
             TextColor = RadioVaultTheme.MutedText,
             Lines = 0,
             TextAlignment = UITextAlignment.Center

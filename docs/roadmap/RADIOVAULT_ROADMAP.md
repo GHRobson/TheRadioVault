@@ -20,6 +20,8 @@ Exit criteria: the local release gate passes, Mac installers open, a fresh iPhon
 
 Goal: make the phone client feel complete outside a development setup.
 
+Status: in progress. Core fixed-size typography now scales through Dynamic Type, VoiceOver announces saved-action results, Reduce Motion stops the automatic On This Day carousel and card-follow animation, and Now Playing plus Radio Vault Live expose the native AirPlay/Bluetooth route picker with the current output name. Diagnostic sharing now redacts connection details, the bundle contains an Apple privacy manifest, and a physical-device/TestFlight checklist is maintained in `docs/current/V0.42.0_IOS_TESTFLIGHT.md`. Large-text device review, the 24-hour soak and the first external TestFlight installation remain release work.
+
 - Lock Screen, Control Centre, headset and Bluetooth acceptance matrix.
 - Dynamic Type, VoiceOver order/labels, contrast, reduced motion and large-text layouts.
 - iPad adaptive split-view layout.

@@ -17,7 +17,7 @@ public sealed class ServerViewController : SessionTableViewController
         Placeholder = "Six-digit pairing code",
         KeyboardType = UIKeyboardType.NumberPad,
         TextAlignment = UITextAlignment.Center,
-        Font = UIFont.MonospacedDigitSystemFontOfSize(22, UIFontWeight.Semibold),
+        Font = RadioVaultAccessibility.ScaledMonospacedDigitFont(22, UIFontWeight.Semibold),
         TranslatesAutoresizingMaskIntoConstraints = false
     };
     private readonly UITextField _addressField = new()

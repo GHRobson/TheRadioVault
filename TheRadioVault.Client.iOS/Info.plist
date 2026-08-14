@@ -8,6 +8,8 @@
   <string>48</string>
   <key>LSRequiresIPhoneOS</key>
   <true/>
+  <key>ITSAppUsesNonExemptEncryption</key>
+  <false/>
   <key>MinimumOSVersion</key>
   <string>16.0</string>
   <key>UIDeviceFamily</key>

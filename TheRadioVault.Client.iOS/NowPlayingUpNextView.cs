@@ -24,7 +24,7 @@ internal sealed class NowPlayingUpNextView : UIView
         var eyebrow = new UILabel
         {
             Text = "SHARED QUEUE",
-            Font = UIFont.SystemFontOfSize(10, UIFontWeight.Bold)!,
+            Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Bold),
             TextColor = RadioVaultTheme.Accent
         };
         var title = new UILabel
@@ -118,21 +118,21 @@ internal sealed class NowPlayingQueueItemView : UIControl
         var number = new UILabel
         {
             Text = (item.Position + 1).ToString(),
-            Font = UIFont.MonospacedDigitSystemFontOfSize(11, UIFontWeight.Bold)!,
+            Font = RadioVaultAccessibility.ScaledMonospacedDigitFont(11, UIFontWeight.Bold),
             TextColor = RadioVaultTheme.Accent,
             TextAlignment = UITextAlignment.Center
         };
         var title = new UILabel
         {
             Text = item.Episode.Title,
-            Font = UIFont.SystemFontOfSize(15, UIFontWeight.Semibold)!,
+            Font = RadioVaultAccessibility.ScaledFont(15, UIFontWeight.Semibold),
             TextColor = RadioVaultTheme.Text,
             Lines = 2
         };
         var detail = new UILabel
         {
             Text = $"{item.Episode.Show} · {item.Episode.Status}",
-            Font = UIFont.SystemFontOfSize(11)!,
+            Font = RadioVaultAccessibility.ScaledFont(11),
             TextColor = RadioVaultTheme.MutedText,
             Lines = 2
         };

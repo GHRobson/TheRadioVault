@@ -24,9 +24,9 @@ internal sealed class LiveRadioDashboardCell : UITableViewCell
         _icon.ContentMode = UIViewContentMode.Center;
         _eyebrow.Text = "RADIO VAULT LIVE";
         _eyebrow.TextColor = RadioVaultTheme.Accent;
-        _eyebrow.Font = UIFont.SystemFontOfSize(11, UIFontWeight.Bold)!;
+        _eyebrow.Font = RadioVaultAccessibility.ScaledFont(11, UIFontWeight.Bold);
         _title.TextColor = RadioVaultTheme.Text;
-        _title.Font = UIFont.SystemFontOfSize(18, UIFontWeight.Bold)!;
+        _title.Font = RadioVaultAccessibility.ScaledFont(18, UIFontWeight.Bold);
         _title.Lines = 2;
         _detail.TextColor = RadioVaultTheme.MutedText;
         _detail.Font = UIFont.PreferredFootnote!;
@@ -34,7 +34,7 @@ internal sealed class LiveRadioDashboardCell : UITableViewCell
         _liveBadge.Text = " LIVE ";
         _liveBadge.TextColor = RadioVaultTheme.Background;
         _liveBadge.BackgroundColor = RadioVaultTheme.Accent;
-        _liveBadge.Font = UIFont.SystemFontOfSize(10, UIFontWeight.Heavy)!;
+        _liveBadge.Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Heavy);
         _liveBadge.TextAlignment = UITextAlignment.Center;
         _liveBadge.Layer.CornerRadius = 7;
         _liveBadge.Layer.MasksToBounds = true;
@@ -90,6 +90,7 @@ internal sealed class LiveRadioOnAirCell : UITableViewCell
     private readonly UILabel _time = new();
     private readonly UIButton _tune = UIButton.FromType(UIButtonType.System);
     private readonly UIButton _moment = UIButton.FromType(UIButtonType.System);
+    private readonly RadioVaultOutputRouteView _outputRoute = new();
 
     public LiveRadioOnAirCell() : base(UITableViewCellStyle.Default, "live-radio-on-air")
     {
@@ -97,7 +98,7 @@ internal sealed class LiveRadioOnAirCell : UITableViewCell
         BackgroundColor = RadioVaultTheme.Surface;
         _badge.Text = "● LIVE";
         _badge.TextColor = RadioVaultTheme.Accent;
-        _badge.Font = UIFont.SystemFontOfSize(12, UIFontWeight.Heavy)!;
+        _badge.Font = RadioVaultAccessibility.ScaledFont(12, UIFontWeight.Heavy);
         _title.TextColor = RadioVaultTheme.Text;
         _title.Font = UIFont.PreferredTitle2!;
         _title.Lines = 0;
@@ -109,8 +110,9 @@ internal sealed class LiveRadioOnAirCell : UITableViewCell
         _reason.Lines = 0;
         _progress.ProgressTintColor = RadioVaultTheme.Progress;
         _progress.TrackTintColor = RadioVaultTheme.Border;
+        _progress.AccessibilityLabel = "Live programme position";
         _time.TextColor = RadioVaultTheme.MutedText;
-        _time.Font = UIFont.MonospacedDigitSystemFontOfSize(12, UIFontWeight.Semibold)!;
+        _time.Font = RadioVaultAccessibility.ScaledMonospacedDigitFont(12, UIFontWeight.Semibold);
         ConfigureButton(_tune, RadioVaultTheme.Accent, RadioVaultTheme.Background);
         ConfigureButton(_moment, RadioVaultTheme.SurfaceRaised, RadioVaultTheme.Text);
 
@@ -120,7 +122,7 @@ internal sealed class LiveRadioOnAirCell : UITableViewCell
             Distribution = UIStackViewDistribution.FillEqually,
             Spacing = 10
         };
-        var stack = new UIStackView([_badge, _title, _show, _reason, _progress, _time, buttons])
+        var stack = new UIStackView([_badge, _title, _show, _reason, _progress, _time, _outputRoute, buttons])
         {
             Axis = UILayoutConstraintAxis.Vertical,
             Alignment = UIStackViewAlignment.Fill,
@@ -133,8 +135,10 @@ internal sealed class LiveRadioOnAirCell : UITableViewCell
             stack.TrailingAnchor.ConstraintEqualTo(ContentView.TrailingAnchor, -18),
             stack.TopAnchor.ConstraintEqualTo(ContentView.TopAnchor, 18),
             stack.BottomAnchor.ConstraintEqualTo(ContentView.BottomAnchor, -18),
-            buttons.HeightAnchor.ConstraintEqualTo(46)
+            _outputRoute.HeightAnchor.ConstraintGreaterThanOrEqualTo(44),
+            buttons.HeightAnchor.ConstraintGreaterThanOrEqualTo(46)
         ]);
+        RadioVaultAccessibility.PrepareView(this);
     }
 
     public void Configure(
@@ -152,6 +156,7 @@ internal sealed class LiveRadioOnAirCell : UITableViewCell
         _reason.Text = programme.SelectionReason;
         var duration = Math.Max(1, broadcast.DurationMs);
         _progress.Progress = (float)Math.Clamp(programme.PositionMs / (double)duration, 0, 1);
+        _progress.AccessibilityValue = $"{Math.Round(_progress.Progress * 100)} percent";
         _time.Text = $"{Format(programme.PositionMs)}  ·  live  ·  {Format(programme.RemainingMs)} remaining";
         _tune.SetTitle(loading ? "Tuning…" : tunedIn ? "Leave Live Radio" : "Tune In", UIControlState.Normal);
         _tune.Enabled = !loading;
@@ -167,6 +172,7 @@ internal sealed class LiveRadioOnAirCell : UITableViewCell
             {
                 _moment.SetTitle(saved ? "Moment Saved" : "Try Again", UIControlState.Normal);
                 _moment.Enabled = tunedIn;
+                RadioVaultAccessibility.Announce(saved ? "Moment saved" : "Moment could not be saved");
             });
         };
     }
@@ -175,7 +181,7 @@ internal sealed class LiveRadioOnAirCell : UITableViewCell
     {
         button.BackgroundColor = background;
         button.SetTitleColor(foreground, UIControlState.Normal);
-        button.TitleLabel!.Font = UIFont.SystemFontOfSize(15, UIFontWeight.Bold)!;
+        button.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(15, UIFontWeight.Bold);
         button.Layer.CornerRadius = 16;
     }
 

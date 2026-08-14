@@ -46,6 +46,18 @@ public abstract class SessionTableViewController : UITableViewController
         UpdateConnectionIndicator();
     }
 
+    public override void ViewDidLayoutSubviews()
+    {
+        base.ViewDidLayoutSubviews();
+        RadioVaultAccessibility.PrepareView(View);
+    }
+
+    public override void WillDisplay(UITableView tableView, UITableViewCell cell, NSIndexPath indexPath)
+    {
+        base.WillDisplay(tableView, cell, indexPath);
+        RadioVaultAccessibility.PrepareView(cell);
+    }
+
     protected virtual void ReloadSession() => TableView.ReloadData();
 
     protected virtual MobileBroadcastItem? ContextBroadcastForRow(NSIndexPath indexPath) => null;

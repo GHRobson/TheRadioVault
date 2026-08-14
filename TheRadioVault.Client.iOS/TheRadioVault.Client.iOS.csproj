@@ -28,5 +28,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="..\TheRadioVault.Client.Mobile\TheRadioVault.Client.Mobile.csproj" />
+    <BundleResource Include="PrivacyInfo.xcprivacy" LogicalName="PrivacyInfo.xcprivacy" />
   </ItemGroup>
 </Project>

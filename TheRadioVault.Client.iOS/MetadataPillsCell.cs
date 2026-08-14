@@ -16,7 +16,7 @@ internal sealed class MetadataPillsCell : UITableViewCell
     {
         BackgroundColor = RadioVaultTheme.Surface;
         SelectionStyle = UITableViewCellSelectionStyle.None;
-        _heading.Font = UIFont.SystemFontOfSize(11, UIFontWeight.Bold)!;
+        _heading.Font = RadioVaultAccessibility.ScaledFont(11, UIFontWeight.Bold);
         _heading.TextColor = RadioVaultTheme.MutedText;
         var content = new UIStackView([_heading, _rows])
         {
@@ -64,7 +64,7 @@ internal sealed class MetadataPillsCell : UITableViewCell
         var button = UIButton.FromType(UIButtonType.System);
         button.SetTitle(value, UIControlState.Normal);
         button.SetTitleColor(color, UIControlState.Normal);
-        button.TitleLabel!.Font = UIFont.SystemFontOfSize(12, UIFontWeight.Semibold)!;
+        button.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(12, UIFontWeight.Semibold);
         button.TitleLabel.Lines = 1;
         button.TitleLabel.AdjustsFontSizeToFitWidth = true;
         button.TitleLabel.MinimumScaleFactor = 0.72f;

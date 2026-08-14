@@ -8,7 +8,7 @@ internal static class ExploreTypography
 {
     public static UIFont Serif(nfloat size, UIFontWeight weight = UIFontWeight.Regular)
         => UIFont.FromName(weight >= UIFontWeight.Semibold ? "NewYork-Bold" : "NewYork-Regular", size)
-           ?? UIFont.SystemFontOfSize(size, weight)!;
+           ?? RadioVaultAccessibility.ScaledFont(size, weight);
 }
 
 internal sealed class ExploreDashboardHeroCell : UITableViewCell
@@ -26,17 +26,17 @@ internal sealed class ExploreDashboardHeroCell : UITableViewCell
         _image.ClipsToBounds = true;
         _image.Layer.CornerRadius = 16;
         _image.BackgroundColor = RadioVaultTheme.AccentSubtle;
-        var eyebrow = Label("RADIO VAULT ENCYCLOPEDIA", UIFont.SystemFontOfSize(10, UIFontWeight.Bold)!, RadioVaultTheme.Wiki);
+        var eyebrow = Label("RADIO VAULT ENCYCLOPEDIA", RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Bold), RadioVaultTheme.Wiki);
         var title = Label("Explore the stories behind your archive", ExploreTypography.Serif(30, UIFontWeight.Bold), RadioVaultTheme.Text, 0);
         var introduction = Label(
             "Read about programmes, people and turning points, then follow the evidence back to the broadcasts that preserve them.",
-            UIFont.SystemFontOfSize(15)!, RadioVaultTheme.MutedText, 0);
+            RadioVaultAccessibility.ScaledFont(15), RadioVaultTheme.MutedText, 0);
 
         var metricViews = new UIView[4];
         for (var index = 0; index < metricViews.Length; index++)
         {
-            var value = Label("0", UIFont.SystemFontOfSize(20, UIFontWeight.Bold)!, RadioVaultTheme.Text);
-            var caption = Label(MetricTitles[index], UIFont.SystemFontOfSize(9, UIFontWeight.Semibold)!, RadioVaultTheme.MutedText);
+            var value = Label("0", RadioVaultAccessibility.ScaledFont(20, UIFontWeight.Bold), RadioVaultTheme.Text);
+            var caption = Label(MetricTitles[index], RadioVaultAccessibility.ScaledFont(9, UIFontWeight.Semibold), RadioVaultTheme.MutedText);
             caption.TextAlignment = UITextAlignment.Center;
             value.TextAlignment = UITextAlignment.Center;
             _metrics[index] = value;
@@ -122,15 +122,15 @@ internal sealed class ExplorePageCardCell : UITableViewCell
         _image.ClipsToBounds = true;
         _image.Layer.CornerRadius = 11;
         _image.BackgroundColor = RadioVaultTheme.AccentSubtle;
-        _type.Font = UIFont.SystemFontOfSize(9, UIFontWeight.Bold)!;
+        _type.Font = RadioVaultAccessibility.ScaledFont(9, UIFontWeight.Bold);
         _type.TextColor = RadioVaultTheme.Wiki;
         _title.Font = ExploreTypography.Serif(21, UIFontWeight.Bold);
         _title.TextColor = RadioVaultTheme.Text;
         _title.Lines = 2;
-        _summary.Font = UIFont.SystemFontOfSize(13)!;
+        _summary.Font = RadioVaultAccessibility.ScaledFont(13);
         _summary.TextColor = RadioVaultTheme.MutedText;
         _summary.Lines = 3;
-        _evidence.Font = UIFont.SystemFontOfSize(10, UIFontWeight.Medium)!;
+        _evidence.Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Medium);
         _evidence.TextColor = RadioVaultTheme.SubtleText;
         var labels = new UIStackView([_type, _title, _summary, _evidence])
         {
@@ -186,7 +186,7 @@ internal sealed class ExploreTimelinePromoCell : UITableViewCell
         var eyebrow = new UILabel
         {
             Text = "INTERACTIVE HISTORY",
-            Font = UIFont.SystemFontOfSize(9, UIFontWeight.Bold)!,
+            Font = RadioVaultAccessibility.ScaledFont(9, UIFontWeight.Bold),
             TextColor = RadioVaultTheme.Wiki
         };
         var title = new UILabel
@@ -198,7 +198,7 @@ internal sealed class ExploreTimelinePromoCell : UITableViewCell
         var detail = new UILabel
         {
             Text = $"Travel through {eventCount:N0} dated events across {showCount:N0} shows.",
-            Font = UIFont.SystemFontOfSize(13)!,
+            Font = RadioVaultAccessibility.ScaledFont(13),
             TextColor = RadioVaultTheme.MutedText,
             Lines = 0
         };
@@ -238,7 +238,7 @@ internal sealed class ExploreArticleHeaderCell : UITableViewCell
     {
         BackgroundColor = RadioVaultTheme.Surface;
         SelectionStyle = UITableViewCellSelectionStyle.None;
-        _type.Font = UIFont.SystemFontOfSize(10, UIFontWeight.Bold)!;
+        _type.Font = RadioVaultAccessibility.ScaledFont(10, UIFontWeight.Bold);
         _type.TextColor = RadioVaultTheme.Wiki;
         _title.Font = ExploreTypography.Serif(34, UIFontWeight.Bold);
         _title.TextColor = RadioVaultTheme.Text;
@@ -246,7 +246,7 @@ internal sealed class ExploreArticleHeaderCell : UITableViewCell
         _summary.Font = ExploreTypography.Serif(18);
         _summary.TextColor = RadioVaultTheme.Text;
         _summary.Lines = 0;
-        _byline.Font = UIFont.SystemFontOfSize(11)!;
+        _byline.Font = RadioVaultAccessibility.ScaledFont(11);
         _byline.TextColor = RadioVaultTheme.SubtleText;
         _byline.Lines = 0;
         var rule = new UIView { BackgroundColor = RadioVaultTheme.Border };
@@ -504,17 +504,17 @@ internal sealed class ExploreTimelineEventCell : UITableViewCell
         var line = new UIView { BackgroundColor = RadioVaultTheme.Wiki, TranslatesAutoresizingMaskIntoConstraints = false };
         var dot = new UIView { BackgroundColor = RadioVaultTheme.Wiki, TranslatesAutoresizingMaskIntoConstraints = false };
         dot.Layer.CornerRadius = 6;
-        _year.Font = UIFont.SystemFontOfSize(25, UIFontWeight.Bold)!;
+        _year.Font = RadioVaultAccessibility.ScaledFont(25, UIFontWeight.Bold);
         _year.TextColor = RadioVaultTheme.Wiki;
-        _date.Font = UIFont.SystemFontOfSize(9, UIFontWeight.Bold)!;
+        _date.Font = RadioVaultAccessibility.ScaledFont(9, UIFontWeight.Bold);
         _date.TextColor = RadioVaultTheme.MutedText;
         _title.Font = ExploreTypography.Serif(21, UIFontWeight.Bold);
         _title.TextColor = RadioVaultTheme.Text;
         _title.Lines = 0;
-        _summary.Font = UIFont.SystemFontOfSize(14)!;
+        _summary.Font = RadioVaultAccessibility.ScaledFont(14);
         _summary.TextColor = RadioVaultTheme.MutedText;
         _summary.Lines = 0;
-        _evidence.Font = UIFont.SystemFontOfSize(10)!;
+        _evidence.Font = RadioVaultAccessibility.ScaledFont(10);
         _evidence.TextColor = RadioVaultTheme.SubtleText;
         var content = new UIStackView([_year, _date, _title, _summary, _evidence])
         {

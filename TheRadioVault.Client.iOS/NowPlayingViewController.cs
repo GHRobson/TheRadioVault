@@ -22,6 +22,7 @@ public sealed class NowPlayingViewController : UIViewController
     private readonly UIButton _momentButton = UIButton.FromType(UIButtonType.System);
     private readonly UIButton _infoButton = UIButton.FromType(UIButtonType.System);
     private readonly UIButton _favouriteButton = UIButton.FromType(UIButtonType.System);
+    private readonly RadioVaultOutputRouteView _outputRoute = new();
     private readonly UIActivityIndicatorView _playActivity = new(UIActivityIndicatorViewStyle.Large);
     private readonly NowPlayingUpNextView _upNext;
     private bool _isScrubbing;
@@ -98,6 +99,8 @@ public sealed class NowPlayingViewController : UIViewController
         _progressSlider.MinimumTrackTintColor = RadioVaultTheme.Accent;
         _progressSlider.MaximumTrackTintColor = RadioVaultTheme.Border;
         _progressSlider.ThumbTintColor = RadioVaultTheme.Accent;
+        _progressSlider.AccessibilityLabel = "Playback position";
+        _progressSlider.AccessibilityHint = "Swipe up or down to move through this broadcast";
         _progressSlider.TouchDown += (_, _) => _isScrubbing = true;
         _progressSlider.TouchUpInside += ProgressSliderFinished;
         _progressSlider.TouchUpOutside += ProgressSliderFinished;
@@ -113,7 +116,7 @@ public sealed class NowPlayingViewController : UIViewController
         _backButton.TintColor = RadioVaultTheme.Accent;
         _forwardButton.TintColor = RadioVaultTheme.Accent;
         _speedButton.TouchUpInside += (_, _) => _session.CycleSpeed();
-        _speedButton.TitleLabel!.Font = UIFont.SystemFontOfSize(16, UIFontWeight.Semibold)!;
+        _speedButton.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(16, UIFontWeight.Semibold);
         _speedButton.TitleLabel.AdjustsFontForContentSizeCategory = true;
         _speedButton.SetTitleColor(RadioVaultTheme.Text, UIControlState.Normal);
         _speedButton.BackgroundColor = RadioVaultTheme.SurfaceRaised;
@@ -160,10 +163,15 @@ public sealed class NowPlayingViewController : UIViewController
             Distribution = UIStackViewDistribution.FillEqually,
             Spacing = 10
         };
-        var speedStage = new UIView();
         _speedButton.TranslatesAutoresizingMaskIntoConstraints = false;
-        speedStage.AddSubview(_speedButton);
-        var playerContent = new UIStackView([artworkStage, metadata, progress, controlsStage, actions, speedStage, _statusLabel])
+        var secondaryControls = new UIStackView([_speedButton, _outputRoute])
+        {
+            Axis = UILayoutConstraintAxis.Horizontal,
+            Alignment = UIStackViewAlignment.Fill,
+            Distribution = UIStackViewDistribution.Fill,
+            Spacing = 10
+        };
+        var playerContent = new UIStackView([artworkStage, metadata, progress, controlsStage, actions, secondaryControls, _statusLabel])
         {
             Axis = UILayoutConstraintAxis.Vertical,
             Alignment = UIStackViewAlignment.Fill,
@@ -213,7 +221,7 @@ public sealed class NowPlayingViewController : UIViewController
             content.TopAnchor.ConstraintEqualTo(contentHost.TopAnchor, 16),
             content.BottomAnchor.ConstraintEqualTo(contentHost.BottomAnchor, -24),
             playerContent.HeightAnchor.ConstraintGreaterThanOrEqualTo(scrollView.FrameLayoutGuide.HeightAnchor, -40),
-            times.HeightAnchor.ConstraintEqualTo(18),
+            times.HeightAnchor.ConstraintGreaterThanOrEqualTo(18),
             _elapsedLabel.LeadingAnchor.ConstraintEqualTo(times.LeadingAnchor),
             _elapsedLabel.TopAnchor.ConstraintEqualTo(times.TopAnchor),
             _elapsedLabel.BottomAnchor.ConstraintEqualTo(times.BottomAnchor),
@@ -234,13 +242,12 @@ public sealed class NowPlayingViewController : UIViewController
             _playActivity.CenterYAnchor.ConstraintEqualTo(_playButton.CenterYAnchor),
             _forwardButton.WidthAnchor.ConstraintEqualTo(64),
             _forwardButton.HeightAnchor.ConstraintEqualTo(64),
-            actions.HeightAnchor.ConstraintEqualTo(48),
-            speedStage.HeightAnchor.ConstraintEqualTo(38),
-            _speedButton.CenterXAnchor.ConstraintEqualTo(speedStage.CenterXAnchor),
-            _speedButton.CenterYAnchor.ConstraintEqualTo(speedStage.CenterYAnchor),
+            actions.HeightAnchor.ConstraintGreaterThanOrEqualTo(48),
+            secondaryControls.HeightAnchor.ConstraintGreaterThanOrEqualTo(44),
             _speedButton.WidthAnchor.ConstraintEqualTo(76),
-            _speedButton.HeightAnchor.ConstraintEqualTo(38)
+            _speedButton.HeightAnchor.ConstraintEqualTo(44)
         ]);
+        RadioVaultAccessibility.PrepareView(view);
         ReloadSession();
     }
 
@@ -257,7 +264,7 @@ public sealed class NowPlayingViewController : UIViewController
 
     private static void ConfigureTimeLabel(UILabel label, UITextAlignment alignment)
     {
-        label.Font = UIFont.MonospacedDigitSystemFontOfSize(12, UIFontWeight.Semibold)!;
+        label.Font = RadioVaultAccessibility.ScaledMonospacedDigitFont(12, UIFontWeight.Semibold);
         label.TextAlignment = alignment;
         label.TextColor = RadioVaultTheme.MutedText;
         label.AdjustsFontSizeToFitWidth = true;
@@ -273,7 +280,7 @@ public sealed class NowPlayingViewController : UIViewController
         button.SetTitle($" {title}", UIControlState.Normal);
         button.SetTitleColor(RadioVaultTheme.MutedText, UIControlState.Normal);
         button.SetImage(RadioVaultIcons.Image(icon, size: 20), UIControlState.Normal);
-        button.TitleLabel!.Font = UIFont.SystemFontOfSize(12, UIFontWeight.Semibold)!;
+        button.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(12, UIFontWeight.Semibold);
         button.TitleLabel.AdjustsFontForContentSizeCategory = true;
         button.BackgroundColor = RadioVaultTheme.SurfaceRaised;
         button.Layer.CornerRadius = 14;
@@ -321,6 +328,7 @@ public sealed class NowPlayingViewController : UIViewController
                 using var feedback = new UINotificationFeedbackGenerator();
                 feedback.NotificationOccurred(UINotificationFeedbackType.Success);
             }
+            RadioVaultAccessibility.Announce(saved ? "Moment saved" : "Moment could not be saved");
             RefreshSavedActionButtons();
         });
         if (!saved) return;
@@ -357,6 +365,9 @@ public sealed class NowPlayingViewController : UIViewController
                 using var feedback = new UINotificationFeedbackGenerator();
                 feedback.NotificationOccurred(UINotificationFeedbackType.Success);
             }
+            RadioVaultAccessibility.Announce(updated is null
+                ? "Favourite could not be changed"
+                : updated.Source.Favourite ? "Added to favourites" : "Removed from favourites");
             RefreshSavedActionButtons();
         });
     }

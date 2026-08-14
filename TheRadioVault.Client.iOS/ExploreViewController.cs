@@ -319,9 +319,9 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
         var content = cell.DefaultContentConfiguration;
         content.Text = title;
         content.SecondaryText = detail;
-        content.TextProperties.Font = UIFont.BoldSystemFontOfSize(22)!;
+        content.TextProperties.Font = RadioVaultAccessibility.ScaledFont(22, UIFontWeight.Bold);
         content.TextProperties.Color = RadioVaultTheme.Text;
-        content.SecondaryTextProperties.Font = UIFont.SystemFontOfSize(13)!;
+        content.SecondaryTextProperties.Font = RadioVaultAccessibility.ScaledFont(13);
         content.SecondaryTextProperties.Color = RadioVaultTheme.MutedText;
         content.SecondaryTextProperties.NumberOfLines = 0;
         content.Image = RadioVaultIcons.Image(RadioVaultIcon.Explore, size: 42);

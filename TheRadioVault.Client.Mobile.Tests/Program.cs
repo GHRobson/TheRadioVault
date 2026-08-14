@@ -1,6 +1,7 @@
 using System.Text.Json;
 using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Downloads;
+using TheRadioVault.Client.Mobile.Diagnostics;
 using TheRadioVault.Client.Mobile.Explore;
 using TheRadioVault.Client.Mobile.Knowledge;
 using TheRadioVault.Client.Mobile.Library;
@@ -52,7 +53,8 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
     ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync),
-    ("Live Radio stays outside personal playback state", LiveRadioStaysOutsidePersonalPlaybackStateAsync)
+    ("Live Radio stays outside personal playback state", LiveRadioStaysOutsidePersonalPlaybackStateAsync),
+    ("Diagnostic exports redact private connection details", DiagnosticExportsRedactPrivateConnectionDetailsAsync)
 };
 
 var selectedTests = args.Length == 0
@@ -86,6 +88,23 @@ if (failures.Count > 0)
     return 1;
 }
 return 0;
+
+static Task DiagnosticExportsRedactPrivateConnectionDetailsAsync()
+{
+    const string report = "Server: Living Room (192.168.1.42:8090)\n" +
+                          "GET https://radio-vault.local:8090/api/media/42?token=keep-out\n" +
+                          "Authorization: Bearer private-credential\n" +
+                          "pairing_code=482913\n" +
+                          "Playback position: 69 percent";
+    var redacted = MobileDiagnosticRedactor.Redact(report);
+    Ensure(!redacted.Contains("192.168.1.42", StringComparison.Ordinal), "The server IP address remained in the report.");
+    Ensure(!redacted.Contains("radio-vault.local", StringComparison.Ordinal), "The server host remained in the report.");
+    Ensure(!redacted.Contains("keep-out", StringComparison.Ordinal), "The query token remained in the report.");
+    Ensure(!redacted.Contains("private-credential", StringComparison.Ordinal), "The authorization value remained in the report.");
+    Ensure(!redacted.Contains("482913", StringComparison.Ordinal), "The pairing code remained in the report.");
+    Contains(redacted, "Playback position: 69 percent", "non-private diagnostic context");
+    return Task.CompletedTask;
+}
 
 static async Task DownloadedProgressStaysIsolatedAsync()
 {

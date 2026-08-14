@@ -208,7 +208,7 @@ public sealed class SyncDiagnosticsViewController : SessionTableViewController
         report.AppendLine($"Paired: {snapshot.IsPaired}");
         report.AppendLine($"Live connection: {snapshot.IsLiveConnected}");
         report.AppendLine($"Metadata syncing: {snapshot.IsMetadataSyncing}");
-        report.AppendLine($"Server: {snapshot.ServerName} ({snapshot.ServerAddress})");
+        report.AppendLine($"Server: {snapshot.ServerName} (network address omitted)");
         report.AppendLine($"Status: {snapshot.StatusText}");
         report.AppendLine($"Pending changes: {PendingText(snapshot)}");
         report.AppendLine($"Last successful sync: {FormatDate(snapshot.LastSuccessfulSyncAt)}");
@@ -245,7 +245,7 @@ public sealed class SyncDiagnosticsViewController : SessionTableViewController
         report.AppendLine($"Download expiry: {(snapshot.DownloadExpiryDays <= 0 ? "Never" : snapshot.DownloadExpiryDays + " days")}");
         report.AppendLine($"Storage limit: {(snapshot.DownloadStorageLimitBytes <= 0 ? "None" : FormatBytes(snapshot.DownloadStorageLimitBytes))}");
         report.AppendLine();
-        report.AppendLine("Privacy: access tokens, pairing codes and certificates are not included.");
+        report.AppendLine("Privacy: network addresses, access tokens, pairing codes, passwords and certificates are omitted or redacted.");
         return report.ToString();
     }
 

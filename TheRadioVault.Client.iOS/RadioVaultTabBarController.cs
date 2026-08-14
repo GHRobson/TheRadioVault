@@ -31,6 +31,9 @@ public sealed class RadioVaultTabBarController : UITabBarController
     public override void ViewDidLoad()
     {
         base.ViewDidLoad();
+        if (UIDevice.CurrentDevice.UserInterfaceIdiom == UIUserInterfaceIdiom.Pad &&
+            UIDevice.CurrentDevice.CheckSystemVersion(18, 0))
+            Mode = UITabBarControllerMode.TabSidebar;
         InstallMiniPlayer();
     }
 

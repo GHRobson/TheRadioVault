@@ -99,9 +99,9 @@ public sealed class ExploreArticleViewController : SessionTableViewController
         var content = cell.DefaultContentConfiguration;
         content.Text = title;
         content.SecondaryText = detail;
-        content.TextProperties.Font = UIFont.BoldSystemFontOfSize(20)!;
+        content.TextProperties.Font = RadioVaultAccessibility.ScaledFont(20, UIFontWeight.Bold);
         content.TextProperties.NumberOfLines = 0;
-        content.SecondaryTextProperties.Font = UIFont.SystemFontOfSize(detailSize)!;
+        content.SecondaryTextProperties.Font = RadioVaultAccessibility.ScaledFont(detailSize);
         content.SecondaryTextProperties.Color = RadioVaultTheme.Text;
         content.SecondaryTextProperties.NumberOfLines = 0;
         RadioVaultTheme.StyleCell(cell, content);

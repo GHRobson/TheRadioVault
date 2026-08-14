@@ -216,7 +216,7 @@ internal sealed class KnowledgeHeatMapCell : UITableViewCell
     {
         BackgroundColor = RadioVaultTheme.Surface;
         SelectionStyle = UITableViewCellSelectionStyle.None;
-        _title.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
+        _title.Font = RadioVaultAccessibility.ScaledFont(13, UIFontWeight.Semibold);
         _title.TextColor = RadioVaultTheme.Text;
         _title.TranslatesAutoresizingMaskIntoConstraints = false;
         _strip.TranslatesAutoresizingMaskIntoConstraints = false;
@@ -431,11 +431,15 @@ internal sealed class KnowledgeReviewCardCell : UITableViewCell
         var translation = gesture.TranslationInView(_card);
         if (gesture.State == UIGestureRecognizerState.Changed)
         {
-            _card.Transform = CGAffineTransform.MakeTranslation(translation.X, translation.Y * 0.35f);
+            if (!RadioVaultAccessibility.ReduceMotion)
+                _card.Transform = CGAffineTransform.MakeTranslation(translation.X, translation.Y * 0.35f);
             return;
         }
         if (gesture.State is not (UIGestureRecognizerState.Ended or UIGestureRecognizerState.Cancelled)) return;
-        UIView.Animate(0.18, () => _card.Transform = CGAffineTransform.MakeIdentity());
+        if (RadioVaultAccessibility.ReduceMotion)
+            _card.Transform = CGAffineTransform.MakeIdentity();
+        else
+            UIView.Animate(0.18, () => _card.Transform = CGAffineTransform.MakeIdentity());
         if (translation.Y < -60 && Math.Abs(translation.Y) > Math.Abs(translation.X)) _ignore?.Invoke();
         else if (translation.X > 60) _accept?.Invoke();
         else if (translation.X < -60) _reject?.Invoke();
@@ -445,7 +449,7 @@ internal sealed class KnowledgeReviewCardCell : UITableViewCell
         => new()
         {
             Text = string.IsNullOrWhiteSpace(text) ? "No supporting note supplied." : text!,
-            Font = UIFont.SystemFontOfSize(size, weight)!,
+            Font = RadioVaultAccessibility.ScaledFont(size, weight),
             TextColor = color,
             Lines = lines,
             AdjustsFontForContentSizeCategory = true
@@ -456,7 +460,7 @@ internal sealed class KnowledgeReviewCardCell : UITableViewCell
         var button = UIButton.FromType(UIButtonType.System);
         button.SetTitle(title, UIControlState.Normal);
         button.SetTitleColor(color, UIControlState.Normal);
-        button.TitleLabel!.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
+        button.TitleLabel!.Font = RadioVaultAccessibility.ScaledFont(13, UIFontWeight.Semibold);
         button.BackgroundColor = RadioVaultTheme.Surface;
         button.Layer.CornerRadius = 12;
         button.TouchUpInside += (_, _) => action();

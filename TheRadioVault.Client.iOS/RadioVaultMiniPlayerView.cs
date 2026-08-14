@@ -95,6 +95,7 @@ public sealed class RadioVaultMiniPlayerView : UIView
         labels.AddGestureRecognizer(new UITapGestureRecognizer(() => Tapped?.Invoke(this, EventArgs.Empty)));
         _session.StateChanged += SessionOnStateChanged;
         _session.PlaybackStateChanged += SessionOnStateChanged;
+        RadioVaultAccessibility.PrepareView(this);
         Reload();
     }
 
