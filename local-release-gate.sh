@@ -69,10 +69,20 @@ echo "SDK: $PINNED_SDK"
 echo "Log: $LOG_PATH"
 
 version_value() {
-  sed -nE "s/.*<$2>([^<]+)<\/$2>.*/\1/p" "$1" | head -1
+  local value
+  value="$(sed -nE "s/.*<$2>([^<]+)<\/$2>.*/\1/p" "$1" | head -1)"
+  if [[ "$value" == '$(RadioVaultProductVersion)' ]]; then value="$VERSION"; fi
+  printf '%s\n' "$value"
 }
 
 VERSION="$(tr -d '\r\n' < "$ROOT/VERSION.txt")"
+if [[ -z "${RADIOVAULT_BUILD_IDENTITY:-}" ]]; then
+  RADIOVAULT_BUILD_IDENTITY="$(git -C "$ROOT" rev-parse HEAD)"
+  if [[ -n "$(git -C "$ROOT" status --porcelain)" ]]; then
+    RADIOVAULT_BUILD_IDENTITY="$RADIOVAULT_BUILD_IDENTITY.dirty"
+  fi
+  export RADIOVAULT_BUILD_IDENTITY
+fi
 DESKTOP_VERSION="$(version_value "$ROOT/TheRadioVault.Desktop.Avalonia/TheRadioVault.Desktop.Avalonia.csproj" Version)"
 SERVER_VERSION="$(version_value "$ROOT/TheRadioVault.Server/TheRadioVault.Server.csproj" Version)"
 IOS_VERSION="$(version_value "$ROOT/TheRadioVault.Client.iOS/TheRadioVault.Client.iOS.csproj" ApplicationDisplayVersion)"
@@ -89,6 +99,12 @@ if [[ "$IOS_BUILD" != "$IOS_PLIST_BUILD" ]]; then
   exit 1
 fi
 echo "Version consistency: $VERSION ($IOS_BUILD)"
+
+if ! rg -q 'VERSION\.txt.*single product-version authority' "$ROOT/Directory.Build.props" ||
+   ! rg -q 'RadioVaultInformationalVersion' "$ROOT/Directory.Build.props"; then
+  echo "Central version/build identity properties are missing." >&2
+  exit 1
+fi
 
 git -C "$ROOT" diff --check
 if rg -n '^(<<<<<<< .+|=======|>>>>>>> .+)$' "$ROOT" \

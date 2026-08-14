@@ -6,6 +6,8 @@ param(
 $ErrorActionPreference = "Stop"
 $root = Split-Path $PSScriptRoot -Parent
 $version = (Get-Content (Join-Path $root "VERSION.txt") -Raw).Trim()
+. (Join-Path $root "tools\Build-Identity.ps1")
+$identity = Get-RadioVaultBuildIdentity -Root $root -Version $version
 $excludedDirectories = '[\\/](bin|obj|artifacts|\.git|\.vs|\.vscode|\.idea|TestResults|coverage|packages)[\\/]'
 $rootInstaller = '^RadioVault\.(Client|Server)-.+-Setup\.exe$'
 $excludedNames = @('.DS_Store', 'Thumbs.db')
@@ -36,6 +38,9 @@ $manifestComparison = [System.Comparison[object]]{
 [Array]::Sort[object]($manifestEntries, $manifestComparison)
 $manifest = [ordered]@{
     version = $version
+    buildIdentity = $identity.BuildIdentity
+    commit = $identity.Commit
+    sourceDirty = $identity.SourceDirty
     generatedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
     fileCount = $manifestEntries.Count
     files = $manifestEntries

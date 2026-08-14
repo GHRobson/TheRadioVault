@@ -60,6 +60,11 @@ static async Task ManualCollectionsPreserveOrder()
         var summaries = await service.GetAllAsync();
         Equal(1, summaries.Count, "summary count");
         Equal(2, summaries[0].ItemCount, "manual summary count");
+
+        var reopened = new SavedCollectionService(database);
+        var persisted = await reopened.GetAsync(created.Summary.Id)
+            ?? throw new InvalidOperationException("Saved collection disappeared after reopening the service.");
+        Equal("Second,First", string.Join(',', persisted.Broadcasts.Select(value => value.Title)), "persisted saved order");
     });
 }
 
@@ -174,6 +179,14 @@ static async Task LiveRadioScheduleIsStableAndReadOnly()
             Equal(first.ScheduleRevision, afterRestart.ScheduleRevision, "schedule revision after service restart");
         }
         if (first.Current is null) throw new InvalidOperationException("Expected a live programme.");
+        using (var service = new LiveRadioScheduleService(database))
+        {
+            var anchor = first.Current.StartsAt.AddSeconds(30);
+            var anchored = await service.GetSnapshotAsync(anchor);
+            var advanced = await service.GetSnapshotAsync(anchor.AddSeconds(20));
+            Equal(anchored.Current?.ScheduleEntryId, advanced.Current?.ScheduleEntryId, "programme while the server clock advances");
+            Equal((anchored.Current?.PositionMs ?? 0) + 20_000, advanced.Current?.PositionMs ?? 0, "server-clock playhead advance");
+        }
         Equal(before, ReadListeningState(database), "unchanged listening state");
     });
 }

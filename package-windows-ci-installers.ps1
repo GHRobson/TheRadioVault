@@ -57,7 +57,14 @@ if (Test-Path -LiteralPath $outputPath) {
 New-Item -ItemType Directory -Path $outputPath -Force | Out-Null
 
 $version = (Get-Content (Join-Path $root "VERSION.txt") -Raw).Trim()
+. (Join-Path $root "tools\Build-Identity.ps1")
+$identity = Get-RadioVaultBuildIdentity -Root $root -Version $version
+Write-RadioVaultBuildInfo -Destination (Join-Path $clientPath "BUILD_INFO.json") `
+    -Product "Radio Vault Client" -Version $version -Runtime "win-x64" -Role "desktop-client" -Identity $identity
+Write-RadioVaultBuildInfo -Destination (Join-Path $serverPath "BUILD_INFO.json") `
+    -Product "Radio Vault Server" -Version $version -Runtime "win-x64" -Role "authoritative-server" -Identity $identity
 $env:RV_VERSION = $version
+$env:RV_FILE_VERSION = "$version.0"
 $env:RV_CLIENT_PUBLISH = $clientPath
 $env:RV_SERVER_PUBLISH = $serverPath
 $env:RV_INSTALLER_OUTPUT = $outputPath

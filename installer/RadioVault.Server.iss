@@ -1,4 +1,5 @@
 #define MyAppVersion GetEnv("RV_VERSION")
+#define MyFileVersion GetEnv("RV_FILE_VERSION")
 #define ServerPublishDir GetEnv("RV_SERVER_PUBLISH")
 #define InstallerOutputDir GetEnv("RV_INSTALLER_OUTPUT")
 
@@ -24,11 +25,11 @@ ArchitecturesInstallIn64BitMode=x64compatible
 CloseApplications=yes
 RestartApplications=no
 AppMutex=Local\RadioVault.Server.Instance.v1
-VersionInfoVersion=0.35.0.9
+VersionInfoVersion={#MyFileVersion}
 VersionInfoCompany=Radio Vault
 VersionInfoDescription=Radio Vault Server installer
 VersionInfoProductName=Radio Vault Server
-VersionInfoProductVersion=0.35.0.9
+VersionInfoProductVersion={#MyFileVersion}
 ChangesEnvironment=no
 UsePreviousAppDir=yes
 UsePreviousTasks=yes

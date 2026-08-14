@@ -26,6 +26,7 @@ $expectedInstaller = Join-Path $installerOutput "RadioVault.Client-$version-Setu
 if (Test-Path $expectedInstaller) { Remove-Item $expectedInstaller -Force }
 
 $env:RV_VERSION = $version
+$env:RV_FILE_VERSION = "$version.0"
 $env:RV_CLIENT_PUBLISH = $publish
 $env:RV_INSTALLER_OUTPUT = $installerOutput
 try {
@@ -34,6 +35,7 @@ try {
 }
 finally {
     Remove-Item Env:RV_VERSION -ErrorAction SilentlyContinue
+    Remove-Item Env:RV_FILE_VERSION -ErrorAction SilentlyContinue
     Remove-Item Env:RV_CLIENT_PUBLISH -ErrorAction SilentlyContinue
     Remove-Item Env:RV_INSTALLER_OUTPUT -ErrorAction SilentlyContinue
 }

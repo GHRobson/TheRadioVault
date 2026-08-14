@@ -22,6 +22,13 @@
 - Added `TheRadioVault.Data.Tests` as a release-gated database suite and moved seed, latest-schema and legacy-upgrade behavior out of the broad smoke runner.
 - Introduced transactional, contiguous numbered SQLite migrations after the preserved schema-47 bootstrap. Schema 48 adds an auditable migration ledger, rejects databases created by newer builds, and has ordered, idempotence, rollback and restorable-backup coverage.
 
+# 0.42.0
+
+- Makes `VERSION.txt` the .NET product-version authority and advances the desktop Client, Server and iOS app to 0.42.0 (iOS build 48).
+- Embeds the source commit in application informational versions, displays its short identity in About/Diagnostics and writes it into packaged build manifests.
+- Corrects stale Windows setup file metadata that still identified new installers as 0.35.0.9.
+- Adds explicit release-candidate acceptance coverage for Radio Vault Live, RSS ingestion, automatic downloads/storage management and saved collections.
+
 # 0.41.0
 
 - Made the source repository public so standard GitHub-hosted parity builds are no longer metered, while retaining read-only workflow permissions.

@@ -55,8 +55,17 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Live Radio stays outside personal playback state", LiveRadioStaysOutsidePersonalPlaybackStateAsync)
 };
 
+var selectedTests = args.Length == 0
+    ? tests
+    : tests.Where(test => args.Any(filter => test.Name.Contains(filter, StringComparison.OrdinalIgnoreCase))).ToArray();
+if (selectedTests.Length == 0)
+{
+    Console.Error.WriteLine("No mobile tests matched the supplied filters.");
+    return 2;
+}
+
 var failures = new List<string>();
-foreach (var test in tests)
+foreach (var test in selectedTests)
 {
     try
     {
@@ -70,7 +79,7 @@ foreach (var test in tests)
     }
 }
 
-Console.WriteLine($"\n{tests.Length - failures.Count}/{tests.Length} mobile regression checks passed.");
+Console.WriteLine($"\n{selectedTests.Length - failures.Count}/{selectedTests.Length} mobile regression checks passed.");
 if (failures.Count > 0)
 {
     Console.Error.WriteLine("Failed: " + string.Join(", ", failures));

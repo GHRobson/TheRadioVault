@@ -31,8 +31,18 @@ end
 entries = files.sort_by(&:first).map do |relative, path|
   { "path" => relative, "bytes" => path.size, "sha256" => Digest::SHA256.file(path).hexdigest }
 end
+commit = ENV["RADIOVAULT_BUILD_IDENTITY"] || ENV["GITHUB_SHA"]
+if commit.to_s.empty?
+  commit = `git -C #{root.to_s.dump} rev-parse HEAD 2>/dev/null`.strip
+end
+commit = nil unless commit.to_s.match?(/\A[0-9a-f]{7,64}\z/i)
+source_dirty = commit ? !`git -C #{root.to_s.dump} status --porcelain 2>/dev/null`.strip.empty? : false
+short = commit ? commit.downcase[0, 12] + (source_dirty ? ".dirty" : "") : "local"
 manifest = {
   "version" => root.join("VERSION.txt").read.strip,
+  "buildIdentity" => "#{root.join("VERSION.txt").read.strip}+#{short}",
+  "commit" => commit&.downcase,
+  "sourceDirty" => source_dirty,
   "generatedAtUtc" => Time.now.utc.iso8601(7),
   "fileCount" => entries.length,
   "files" => entries

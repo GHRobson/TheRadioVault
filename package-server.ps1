@@ -2,6 +2,9 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $version = (Get-Content (Join-Path $root "VERSION.txt") -Raw).Trim()
 $project = Join-Path $root "TheRadioVault.Server\TheRadioVault.Server.csproj"
+. (Join-Path $root "tools\Build-Identity.ps1")
+$identity = Get-RadioVaultBuildIdentity -Root $root -Version $version
+$env:RADIOVAULT_BUILD_IDENTITY = $identity.EmbeddedIdentity
 
 & (Join-Path $root "release-gate.ps1")
 
@@ -18,12 +21,7 @@ dotnet publish $project `
     -o $publish
 if ($LASTEXITCODE -ne 0) { throw "RadioVault Server publish failed." }
 
-$buildInfo = [ordered]@{
-    product = "RadioVault Server"
-    version = $version
-    generatedAtUtc = [DateTimeOffset]::UtcNow.ToString("O")
-    runtime = "win-x64"
-    role = "authoritative-server"
+$features = @{
     userInterface = "settings-only"
     databaseSchema = 51
     radioVaultAnywhere = $true
@@ -34,6 +32,8 @@ $buildInfo = [ordered]@{
     transcriptionSetup = "server-settings"
     wiki = "server-owned-exploration-canonical-topic-auto-merge-interactive-timeline-quality-audit-rvwiki-packs"
 }
-$buildInfo | ConvertTo-Json -Depth 5 | Set-Content (Join-Path $publish "BUILD_INFO.json") -Encoding UTF8
+Write-RadioVaultBuildInfo -Destination (Join-Path $publish "BUILD_INFO.json") `
+    -Product "RadioVault Server" -Version $version -Runtime "win-x64" -Role "authoritative-server" `
+    -Identity $identity -Features $features
 Compress-Archive -Path (Join-Path $publish '*') -DestinationPath $package -CompressionLevel Optimal
 Write-Host "RadioVault Server package created: $package" -ForegroundColor Green

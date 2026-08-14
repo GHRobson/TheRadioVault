@@ -1,7 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia.Threading;
@@ -152,8 +151,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
-    public string VersionText => $"Radio Vault Server {typeof(ServerSettingsViewModel).Assembly
-        .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion ?? "0.34"}";
+    public string VersionText => $"Radio Vault Server {AppVersionService.DisplayVersion}";
     public string DatabasePath { get; }
     public string ServerDisplayName { get => _serverDisplayName; set => Set(ref _serverDisplayName, value); }
     public string HttpPortText { get => _httpPortText; set => Set(ref _httpPortText, value); }

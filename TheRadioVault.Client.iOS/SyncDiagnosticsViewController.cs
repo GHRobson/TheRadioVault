@@ -1,4 +1,5 @@
 using System.Text;
+using System.Reflection;
 using CoreGraphics;
 using Foundation;
 using TheRadioVault.Client.Mobile;
@@ -252,7 +253,20 @@ public sealed class SyncDiagnosticsViewController : SessionTableViewController
     {
         var version = NSBundle.MainBundle.ObjectForInfoDictionary("CFBundleShortVersionString")?.ToString() ?? "Unknown";
         var build = NSBundle.MainBundle.ObjectForInfoDictionary("CFBundleVersion")?.ToString() ?? "Unknown";
-        return $"Version {version} ({build})";
+        var informational = typeof(SyncDiagnosticsViewController).Assembly
+            .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?.InformationalVersion;
+        var separator = informational?.IndexOf('+') ?? -1;
+        var identity = separator >= 0 && separator < informational!.Length - 1
+            ? informational[(separator + 1)..]
+            : "unknown";
+        if (identity is not ("local" or "unknown"))
+        {
+            var suffixSeparator = identity.IndexOf('.');
+            var commit = suffixSeparator < 0 ? identity : identity[..suffixSeparator];
+            var suffix = suffixSeparator < 0 ? string.Empty : identity[suffixSeparator..];
+            identity = commit[..Math.Min(12, commit.Length)] + suffix;
+        }
+        return $"Version {version} ({build}) · build {identity}";
     }
 
     private static string PendingText(MobileDiagnosticSnapshot snapshot)

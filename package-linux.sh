@@ -6,6 +6,19 @@ CONFIGURATION="${CONFIGURATION:-Release}"
 RID="${RUNTIME_IDENTIFIER:-linux-x64}"
 DOTNET_EXE="${DOTNET_EXE:-dotnet}"
 VERSION="$(tr -d '\r\n' < "$ROOT/VERSION.txt")"
+BUILD_COMMIT="${RADIOVAULT_BUILD_IDENTITY:-${GITHUB_SHA:-$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)}}"
+if [[ ! "$BUILD_COMMIT" =~ ^[0-9a-fA-F]{7,64}$ ]]; then BUILD_COMMIT="local"; fi
+BUILD_COMMIT="$(printf '%s' "$BUILD_COMMIT" | tr '[:upper:]' '[:lower:]')"
+BUILD_SHORT="${BUILD_COMMIT:0:12}"
+SOURCE_DIRTY=false
+if [[ "$BUILD_COMMIT" != "local" && -z "${GITHUB_SHA:-}" && -n "$(git -C "$ROOT" status --porcelain)" ]]; then
+  SOURCE_DIRTY=true
+  BUILD_SHORT="$BUILD_SHORT.dirty"
+fi
+BUILD_IDENTITY="$VERSION+$BUILD_SHORT"
+EMBEDDED_BUILD_IDENTITY="$BUILD_COMMIT"
+if [[ "$SOURCE_DIRTY" == true ]]; then EMBEDDED_BUILD_IDENTITY="$EMBEDDED_BUILD_IDENTITY.dirty"; fi
+export RADIOVAULT_BUILD_IDENTITY="$EMBEDDED_BUILD_IDENTITY"
 ARTIFACT_ROOT="$ROOT/artifacts/linux/$RID"
 CLIENT_PUBLISH="$ARTIFACT_ROOT/publish-client"
 SERVER_PUBLISH="$ARTIFACT_ROOT/publish-server"
@@ -36,6 +49,19 @@ cp -R "$CLIENT_PUBLISH"/. "$CLIENT_BUNDLE/"
 cp -R "$SERVER_PUBLISH"/. "$SERVER_BUNDLE/"
 cp "$ROOT/TheRadioVault.Desktop.Avalonia/Assets/RadioVault-Logo.png" "$CLIENT_BUNDLE/RadioVault.png"
 cp "$ROOT/TheRadioVault.Server/Assets/RadioVault.Server-Logo.png" "$SERVER_BUNDLE/RadioVaultServer.png"
+
+for BUILD_INFO_TARGET in "$CLIENT_BUNDLE/BUILD_INFO.json" "$SERVER_BUNDLE/BUILD_INFO.json"; do
+  BUILD_ROLE="desktop-client"
+  BUILD_PRODUCT="Radio Vault Client"
+  if [[ "$BUILD_INFO_TARGET" == "$SERVER_BUNDLE/BUILD_INFO.json" ]]; then
+    BUILD_ROLE="authoritative-server"
+    BUILD_PRODUCT="Radio Vault Server"
+  fi
+  printf '{\n  "product": "%s",\n  "version": "%s",\n  "buildIdentity": "%s",\n  "commit": %s,\n  "sourceDirty": %s,\n  "generatedAtUtc": "%s",\n  "runtime": "%s",\n  "role": "%s"\n}\n' \
+    "$BUILD_PRODUCT" "$VERSION" "$BUILD_IDENTITY" \
+    "$([[ "$BUILD_COMMIT" == "local" ]] && printf 'null' || printf '"%s"' "$BUILD_COMMIT")" \
+    "$SOURCE_DIRTY" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$RID" "$BUILD_ROLE" > "$BUILD_INFO_TARGET"
+done
 
 cat > "$CLIENT_BUNDLE/run-radiovault.sh" <<'EOF'
 #!/usr/bin/env bash

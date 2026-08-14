@@ -160,7 +160,7 @@ After merging, delete the topic branch and update each computer with
 ## Releases
 
 Create releases from a version tag on a tested `main` commit, for example
-`v0.41.0`. The Windows, Mac and Linux Clients and Servers and the iOS Client
+`v0.42.0`. The Windows, Mac and Linux Clients and Servers and the iOS Client
 for a release must all identify the same commit and `VERSION.txt` value.
 
 The current engineering roadmap and cross-platform audit are maintained in

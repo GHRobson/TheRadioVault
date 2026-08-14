@@ -4,7 +4,7 @@ $version = (Get-Content (Join-Path $root "VERSION.txt") -Raw).Trim()
 $projectPath = Join-Path $root "TheRadioVault.Desktop.Avalonia\TheRadioVault.Desktop.Avalonia.csproj"
 $hostPath = Join-Path $root "TheRadioVault.Desktop.Avalonia\Composition\AvaloniaApplicationHost.cs"
 
-if ($version -ne "0.41.0") {
+if ($version -ne "0.42.0") {
     throw "Unexpected VERSION.txt value: $version"
 }
 if (-not (Test-Path $projectPath)) { throw "Avalonia project is missing." }
@@ -28,8 +28,12 @@ if ($runSourceText -match 'WpfReference|TheRadioVault\\TheRadioVault.csproj') { 
 
 [xml]$project = Get-Content $projectPath -Raw
 $propertyGroup = @($project.Project.PropertyGroup)[0]
-if ([string]$propertyGroup.Version -ne $version) {
-    throw "Avalonia project version does not match VERSION.txt."
+if ([string]$propertyGroup.Version -ne '$(RadioVaultProductVersion)') {
+    throw "Avalonia project does not use the central RadioVault product version."
+}
+$centralVersionText = Get-Content (Join-Path $root 'Directory.Build.props') -Raw
+foreach ($marker in @('VERSION.txt', 'RadioVaultProductVersion', 'RadioVaultBuildIdentity', 'RadioVaultInformationalVersion')) {
+    if ($centralVersionText -notmatch [regex]::Escape($marker)) { throw "Central build identity marker missing: $marker" }
 }
 
 $references = @()
@@ -1046,8 +1050,8 @@ foreach ($marker in @('<h1 align="center">Radio Vault</h1>', 'Bring your old rad
     if ($stableReadmeText -notmatch [regex]::Escape($marker)) { throw "Radio Vault marketing README marker missing: $marker" }
 }
 if ($stableReadmeText -match [regex]::Escape('repository is currently private')) { throw 'Public Radio Vault README still describes the repository as private.' }
-foreach ($marker in @('# Building Radio Vault 0.41.0', 'local-release-gate.sh', 'package-macos-local.sh', 'package-server-installer.ps1', 'package-client-installer.ps1', 'SOURCE_MANIFEST.sha256.json')) {
-    if ($stableBuildingText -notmatch [regex]::Escape($marker)) { throw "0.41 build-guide marker missing: $marker" }
+foreach ($marker in @('# Building Radio Vault 0.42.0', 'local-release-gate.sh', 'package-macos-local.sh', 'package-server-installer.ps1', 'package-client-installer.ps1', 'SOURCE_MANIFEST.sha256.json')) {
+    if ($stableBuildingText -notmatch [regex]::Escape($marker)) { throw "0.42 build-guide marker missing: $marker" }
 }
 foreach ($marker in @("foundationVersion = '0.35-alpha9-knowledge-portability'", 'databaseSchema = 51', 'lanCapabilityGeneration = 41', 'remoteClientMigrated = $true', 'encryptedRemoteCache = $true', 'automaticReconnect = $true', 'remotePlaybackMigrated = $true')) {
     if ($stableFoundationText -notmatch [regex]::Escape($marker)) { throw "0.35 Alpha 1 architecture-report marker missing: $marker" }

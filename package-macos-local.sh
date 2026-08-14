@@ -34,7 +34,20 @@ fi
 
 VERSION="$(tr -d '\r\n' < "$ROOT/VERSION.txt")"
 SHORT_VERSION="$(printf '%s' "$VERSION" | sed -E 's/^([0-9]+\.[0-9]+\.[0-9]+).*/\1/')"
-BUNDLE_VERSION="${APPLICATION_BUILD:-47}"
+BUNDLE_VERSION="${APPLICATION_BUILD:-48}"
+BUILD_COMMIT="${RADIOVAULT_BUILD_IDENTITY:-${GITHUB_SHA:-$(git -C "$ROOT" rev-parse HEAD 2>/dev/null || true)}}"
+if [[ ! "$BUILD_COMMIT" =~ ^[0-9a-fA-F]{7,64}$ ]]; then BUILD_COMMIT="local"; fi
+BUILD_COMMIT="$(printf '%s' "$BUILD_COMMIT" | tr '[:upper:]' '[:lower:]')"
+BUILD_SHORT="${BUILD_COMMIT:0:12}"
+SOURCE_DIRTY=false
+if [[ "$BUILD_COMMIT" != "local" && -z "${GITHUB_SHA:-}" && -n "$(git -C "$ROOT" status --porcelain)" ]]; then
+  SOURCE_DIRTY=true
+  BUILD_SHORT="$BUILD_SHORT.dirty"
+fi
+BUILD_IDENTITY="$VERSION+$BUILD_SHORT"
+EMBEDDED_BUILD_IDENTITY="$BUILD_COMMIT"
+if [[ "$SOURCE_DIRTY" == true ]]; then EMBEDDED_BUILD_IDENTITY="$EMBEDDED_BUILD_IDENTITY.dirty"; fi
+export RADIOVAULT_BUILD_IDENTITY="$EMBEDDED_BUILD_IDENTITY"
 CLIENT_ARTIFACT="$ROOT/artifacts/macos/$RID"
 SERVER_ARTIFACT="$ROOT/artifacts/macos-server/$RID"
 
@@ -74,6 +87,9 @@ create_manifest() {
   {
     echo "product=$product"
     echo "version=$VERSION"
+    echo "buildIdentity=$BUILD_IDENTITY"
+    echo "commit=$BUILD_COMMIT"
+    echo "sourceDirty=$SOURCE_DIRTY"
     echo "runtimeIdentifier=$RID"
     echo "bundleIdentifier=$bundle_id"
     echo "entryPoint=$entry_point"
@@ -119,6 +135,21 @@ package_product() {
     echo "--skip-publish requires $publish_root/$executable" >&2
     exit 1
   fi
+
+  ruby -rjson -rtime - "$publish_root/BUILD_INFO.json" "$product" "$VERSION" "$BUILD_IDENTITY" "$BUILD_COMMIT" "$RID" "$SOURCE_DIRTY" <<'RUBY'
+path, product, version, identity, commit, runtime, source_dirty = ARGV
+document = {
+  "product" => "Radio Vault #{product}",
+  "version" => version,
+  "buildIdentity" => identity,
+  "commit" => commit == "local" ? nil : commit,
+  "sourceDirty" => source_dirty == "true",
+  "generatedAtUtc" => Time.now.utc.iso8601(7),
+  "runtime" => runtime,
+  "role" => product == "Server" ? "authoritative-server" : "desktop-client"
+}
+File.write(path, JSON.pretty_generate(document) + "\n")
+RUBY
 
   rm -rf "$bundle_root" "$archive"
   mkdir -p "$contents_root/MacOS" "$contents_root/Resources"

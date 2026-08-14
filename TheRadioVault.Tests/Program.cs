@@ -2279,7 +2279,7 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
 
 static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 {
-    Equal("0.41.0", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
+    Equal("0.42.0", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
 
     foreach (var projectPath in new[]
              {
@@ -2288,8 +2288,8 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
              })
     {
         var project = File.ReadAllText(Path.Combine(SourceRoot(), projectPath));
-        True(project.Contains("<Version>0.41.0</Version>", StringComparison.Ordinal));
-        True(project.Contains("<InformationalVersion>0.41.0</InformationalVersion>", StringComparison.Ordinal));
+        True(project.Contains("<Version>$(RadioVaultProductVersion)</Version>", StringComparison.Ordinal));
+        True(project.Contains("<InformationalVersion>$(RadioVaultInformationalVersion)</InformationalVersion>", StringComparison.Ordinal));
     }
 
     var readme = File.ReadAllText(Path.Combine(SourceRoot(), "README.md"));
@@ -2313,7 +2313,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
     True(!readme.Contains("repository is currently private", StringComparison.OrdinalIgnoreCase));
 
     var building = File.ReadAllText(Path.Combine(SourceRoot(), "BUILDING.md"));
-    True(building.StartsWith("# Building Radio Vault 0.41.0", StringComparison.Ordinal));
+    True(building.StartsWith("# Building Radio Vault 0.42.0", StringComparison.Ordinal));
     True(building.Contains("package-server-installer.ps1", StringComparison.Ordinal));
     True(building.Contains("package-client-installer.ps1", StringComparison.Ordinal));
     True(!building.Contains("subsequent 0.34 phases", StringComparison.Ordinal));
@@ -2352,7 +2352,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 
     using var sourceManifest = System.Text.Json.JsonDocument.Parse(
         File.ReadAllText(Path.Combine(SourceRoot(), "SOURCE_MANIFEST.sha256.json")));
-    Equal("0.41.0", sourceManifest.RootElement.GetProperty("version").GetString());
+    Equal("0.42.0", sourceManifest.RootElement.GetProperty("version").GetString());
 
     foreach (var projectPath in new[]
              {
@@ -3524,7 +3524,7 @@ static void KnowledgeSurfacesUseArticleFirstDashboardsAndSummaries()
 
 static void Alpha9HardensDocumentedKnowledgePortability()
 {
-    Equal("0.41.0", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
+    Equal("0.42.0", File.ReadAllText(Path.Combine(SourceRoot(), "VERSION.txt")).Trim());
 
     var shell = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "MainWindowViewModel.cs"));
     True(shell.Contains("\"wiki\", \"Explore\"", StringComparison.Ordinal));
@@ -5388,7 +5388,6 @@ static void ProductVersionsRemainConsistent()
     var serverVersion = ProjectValue(
         Path.Combine(root, "TheRadioVault.Server", "TheRadioVault.Server.csproj"),
         "Version");
-    var assemblyVersion = version + ".0";
     var desktopProject = Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "TheRadioVault.Desktop.Avalonia.csproj");
     var serverProject = Path.Combine(root, "TheRadioVault.Server", "TheRadioVault.Server.csproj");
     var iosProject = Path.Combine(root, "TheRadioVault.Client.iOS", "TheRadioVault.Client.iOS.csproj");
@@ -5396,15 +5395,32 @@ static void ProductVersionsRemainConsistent()
     var iosBuild = ProjectValue(iosProject, "ApplicationVersion");
     var plist = System.Xml.Linq.XDocument.Load(Path.Combine(root, "TheRadioVault.Client.iOS", "Info.plist"));
 
-    Equal(version, desktopVersion);
-    Equal(version, serverVersion);
-    Equal(assemblyVersion, ProjectValue(desktopProject, "AssemblyVersion"));
-    Equal(assemblyVersion, ProjectValue(desktopProject, "FileVersion"));
-    Equal(assemblyVersion, ProjectValue(serverProject, "AssemblyVersion"));
-    Equal(assemblyVersion, ProjectValue(serverProject, "FileVersion"));
-    Equal(version, iosVersion);
+    Equal("$(RadioVaultProductVersion)", desktopVersion);
+    Equal("$(RadioVaultProductVersion)", serverVersion);
+    Equal("$(RadioVaultAssemblyVersion)", ProjectValue(desktopProject, "AssemblyVersion"));
+    Equal("$(RadioVaultAssemblyVersion)", ProjectValue(desktopProject, "FileVersion"));
+    Equal("$(RadioVaultAssemblyVersion)", ProjectValue(serverProject, "AssemblyVersion"));
+    Equal("$(RadioVaultAssemblyVersion)", ProjectValue(serverProject, "FileVersion"));
+    Equal("$(RadioVaultProductVersion)", iosVersion);
     Equal(version, PlistValue(plist, "CFBundleShortVersionString"));
     Equal(iosBuild, PlistValue(plist, "CFBundleVersion"));
+
+    var central = File.ReadAllText(Path.Combine(root, "Directory.Build.props"));
+    True(central.Contains("VERSION.txt", StringComparison.Ordinal));
+    True(central.Contains("RadioVaultBuildIdentity", StringComparison.Ordinal));
+    True(central.Contains("RadioVaultInformationalVersion", StringComparison.Ordinal));
+    True(central.Contains("<IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>", StringComparison.Ordinal));
+
+    foreach (var installerName in new[] { "RadioVault.Client.iss", "RadioVault.Server.iss" })
+    {
+        var installer = File.ReadAllText(Path.Combine(root, "installer", installerName));
+        True(installer.Contains("VersionInfoVersion={#MyFileVersion}", StringComparison.Ordinal));
+        True(!installer.Contains("0.35.0.9", StringComparison.Ordinal));
+    }
+
+    var buildIdentity = File.ReadAllText(Path.Combine(root, "tools", "Build-Identity.ps1"));
+    True(buildIdentity.Contains("buildIdentity", StringComparison.Ordinal));
+    True(buildIdentity.Contains("commit", StringComparison.Ordinal));
 }
 
 static string ProjectValue(string path, string name)

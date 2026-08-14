@@ -1,4 +1,4 @@
-# Building Radio Vault 0.41.0
+# Building Radio Vault 0.42.0
 
 ## Requirements
 
@@ -176,13 +176,13 @@ device or distribution account.
 Create a source archive and regenerate `SOURCE_MANIFEST.sha256.json` with:
 
 ```zsh
-./tools/package-source-local.sh artifacts/RadioVault-0.41.0-source.zip
+./tools/package-source-local.sh artifacts/RadioVault-0.42.0-source.zip
 ```
 
 The equivalent PowerShell command is:
 
 ```powershell
-.\tools\Package-Source.ps1 -Destination .\artifacts\RadioVault-0.41.0-source.zip
+.\tools\Package-Source.ps1 -Destination .\artifacts\RadioVault-0.42.0-source.zip
 ```
 
 ## Alpha acceptance

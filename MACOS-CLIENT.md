@@ -8,7 +8,7 @@ Vault Server, or it can own and serve the main archive itself.
 
 - macOS 13 or later
 - Apple Silicon (`osx-arm64`) first
-- Native Radio Vault Server `0.41.0`
+- Native Radio Vault Server `0.42.0`
 - Native AVFoundation playback for downloaded files and authenticated server streams
 - Current-user LaunchAgent support for starting the Server at sign-in
 
@@ -23,9 +23,9 @@ The script cross-publishes the self-contained client and creates:
 
 ```text
 artifacts\macos\osx-arm64\Radio Vault.app
-artifacts\macos\osx-arm64\RadioVault.Client-0.41.0-osx-arm64-unsigned.zip
+artifacts\macos\osx-arm64\RadioVault.Client-0.42.0-osx-arm64-unsigned.zip
 artifacts\macos-server\osx-arm64\Radio Vault Server.app
-artifacts\macos-server\osx-arm64\RadioVault.Server-0.41.0-osx-arm64-unsigned.zip
+artifacts\macos-server\osx-arm64\RadioVault.Server-0.42.0-osx-arm64-unsigned.zip
 ```
 
 The Windows-produced ZIP is an unsigned transfer artifact containing the app,

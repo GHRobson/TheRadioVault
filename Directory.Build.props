@@ -1,0 +1,12 @@
+<Project>
+  <PropertyGroup>
+    <!-- VERSION.txt is the single product-version authority for every .NET target. -->
+    <RadioVaultProductVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)VERSION.txt').Trim())</RadioVaultProductVersion>
+    <RadioVaultAssemblyVersion>$(RadioVaultProductVersion).0</RadioVaultAssemblyVersion>
+    <RadioVaultBuildIdentity Condition="'$(RadioVaultBuildIdentity)' == '' and '$(RADIOVAULT_BUILD_IDENTITY)' != ''">$(RADIOVAULT_BUILD_IDENTITY)</RadioVaultBuildIdentity>
+    <RadioVaultBuildIdentity Condition="'$(RadioVaultBuildIdentity)' == '' and '$(GITHUB_SHA)' != ''">$(GITHUB_SHA)</RadioVaultBuildIdentity>
+    <RadioVaultBuildIdentity Condition="'$(RadioVaultBuildIdentity)' == ''">local</RadioVaultBuildIdentity>
+    <RadioVaultInformationalVersion>$(RadioVaultProductVersion)+$(RadioVaultBuildIdentity)</RadioVaultInformationalVersion>
+    <IncludeSourceRevisionInInformationalVersion>false</IncludeSourceRevisionInInformationalVersion>
+  </PropertyGroup>
+</Project>

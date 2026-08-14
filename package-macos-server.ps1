@@ -11,6 +11,9 @@ $ErrorActionPreference = "Stop"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $project = Join-Path $root "TheRadioVault.Server\TheRadioVault.Server.csproj"
 $version = (Get-Content (Join-Path $root "VERSION.txt") -Raw).Trim()
+. (Join-Path $root "tools\Build-Identity.ps1")
+$identity = Get-RadioVaultBuildIdentity -Root $root -Version $version
+$env:RADIOVAULT_BUILD_IDENTITY = $identity.EmbeddedIdentity
 $artifactRoot = Join-Path $root "artifacts\macos-server\$RuntimeIdentifier"
 $publishRoot = Join-Path $artifactRoot "publish"
 $bundleRoot = Join-Path $artifactRoot "Radio Vault Server.app"
@@ -82,11 +85,13 @@ $executable = Join-Path $publishRoot "RadioVault.Server"
 if (-not (Test-Path -LiteralPath $executable)) {
     throw "The macOS server application host was not produced: $executable"
 }
+Write-RadioVaultBuildInfo -Destination (Join-Path $publishRoot "BUILD_INFO.json") `
+    -Product "Radio Vault Server" -Version $version -Runtime $RuntimeIdentifier `
+    -Role "authoritative-server" -Identity $identity
 Copy-Item -Path (Join-Path $publishRoot "*") -Destination $macOsRoot -Recurse -Force
 
 $shortVersion = if ($version -match '^(\d+\.\d+\.\d+)') { $Matches[1] } else { "0.1.0" }
-$versionParts = $shortVersion.Split('.')
-$bundleVersion = "{0}.{1}.{2}" -f ([int]$versionParts[1]), ([int]$versionParts[2]), 9
+$bundleVersion = "48"
 $plistTemplate = Get-Content (Join-Path $root "installer\macos\ServerInfo.plist") -Raw
 $plist = $plistTemplate.Replace("@SHORT_VERSION@", $shortVersion).Replace("@BUNDLE_VERSION@", $bundleVersion)
 [IO.File]::WriteAllText((Join-Path $contentsRoot "Info.plist"), $plist, [Text.UTF8Encoding]::new($false))
@@ -107,6 +112,8 @@ $files = @(
 $manifest = [ordered]@{
     product = "Radio Vault Server"
     version = $version
+    buildIdentity = $identity.BuildIdentity
+    commit = $identity.Commit
     runtimeIdentifier = $RuntimeIdentifier
     bundleIdentifier = "com.theradiovault.server"
     entryPoint = "Radio Vault Server.app/Contents/MacOS/RadioVault.Server"
