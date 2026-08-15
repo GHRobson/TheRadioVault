@@ -2854,7 +2854,7 @@ index 8c8609c35bf2e2f798a5b86779ff1adcfcf24a1b..87fe01851595eef86feb5a4d2275a235
  
  Radio Vault uses different identifiers for different jobs:
 diff --git a/validate-source.ps1 b/validate-source.ps1
-index 27c8d9340a98497dd55a146268c1d8c67aee02fb..e5d93d4b8856dc4bc7142d5e1d239080aa69fb05 100644
+index 27c8d9340a98497dd55a146268c1d8c67aee02fb..92c259d98d6b2b0ffbcd79ba70b3b133cb195385 100644
 --- a/validate-source.ps1
 +++ b/validate-source.ps1
 @@ -744,7 +744,9 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-STABLE.
@@ -2890,3 +2890,16 @@ index 27c8d9340a98497dd55a146268c1d8c67aee02fb..e5d93d4b8856dc4bc7142d5e1d239080
  if ($solutionText -notmatch [regex]::Escape('TheRadioVault.Server\TheRadioVault.Server.csproj')) {
      throw "The dedicated server project is missing from the solution."
  }
+@@ -932,7 +942,11 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA11
+ $alpha12HostText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Composition\AvaloniaApplicationHost.cs") -Raw
+ $alpha12TranscriptionText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\LoopbackTranscriptionServices.cs") -Raw
+ $alpha12ServerViewModelText = Get-Content (Join-Path $root "TheRadioVault.Server\ViewModels\ServerSettingsViewModel.cs") -Raw
+-$alpha12ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml") -Raw
++$alpha12ServerViewText = @(
++    Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml") -Raw
++    Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerDashboardView.axaml") -Raw
++    Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerTranscriptionView.axaml") -Raw
++) -join [Environment]::NewLine
+ $alpha12ClientStylesText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\App.axaml") -Raw
+ $alpha12TranscriptsViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\TranscriptsView.axaml") -Raw
+ foreach ($marker in @('LoopbackServerLibraryFolderService', 'LoopbackServerArchiveHealthService', 'LoopbackServerLibraryMaintenanceService', 'IServerTranscriptionAdministrationService')) {
