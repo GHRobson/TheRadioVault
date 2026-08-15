@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TheRadioVault.Core.LibraryTruth;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Data.Database;
 using TheRadioVault.Services.Models;
 
@@ -514,8 +515,15 @@ public sealed class LibraryTruthEngine
         command.CommandText = """
             SELECT mf.id,mf.episode_id,mf.path,mf.original_filename,mf.file_size,COALESCE(mf.duration_ms,0),
                    COALESCE(mf.partial_hash,''),COALESCE(mf.full_hash,''),COALESCE(mf.storage_state,''),
-                   COALESCE(mf.is_preferred,0),c.name,e.air_date,COALESCE(e.broadcast_slot,''),
-                   COALESCE(e.part_number,1),e.total_parts,COALESCE(e.title,''),COALESCE(e.broadcast_uid,'')
+                   COALESCE(mf.is_preferred,0),c.name,e.air_date,COALESCE(e.date_confidence,'Unknown'),
+                   COALESCE(e.broadcast_slot,''),COALESCE(e.part_number,1),e.total_parts,
+                   COALESCE(e.title,''),COALESCE(e.broadcast_uid,''),
+                   (SELECT MIN(NULLIF(trim(rb.air_date),''))
+                      FROM research_broadcasts rb
+                     WHERE rb.episode_id=e.id),
+                   (SELECT COUNT(DISTINCT NULLIF(trim(rb.air_date),''))
+                      FROM research_broadcasts rb
+                     WHERE rb.episode_id=e.id)
               FROM media_files mf
               JOIN episodes e ON e.id=mf.episode_id
               JOIN collections c ON c.id=e.collection_id
@@ -528,6 +536,15 @@ public sealed class LibraryTruthEngine
             cancellationToken.ThrowIfCancellationRequested();
             var path = reader.GetString(2);
             var folder = MatchRoot(path, folders);
+            var currentDate = reader.IsDBNull(11) ? null : ParseDate(reader.GetString(11));
+            var currentDateConfidence = reader.GetString(12);
+            if (DateConfidencePolicy.IsUncertain(currentDateConfidence)
+                && reader.GetInt32(19) == 1
+                && !reader.IsDBNull(18))
+            {
+                currentDate = ParseDate(reader.GetString(18));
+                currentDateConfidence = "Research authoritative";
+            }
             result.Add(new LibraryTruthFileInput
             {
                 MediaFileId = reader.GetInt64(0),
@@ -541,12 +558,13 @@ public sealed class LibraryTruthEngine
                 StorageState = reader.GetString(8),
                 IsPreferred = reader.GetInt64(9) != 0,
                 CurrentCollectionName = reader.GetString(10),
-                CurrentAirDate = reader.IsDBNull(11) ? null : ParseDate(reader.GetString(11)),
-                CurrentBroadcastSlot = reader.GetString(12),
-                CurrentPartNumber = reader.GetInt32(13),
-                CurrentTotalParts = reader.IsDBNull(14) ? null : reader.GetInt32(14),
-                CurrentTitle = reader.GetString(15),
-                CurrentBroadcastUid = reader.GetString(16),
+                CurrentAirDate = currentDate,
+                CurrentDateConfidence = currentDateConfidence,
+                CurrentBroadcastSlot = reader.GetString(13),
+                CurrentPartNumber = reader.GetInt32(14),
+                CurrentTotalParts = reader.IsDBNull(15) ? null : reader.GetInt32(15),
+                CurrentTitle = reader.GetString(16),
+                CurrentBroadcastUid = reader.GetString(17),
                 LibraryRoot = folder?.Path ?? string.Empty,
                 AssignedCollectionName = folder?.AssignedCollectionName ?? string.Empty
             });

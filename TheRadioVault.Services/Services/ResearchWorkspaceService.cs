@@ -23,6 +23,7 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
     public async Task<ResearchWorkspaceOverview> GetOverviewAsync(CancellationToken cancellationToken = default)
     {
         await using var connection = await _database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection, cancellationToken).ConfigureAwait(false);
         await MarkPendingCatalogueDateReviewsAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         command.CommandText = """
@@ -105,20 +106,18 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
                 var currentConfidence = ReadString(reader, 5);
                 var selected = SelectDateReviewCandidate(
                     show, currentDate, explicitHint, broadcastHint, releaseHint, recordingHint, filenameHint);
-                var hasExplicitReviewState = !string.IsNullOrWhiteSpace(status);
-                var autoResearchDate = IsResearchAdoptedDateConfidence(currentConfidence);
-                var uncertainCurrentDate = !currentDate.HasValue || IsUncertainDateConfidence(currentConfidence);
+                var explicitlyReopened = status.Equals("reopened", StringComparison.OrdinalIgnoreCase);
+                var uncertainCurrentDate = !currentDate.HasValue || DateConfidencePolicy.IsUncertain(currentConfidence);
                 var conflictsWithCurrentDate = DateHintConflictsWithCurrentDate(selected.Hint, currentDate);
                 var hasRoleConflict = DateHintConflictsWithCurrentDate(releaseHint, currentDate)
                     || DateHintConflictsWithCurrentDate(recordingHint, currentDate);
 
                 // Every first-class show uses the same guarded date workflow.
-                // Already-settled High/Confirmed/Manual dates stay quiet unless
-                // imported evidence conflicts, a previous Research build adopted
-                // the date automatically, or the pack explicitly requests review.
-                var shouldReview = hasExplicitReviewState
+                // An approved Research date is durable evidence, not a reason to
+                // review the same date again. Only a real conflict, uncertainty,
+                // or a deliberate user reopen belongs in this queue.
+                var shouldReview = explicitlyReopened
                     || uncertainCurrentDate
-                    || autoResearchDate
                     || conflictsWithCurrentDate
                     || hasRoleConflict;
                 if (!shouldReview || ReadInt(reader, 8) == 1) continue;
@@ -280,6 +279,7 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
     {
         var result = new List<UndatedBroadcastItem>();
         await using var connection = await _database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         var family = collectionId.HasValue
             ? CollectionIdentityResolver.ResolveFamily(connection, collectionId.Value)
@@ -352,6 +352,7 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
     {
         var result = new List<CatalogueDateReviewItem>();
         await using var connection = await _database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection, cancellationToken).ConfigureAwait(false);
         await MarkPendingCatalogueDateReviewsAsync(connection, cancellationToken).ConfigureAwait(false);
         await using var command = connection.CreateCommand();
         var family = collectionId.HasValue
@@ -440,15 +441,13 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
             var currentEpisodeDate = ParseDate(row.EpisodeAirDate);
             var selected = SelectDateReviewCandidate(
                 row.ShowName, currentEpisodeDate, explicitHint, broadcastHint, releaseHint, recordingHint, filenameHint);
-            var autoResearchDate = IsResearchAdoptedDateConfidence(row.EpisodeDateConfidence);
-            var uncertainCurrentDate = !currentEpisodeDate.HasValue || IsUncertainDateConfidence(row.EpisodeDateConfidence);
+            var uncertainCurrentDate = !currentEpisodeDate.HasValue || DateConfidencePolicy.IsUncertain(row.EpisodeDateConfidence);
             var conflictsWithCurrentDate = DateHintConflictsWithCurrentDate(selected.Hint, currentEpisodeDate);
             var hasRoleConflict = DateHintConflictsWithCurrentDate(releaseHint, currentEpisodeDate)
                 || DateHintConflictsWithCurrentDate(recordingHint, currentEpisodeDate);
-            var hasExplicitReviewState = !string.IsNullOrWhiteSpace(decision);
-            var needsDecision = hasExplicitReviewState
+            var explicitlyReopened = decision.Equals("reopened", StringComparison.OrdinalIgnoreCase);
+            var needsDecision = explicitlyReopened
                 || uncertainCurrentDate
-                || autoResearchDate
                 || conflictsWithCurrentDate
                 || hasRoleConflict;
 
@@ -547,7 +546,7 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
             ?? candidateHint.DisplayText;
 
         var autoAdoptedCatalogueDate = !string.IsNullOrWhiteSpace(currentAirDate)
-            && IsResearchAdoptedDateConfidence(currentDateConfidence);
+            && DateConfidencePolicy.IsResearchBacked(currentDateConfidence);
         var previousAirDateForDecision = currentAirDate;
         var previousConfidenceForDecision = currentDateConfidence;
         DateOnly? restoredDate = null;
@@ -581,7 +580,7 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
         var now=DateTimeOffset.UtcNow.ToString("O",CultureInfo.InvariantCulture);
         if (action==CatalogueDateReviewAction.Reopen)
         {
-            catalogue["date_review_status"]="pending";
+            catalogue["date_review_status"]="reopened";
             catalogue["date_reviewed_at"]=null;
         }
         else
@@ -1848,16 +1847,6 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
             || status.Equals("reopened", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsUncertainDateConfidence(string? value)
-    {
-        var confidence = value?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(confidence)) return true;
-        if (IsResearchAdoptedDateConfidence(confidence)) return false;
-        return !confidence.Equals("High", StringComparison.OrdinalIgnoreCase)
-            && !confidence.Equals("Confirmed", StringComparison.OrdinalIgnoreCase)
-            && !confidence.Equals("Manual", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static bool DateHintConflictsWithCurrentDate(CatalogueDateHint hint, DateOnly? currentDate)
     {
         if (!hint.HasValue || !currentDate.HasValue) return false;
@@ -1912,15 +1901,6 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
             KnownShowCatalog.SupportsUndatedCatalogueItems(showName)
                 ? "Missing or uncertain programme date"
                 : "Missing or uncertain broadcast date");
-    }
-
-    private static bool IsResearchAdoptedDateConfidence(string? value)
-    {
-        var confidence = value?.Trim() ?? string.Empty;
-        return confidence.StartsWith("Research exact date",StringComparison.OrdinalIgnoreCase)
-            || confidence.StartsWith("Research authoritative",StringComparison.OrdinalIgnoreCase)
-            || confidence.StartsWith("Research manual",StringComparison.OrdinalIgnoreCase)
-            || confidence.StartsWith("Research date approved",StringComparison.OrdinalIgnoreCase);
     }
 
     private static string FirstValue(params string?[] values)

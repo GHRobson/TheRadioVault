@@ -24,6 +24,7 @@ var tests = new (string Name, Action Run)[]
     ("Library Truth reassembles annotated multipart families", LibraryTruthReassemblesAnnotatedMultipartFamilies),
     ("Library Truth assembles Roman multipart files into one broadcast", LibraryTruthGroupsRomanMultipart),
     ("Library Truth preserves genuinely unknown dates", LibraryTruthPreservesUnknownDate),
+    ("Library Truth preserves durable Research dates for undated multipart files", LibraryTruthPreservesDurableResearchDate),
     ("Library Truth shadow index separates broadcasts recordings and files", LibraryTruthShadowIndexSeparatesLayers),
     ("Library Truth treats alternate recordings as normal structure", LibraryTruthTreatsAlternateRecordingsAsNormal),
     ("Library Truth keeps identical audio with conflicting dates separate", LibraryTruthKeepsConflictingDatesSeparate),
@@ -189,6 +190,37 @@ static void LibraryTruthRecoversCompactRafMonthDay()
     Equal(new DateOnly(2003, 11, 24), parsed.AirDate);
     Equal("Midday", parsed.BroadcastSlot);
     Equal(1, parsed.PartNumber);
+}
+
+static void LibraryTruthPreservesDurableResearchDate()
+{
+    var date = new DateOnly(2011, 11, 1);
+    var input = new LibraryTruthFileInput
+    {
+        MediaFileId = 811,
+        CurrentEpisodeId = 811,
+        Path = @"D:\Radio\Opie and Anthony\Patrice O'Neal Tribute Part 7.mp3",
+        OriginalFilename = "Patrice O'Neal Tribute Part 7.mp3",
+        CurrentCollectionName = "Opie & Anthony",
+        CurrentAirDate = date,
+        CurrentDateConfidence = "Research authoritative",
+        CurrentPartNumber = 7,
+        CurrentTotalParts = 18,
+        AssignedCollectionName = "Opie & Anthony"
+    };
+
+    var parsed = new LibraryTruthParser().Parse(input, new LibraryTruthFolderContext
+    {
+        ContextKey = input.DirectoryPath,
+        AssignedCollectionName = "Opie & Anthony",
+        DominantCollectionName = "Opie & Anthony",
+        FileCount = 18
+    });
+
+    Equal(date, parsed.AirDate);
+    Equal(7, parsed.PartNumber);
+    True(!parsed.Warnings.Any(warning => warning.Code == "unknown-date"));
+    True(parsed.Evidence.Any(evidence => evidence.Source == "durable Library metadata"));
 }
 
 

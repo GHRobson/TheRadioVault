@@ -924,27 +924,21 @@ public sealed class LocalResearchPackTransferService : IResearchPackTransferServ
         var isIgnored = decision.Equals("ignored", StringComparison.OrdinalIgnoreCase);
         var isKnownResolvedDecision = isApproved || isRecordingOnly || isReleaseOnly || isLeftUndated
             || isKeepExisting || isIgnored;
-        var isExplicitPending = decision.Equals("pending", StringComparison.OrdinalIgnoreCase)
-            || decision.Equals("reopened", StringComparison.OrdinalIgnoreCase);
-        var hasExplicitDecision = !string.IsNullOrWhiteSpace(decision);
-        var uncertainCurrentDate = !currentDate.HasValue || IsUncertainDateConfidence(currentConfidence);
-        var autoResearchDate = IsResearchAdoptedDateConfidence(currentConfidence);
+        var isExplicitPending = decision.Equals("reopened", StringComparison.OrdinalIgnoreCase);
+        var hasExplicitDecision = !string.IsNullOrWhiteSpace(decision)
+            && !decision.Equals("pending", StringComparison.OrdinalIgnoreCase);
+        var uncertainCurrentDate = !currentDate.HasValue || DateConfidencePolicy.IsUncertain(currentConfidence);
         var conflictsWithCurrentDate = DateHintConflictsWithCurrentDate(dateHint, currentDate);
         var hasRoleConflict = DateHintConflictsWithCurrentDate(releaseHint, currentDate)
             || DateHintConflictsWithCurrentDate(recordingHint, currentDate);
-        var catalogueDateNeedsConfirmation = KnownShowCatalog.SupportsUndatedCatalogueItems(item.Show)
-            && dateHint.HasValue;
-
         var isPending = isExplicitPending
             || (isApproved && !dateHint.ExactDate.HasValue)
             || (hasExplicitDecision && !isKnownResolvedDecision);
         if (!hasExplicitDecision)
         {
             isPending = uncertainCurrentDate
-                || autoResearchDate
                 || conflictsWithCurrentDate
-                || hasRoleConflict
-                || catalogueDateNeedsConfirmation;
+                || hasRoleConflict;
             if (!isPending) return;
         }
 
@@ -1366,16 +1360,6 @@ public sealed class LocalResearchPackTransferService : IResearchPackTransferServ
     private static string EffectiveSlot(TrvPackBroadcast item) => FirstNonEmpty(item.Slot, item.Research?.Broadcast?.Slot);
     private static string NormalizeKey(string? value) => Clean(value).ToLowerInvariant();
     private static string Clean(string? value) => value?.Trim() ?? string.Empty;
-    private static bool IsUncertainDateConfidence(string? value)
-    {
-        var confidence = Clean(value);
-        if (string.IsNullOrWhiteSpace(confidence)) return true;
-        if (IsResearchAdoptedDateConfidence(confidence)) return false;
-        return !confidence.Equals("High", StringComparison.OrdinalIgnoreCase)
-            && !confidence.Equals("Confirmed", StringComparison.OrdinalIgnoreCase)
-            && !confidence.Equals("Manual", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static bool DateHintConflictsWithCurrentDate(CatalogueDateHint hint, DateOnly? currentDate)
     {
         if (!hint.HasValue || !currentDate.HasValue) return false;

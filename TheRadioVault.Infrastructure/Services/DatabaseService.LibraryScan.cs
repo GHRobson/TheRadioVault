@@ -498,9 +498,9 @@ public sealed partial class DatabaseService
             }
         }
 
-        var manualDateProtected = currentDate.HasValue &&
-            string.Equals(currentDateConfidence, "Manual", StringComparison.OrdinalIgnoreCase);
-        var parsedDateIsAuthoritative = !manualDateProtected && parsed.AirDate.HasValue && parsed.DateConfidence == "High";
+        var durableDateProtected = currentDate.HasValue &&
+            DateConfidencePolicy.IsProtectedFromAutomatedParsing(currentDateConfidence);
+        var parsedDateIsAuthoritative = !durableDateProtected && parsed.AirDate.HasValue && parsed.DateConfidence == "High";
         var replaceDate = parsedDateIsAuthoritative &&
                           (!currentDate.HasValue || currentDate.Value.Date != parsed.AirDate!.Value.Date);
         var upgradeDateConfidence = parsedDateIsAuthoritative && currentDate.HasValue &&

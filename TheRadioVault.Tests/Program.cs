@@ -310,6 +310,7 @@ var tests = new (string Name, Action Run)[]
     ("Canonical library cutover projects one broadcast per truth group", CanonicalLibraryCutoverProjectsBroadcasts),
     ("Post-cutover scans append new broadcasts to the canonical library", PostCutoverScanAppendsCanonicalBroadcasts),
     ("Research date updates the active adopted Library projection", ResearchDateUpdatesActiveAdoptedLibraryProjection),
+    ("Research dates stay durable across multipart review and scanning", ResearchDatesStayDurableAcrossMultipartReviewAndScanning),
     ("Quick date-review decisions persist and reopen safely", QuickDateReviewDecisionsPersistAndReopenSafely),
     ("Research packs round-trip date-review decisions", ResearchPacksRoundTripDateReviewDecisions),
     ("Research packs tolerate harmless AI scalar variations", ResearchPacksTolerateAiScalarVariations),
@@ -3351,12 +3352,12 @@ static void DateReviewAppliesToEveryFirstClassShow()
     True(workspace.Contains("SupportsDateReview(show)", StringComparison.Ordinal));
     True(workspace.Contains("SupportsDateReview(row.ShowName)", StringComparison.Ordinal));
     True(workspace.Contains("Missing or uncertain broadcast date", StringComparison.Ordinal));
-    True(workspace.Contains("IsUncertainDateConfidence", StringComparison.Ordinal));
+    True(workspace.Contains("DateConfidencePolicy.IsUncertain", StringComparison.Ordinal));
 
     var transfer = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Research", "AvaloniaResearchPackTransferServices.cs"));
     True(transfer.Contains("SupportsDateReview(item.Show)", StringComparison.Ordinal));
-    True(transfer.Contains("catalogueDateNeedsConfirmation", StringComparison.Ordinal));
-    True(transfer.Contains("autoResearchDate", StringComparison.Ordinal));
+    True(transfer.Contains("DateConfidencePolicy.IsUncertain", StringComparison.Ordinal));
+    True(!transfer.Contains("autoResearchDate", StringComparison.Ordinal));
 
     var view = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "ResearchWorkspaceView.axaml"));
     True(view.Contains("Missing, uncertain or conflicting dates from every show", StringComparison.Ordinal));
@@ -4851,6 +4852,89 @@ static void ResearchDateUpdatesActiveAdoptedLibraryProjection()
     }
     finally
     {
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void ResearchDatesStayDurableAcrossMultipartReviewAndScanning()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "rv-durable-research-date-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(directory, "durable-date.db"));
+        database.Initialize();
+        var now = DateTimeOffset.UtcNow.ToString("O");
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name)
+                VALUES('Opie & Anthony','Opie & Anthony');
+
+                INSERT INTO episodes(id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,hidden,part_number,total_parts)
+                VALUES
+                  (6101,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown','Patrice O''Neal Tribute Part 1','Unplayed',$now,$now,'PATRICE-TRIBUTE-1',0,1,18),
+                  (6102,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown','Patrice O''Neal Tribute Part 2','Unplayed',$now,$now,'PATRICE-TRIBUTE-2',0,2,18);
+
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES
+                  (7101,6101,$path1,'Patrice O''Neal Tribute Part 1.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7102,6102,$path2,'Patrice O''Neal Tribute Part 2.mp3',100,$now,0,$now,1000,'AvailableOffline',1);
+
+                INSERT INTO research_broadcasts(id,identity_key,collection_id,episode_id,source_broadcast_id,air_date,headline,research_json,research_state,existence_status,confidence,needs_review,created_at,updated_at)
+                VALUES
+                  (8101,'PATRICE-TRIBUTE-1',(SELECT id FROM collections WHERE name='Opie & Anthony'),6101,'PATRICE-TRIBUTE-1','2011-11-01','Patrice O''Neal Tribute Part 1',$json,'in_library','in_library',100,1,$now,$now),
+                  (8102,'PATRICE-TRIBUTE-2',(SELECT id FROM collections WHERE name='Opie & Anthony'),6102,'PATRICE-TRIBUTE-2','2011-11-01','Patrice O''Neal Tribute Part 2',$json,'in_library','in_library',100,1,$now,$now);
+                """;
+            command.Parameters.AddWithValue("$now", now);
+            command.Parameters.AddWithValue("$path1", Path.Combine(directory, "patrice-part-1.mp3"));
+            command.Parameters.AddWithValue("$path2", Path.Combine(directory, "patrice-part-2.mp3"));
+            command.Parameters.AddWithValue("$json", """
+                {"broadcast_date":"2011-11-01","research":{"catalogue":{"date_review_status":"pending","date_review_date":"2011-11-01"}}}
+                """);
+            command.ExecuteNonQuery();
+        }
+
+        var reviews = new ResearchWorkspaceService(database)
+            .GetCatalogueDateReviewsAsync()
+            .GetAwaiter()
+            .GetResult();
+        Equal(0, reviews.Count);
+
+        var scanner = new DatabaseService(database);
+        var conflictingFilenameDate = new TheRadioVault.Core.Models.ParsedFilename
+        {
+            CollectionName = "Opie & Anthony",
+            AirDate = new DateTime(2012, 1, 2),
+            DateConfidence = "High",
+            PartNumber = 1,
+            TotalParts = 18
+        };
+        scanner.UpsertScannedFile(
+            Path.Combine(directory, "patrice-part-1.mp3"),
+            100,
+            DateTime.UtcNow,
+            scanner.GetCollectionLookup()["Opie & Anthony"],
+            conflictingFilenameDate,
+            durationMs: 1000);
+
+        using var verification = database.OpenConnection();
+        using var verify = verification.CreateCommand();
+        verify.CommandText = "SELECT air_date,date_confidence FROM episodes WHERE id IN (6101,6102) ORDER BY id";
+        using var reader = verify.ExecuteReader();
+        var count = 0;
+        while (reader.Read())
+        {
+            count++;
+            Equal("2011-11-01", reader.GetString(0));
+            Equal("Research authoritative", reader.GetString(1));
+        }
+        Equal(2, count);
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         try { Directory.Delete(directory, true); } catch { }
     }
 }
