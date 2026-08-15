@@ -1,0 +1,2855 @@
+diff --git a/CHANGELOG.md b/CHANGELOG.md
+index 41fe929c5a6f2de502b43e22e0219f83852655bf..1aa58e4f1b8362193d4eac957fa52b53e8e50ac7 100644
+--- a/CHANGELOG.md
++++ b/CHANGELOG.md
+@@ -3,6 +3,9 @@
+ - Adds a Server-guided physical-media consolidation workflow driven by Library Truth: complete SHA-256 verification, deterministic longest-runtime/highest-bitrate selection, logical Show/Year/Month paths, a signed no-move rehearsal, exact confirmation and a stopped-server commit.
+ - Retains every source—including selected originals, exact duplicates and alternate recordings—in a plan-specific non-indexed quarantine, creates a verified pre-change SQLite backup, journals every phase and can recover an interrupted plan after the Server app restarts. Radio Vault exposes no quarantine deletion action.
+ - Re-audits legacy file identity: moved-file matching now prefers an unambiguous full hash and requires duration alongside partial hash and size; portable archive manifests add a path-independent content key while preserving their legacy machine-row key.
++- Prevents stale partial-archive consolidation plans: Prepare now creates or refreshes the non-destructive archive reconciliation when needed, signs complete physical-inventory counts and identity, explicitly counts held and missing files, and invalidates rehearsal if the inventory later changes.
++- Replaces the hidden Library Truth UI boundary with a server-owned Archive Reconciliation service and dedicated administration screen while preserving the established parser, evidence and recording-ranking engine behind that boundary.
++- Rebuilds the Server app as eight focused administration screens—Dashboard, Library, Archive Reconciliation, Automation, Knowledge, Transcription, Access and Recovery—with live operational health and reconciliation readiness on the opening dashboard.
+ - Adds server-owned saved playlists and smart collections with ordered items, queue snapshots, revision-conflict protection, desktop/iPhone management and cached offline iPhone reading.
+ - Advances the durable database to schema 49 and the connected client/server capability generation to 41 for the new collection contract.
+ - Adds a server-owned RSS Archive Inbox for private or public feeds, including encrypted credentials, first-check back-catalogue protection, conditional polling, atomic downloads, content-hash deduplication and automatic Library ingestion; advances the durable database to schema 50 without changing the client protocol generation.
+diff --git a/TheRadioVault.Infrastructure/Models/MediaConsolidationModels.cs b/TheRadioVault.Infrastructure/Models/MediaConsolidationModels.cs
+index 58a8eba29f7ef9c2ba527619131ebeb71404b5f9..b278ba518aad02c3d274be2102f853c3f4b8782b 100644
+--- a/TheRadioVault.Infrastructure/Models/MediaConsolidationModels.cs
++++ b/TheRadioVault.Infrastructure/Models/MediaConsolidationModels.cs
+@@ -43,12 +43,18 @@ public sealed record MediaConsolidationPlan(
+     IReadOnlyList<MediaConsolidationPlanItem> Items,
+     int EligibleBroadcasts,
+     int HeldBroadcasts,
++    int InventoryMediaRecords,
++    int InventoryAvailableFiles,
++    int InventoryMissingFiles,
++    int HeldSourceFiles,
++    string InventorySignature,
+     long ManagedBytes,
+     long QuarantinedOriginalBytes,
+     IReadOnlyList<string> Warnings)
+ {
+     public int ManagedFiles => Items.Count(item => item.IsManagedCopy);
+     public int RejectedFiles => Items.Count(item => item.IsRejected);
++    public int AccountedAvailableFiles => Items.Count + HeldSourceFiles;
+     public string ConfirmationText => $"CONSOLIDATE {PlanId}";
+ }
+ 
+diff --git a/TheRadioVault.Infrastructure/Services/MediaConsolidationService.cs b/TheRadioVault.Infrastructure/Services/MediaConsolidationService.cs
+index 85ffd9380775f6df3fe19bb2646f99b9adadd99e..bd98ed6f5dea2c2e0bc1c2fc8395057494bc0766 100644
+--- a/TheRadioVault.Infrastructure/Services/MediaConsolidationService.cs
++++ b/TheRadioVault.Infrastructure/Services/MediaConsolidationService.cs
+@@ -1,9 +1,11 @@
++using System.Globalization;
+ using System.Security.Cryptography;
+ using System.Text;
+ using System.Text.Json;
+ using Microsoft.Data.Sqlite;
+ using TheRadioVault.Data.Database;
+ using TheRadioVault.Services.Models;
++using TheRadioVault.Services.Services;
+ 
+ namespace TheRadioVault.Services;
+ 
+@@ -36,17 +38,37 @@ public sealed class MediaConsolidationService
+ 
+         var runId = LatestCompletedTruthRun();
+         if (runId <= 0)
+-            throw new InvalidOperationException("Run and complete Library Truth before preparing media consolidation.");
+-
++            runId = BuildFreshArchiveReconciliation(
++                "No archive reconciliation exists yet. Building the first non-destructive snapshot…",
++                progress,
++                cancellationToken);
++
++        var inventory = ReadInventorySnapshot(runId);
++        if (inventory.HiddenAvailableOutsideTruthFiles > 0)
++            EnsureTruthCoversCurrentInventory(inventory, runId);
++        if (inventory.AvailableOutsideTruthFiles > 0)
++        {
++            runId = BuildFreshArchiveReconciliation(
++                $"The archive changed after reconciliation run {runId:N0}. Building a fresh non-destructive snapshot…",
++                progress,
++                cancellationToken);
++            inventory = ReadInventorySnapshot(runId);
++        }
++        EnsureTruthCoversCurrentInventory(inventory, runId);
+         var raw = ReadCandidates(runId);
+         if (raw.Count == 0)
+-            throw new InvalidOperationException("The latest Library Truth run contains no available media files.");
++            throw new InvalidOperationException("The latest archive reconciliation contains no available media files.");
++        if (raw.Count != inventory.TruthCoveredAvailableFiles)
++            throw new InvalidOperationException(
++                $"Media consolidation stopped because archive reconciliation {runId:N0} returned {raw.Count:N0} candidate row(s), " +
++                $"but the current inventory reconciliation found {inventory.TruthCoveredAvailableFiles:N0}. No plan was created.");
+ 
+         var planId = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8];
+         var warnings = new List<string>();
+         var items = new List<MediaConsolidationPlanItem>();
+         var eligibleBroadcasts = 0;
+         var heldBroadcasts = 0;
++        var heldSourceFiles = 0;
+         var completedFiles = 0;
+ 
+         foreach (var broadcast in raw.GroupBy(candidate => candidate.CanonicalKey, StringComparer.OrdinalIgnoreCase))
+@@ -58,6 +80,7 @@ public sealed class MediaConsolidationService
+                 candidates.Any(candidate => string.IsNullOrWhiteSpace(candidate.RecordingKey)))
+             {
+                 heldBroadcasts++;
++                heldSourceFiles += candidates.Length;
+                 warnings.Add($"Held {first.CanonicalKey}: {HeldReason(first)}");
+                 continue;
+             }
+@@ -89,7 +112,7 @@ public sealed class MediaConsolidationService
+                 var file = new FileInfo(candidate.SourcePath);
+                 if (file.Length != candidate.SourceBytes)
+                 {
+-                    warnings.Add($"Held {first.CanonicalKey}: {Path.GetFileName(candidate.SourcePath)} changed after Library Truth ran.");
++                    warnings.Add($"Held {first.CanonicalKey}: {Path.GetFileName(candidate.SourcePath)} changed after archive reconciliation ran.");
+                     unsafeGroup = true;
+                     break;
+                 }
+@@ -114,6 +137,7 @@ public sealed class MediaConsolidationService
+             if (unsafeGroup)
+             {
+                 heldBroadcasts++;
++                heldSourceFiles += candidates.Length;
+                 continue;
+             }
+ 
+@@ -124,12 +148,14 @@ public sealed class MediaConsolidationService
+             if (variants.Any(variant => !variant.IsInternallySafe))
+             {
+                 heldBroadcasts++;
+-                warnings.Add($"Held {first.CanonicalKey}: a proposed recording segment contains non-identical files. Run Library Truth again or review that recording manually.");
++                heldSourceFiles += candidates.Length;
++                warnings.Add($"Held {first.CanonicalKey}: a proposed recording segment contains non-identical files. Run archive reconciliation again or review that recording manually.");
+                 continue;
+             }
+             if (variants.Length > 1 && variants.Any(variant => variant.DurationMs <= 0))
+             {
+                 heldBroadcasts++;
++                heldSourceFiles += candidates.Length;
+                 warnings.Add($"Held {first.CanonicalKey}: alternate recordings cannot be ranked safely until every runtime is known.");
+                 continue;
+             }
+@@ -204,10 +230,20 @@ public sealed class MediaConsolidationService
+         }
+ 
+         if (items.Count == 0)
+-            throw new InvalidOperationException("Library Truth did not find any safely consolidatable broadcasts. Review the held items before moving physical media.");
++            throw new InvalidOperationException("Archive reconciliation did not find any safely consolidatable broadcasts. Review the held items before moving physical media.");
+ 
+         EnsureUniqueTargets(items);
+         EnsureUniqueSources(items);
++        var finalInventory = ReadInventorySnapshot(runId);
++        if (!inventory.Signature.Equals(finalInventory.Signature, StringComparison.Ordinal) ||
++            inventory.TotalMediaRecords != finalInventory.TotalMediaRecords ||
++            inventory.AvailableFiles != finalInventory.AvailableFiles ||
++            inventory.MissingFiles != finalInventory.MissingFiles)
++            throw new InvalidOperationException(
++                "The physical-media inventory changed while the consolidation plan was being prepared. No plan was created; run archive reconciliation again after scanning has settled.");
++        if (items.Count + heldSourceFiles != inventory.AvailableFiles)
++            throw new InvalidOperationException(
++                $"Media consolidation could account for only {items.Count + heldSourceFiles:N0} of {inventory.AvailableFiles:N0} available physical files. No plan was created.");
+         var unsigned = new MediaConsolidationPlan(
+             planId,
+             DateTimeOffset.UtcNow,
+@@ -218,6 +254,11 @@ public sealed class MediaConsolidationService
+             items,
+             eligibleBroadcasts,
+             heldBroadcasts,
++            inventory.TotalMediaRecords,
++            inventory.AvailableFiles,
++            inventory.MissingFiles,
++            heldSourceFiles,
++            inventory.Signature,
+             items.Where(item => item.IsManagedCopy).Sum(item => item.SourceBytes),
+             items.Sum(item => item.SourceBytes),
+             warnings);
+@@ -275,6 +316,19 @@ public sealed class MediaConsolidationService
+         EnsureUniqueSources(plan.Items);
+ 
+         var problems = new List<string>();
++        if (!IsCompletedPlan(plan))
++        {
++            var currentInventory = ReadInventorySnapshot(plan.LibraryTruthRunId);
++            if (!plan.InventorySignature.Equals(currentInventory.Signature, StringComparison.Ordinal) ||
++                plan.InventoryMediaRecords != currentInventory.TotalMediaRecords ||
++                plan.InventoryAvailableFiles != currentInventory.AvailableFiles ||
++                plan.InventoryMissingFiles != currentInventory.MissingFiles)
++                problems.Add(
++                    "The physical-media inventory changed after this plan was prepared. Prepare a new consolidation plan; Radio Vault will refresh archive reconciliation automatically.");
++        }
++        if (plan.AccountedAvailableFiles != plan.InventoryAvailableFiles)
++            problems.Add(
++                $"The signed plan accounts for {plan.AccountedAvailableFiles:N0} of {plan.InventoryAvailableFiles:N0} available physical files.");
+         long verifiedBytes = 0;
+         var verifiedFiles = 0;
+         for (var index = 0; index < plan.Items.Count; index++)
+@@ -506,6 +560,129 @@ public sealed class MediaConsolidationService
+         return Convert.ToInt64(command.ExecuteScalar());
+     }
+ 
++    private long BuildFreshArchiveReconciliation(
++        string initialMessage,
++        IProgress<MediaConsolidationProgress>? progress,
++        CancellationToken cancellationToken)
++    {
++        progress?.Report(new(
++            "Reconciling inventory",
++            0,
++            100,
++            string.Empty,
++            initialMessage));
++        var truthProgress = progress is null
++            ? null
++            : new SynchronousProgress<(double Percent, string Message)>(value => progress.Report(new(
++                "Reconciling inventory",
++                (int)Math.Round(value.Percent),
++                100,
++                string.Empty,
++                value.Message)));
++        var refreshed = new LibraryTruthEngine(_database)
++            .BuildShadowIndex(truthProgress, cancellationToken)
++            .Summary;
++        if (!refreshed.Status.Equals("completed", StringComparison.OrdinalIgnoreCase) || refreshed.RunId <= 0)
++            throw new InvalidOperationException("The fresh archive reconciliation did not complete. No consolidation plan was created.");
++        return refreshed.RunId;
++    }
++
++    private MediaInventorySnapshot ReadInventorySnapshot(long truthRunId)
++    {
++        using var connection = _database.OpenConnection();
++        using var counts = connection.CreateCommand();
++        counts.CommandText = """
++            SELECT COUNT(*),
++                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 THEN 1 ELSE 0 END),0),
++                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)<>0 THEN 1 ELSE 0 END),0),
++                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 AND EXISTS(
++                       SELECT 1 FROM library_truth_files f
++                        WHERE f.run_id=$run AND f.media_file_id=mf.id
++                   ) THEN 1 ELSE 0 END),0),
++                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 AND NOT EXISTS(
++                       SELECT 1 FROM library_truth_files f
++                        WHERE f.run_id=$run AND f.media_file_id=mf.id
++                   ) THEN 1 ELSE 0 END),0),
++                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 AND COALESCE(e.hidden,0)=0 AND NOT EXISTS(
++                       SELECT 1 FROM library_truth_files f
++                        WHERE f.run_id=$run AND f.media_file_id=mf.id
++                   ) THEN 1 ELSE 0 END),0),
++                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 AND COALESCE(e.hidden,0)<>0 AND NOT EXISTS(
++                       SELECT 1 FROM library_truth_files f
++                        WHERE f.run_id=$run AND f.media_file_id=mf.id
++                   ) THEN 1 ELSE 0 END),0)
++              FROM media_files mf
++              JOIN episodes e ON e.id=mf.episode_id
++            """;
++        counts.Parameters.AddWithValue("$run", truthRunId);
++        using var reader = counts.ExecuteReader();
++        if (!reader.Read()) throw new InvalidOperationException("The physical-media inventory could not be counted.");
++        var total = reader.GetInt32(0);
++        var available = reader.GetInt32(1);
++        var missing = reader.GetInt32(2);
++        var covered = reader.GetInt32(3);
++        var outside = reader.GetInt32(4);
++        var visibleOutside = reader.GetInt32(5);
++        var hiddenOutside = reader.GetInt32(6);
++        reader.Close();
++
++        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
++        using var rows = connection.CreateCommand();
++        rows.CommandText = """
++            SELECT mf.id,mf.episode_id,mf.path,mf.file_size,mf.modified_time,
++                   COALESCE(mf.is_missing,0),COALESCE(mf.storage_state,''),COALESCE(e.hidden,0)
++              FROM media_files mf
++              JOIN episodes e ON e.id=mf.episode_id
++             ORDER BY mf.id
++            """;
++        using var rowReader = rows.ExecuteReader();
++        while (rowReader.Read())
++        {
++            for (var index = 0; index < rowReader.FieldCount; index++)
++            {
++                var value = rowReader.IsDBNull(index)
++                    ? string.Empty
++                    : Convert.ToString(rowReader.GetValue(index), CultureInfo.InvariantCulture) ?? string.Empty;
++                AppendInventorySignatureField(hash, value);
++            }
++        }
++
++        return new(
++            total,
++            available,
++            missing,
++            covered,
++            outside,
++            visibleOutside,
++            hiddenOutside,
++            Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
++    }
++
++    private static void EnsureTruthCoversCurrentInventory(MediaInventorySnapshot inventory, long truthRunId)
++    {
++        if (inventory.AvailableFiles <= 0)
++            throw new InvalidOperationException("The current inventory contains no available physical media files.");
++        if (inventory.AvailableOutsideTruthFiles == 0) return;
++
++        var hiddenAdvice = inventory.HiddenAvailableOutsideTruthFiles == 0
++            ? string.Empty
++            : $" {inventory.HiddenAvailableOutsideTruthFiles:N0} omitted file(s) belong to hidden legacy rows and require archive reconciliation review rather than automatic movement.";
++        throw new InvalidOperationException(
++            $"Media consolidation stopped safely: archive reconciliation {truthRunId:N0} accounts for " +
++            $"{inventory.TruthCoveredAvailableFiles:N0} of {inventory.AvailableFiles:N0} currently available physical files. " +
++            $"{inventory.AvailableOutsideTruthFiles:N0} file(s) were scanned or changed after that snapshot " +
++            $"({inventory.VisibleAvailableOutsideTruthFiles:N0} active, {inventory.HiddenAvailableOutsideTruthFiles:N0} hidden). " +
++            "Run a fresh archive reconciliation, let scanning finish, then prepare a new consolidation plan." + hiddenAdvice);
++    }
++
++    private static void AppendInventorySignatureField(IncrementalHash hash, string value)
++    {
++        var prefix = Encoding.UTF8.GetBytes(value.Length.ToString(CultureInfo.InvariantCulture) + ":");
++        hash.AppendData(prefix);
++        hash.AppendData(Encoding.UTF8.GetBytes(value));
++        hash.AppendData(new byte[] { (byte)'\n' });
++    }
++
+     private IReadOnlyList<string> RegisteredRoots()
+     {
+         var roots = new List<string>();
+@@ -792,7 +969,14 @@ public sealed class MediaConsolidationService
+             .AppendLine(plan.PlanId)
+             .AppendLine(Path.GetFullPath(plan.ManagedRoot))
+             .AppendLine(Path.GetFullPath(plan.QuarantineRoot))
+-            .AppendLine(plan.LibraryTruthRunId.ToString());
++            .AppendLine(plan.LibraryTruthRunId.ToString(CultureInfo.InvariantCulture))
++            .AppendLine(plan.EligibleBroadcasts.ToString(CultureInfo.InvariantCulture))
++            .AppendLine(plan.HeldBroadcasts.ToString(CultureInfo.InvariantCulture))
++            .AppendLine(plan.InventoryMediaRecords.ToString(CultureInfo.InvariantCulture))
++            .AppendLine(plan.InventoryAvailableFiles.ToString(CultureInfo.InvariantCulture))
++            .AppendLine(plan.InventoryMissingFiles.ToString(CultureInfo.InvariantCulture))
++            .AppendLine(plan.HeldSourceFiles.ToString(CultureInfo.InvariantCulture))
++            .AppendLine(plan.InventorySignature);
+         foreach (var item in plan.Items.OrderBy(value => value.ItemId, StringComparer.Ordinal))
+             text.Append(item.ItemId).Append('|').Append(item.SourcePath).Append('|').Append(item.SourceBytes)
+                 .Append('|').Append(item.FullSha256).Append('|').Append(item.Disposition).Append('|')
+@@ -841,6 +1025,16 @@ public sealed class MediaConsolidationService
+             throw new InvalidDataException("The consolidation recovery journal belongs to a different signed plan.");
+     }
+ 
++    private static bool IsCompletedPlan(MediaConsolidationPlan plan)
++    {
++        var journalPath = Path.Combine(PlanDirectory(plan), "journal.json");
++        if (!File.Exists(journalPath)) return false;
++        var journal = ReadJournal(journalPath);
++        if (journal is null) return false;
++        ValidateJournal(journal, plan);
++        return journal.Status.Equals("completed", StringComparison.OrdinalIgnoreCase);
++    }
++
+     private static void WriteSafetyNotice(string planDirectory, MediaConsolidationPlan plan)
+     {
+         var path = Path.Combine(planDirectory, "README - REVIEW BEFORE DELETING.txt");
+@@ -959,7 +1153,7 @@ public sealed class MediaConsolidationService
+         => candidate.AirDate is null
+             ? "the broadcast date is not known"
+             : !IsSafeAdoptionState(candidate.AdoptionState)
+-                ? $"Library Truth state is {candidate.AdoptionState}"
++                ? $"Archive reconciliation state is {candidate.AdoptionState}"
+                 : "the recording structure is incomplete";
+ 
+     private static long EstimateBitrate(long bytes, long durationMs)
+@@ -1023,6 +1217,21 @@ public sealed class MediaConsolidationService
+         string ContentIdentity,
+         bool IsInternallySafe);
+ 
++    private sealed record MediaInventorySnapshot(
++        int TotalMediaRecords,
++        int AvailableFiles,
++        int MissingFiles,
++        int TruthCoveredAvailableFiles,
++        int AvailableOutsideTruthFiles,
++        int VisibleAvailableOutsideTruthFiles,
++        int HiddenAvailableOutsideTruthFiles,
++        string Signature);
++
++    private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>
++    {
++        public void Report(T value) => report(value);
++    }
++
+     private sealed class ConsolidationJournal
+     {
+         public string PlanId { get; set; } = string.Empty;
+diff --git a/TheRadioVault.Infrastructure/Services/RadioVaultServerRuntime.cs b/TheRadioVault.Infrastructure/Services/RadioVaultServerRuntime.cs
+index 43a00a6a6850ab8ad4986efc7ecd34ae452f7667..ca7d44ef7ea72ae4be472e8d13e6c13ddc15c731 100644
+--- a/TheRadioVault.Infrastructure/Services/RadioVaultServerRuntime.cs
++++ b/TheRadioVault.Infrastructure/Services/RadioVaultServerRuntime.cs
+@@ -26,6 +26,7 @@ public sealed class RadioVaultServerRuntime : IDisposable
+     private readonly ILibraryFolderService _libraryFolders;
+     private readonly RssFeedIngestionService _rssFeeds;
+     private readonly MediaConsolidationService _mediaConsolidation;
++    private readonly ArchiveReconciliationService _archiveReconciliation;
+     private bool _disposed;
+ 
+     public RadioVaultServerRuntime(
+@@ -56,6 +57,7 @@ public sealed class RadioVaultServerRuntime : IDisposable
+                 return result.Started && !result.IsRunning;
+             });
+         _mediaConsolidation = new MediaConsolidationService(_platformDatabase);
++        _archiveReconciliation = new ArchiveReconciliationService(_platformDatabase);
+         _rssFeeds.Start();
+ 
+         if (honorAutomaticStart && Preferences.Enabled && Preferences.StartAutomatically)
+@@ -123,6 +125,12 @@ public sealed class RadioVaultServerRuntime : IDisposable
+     public Task ExportRedactedDiagnosticsAsync(string destinationPath, CancellationToken cancellationToken = default)
+         => new ServerHealthDiagnosticsService().ExportAsync(
+             GetHealthSnapshot(), AppVersionService.Version, destinationPath, cancellationToken);
++    public ArchiveReconciliationSnapshot GetArchiveReconciliationSnapshot()
++        => _archiveReconciliation.GetSnapshot();
++    public ArchiveReconciliationSnapshot ReconcileArchive(
++        IProgress<(double Percent, string Message)>? progress = null,
++        CancellationToken cancellationToken = default)
++        => _archiveReconciliation.Reconcile(progress, cancellationToken);
+     public MediaConsolidationPlan PrepareMediaConsolidation(
+         string managedRoot,
+         string quarantineRoot,
+diff --git a/TheRadioVault.Server/App.axaml b/TheRadioVault.Server/App.axaml
+index c84ebefb2cc607389f2d11d916b2db6ae36fcf80..b0b2630b08e4db723960e03e72b4f1e6495b1b71 100644
+--- a/TheRadioVault.Server/App.axaml
++++ b/TheRadioVault.Server/App.axaml
+@@ -49,5 +49,18 @@
+     <Style Selector="TextBox">
+       <Setter Property="MinHeight" Value="38" />
+     </Style>
++    <Style Selector="TabControl">
++      <Setter Property="Background" Value="#101318" />
++    </Style>
++    <Style Selector="TabItem">
++      <Setter Property="MinWidth" Value="190" />
++      <Setter Property="MinHeight" Value="48" />
++      <Setter Property="Padding" Value="16,11" />
++      <Setter Property="HorizontalContentAlignment" Value="Left" />
++      <Setter Property="FontWeight" Value="SemiBold" />
++    </Style>
++    <Style Selector="TabItem:selected">
++      <Setter Property="Foreground" Value="#F2C94C" />
++    </Style>
+   </Application.Styles>
+ </Application>
+diff --git a/TheRadioVault.Server/App.axaml.cs b/TheRadioVault.Server/App.axaml.cs
+index c687b86679b0f728f8b907bac4ef66c686d290ce..6de94f5b6bf2a11dc8be41365945cb0afe1b87a6 100644
+--- a/TheRadioVault.Server/App.axaml.cs
++++ b/TheRadioVault.Server/App.axaml.cs
+@@ -70,7 +70,7 @@ public partial class App : Avalonia.Application
+     private void CreateTrayIcon(IClassicDesktopStyleApplicationLifetime desktop)
+     {
+         var menu = new NativeMenu();
+-        var show = new NativeMenuItem("Open server settings");
++        var show = new NativeMenuItem("Open server administration");
+         show.Click += (_, _) => ShowSettings();
+         var openAnywhere = new NativeMenuItem("Open Radio Vault Web");
+         openAnywhere.Click += (_, _) => _viewModel?.OpenAnywhereCommand.Execute(null);
+diff --git a/TheRadioVault.Server/Services/ServerClipboardService.cs b/TheRadioVault.Server/Services/ServerClipboardService.cs
+index a5e7606765f721375e0d6e27b956aa8fd303fb5e..6ac3e6cd3090a2c35ee64f512e249bab39c89dee 100644
+--- a/TheRadioVault.Server/Services/ServerClipboardService.cs
++++ b/TheRadioVault.Server/Services/ServerClipboardService.cs
+@@ -13,7 +13,7 @@ public sealed class ServerClipboardService
+     public async Task SetTextAsync(string text, CancellationToken cancellationToken = default)
+     {
+         var clipboard = _owner.Clipboard
+-            ?? throw new InvalidOperationException("The server settings clipboard is not available yet.");
++            ?? throw new InvalidOperationException("The server administration clipboard is not available yet.");
+         await clipboard.SetTextAsync(text ?? string.Empty).WaitAsync(cancellationToken).ConfigureAwait(false);
+     }
+ }
+diff --git a/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.ArchiveReconciliation.cs b/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.ArchiveReconciliation.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..2873ff39ec33bbf3a36999f15e87c17ace0278ee
+--- /dev/null
++++ b/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.ArchiveReconciliation.cs
+@@ -0,0 +1,167 @@
++using System.ComponentModel;
++using System.Windows.Input;
++using TheRadioVault.Services.Models;
++
++namespace TheRadioVault.Server.ViewModels;
++
++public sealed partial class ServerSettingsViewModel
++{
++    private ArchiveReconciliationSnapshot _archiveReconciliation = ArchiveReconciliationSnapshot.NotAnalysed;
++    private string _archiveReconciliationStatusText = "Reading the latest archive reconciliation status…";
++    private double _archiveReconciliationProgressPercent;
++    private bool _isArchiveReconciliationBusy;
++    private CancellationTokenSource? _archiveReconciliationCancellation;
++    private ServerCommand? _refreshArchiveReconciliationCommand;
++    private ServerCommand? _runArchiveReconciliationCommand;
++    private ServerCommand? _cancelArchiveReconciliationCommand;
++
++    public bool HasArchiveReconciliation => _archiveReconciliation.HasCompletedAnalysis;
++    public bool IsArchiveReconciliationBusy
++    {
++        get => _isArchiveReconciliationBusy;
++        private set
++        {
++            if (!Set(ref _isArchiveReconciliationBusy, value)) return;
++            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsArchiveReconciliationIdle)));
++            RaiseArchiveReconciliationCommandState();
++            RaiseMediaConsolidationCommandState();
++        }
++    }
++    public bool IsArchiveReconciliationIdle => !IsArchiveReconciliationBusy;
++    public double ArchiveReconciliationProgressPercent
++    {
++        get => _archiveReconciliationProgressPercent;
++        private set => Set(ref _archiveReconciliationProgressPercent, Math.Clamp(value, 0, 100));
++    }
++    public string ArchiveReconciliationStatusText
++    {
++        get => _archiveReconciliationStatusText;
++        private set => Set(ref _archiveReconciliationStatusText, value);
++    }
++    public string ArchiveReconciliationStateLabel => HasArchiveReconciliation ? "INDEX READY" : "ANALYSIS NEEDED";
++    public string ArchiveReconciliationStateBrush => HasArchiveReconciliation ? "#52D6A2" : "#E2A84A";
++    public string ArchiveReconciliationHeadline => HasArchiveReconciliation
++        ? $"Archive reconciled across {_archiveReconciliation.PhysicalFiles:N0} physical files"
++        : "Build a safe physical archive inventory";
++    public string ArchiveReconciliationCompletedText => HasArchiveReconciliation
++        ? $"Analysis {_archiveReconciliation.AnalysisId:N0} completed {_archiveReconciliation.CompletedDisplay}"
++        : "No completed reconciliation is available yet.";
++    public string ArchiveReconciliationInventoryText => HasArchiveReconciliation
++        ? $"{_archiveReconciliation.PhysicalFiles:N0} physical files · {_archiveReconciliation.CanonicalBroadcasts:N0} canonical broadcasts"
++        : "Physical files and canonical broadcasts have not been compared yet.";
++    public string ArchiveReconciliationChangeText => HasArchiveReconciliation
++        ? $"{_archiveReconciliation.UnchangedFiles:N0} unchanged · {_archiveReconciliation.ProposedFileChanges:N0} proposed corrections · {_archiveReconciliation.RecoveredDates:N0} dates recovered"
++        : "The analysis is read-only and never changes live broadcasts or media.";
++    public string ArchiveReconciliationAttentionText => HasArchiveReconciliation
++        ? $"{_archiveReconciliation.ReadyBroadcasts:N0} ready · {_archiveReconciliation.ReviewRecommendedBroadcasts:N0} review · {_archiveReconciliation.BlockedBroadcasts:N0} blocked"
++        : "Review and blocked counts will appear after analysis.";
++    public string ArchiveReconciliationDuplicateText => HasArchiveReconciliation
++        ? $"{_archiveReconciliation.DuplicateGroups:N0} duplicate groups · {_archiveReconciliation.PartialOrDamagedRecordings:N0} partial or damaged recordings · {_archiveReconciliation.IdentityConflicts:N0} identity conflicts"
++        : "Duplicate and recording-quality evidence will appear here.";
++    public string ArchiveReconciliationDashboardText => HasArchiveReconciliation
++        ? $"{_archiveReconciliation.CanonicalBroadcasts:N0} canonical broadcasts · {_archiveReconciliation.AttentionTotal:N0} need attention · last run {_archiveReconciliation.CompletedDisplay}"
++        : "Archive reconciliation has not been run. Consolidation will build a fresh inventory before it can prepare a plan.";
++
++    public ICommand RefreshArchiveReconciliationCommand { get; private set; } = null!;
++    public ICommand RunArchiveReconciliationCommand { get; private set; } = null!;
++    public ICommand CancelArchiveReconciliationCommand { get; private set; } = null!;
++
++    private void InitializeArchiveReconciliationCommands()
++    {
++        _refreshArchiveReconciliationCommand = new ServerCommand(
++            () => _ = RefreshArchiveReconciliationAsync(),
++            () => !IsArchiveReconciliationBusy);
++        _runArchiveReconciliationCommand = new ServerCommand(
++            () => _ = RunArchiveReconciliationAsync(),
++            () => !IsArchiveReconciliationBusy && !IsMediaConsolidationBusy);
++        _cancelArchiveReconciliationCommand = new ServerCommand(
++            CancelArchiveReconciliation,
++            () => IsArchiveReconciliationBusy);
++        RefreshArchiveReconciliationCommand = _refreshArchiveReconciliationCommand;
++        RunArchiveReconciliationCommand = _runArchiveReconciliationCommand;
++        CancelArchiveReconciliationCommand = _cancelArchiveReconciliationCommand;
++    }
++
++    private async Task RefreshArchiveReconciliationAsync()
++    {
++        if (_runtime is null || IsArchiveReconciliationBusy) return;
++        try
++        {
++            var snapshot = await Task.Run(_runtime.GetArchiveReconciliationSnapshot).ConfigureAwait(true);
++            ApplyArchiveReconciliationSnapshot(snapshot);
++            ArchiveReconciliationStatusText = snapshot.Message;
++        }
++        catch (Exception exception)
++        {
++            ArchiveReconciliationStatusText = $"Archive reconciliation status could not be read: {exception.Message}";
++        }
++    }
++
++    private async Task RunArchiveReconciliationAsync()
++    {
++        if (_runtime is null || IsArchiveReconciliationBusy) return;
++        _archiveReconciliationCancellation?.Dispose();
++        _archiveReconciliationCancellation = new CancellationTokenSource();
++        var cancellationToken = _archiveReconciliationCancellation.Token;
++        var progress = new Progress<(double Percent, string Message)>(value =>
++        {
++            ArchiveReconciliationProgressPercent = value.Percent;
++            ArchiveReconciliationStatusText = value.Message;
++        });
++        IsArchiveReconciliationBusy = true;
++        ArchiveReconciliationProgressPercent = 0;
++        ArchiveReconciliationStatusText = "Starting a fresh read-only analysis of the physical archive…";
++        try
++        {
++            var snapshot = await Task.Run(
++                () => _runtime.ReconcileArchive(progress, cancellationToken),
++                cancellationToken).ConfigureAwait(true);
++            ApplyArchiveReconciliationSnapshot(snapshot);
++            ArchiveReconciliationProgressPercent = 100;
++            ArchiveReconciliationStatusText = snapshot.Message;
++        }
++        catch (OperationCanceledException)
++        {
++            ArchiveReconciliationStatusText = "Archive reconciliation cancelled. The live library and media were not changed.";
++        }
++        catch (Exception exception)
++        {
++            ArchiveReconciliationStatusText = exception.Message;
++        }
++        finally
++        {
++            IsArchiveReconciliationBusy = false;
++        }
++    }
++
++    private void ApplyArchiveReconciliationSnapshot(ArchiveReconciliationSnapshot snapshot)
++    {
++        _archiveReconciliation = snapshot;
++        foreach (var property in new[]
++                 {
++                     nameof(HasArchiveReconciliation), nameof(ArchiveReconciliationStateLabel),
++                     nameof(ArchiveReconciliationStateBrush), nameof(ArchiveReconciliationHeadline),
++                     nameof(ArchiveReconciliationCompletedText), nameof(ArchiveReconciliationInventoryText),
++                     nameof(ArchiveReconciliationChangeText), nameof(ArchiveReconciliationAttentionText),
++                     nameof(ArchiveReconciliationDuplicateText), nameof(ArchiveReconciliationDashboardText)
++                 })
++            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
++    }
++
++    private void CancelArchiveReconciliation()
++        => _archiveReconciliationCancellation?.Cancel();
++
++    private void RaiseArchiveReconciliationCommandState()
++    {
++        _refreshArchiveReconciliationCommand?.RaiseCanExecuteChanged();
++        _runArchiveReconciliationCommand?.RaiseCanExecuteChanged();
++        _cancelArchiveReconciliationCommand?.RaiseCanExecuteChanged();
++    }
++
++    private void DisposeArchiveReconciliation()
++    {
++        _archiveReconciliationCancellation?.Cancel();
++        _archiveReconciliationCancellation?.Dispose();
++        _archiveReconciliationCancellation = null;
++    }
++}
+diff --git a/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.MediaConsolidation.cs b/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.MediaConsolidation.cs
+index 1f634388a4b48afbcc9a0079fe644854ab11c6a4..e55b6974e61b61f615541a88516eac6b7960e586 100644
+--- a/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.MediaConsolidation.cs
++++ b/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.MediaConsolidation.cs
+@@ -73,6 +73,7 @@ public sealed partial class ServerSettingsViewModel
+             if (!Set(ref _isMediaConsolidationBusy, value)) return;
+             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsMediaConsolidationIdle)));
+             RaiseMediaConsolidationCommandState();
++            RaiseArchiveReconciliationCommandState();
+         }
+     }
+ 
+@@ -83,7 +84,9 @@ public sealed partial class ServerSettingsViewModel
+         ? "No consolidation plan has been prepared."
+         : $"Plan {_mediaConsolidationPlan.PlanId}: {_mediaConsolidationPlan.EligibleBroadcasts:N0} broadcasts · " +
+           $"{_mediaConsolidationPlan.ManagedFiles:N0} managed files · {_mediaConsolidationPlan.RejectedFiles:N0} files retained for review · " +
+-          $"{_mediaConsolidationPlan.HeldBroadcasts:N0} broadcasts held unchanged.";
++          $"{_mediaConsolidationPlan.HeldBroadcasts:N0} broadcasts / {_mediaConsolidationPlan.HeldSourceFiles:N0} files held unchanged · " +
++          $"all {_mediaConsolidationPlan.InventoryAvailableFiles:N0} available physical files accounted for " +
++          $"({_mediaConsolidationPlan.InventoryMissingFiles:N0} missing records excluded).";
+     public string MediaConsolidationConfirmationHint => _mediaConsolidationPlan is null
+         ? "Prepare a plan to receive its confirmation phrase."
+         : $"After rehearsal and after stopping the server, enter exactly: {_mediaConsolidationPlan.ConfirmationText}";
+@@ -105,15 +108,15 @@ public sealed partial class ServerSettingsViewModel
+             () => !IsMediaConsolidationBusy);
+         _prepareMediaConsolidationCommand = new ServerCommand(
+             () => _ = PrepareMediaConsolidationAsync(),
+-            () => !IsMediaConsolidationBusy &&
++            () => !IsMediaConsolidationBusy && !IsArchiveReconciliationBusy &&
+                   !string.IsNullOrWhiteSpace(ManagedArchivePath) &&
+                   !string.IsNullOrWhiteSpace(ConsolidationQuarantinePath));
+         _rehearseMediaConsolidationCommand = new ServerCommand(
+             () => _ = RehearseMediaConsolidationAsync(),
+-            () => !IsMediaConsolidationBusy && _mediaConsolidationPlan is not null);
++            () => !IsMediaConsolidationBusy && !IsArchiveReconciliationBusy && _mediaConsolidationPlan is not null);
+         _commitMediaConsolidationCommand = new ServerCommand(
+             () => _ = CommitMediaConsolidationAsync(),
+-            () => !IsMediaConsolidationBusy && !IsServerRunning &&
++            () => !IsMediaConsolidationBusy && !IsArchiveReconciliationBusy && !IsServerRunning &&
+                   _mediaConsolidationPlan is not null &&
+                   _mediaConsolidationRehearsal?.CanCommit == true &&
+                   string.Equals(
+@@ -178,11 +181,14 @@ public sealed partial class ServerSettingsViewModel
+                     cancellationToken);
+                 _mediaConsolidationPlan = plan;
+                 _mediaConsolidationRehearsal = null;
+-                return $"Preview ready. {plan.ManagedFiles:N0} files would form the managed archive; " +
++                return $"Preview ready. All {plan.InventoryAvailableFiles:N0} available physical files are accounted for: " +
++                       $"{plan.ManagedFiles:N0} files would form the managed archive; " +
+                        $"{plan.RejectedFiles:N0} originals or alternates would remain in quarantine. " +
+-                       $"{plan.HeldBroadcasts:N0} unsafe broadcasts will not be touched.";
++                       $"{plan.HeldBroadcasts:N0} unsafe broadcasts containing {plan.HeldSourceFiles:N0} file(s) will not be touched. " +
++                       $"{plan.InventoryMissingFiles:N0} database record(s) already marked missing are explicitly outside the move.";
+             }).ConfigureAwait(true);
+         RaiseMediaConsolidationPlanState();
++        await RefreshArchiveReconciliationAsync().ConfigureAwait(true);
+     }
+ 
+     private async Task RehearseMediaConsolidationAsync()
+diff --git a/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.cs b/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.cs
+index 93a504225382e0e7662edf78d77840d267a515a6..9d27aaf55eb455bb127209fe102615d4893458c3 100644
+--- a/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.cs
++++ b/TheRadioVault.Server/ViewModels/ServerSettingsViewModel.cs
+@@ -135,6 +135,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
+         ScanLibraryCommand = _scanLibraryCommand;
+         InitializeRssFeedCommands();
+         InitializeMediaConsolidationCommands();
++        InitializeArchiveReconciliationCommands();
+         _chooseKnowledgeImportCommand = new ServerCommand(() => _ = ChooseKnowledgeImportAsync(), () => !IsKnowledgeBusy);
+         _applyKnowledgeImportCommand = new ServerCommand(() => _ = ApplyKnowledgeImportAsync(), () => HasKnowledgeImportPreview && !IsKnowledgeBusy);
+         _cancelKnowledgeImportCommand = new ServerCommand(CancelKnowledgeImport, () => HasKnowledgeImportPreview);
+@@ -151,6 +152,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
+         RefreshStatus();
+         _ = LoadLibraryFoldersAsync();
+         _ = LoadRssFeedsAsync();
++        _ = RefreshArchiveReconciliationAsync();
+         _refreshTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => RefreshStatus());
+         _refreshTimer.Start();
+     }
+@@ -167,6 +169,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
+             ChooseKnowledgeImportCommand = ApplyKnowledgeImportCommand = CancelKnowledgeImportCommand = ExportKnowledgeCommand =
+             RehearseBackupCommand = ExportDiagnosticsCommand = ChooseManagedArchiveCommand = ChooseQuarantineCommand =
+             PrepareMediaConsolidationCommand = RehearseMediaConsolidationCommand = CommitMediaConsolidationCommand = CancelMediaConsolidationCommand =
++            RefreshArchiveReconciliationCommand = RunArchiveReconciliationCommand = CancelArchiveReconciliationCommand =
+                 new ServerCommand(() => { }, () => false);
+     }
+ 
+@@ -765,7 +768,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
+                 throw new InvalidOperationException("Secure HTTPS access is required before enabling native remote clients.");
+             _runtime.Apply(preferences, Enabled);
+             StartupStatusText = _startup?.SetEnabled(StartAutomatically) ?? string.Empty;
+-            DetailText = "Server settings and background startup were saved.";
++            DetailText = "Server administration settings and background startup were saved.";
+         }
+         catch (Exception exception)
+         {
+@@ -1092,6 +1095,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
+         if (_disposed) return;
+         _disposed = true;
+         DisposeMediaConsolidation();
++        DisposeArchiveReconciliation();
+         _refreshTimer?.Stop();
+         _refreshCancellation.Cancel();
+         _transcriptionCancellation?.Cancel();
+diff --git a/TheRadioVault.Server/Views/ServerAccessView.axaml b/TheRadioVault.Server/Views/ServerAccessView.axaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..f468d7e0d62fdad931913c0ec438557c13cc298a
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerAccessView.axaml
+@@ -0,0 +1,138 @@
++<UserControl xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             x:Class="TheRadioVault.Server.Views.ServerAccessView">
++  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
++    <StackPanel Margin="26" Spacing="16">
++      <StackPanel Spacing="4">
++        <TextBlock Text="ACCESS" Classes="eyebrow" />
++        <TextBlock Text="Web, network and trusted clients" FontSize="28" FontWeight="Bold" />
++        <TextBlock Text="Control how this server is named, reached and paired without exposing archive tools to clients." Classes="muted" FontSize="12" />
++      </StackPanel>
++
++      <Border Classes="card">
++        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="22">
++          <StackPanel Spacing="12">
++            <StackPanel Spacing="3">
++              <TextBlock Text="RADIO VAULT WEB" Classes="eyebrow" />
++              <TextBlock Text="Phone, tablet and browser access" FontSize="17" FontWeight="SemiBold" />
++              <TextBlock Text="Radio Vault Web is hosted by this server computer. Scan the code with a phone on the same network, or copy the private link."
++                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
++            </StackPanel>
++            <TextBox Text="{Binding AccessUrl}" IsReadOnly="True" PlaceholderText="Start the server to create the private Web address" />
++            <WrapPanel ItemSpacing="8" LineSpacing="8">
++              <Button Content="Open Web" Classes="primary" Command="{Binding OpenAnywhereCommand}" />
++              <Button Content="Copy phone link" Classes="secondary" Command="{Binding CopyWebLinkCommand}" />
++              <Button Content="Phone HTTPS setup" Classes="secondary" Command="{Binding OpenSecureSetupCommand}" IsVisible="{Binding IsServerSecure}" />
++              <Button Content="Create a new private link" Classes="secondary" Command="{Binding RegenerateWebLinkCommand}" />
++            </WrapPanel>
++            <TextBlock Text="Creating a new private link signs existing Web browsers out. It does not unpair native Radio Vault clients."
++                       Classes="muted" FontSize="10" TextWrapping="Wrap" />
++          </StackPanel>
++          <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top">
++            <TextBlock Text="SCAN TO OPEN WEB" Classes="eyebrow" HorizontalAlignment="Center" IsVisible="{Binding WebQrCode.IsAvailable}" />
++            <Border Background="#FFFFFF" CornerRadius="12" Padding="10" IsVisible="{Binding WebQrCode.IsAvailable}">
++              <ItemsControl ItemsSource="{Binding WebQrCode.Rows}">
++                <ItemsControl.ItemTemplate>
++                  <DataTemplate>
++                    <ItemsControl ItemsSource="{Binding Cells}">
++                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
++                      <ItemsControl.ItemTemplate><DataTemplate><Border Width="4" Height="4" Background="{Binding Fill}" /></DataTemplate></ItemsControl.ItemTemplate>
++                    </ItemsControl>
++                  </DataTemplate>
++                </ItemsControl.ItemTemplate>
++              </ItemsControl>
++            </Border>
++            <TextBlock Text="FIRST-TIME HTTPS SETUP" Classes="eyebrow" HorizontalAlignment="Center" IsVisible="{Binding SecureSetupQrCode.IsAvailable}" />
++            <Border Background="#FFFFFF" CornerRadius="10" Padding="8" HorizontalAlignment="Center" IsVisible="{Binding SecureSetupQrCode.IsAvailable}">
++              <ItemsControl ItemsSource="{Binding SecureSetupQrCode.Rows}">
++                <ItemsControl.ItemTemplate>
++                  <DataTemplate>
++                    <ItemsControl ItemsSource="{Binding Cells}">
++                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
++                      <ItemsControl.ItemTemplate><DataTemplate><Border Width="3" Height="3" Background="{Binding Fill}" /></DataTemplate></ItemsControl.ItemTemplate>
++                    </ItemsControl>
++                  </DataTemplate>
++                </ItemsControl.ItemTemplate>
++              </ItemsControl>
++            </Border>
++          </StackPanel>
++        </Grid>
++      </Border>
++
++      <Border Classes="card">
++        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
++          <StackPanel Spacing="3">
++            <TextBlock Text="SERVER IDENTITY" Classes="eyebrow" />
++            <TextBlock Text="Name and network ports" FontSize="17" FontWeight="SemiBold" />
++          </StackPanel>
++          <Grid Grid.Row="1" ColumnDefinitions="170,*" ColumnSpacing="12">
++            <TextBlock Text="Server name" VerticalAlignment="Center" />
++            <TextBox Grid.Column="1" Text="{Binding ServerDisplayName, Mode=TwoWay}" />
++          </Grid>
++          <Grid Grid.Row="2" ColumnDefinitions="170,*,20,*" ColumnSpacing="12">
++            <TextBlock Text="Network ports" VerticalAlignment="Center" />
++            <TextBox Grid.Column="1" Text="{Binding HttpPortText, Mode=TwoWay}" PlaceholderText="HTTP" />
++            <TextBlock Grid.Column="2" Text="/" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" />
++            <TextBox Grid.Column="3" Text="{Binding HttpsPortText, Mode=TwoWay}" PlaceholderText="HTTPS" />
++          </Grid>
++          <WrapPanel Grid.Row="3" ItemSpacing="20" LineSpacing="8">
++            <CheckBox Content="Server enabled" IsChecked="{Binding Enabled, Mode=TwoWay}" />
++            <CheckBox Content="Secure HTTPS access" IsChecked="{Binding SecureAccessEnabled, Mode=TwoWay}" />
++          </WrapPanel>
++          <Grid Grid.Row="4" ColumnDefinitions="170,*" ColumnSpacing="12">
++            <TextBlock Text="Discovery port" VerticalAlignment="Center" />
++            <TextBox Grid.Column="1" Text="{Binding LanDiscoveryPortText, Mode=TwoWay}" />
++          </Grid>
++        </Grid>
++      </Border>
++
++      <Border Classes="card">
++        <StackPanel Spacing="14">
++          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
++            <StackPanel Spacing="3">
++              <TextBlock Text="REMOTE NATIVE CLIENTS" Classes="eyebrow" />
++              <TextBlock Text="Pair another Radio Vault computer" FontSize="17" FontWeight="SemiBold" />
++              <TextBlock Text="Pairing uses the pinned HTTPS certificate and gives that client its own revocable token."
++                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
++            </StackPanel>
++            <CheckBox Grid.Column="1" Content="Allow remote native clients" IsChecked="{Binding LanFederationEnabled, Mode=TwoWay}" VerticalAlignment="Top" />
++          </Grid>
++          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="14">
++            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
++              <StackPanel Spacing="4">
++                <TextBlock Text="ONE-TIME PAIRING CODE" Classes="eyebrow" />
++                <TextBlock Text="{Binding PairingCode}" FontSize="32" FontWeight="Bold" IsVisible="{Binding HasPairingCode}" />
++                <TextBlock Text="{Binding PairingExpiryText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
++              </StackPanel>
++              <WrapPanel Grid.Column="1" ItemSpacing="8" LineSpacing="8" VerticalAlignment="Center">
++                <Button Content="Create pairing code" Classes="primary" Command="{Binding GeneratePairingCodeCommand}" />
++                <Button Content="Cancel code" Classes="secondary" Command="{Binding CancelPairingCommand}" />
++              </WrapPanel>
++            </Grid>
++          </Border>
++          <TextBlock Text="Trusted clients" FontWeight="SemiBold" />
++          <ListBox ItemsSource="{Binding PairedClients}" SelectedItem="{Binding SelectedPairedClient, Mode=TwoWay}"
++                   MaxHeight="220" Background="Transparent" BorderThickness="0" IsVisible="{Binding HasPairedClients}">
++            <ListBox.ItemTemplate>
++              <DataTemplate>
++                <Border Background="#151A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,6">
++                  <StackPanel Spacing="3">
++                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
++                    <TextBlock Text="{Binding DetailText}" Classes="muted" FontSize="10" />
++                  </StackPanel>
++                </Border>
++              </DataTemplate>
++            </ListBox.ItemTemplate>
++          </ListBox>
++          <TextBlock Text="No native clients are currently paired." Classes="muted" IsVisible="{Binding !HasPairedClients}" />
++          <WrapPanel ItemSpacing="8" LineSpacing="8">
++            <Button Content="Revoke selected client" Classes="secondary" Command="{Binding RevokeClientCommand}" />
++            <Button Content="Revoke every client" Classes="secondary" Command="{Binding RevokeAllClientsCommand}" />
++          </WrapPanel>
++        </StackPanel>
++      </Border>
++
++      <Button Content="Save access settings" Classes="primary" Command="{Binding SaveCommand}" HorizontalAlignment="Right" MinWidth="190" />
++    </StackPanel>
++  </ScrollViewer>
++</UserControl>
+diff --git a/TheRadioVault.Server/Views/ServerAccessView.axaml.cs b/TheRadioVault.Server/Views/ServerAccessView.axaml.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..68ae52528ce1634214b924f1f63fe2002638156e
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerAccessView.axaml.cs
+@@ -0,0 +1,8 @@
++using Avalonia.Controls;
++
++namespace TheRadioVault.Server.Views;
++
++public partial class ServerAccessView : UserControl
++{
++    public ServerAccessView() => InitializeComponent();
++}
+diff --git a/TheRadioVault.Server/Views/ServerAutomationView.axaml b/TheRadioVault.Server/Views/ServerAutomationView.axaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..9fb1aebe5782768724a1d76390cec2ea8c89f31c
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerAutomationView.axaml
+@@ -0,0 +1,119 @@
++<UserControl xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             x:Class="TheRadioVault.Server.Views.ServerAutomationView">
++  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
++    <StackPanel Margin="26" Spacing="16">
++      <StackPanel Spacing="4">
++        <TextBlock Text="AUTOMATION" Classes="eyebrow" />
++        <TextBlock Text="Keep the archive growing" FontSize="28" FontWeight="Bold" />
++        <TextBlock Text="Control background startup and automatically collect broadcasts from RSS feeds." Classes="muted" FontSize="12" />
++      </StackPanel>
++
++      <Border Classes="card">
++        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
++          <StackPanel Spacing="4">
++            <TextBlock Text="BACKGROUND LIFECYCLE" Classes="eyebrow" />
++            <TextBlock Text="Runs without an open administration window" FontSize="17" FontWeight="SemiBold" />
++            <TextBlock Text="{Binding StartupStatusText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
++            <TextBlock Text="Closing this window hides it. Use the Radio Vault tray icon to reopen administration or exit the server."
++                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
++          </StackPanel>
++          <CheckBox Grid.Column="1" Content="{Binding StartAutomaticallyLabel}"
++                    IsChecked="{Binding StartAutomatically, Mode=TwoWay}" VerticalAlignment="Center" />
++        </Grid>
++      </Border>
++
++      <Border Classes="card">
++        <StackPanel Spacing="14">
++          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
++            <StackPanel Spacing="3">
++              <TextBlock Text="RSS ARCHIVE INBOX" Classes="eyebrow" />
++              <TextBlock Text="Automatically collect new broadcasts" FontSize="17" FontWeight="SemiBold" />
++              <TextBlock Text="Radio Vault checks private or public RSS feeds while the Server app is running, downloads new audio into a registered Library folder, then indexes it normally. Feed addresses and credentials remain encrypted on this server."
++                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
++            </StackPanel>
++            <Button Grid.Column="1" Content="Check all now" Classes="secondary" Command="{Binding CheckAllRssFeedsCommand}" VerticalAlignment="Center" />
++          </Grid>
++          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
++            <TextBlock Text="{Binding RssStatusText}" FontSize="11" TextWrapping="Wrap" />
++          </Border>
++          <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
++            <StackPanel Spacing="5">
++              <TextBlock Text="Feed name" Classes="muted" FontSize="10" />
++              <TextBox Text="{Binding RssFeedName, Mode=TwoWay}" PlaceholderText="Bennington private feed" />
++            </StackPanel>
++            <StackPanel Grid.Column="1" Spacing="5">
++              <TextBlock Text="Private RSS address" Classes="muted" FontSize="10" />
++              <TextBox Text="{Binding RssFeedUrl, Mode=TwoWay}" PlaceholderText="https://…" />
++            </StackPanel>
++            <StackPanel Grid.Row="1" Spacing="5">
++              <TextBlock Text="Username (optional)" Classes="muted" FontSize="10" />
++              <TextBox Text="{Binding RssUsername, Mode=TwoWay}" />
++            </StackPanel>
++            <StackPanel Grid.Row="1" Grid.Column="1" Spacing="5">
++              <TextBlock Text="Password (optional)" Classes="muted" FontSize="10" />
++              <TextBox Text="{Binding RssPassword, Mode=TwoWay}" PasswordChar="●" />
++            </StackPanel>
++            <StackPanel Grid.Row="2" Spacing="5">
++              <TextBlock Text="Archive destination" Classes="muted" FontSize="10" />
++              <ComboBox ItemsSource="{Binding RssDestinationFolders}" SelectedItem="{Binding RssDestinationFolder, Mode=TwoWay}"
++                        IsEnabled="{Binding HasRssDestinationFolders}">
++                <ComboBox.ItemTemplate>
++                  <DataTemplate>
++                    <StackPanel Spacing="2">
++                      <TextBlock Text="{Binding AssignmentDisplayName}" FontWeight="SemiBold" />
++                      <TextBlock Text="{Binding Path}" Classes="muted" FontSize="9" TextTrimming="CharacterEllipsis" />
++                    </StackPanel>
++                  </DataTemplate>
++                </ComboBox.ItemTemplate>
++              </ComboBox>
++            </StackPanel>
++            <StackPanel Grid.Row="2" Grid.Column="1" Spacing="5">
++              <TextBlock Text="Check every (minutes)" Classes="muted" FontSize="10" />
++              <TextBox Text="{Binding RssIntervalMinutesText, Mode=TwoWay}" />
++            </StackPanel>
++          </Grid>
++          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
++            <StackPanel Spacing="4">
++              <CheckBox Content="Import episodes already present on the first check" IsChecked="{Binding RssImportExisting, Mode=TwoWay}" />
++              <TextBlock Text="Leave this off to establish the current feed as a baseline and download only episodes published afterward."
++                         Classes="muted" FontSize="10" TextWrapping="Wrap" />
++            </StackPanel>
++            <Button Grid.Column="1" Content="Add RSS feed" Classes="primary" Command="{Binding AddRssFeedCommand}" VerticalAlignment="Center" />
++          </Grid>
++          <ListBox ItemsSource="{Binding RssFeeds}" SelectedItem="{Binding SelectedRssFeed, Mode=TwoWay}"
++                   MaxHeight="300" Background="Transparent" BorderThickness="0" IsVisible="{Binding HasRssFeeds}">
++            <ListBox.ItemTemplate>
++              <DataTemplate>
++                <Border Background="#151A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,6">
++                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
++                    <StackPanel Spacing="3">
++                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
++                      <TextBlock Text="{Binding DisplayUrl}" Classes="muted" FontSize="10" />
++                      <TextBlock Text="{Binding DestinationPath}" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
++                      <TextBlock Text="{Binding StatusText}" FontSize="10" TextWrapping="Wrap" />
++                    </StackPanel>
++                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center" HorizontalAlignment="Right">
++                      <TextBlock Text="{Binding IntervalText}" Classes="muted" FontSize="9" HorizontalAlignment="Right" />
++                      <TextBlock Text="ENABLED" Foreground="#52D6A2" FontWeight="Bold" FontSize="9" HorizontalAlignment="Right" IsVisible="{Binding Enabled}" />
++                      <TextBlock Text="PAUSED" Foreground="#E2A84A" FontWeight="Bold" FontSize="9" HorizontalAlignment="Right" IsVisible="{Binding !Enabled}" />
++                    </StackPanel>
++                  </Grid>
++                </Border>
++              </DataTemplate>
++            </ListBox.ItemTemplate>
++          </ListBox>
++          <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding HasRssFeeds}">
++            <Button Content="Check selected now" Classes="primary" Command="{Binding CheckSelectedRssFeedCommand}" />
++            <Button Content="Enable or pause selected" Classes="secondary" Command="{Binding ToggleRssFeedCommand}" />
++            <Button Content="Remove selected feed" Classes="secondary" Command="{Binding DeleteRssFeedCommand}" />
++          </WrapPanel>
++          <TextBlock Text="Removing a subscription never deletes broadcasts already downloaded into the archive."
++                     Classes="muted" FontSize="10" TextWrapping="Wrap" IsVisible="{Binding HasRssFeeds}" />
++        </StackPanel>
++      </Border>
++      <Button Content="Save automation settings" Classes="primary" Command="{Binding SaveCommand}"
++              HorizontalAlignment="Right" MinWidth="210" />
++    </StackPanel>
++  </ScrollViewer>
++</UserControl>
+diff --git a/TheRadioVault.Server/Views/ServerAutomationView.axaml.cs b/TheRadioVault.Server/Views/ServerAutomationView.axaml.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..633c97c9dbed4f6f7f62b63a42a19141e01346bd
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerAutomationView.axaml.cs
+@@ -0,0 +1,8 @@
++using Avalonia.Controls;
++
++namespace TheRadioVault.Server.Views;
++
++public partial class ServerAutomationView : UserControl
++{
++    public ServerAutomationView() => InitializeComponent();
++}
+diff --git a/TheRadioVault.Server/Views/ServerDashboardView.axaml b/TheRadioVault.Server/Views/ServerDashboardView.axaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..798b3e2701d9b8aa3d0f2f0dc8c06374c51e03f4
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerDashboardView.axaml
+@@ -0,0 +1,90 @@
++<UserControl xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             x:Class="TheRadioVault.Server.Views.ServerDashboardView">
++  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
++    <StackPanel Margin="26" Spacing="16">
++      <StackPanel Spacing="4">
++        <TextBlock Text="SERVER DASHBOARD" Classes="eyebrow" />
++        <TextBlock Text="Your archive at a glance" FontSize="28" FontWeight="Bold" />
++        <TextBlock Text="Live service state, storage health and anything that needs attention." Classes="muted" FontSize="12" />
++      </StackPanel>
++
++      <Border Classes="card">
++        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
++          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
++            <StackPanel Spacing="3">
++              <TextBlock Text="SERVER STATUS" Classes="eyebrow" />
++              <TextBlock Text="{Binding StatusText}" FontSize="20" FontWeight="SemiBold" />
++              <TextBlock Text="{Binding DetailText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
++            </StackPanel>
++            <Border Grid.Column="1" Background="{Binding ServerStateBrush}" CornerRadius="999" Padding="13,7" VerticalAlignment="Top">
++              <StackPanel Orientation="Horizontal" Spacing="8">
++                <Border Width="10" Height="10" CornerRadius="5" Background="#FFFFFF" Opacity="0.92" VerticalAlignment="Center" />
++                <TextBlock Text="{Binding ServerStateLabel}" Foreground="#101318" FontWeight="Bold" FontSize="10" />
++              </StackPanel>
++            </Border>
++          </Grid>
++          <TextBox Grid.Row="1" Text="{Binding AccessUrl}" IsReadOnly="True"
++                   PlaceholderText="The access address appears when the server is running" />
++          <WrapPanel Grid.Row="2" ItemSpacing="8" LineSpacing="8">
++            <Button Content="Start server" Classes="primary" Command="{Binding StartCommand}" IsVisible="{Binding IsServerStopped}" />
++            <Button Content="Stop server" Classes="secondary" Command="{Binding StopCommand}" IsVisible="{Binding IsServerRunning}" />
++            <Button Content="Open Radio Vault Web" Classes="secondary" Command="{Binding OpenAnywhereCommand}" />
++          </WrapPanel>
++        </Grid>
++      </Border>
++
++      <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="12">
++        <Border Classes="card">
++          <StackPanel Spacing="5">
++            <TextBlock Text="DATABASE" Classes="eyebrow" />
++            <TextBlock Text="{Binding DatabaseHealthText}" FontSize="11" TextWrapping="Wrap" />
++          </StackPanel>
++        </Border>
++        <Border Grid.Column="1" Classes="card">
++          <StackPanel Spacing="5">
++            <TextBlock Text="ARCHIVE MEDIA" Classes="eyebrow" />
++            <TextBlock Text="{Binding MediaHealthText}" FontSize="11" TextWrapping="Wrap" />
++          </StackPanel>
++        </Border>
++        <Border Grid.Row="1" Classes="card">
++          <StackPanel Spacing="5">
++            <TextBlock Text="VERIFIED BACKUP" Classes="eyebrow" />
++            <TextBlock Text="{Binding BackupHealthText}" FontSize="11" TextWrapping="Wrap" />
++          </StackPanel>
++        </Border>
++        <Border Grid.Row="1" Grid.Column="1" Classes="card">
++          <StackPanel Spacing="5">
++            <TextBlock Text="SECURE ACCESS" Classes="eyebrow" />
++            <TextBlock Text="{Binding CertificateHealthText}" FontSize="11" TextWrapping="Wrap" />
++          </StackPanel>
++        </Border>
++        <Border Grid.Row="2" Grid.ColumnSpan="2" Classes="card">
++          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
++            <StackPanel Spacing="5">
++              <TextBlock Text="ARCHIVE RECONCILIATION" Classes="eyebrow" />
++              <TextBlock Text="{Binding ArchiveReconciliationDashboardText}" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" />
++              <TextBlock Text="The detailed evidence and safe consolidation workflow are available in Archive Reconciliation."
++                         Classes="muted" FontSize="10" TextWrapping="Wrap" />
++            </StackPanel>
++            <Border Grid.Column="1" Background="{Binding ArchiveReconciliationStateBrush}" CornerRadius="999" Padding="12,7" VerticalAlignment="Top">
++              <TextBlock Text="{Binding ArchiveReconciliationStateLabel}" Foreground="#101318" FontWeight="Bold" FontSize="9" />
++            </Border>
++          </Grid>
++        </Border>
++      </Grid>
++
++      <Border Background="#161A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="14">
++        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
++          <StackPanel Spacing="3">
++            <TextBlock Text="BACKGROUND SERVICE" Classes="eyebrow" />
++            <TextBlock Text="{Binding StartupStatusText}" FontSize="11" TextWrapping="Wrap" />
++            <TextBlock Text="Closing this window hides it; the server keeps running from the tray." Classes="muted" FontSize="10" />
++          </StackPanel>
++          <CheckBox Grid.Column="1" Content="{Binding StartAutomaticallyLabel}"
++                    IsChecked="{Binding StartAutomatically}" IsEnabled="False" VerticalAlignment="Center" />
++        </Grid>
++      </Border>
++    </StackPanel>
++  </ScrollViewer>
++</UserControl>
+diff --git a/TheRadioVault.Server/Views/ServerDashboardView.axaml.cs b/TheRadioVault.Server/Views/ServerDashboardView.axaml.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..49536d732ee779b5398d7e152956aac3d780e2c1
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerDashboardView.axaml.cs
+@@ -0,0 +1,8 @@
++using Avalonia.Controls;
++
++namespace TheRadioVault.Server.Views;
++
++public partial class ServerDashboardView : UserControl
++{
++    public ServerDashboardView() => InitializeComponent();
++}
+diff --git a/TheRadioVault.Server/Views/ServerKnowledgeView.axaml b/TheRadioVault.Server/Views/ServerKnowledgeView.axaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..55ad4b729da0d45bb19208f905ae3fe882046c39
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerKnowledgeView.axaml
+@@ -0,0 +1,48 @@
++<UserControl xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             x:Class="TheRadioVault.Server.Views.ServerKnowledgeView">
++  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
++    <StackPanel Margin="26" Spacing="16">
++      <StackPanel Spacing="4">
++        <TextBlock Text="KNOWLEDGE" Classes="eyebrow" />
++        <TextBlock Text="Protect the story behind the archive" FontSize="28" FontWeight="Bold" />
++        <TextBlock Text="Import or export portable Radio Vault knowledge, Explore pages and linked research." Classes="muted" FontSize="12" />
++      </StackPanel>
++      <Border Classes="card">
++        <StackPanel Spacing="14">
++          <StackPanel Spacing="3">
++            <TextBlock Text="KNOWLEDGE DATABASE" Classes="eyebrow" />
++            <TextBlock Text="Import, protect and export archive knowledge" FontSize="17" FontWeight="SemiBold" />
++            <TextBlock Text="Imports run as cancellable background jobs owned by the server. Closing this window or disconnecting a client does not stop a healthy import. Every import remains transactional and creates a verified safety backup before changing the archive."
++                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
++          </StackPanel>
++          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
++            <StackPanel Spacing="8">
++              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
++                <TextBlock Text="{Binding KnowledgeStatusText}" FontSize="11" TextWrapping="Wrap" />
++                <TextBlock Grid.Column="1" Text="{Binding KnowledgeProgressCountText}" Classes="muted" FontSize="10" VerticalAlignment="Center" />
++                <TextBlock Grid.Column="2" Text="{Binding KnowledgeProgressPercentText}" FontWeight="Bold" Foreground="#F2C94C" VerticalAlignment="Center" />
++              </Grid>
++              <ProgressBar Minimum="0" Maximum="100" Value="{Binding KnowledgeProgressPercent}" Height="8"
++                           Foreground="#F2C94C" Background="#343B45" />
++            </StackPanel>
++          </Border>
++          <Border Background="#1B2027" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12"
++                  IsVisible="{Binding HasKnowledgeImportPreview}">
++            <StackPanel Spacing="4">
++              <TextBlock Text="{Binding KnowledgeImportFileText}" FontWeight="SemiBold" />
++              <TextBlock Text="{Binding KnowledgeImportPreviewText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
++            </StackPanel>
++          </Border>
++          <WrapPanel ItemSpacing="8" LineSpacing="8">
++            <Button Content="Choose Knowledge Database…" Classes="primary" Command="{Binding ChooseKnowledgeImportCommand}" />
++            <Button Content="Import now" Classes="primary" Command="{Binding ApplyKnowledgeImportCommand}" IsVisible="{Binding HasKnowledgeImportPreview}" />
++            <Button Content="Cancel import" Classes="secondary" Command="{Binding CancelKnowledgeImportCommand}" IsVisible="{Binding HasKnowledgeImportPreview}" />
++          </WrapPanel>
++          <Button Content="Export complete Knowledge Database…" Classes="secondary" HorizontalAlignment="Left"
++                  Command="{Binding ExportKnowledgeCommand}" />
++        </StackPanel>
++      </Border>
++    </StackPanel>
++  </ScrollViewer>
++</UserControl>
+diff --git a/TheRadioVault.Server/Views/ServerKnowledgeView.axaml.cs b/TheRadioVault.Server/Views/ServerKnowledgeView.axaml.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..6ad52d862eab8cc02d65269ed29ebd39198bc5c2
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerKnowledgeView.axaml.cs
+@@ -0,0 +1,8 @@
++using Avalonia.Controls;
++
++namespace TheRadioVault.Server.Views;
++
++public partial class ServerKnowledgeView : UserControl
++{
++    public ServerKnowledgeView() => InitializeComponent();
++}
+diff --git a/TheRadioVault.Server/Views/ServerLibraryView.axaml b/TheRadioVault.Server/Views/ServerLibraryView.axaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..4072bfaf3e778918d3d4d4fd46f2241449afa432
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerLibraryView.axaml
+@@ -0,0 +1,68 @@
++<UserControl xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             x:Class="TheRadioVault.Server.Views.ServerLibraryView">
++  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
++    <StackPanel Margin="26" Spacing="16">
++      <StackPanel Spacing="4">
++        <TextBlock Text="LIBRARY" Classes="eyebrow" />
++        <TextBlock Text="Archive locations and indexing" FontSize="28" FontWeight="Bold" />
++        <TextBlock Text="Choose the folders this server owns and scan them into the Radio Vault library." Classes="muted" FontSize="12" />
++      </StackPanel>
++
++      <Border Classes="card">
++        <StackPanel Spacing="14">
++          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="9">
++            <StackPanel Spacing="3">
++              <TextBlock Text="LIBRARY FOLDERS" Classes="eyebrow" />
++              <TextBlock Text="Archive locations on this computer" FontSize="17" FontWeight="SemiBold" />
++              <TextBlock Text="Add folders from the server computer that physically owns the archive. Radio Vault asks which show each folder contains; use mixed only when it really contains several shows. Removing a registration never deletes audio files."
++                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
++            </StackPanel>
++            <Button Grid.Column="1" Content="Scan Library now" Classes="secondary" Command="{Binding ScanLibraryCommand}" VerticalAlignment="Center" />
++            <Button Grid.Column="2" Content="Add folder" Classes="primary" Command="{Binding AddLibraryFolderCommand}" VerticalAlignment="Center" />
++          </Grid>
++          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
++            <TextBlock Text="{Binding LibraryStatusText}" FontSize="11" TextWrapping="Wrap" />
++          </Border>
++          <ListBox ItemsSource="{Binding LibraryFolders}" SelectedItem="{Binding SelectedLibraryFolder, Mode=TwoWay}"
++                   MaxHeight="420" Background="Transparent" BorderThickness="0" IsVisible="{Binding HasLibraryFolders}">
++            <ListBox.ItemTemplate>
++              <DataTemplate>
++                <Border Background="#151A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,6">
++                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
++                    <StackPanel Spacing="3">
++                      <TextBlock Text="{Binding Path}" FontWeight="SemiBold" TextWrapping="Wrap" />
++                      <TextBlock Text="{Binding AssignmentDisplayName}" Classes="muted" FontSize="10" />
++                    </StackPanel>
++                    <TextBlock Grid.Column="1" Text="ENABLED" Foreground="#52D6A2" FontWeight="Bold" FontSize="9"
++                               VerticalAlignment="Center" IsVisible="{Binding Enabled}" />
++                    <TextBlock Grid.Column="1" Text="DISABLED" Foreground="#E2A84A" FontWeight="Bold" FontSize="9"
++                               VerticalAlignment="Center" IsVisible="{Binding !Enabled}" />
++                  </Grid>
++                </Border>
++              </DataTemplate>
++            </ListBox.ItemTemplate>
++          </ListBox>
++          <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding HasLibraryFolders}">
++            <Button Content="Change selected show" Classes="primary" Command="{Binding AssignLibraryFolderCommand}" />
++            <Button Content="Enable or disable selected" Classes="secondary" Command="{Binding ToggleLibraryFolderCommand}" />
++            <Button Content="Remove selected registration" Classes="secondary" Command="{Binding RemoveLibraryFolderCommand}" />
++          </WrapPanel>
++        </StackPanel>
++      </Border>
++
++      <Border Classes="card">
++        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
++          <StackPanel Spacing="3">
++            <TextBlock Text="AUTHORITATIVE STORAGE" Classes="eyebrow" />
++            <TextBlock Text="RadioVault Server owns this database" FontSize="17" FontWeight="SemiBold" />
++            <TextBlock Text="Playback state, metadata, pairings and archive indexes all use this server database."
++                       Classes="muted" FontSize="11" />
++          </StackPanel>
++          <TextBox Grid.Row="1" Text="{Binding DatabasePath}" IsReadOnly="True" />
++          <Button Grid.Row="2" Content="Open data folder" Classes="secondary" Command="{Binding OpenDataFolderCommand}" HorizontalAlignment="Left" />
++        </Grid>
++      </Border>
++    </StackPanel>
++  </ScrollViewer>
++</UserControl>
+diff --git a/TheRadioVault.Server/Views/ServerLibraryView.axaml.cs b/TheRadioVault.Server/Views/ServerLibraryView.axaml.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..514880050449d96d87c78e6cd57b4b4e891c2633
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerLibraryView.axaml.cs
+@@ -0,0 +1,8 @@
++using Avalonia.Controls;
++
++namespace TheRadioVault.Server.Views;
++
++public partial class ServerLibraryView : UserControl
++{
++    public ServerLibraryView() => InitializeComponent();
++}
+diff --git a/TheRadioVault.Server/Views/ServerReconciliationView.axaml b/TheRadioVault.Server/Views/ServerReconciliationView.axaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..b8c4fa27252b3bf6fe0501144c0242e1be7e7831
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerReconciliationView.axaml
+@@ -0,0 +1,116 @@
++<UserControl xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             x:Class="TheRadioVault.Server.Views.ServerReconciliationView">
++  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
++    <StackPanel Margin="26" Spacing="16">
++      <StackPanel Spacing="4">
++        <TextBlock Text="ARCHIVE RECONCILIATION" Classes="eyebrow" />
++        <TextBlock Text="Understand the files before changing them" FontSize="28" FontWeight="Bold" />
++        <TextBlock Text="A read-only analysis of broadcasts, recording variants, multipart captures, duplicates and conflicts."
++                   Classes="muted" FontSize="12" TextWrapping="Wrap" />
++      </StackPanel>
++
++      <Border Classes="card">
++        <StackPanel Spacing="14">
++          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
++            <StackPanel Spacing="3">
++              <TextBlock Text="RECONCILIATION STATUS" Classes="eyebrow" />
++              <TextBlock Text="{Binding ArchiveReconciliationHeadline}" FontSize="19" FontWeight="SemiBold" TextWrapping="Wrap" />
++              <TextBlock Text="{Binding ArchiveReconciliationCompletedText}" Classes="muted" FontSize="10" />
++            </StackPanel>
++            <Border Grid.Column="1" Background="{Binding ArchiveReconciliationStateBrush}" CornerRadius="999" Padding="13,7" VerticalAlignment="Top">
++              <TextBlock Text="{Binding ArchiveReconciliationStateLabel}" Foreground="#101318" FontWeight="Bold" FontSize="10" />
++            </Border>
++          </Grid>
++
++          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="10">
++            <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
++              <StackPanel Spacing="3">
++                <TextBlock Text="PHYSICAL INVENTORY" Classes="eyebrow" />
++                <TextBlock Text="{Binding ArchiveReconciliationInventoryText}" FontSize="11" TextWrapping="Wrap" />
++              </StackPanel>
++            </Border>
++            <Border Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
++              <StackPanel Spacing="3">
++                <TextBlock Text="PROPOSED INTERPRETATION" Classes="eyebrow" />
++                <TextBlock Text="{Binding ArchiveReconciliationChangeText}" FontSize="11" TextWrapping="Wrap" />
++              </StackPanel>
++            </Border>
++            <Border Grid.Row="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
++              <StackPanel Spacing="3">
++                <TextBlock Text="READINESS" Classes="eyebrow" />
++                <TextBlock Text="{Binding ArchiveReconciliationAttentionText}" FontSize="11" TextWrapping="Wrap" />
++              </StackPanel>
++            </Border>
++            <Border Grid.Row="1" Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
++              <StackPanel Spacing="3">
++                <TextBlock Text="RECORDING EVIDENCE" Classes="eyebrow" />
++                <TextBlock Text="{Binding ArchiveReconciliationDuplicateText}" FontSize="11" TextWrapping="Wrap" />
++              </StackPanel>
++            </Border>
++          </Grid>
++
++          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
++            <StackPanel Spacing="8">
++              <TextBlock Text="{Binding ArchiveReconciliationStatusText}" FontSize="11" TextWrapping="Wrap" />
++              <ProgressBar Minimum="0" Maximum="100" Value="{Binding ArchiveReconciliationProgressPercent}"
++                           Height="8" Foreground="#F2C94C" Background="#343B45" />
++            </StackPanel>
++          </Border>
++          <WrapPanel ItemSpacing="8" LineSpacing="8">
++            <Button Content="Run full reconciliation" Classes="primary" Command="{Binding RunArchiveReconciliationCommand}" />
++            <Button Content="Refresh saved status" Classes="secondary" Command="{Binding RefreshArchiveReconciliationCommand}" />
++            <Button Content="Cancel analysis" Classes="secondary" Command="{Binding CancelArchiveReconciliationCommand}"
++                    IsVisible="{Binding IsArchiveReconciliationBusy}" />
++          </WrapPanel>
++          <TextBlock Text="Reconciliation writes only a shadow index. It does not rename, move, merge or delete media and it does not change the live client library."
++                     Classes="muted" FontSize="10" TextWrapping="Wrap" />
++        </StackPanel>
++      </Border>
++
++      <Border Classes="card">
++        <StackPanel Spacing="14">
++          <StackPanel Spacing="3">
++            <TextBlock Text="SAFE MEDIA CONSOLIDATION" Classes="eyebrow" />
++            <TextBlock Text="Build one organised archive without deleting originals" FontSize="17" FontWeight="SemiBold" />
++            <TextBlock Text="Radio Vault first reconciles the current physical inventory so every available file is either planned or visibly held. It verifies every planned source with full SHA-256 and chooses the longest recording; equal-length recordings use the highest estimated bitrate. Winners form the managed archive while every moved original—including winners and rejected duplicates—remains in a plan-specific quarantine. Unsafe broadcasts are left untouched."
++                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
++          </StackPanel>
++          <Border Background="#241F13" BorderBrush="#E2A84A" BorderThickness="1" CornerRadius="10" Padding="12">
++            <TextBlock Text="Radio Vault has no command to delete quarantine media. Preview and rehearsal move nothing. Commit creates a verified database backup first, must be explicitly confirmed, and is available only while the server is stopped."
++                       Foreground="#F2C94C" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
++          </Border>
++          <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="9">
++            <TextBox Text="{Binding ManagedArchivePath}" IsReadOnly="True" PlaceholderText="New managed archive folder" />
++            <Button Grid.Column="1" Content="Choose managed folder…" Classes="secondary" Command="{Binding ChooseManagedArchiveCommand}" />
++            <TextBox Grid.Row="1" Text="{Binding ConsolidationQuarantinePath}" IsReadOnly="True" PlaceholderText="Separate quarantine folder" />
++            <Button Grid.Row="1" Grid.Column="1" Content="Choose quarantine…" Classes="secondary" Command="{Binding ChooseQuarantineCommand}" />
++          </Grid>
++          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
++            <StackPanel Spacing="8">
++              <TextBlock Text="{Binding MediaConsolidationPlanText}" FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap" />
++              <TextBlock Text="{Binding MediaConsolidationStatusText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
++              <ProgressBar Minimum="0" Maximum="100" Value="{Binding MediaConsolidationProgressPercent}"
++                           Height="8" Foreground="#F2C94C" Background="#343B45" />
++            </StackPanel>
++          </Border>
++          <WrapPanel ItemSpacing="8" LineSpacing="8">
++            <Button Content="1. Prepare preview" Classes="primary" Command="{Binding PrepareMediaConsolidationCommand}" />
++            <Button Content="2. Run no-move rehearsal" Classes="secondary" Command="{Binding RehearseMediaConsolidationCommand}" />
++            <Button Content="Cancel current step" Classes="secondary" Command="{Binding CancelMediaConsolidationCommand}"
++                    IsVisible="{Binding IsMediaConsolidationBusy}" />
++          </WrapPanel>
++          <StackPanel Spacing="7" IsVisible="{Binding HasPassedMediaConsolidationRehearsal}">
++            <TextBlock Text="{Binding MediaConsolidationConfirmationHint}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
++            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
++              <TextBox Text="{Binding ConsolidationConfirmationText, Mode=TwoWay}" PlaceholderText="Exact confirmation phrase" />
++              <Button Grid.Column="1" Content="3. Commit consolidation" Classes="primary" Command="{Binding CommitMediaConsolidationCommand}" />
++            </Grid>
++            <TextBlock Text="Stop the server before commit. A cancelled or interrupted commit can be safely resumed with the same plan; its journal records each verified step."
++                       Classes="muted" FontSize="10" TextWrapping="Wrap" />
++          </StackPanel>
++        </StackPanel>
++      </Border>
++    </StackPanel>
++  </ScrollViewer>
++</UserControl>
+diff --git a/TheRadioVault.Server/Views/ServerReconciliationView.axaml.cs b/TheRadioVault.Server/Views/ServerReconciliationView.axaml.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..d1d3d57d5ba3381a152e8d90c7446e22f231b3a2
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerReconciliationView.axaml.cs
+@@ -0,0 +1,8 @@
++using Avalonia.Controls;
++
++namespace TheRadioVault.Server.Views;
++
++public partial class ServerReconciliationView : UserControl
++{
++    public ServerReconciliationView() => InitializeComponent();
++}
+diff --git a/TheRadioVault.Server/Views/ServerRecoveryView.axaml b/TheRadioVault.Server/Views/ServerRecoveryView.axaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..57b76de0312cfd46d80009ad8c7bc50cfe8cccb9
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerRecoveryView.axaml
+@@ -0,0 +1,55 @@
++<UserControl xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             x:Class="TheRadioVault.Server.Views.ServerRecoveryView">
++  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
++    <StackPanel Margin="26" Spacing="16">
++      <StackPanel Spacing="4">
++        <TextBlock Text="RECOVERY" Classes="eyebrow" />
++        <TextBlock Text="Health, backups and diagnostics" FontSize="28" FontWeight="Bold" />
++        <TextBlock Text="Verify that the authoritative database can be recovered and export privacy-safe evidence when something goes wrong."
++                   Classes="muted" FontSize="12" TextWrapping="Wrap" />
++      </StackPanel>
++      <Border Classes="card">
++        <StackPanel Spacing="14">
++          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
++            <StackPanel Spacing="3">
++              <TextBlock Text="SERVER HEALTH" Classes="eyebrow" />
++              <TextBlock Text="{Binding HealthHeadline}" FontSize="19" FontWeight="SemiBold" />
++              <TextBlock Text="Live checks for the database, storage, backups, certificates and connected clients."
++                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
++            </StackPanel>
++            <Border Grid.Column="1" Background="{Binding HealthStateBrush}" CornerRadius="999" Padding="13,7" VerticalAlignment="Top">
++              <TextBlock Text="HEALTH" Foreground="#101318" FontWeight="Bold" FontSize="10" />
++            </Border>
++          </Grid>
++          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="9">
++            <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
++              <StackPanel Spacing="3"><TextBlock Text="DATABASE" Classes="eyebrow" /><TextBlock Text="{Binding DatabaseHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
++            </Border>
++            <Border Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
++              <StackPanel Spacing="3"><TextBlock Text="ARCHIVE MEDIA" Classes="eyebrow" /><TextBlock Text="{Binding MediaHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
++            </Border>
++            <Border Grid.Row="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
++              <StackPanel Spacing="3"><TextBlock Text="VERIFIED BACKUP" Classes="eyebrow" /><TextBlock Text="{Binding BackupHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
++            </Border>
++            <Border Grid.Row="1" Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
++              <StackPanel Spacing="3"><TextBlock Text="SECURE ACCESS" Classes="eyebrow" /><TextBlock Text="{Binding CertificateHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
++            </Border>
++            <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
++              <StackPanel Spacing="3"><TextBlock Text="CONNECTED CLIENTS" Classes="eyebrow" /><TextBlock Text="{Binding ClientHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
++            </Border>
++          </Grid>
++          <TextBlock Text="{Binding HealthActionText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
++          <WrapPanel ItemSpacing="8" LineSpacing="8">
++            <Button Content="Test latest backup restore" Classes="primary" Command="{Binding RehearseBackupCommand}" />
++            <Button Content="Export privacy-safe diagnostics…" Classes="secondary" Command="{Binding ExportDiagnosticsCommand}" />
++          </WrapPanel>
++        </StackPanel>
++      </Border>
++      <Border Background="#241F13" BorderBrush="#E2A84A" BorderThickness="1" CornerRadius="10" Padding="14">
++        <TextBlock Text="A restore rehearsal uses an isolated temporary database and never replaces the live archive. Exported diagnostics redact private links, credentials and tokens."
++                   Foreground="#F2C94C" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
++      </Border>
++    </StackPanel>
++  </ScrollViewer>
++</UserControl>
+diff --git a/TheRadioVault.Server/Views/ServerRecoveryView.axaml.cs b/TheRadioVault.Server/Views/ServerRecoveryView.axaml.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..cec2d8636c64310108d71a717b42e1ee236610fc
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerRecoveryView.axaml.cs
+@@ -0,0 +1,8 @@
++using Avalonia.Controls;
++
++namespace TheRadioVault.Server.Views;
++
++public partial class ServerRecoveryView : UserControl
++{
++    public ServerRecoveryView() => InitializeComponent();
++}
+diff --git a/TheRadioVault.Server/Views/ServerSettingsWindow.axaml b/TheRadioVault.Server/Views/ServerSettingsWindow.axaml
+index 20920eeece8c8f687d883df8d98093ec7c672158..fff2e8426f56834ff6a04a67928b8da24537053e 100644
+--- a/TheRadioVault.Server/Views/ServerSettingsWindow.axaml
++++ b/TheRadioVault.Server/Views/ServerSettingsWindow.axaml
+@@ -1,552 +1,37 @@
+ <Window xmlns="https://github.com/avaloniaui"
+         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++        xmlns:views="clr-namespace:TheRadioVault.Server.Views"
+         x:Class="TheRadioVault.Server.Views.ServerSettingsWindow"
+-        Title="RadioVault Server settings"
+-        Width="820" Height="780" MinWidth="700" MinHeight="640"
++        Title="Radio Vault Server"
++        Width="1080" Height="800" MinWidth="860" MinHeight="640"
+         WindowStartupLocation="CenterScreen">
+-  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+-    <StackPanel Margin="28" Spacing="16">
++  <Grid RowDefinitions="Auto,*">
++    <Border Background="#161A20" BorderBrush="#343B45" BorderThickness="0,0,0,1" Padding="22,16">
+       <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="14">
+-        <Image Width="56" Height="56" Source="/Assets/RadioVault.Server-Logo.png"
++        <Image Width="50" Height="50" Source="/Assets/RadioVault.Server-Logo.png"
+                Stretch="Uniform" RenderOptions.BitmapInterpolationMode="HighQuality" />
+-        <StackPanel Grid.Column="1" Spacing="4">
+-          <TextBlock Text="RADIOVAULT SERVER" Classes="eyebrow" />
+-          <TextBlock Text="Background archive service" FontSize="27" FontWeight="Bold" />
+-          <TextBlock Text="This application owns the archive and serves Radio Vault clients. It contains settings only."
+-                     Classes="muted" FontSize="12" TextWrapping="Wrap" />
++        <StackPanel Grid.Column="1" Spacing="3" VerticalAlignment="Center">
++          <TextBlock Text="RADIO VAULT SERVER" Classes="eyebrow" />
++          <TextBlock Text="Archive administration" FontSize="23" FontWeight="Bold" />
+         </StackPanel>
+-        <TextBlock Grid.Column="2" Text="{Binding VersionText}" Classes="muted" FontSize="11"
+-                   VerticalAlignment="Top" />
+-      </Grid>
+-
+-      <Border Classes="card">
+-        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+-            <StackPanel Spacing="3">
+-              <TextBlock Text="SERVER STATUS" Classes="eyebrow" />
+-              <TextBlock Text="{Binding StatusText}" FontSize="20" FontWeight="SemiBold" />
+-              <TextBlock Text="{Binding DetailText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-            </StackPanel>
+-            <Border Grid.Column="1" Background="{Binding ServerStateBrush}" CornerRadius="999" Padding="13,7"
+-                    VerticalAlignment="Top">
+-              <StackPanel Orientation="Horizontal" Spacing="8">
+-                <Border Width="10" Height="10" CornerRadius="5" Background="#FFFFFF" Opacity="0.92" VerticalAlignment="Center" />
+-                <TextBlock Text="{Binding ServerStateLabel}" Foreground="#101318" FontWeight="Bold" FontSize="10" />
+-              </StackPanel>
+-            </Border>
+-          </Grid>
+-          <TextBox Grid.Row="1" Text="{Binding AccessUrl}" IsReadOnly="True"
+-                   PlaceholderText="The access address appears when the server is running" />
+-          <WrapPanel Grid.Row="2" ItemSpacing="8" LineSpacing="8">
+-            <Button Content="Start server" Classes="primary" Command="{Binding StartCommand}" IsVisible="{Binding IsServerStopped}" />
+-            <Button Content="Stop server" Classes="secondary" Command="{Binding StopCommand}" IsVisible="{Binding IsServerRunning}" />
+-            <Button Content="Open Radio Vault Web" Classes="secondary" Command="{Binding OpenAnywhereCommand}" />
+-          </WrapPanel>
+-        </Grid>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <StackPanel Spacing="14">
+-          <StackPanel Spacing="3">
+-            <TextBlock Text="SAFE MEDIA CONSOLIDATION" Classes="eyebrow" />
+-            <TextBlock Text="Build one organised archive without deleting originals" FontSize="17" FontWeight="SemiBold" />
+-            <TextBlock Text="Radio Vault uses the latest completed Library Truth run, verifies every source with full SHA-256, and chooses the longest recording; equal-length recordings use the highest estimated bitrate. It copies winners into the managed archive and moves every original—including winners and rejected duplicates—into a plan-specific quarantine for manual review. Unsafe broadcasts are left untouched."
+-                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-          </StackPanel>
+-
+-          <Border Background="#241F13" BorderBrush="#E2A84A" BorderThickness="1" CornerRadius="10" Padding="12">
+-            <TextBlock Text="Radio Vault has no command to delete quarantine media. Preview and rehearsal move nothing. Commit creates a verified database backup first, must be explicitly confirmed, and is available only while the server is stopped."
+-                       Foreground="#F2C94C" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
+-          </Border>
+-
+-          <Grid ColumnDefinitions="*,Auto" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="9">
+-            <TextBox Text="{Binding ManagedArchivePath}" IsReadOnly="True"
+-                     PlaceholderText="New managed archive folder" />
+-            <Button Grid.Column="1" Content="Choose managed folder…" Classes="secondary"
+-                    Command="{Binding ChooseManagedArchiveCommand}" />
+-            <TextBox Grid.Row="1" Text="{Binding ConsolidationQuarantinePath}" IsReadOnly="True"
+-                     PlaceholderText="Separate quarantine folder" />
+-            <Button Grid.Row="1" Grid.Column="1" Content="Choose quarantine…" Classes="secondary"
+-                    Command="{Binding ChooseQuarantineCommand}" />
+-          </Grid>
+-
+-          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
+-            <StackPanel Spacing="8">
+-              <TextBlock Text="{Binding MediaConsolidationPlanText}" FontWeight="SemiBold" FontSize="11" TextWrapping="Wrap" />
+-              <TextBlock Text="{Binding MediaConsolidationStatusText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-              <ProgressBar Minimum="0" Maximum="100" Value="{Binding MediaConsolidationProgressPercent}"
+-                           Height="8" Foreground="#F2C94C" Background="#343B45" />
+-            </StackPanel>
++        <StackPanel Grid.Column="2" Spacing="4" VerticalAlignment="Center" HorizontalAlignment="Right">
++          <Border Background="{Binding ServerStateBrush}" CornerRadius="999" Padding="11,6" HorizontalAlignment="Right">
++            <TextBlock Text="{Binding ServerStateLabel}" Foreground="#101318" FontWeight="Bold" FontSize="9" />
+           </Border>
+-
+-          <WrapPanel ItemSpacing="8" LineSpacing="8">
+-            <Button Content="1. Prepare preview" Classes="primary" Command="{Binding PrepareMediaConsolidationCommand}" />
+-            <Button Content="2. Run no-move rehearsal" Classes="secondary" Command="{Binding RehearseMediaConsolidationCommand}" />
+-            <Button Content="Cancel current step" Classes="secondary" Command="{Binding CancelMediaConsolidationCommand}"
+-                    IsVisible="{Binding IsMediaConsolidationBusy}" />
+-          </WrapPanel>
+-
+-          <StackPanel Spacing="7" IsVisible="{Binding HasPassedMediaConsolidationRehearsal}">
+-            <TextBlock Text="{Binding MediaConsolidationConfirmationHint}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+-              <TextBox Text="{Binding ConsolidationConfirmationText, Mode=TwoWay}"
+-                       PlaceholderText="Exact confirmation phrase" />
+-              <Button Grid.Column="1" Content="3. Commit consolidation" Classes="primary"
+-                      Command="{Binding CommitMediaConsolidationCommand}" />
+-            </Grid>
+-            <TextBlock Text="Stop the server above before commit. A cancelled or interrupted commit can be safely resumed with the same plan; its journal records each verified step."
+-                       Classes="muted" FontSize="10" TextWrapping="Wrap" />
+-          </StackPanel>
+-        </StackPanel>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <StackPanel Spacing="14">
+-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+-            <StackPanel Spacing="3">
+-              <TextBlock Text="SERVER HEALTH" Classes="eyebrow" />
+-              <TextBlock Text="{Binding HealthHeadline}" FontSize="19" FontWeight="SemiBold" />
+-              <TextBlock Text="Live checks for the database, storage, backups, certificates and connected clients."
+-                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-            </StackPanel>
+-            <Border Grid.Column="1" Background="{Binding HealthStateBrush}" CornerRadius="999" Padding="13,7"
+-                    VerticalAlignment="Top">
+-              <TextBlock Text="HEALTH" Foreground="#101318" FontWeight="Bold" FontSize="10" />
+-            </Border>
+-          </Grid>
+-
+-          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="9">
+-            <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+-              <StackPanel Spacing="3">
+-                <TextBlock Text="DATABASE" Classes="eyebrow" />
+-                <TextBlock Text="{Binding DatabaseHealthText}" FontSize="11" TextWrapping="Wrap" />
+-              </StackPanel>
+-            </Border>
+-            <Border Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+-              <StackPanel Spacing="3">
+-                <TextBlock Text="ARCHIVE MEDIA" Classes="eyebrow" />
+-                <TextBlock Text="{Binding MediaHealthText}" FontSize="11" TextWrapping="Wrap" />
+-              </StackPanel>
+-            </Border>
+-            <Border Grid.Row="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+-              <StackPanel Spacing="3">
+-                <TextBlock Text="VERIFIED BACKUP" Classes="eyebrow" />
+-                <TextBlock Text="{Binding BackupHealthText}" FontSize="11" TextWrapping="Wrap" />
+-              </StackPanel>
+-            </Border>
+-            <Border Grid.Row="1" Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+-              <StackPanel Spacing="3">
+-                <TextBlock Text="SECURE ACCESS" Classes="eyebrow" />
+-                <TextBlock Text="{Binding CertificateHealthText}" FontSize="11" TextWrapping="Wrap" />
+-              </StackPanel>
+-            </Border>
+-            <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+-              <StackPanel Spacing="3">
+-                <TextBlock Text="CONNECTED CLIENTS" Classes="eyebrow" />
+-                <TextBlock Text="{Binding ClientHealthText}" FontSize="11" TextWrapping="Wrap" />
+-              </StackPanel>
+-            </Border>
+-          </Grid>
+-
+-          <TextBlock Text="{Binding HealthActionText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+-          <WrapPanel ItemSpacing="8" LineSpacing="8">
+-            <Button Content="Test latest backup restore" Classes="primary" Command="{Binding RehearseBackupCommand}" />
+-            <Button Content="Export privacy-safe diagnostics…" Classes="secondary" Command="{Binding ExportDiagnosticsCommand}" />
+-          </WrapPanel>
++          <TextBlock Text="{Binding VersionText}" Classes="muted" FontSize="10" HorizontalAlignment="Right" />
+         </StackPanel>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="22">
+-          <StackPanel Spacing="12">
+-            <StackPanel Spacing="3">
+-              <TextBlock Text="RADIO VAULT WEB" Classes="eyebrow" />
+-              <TextBlock Text="Phone, tablet and browser access" FontSize="17" FontWeight="SemiBold" />
+-              <TextBlock Text="Radio Vault Web is hosted by this server computer. Scan the code with a phone on the same network, or copy the private link."
+-                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-            </StackPanel>
+-            <TextBox Text="{Binding AccessUrl}" IsReadOnly="True"
+-                     PlaceholderText="Start the server to create the private Web address" />
+-            <WrapPanel ItemSpacing="8" LineSpacing="8">
+-              <Button Content="Open Web" Classes="primary" Command="{Binding OpenAnywhereCommand}" />
+-              <Button Content="Copy phone link" Classes="secondary" Command="{Binding CopyWebLinkCommand}" />
+-              <Button Content="Phone HTTPS setup" Classes="secondary" Command="{Binding OpenSecureSetupCommand}"
+-                      IsVisible="{Binding IsServerSecure}" />
+-              <Button Content="Create a new private link" Classes="secondary" Command="{Binding RegenerateWebLinkCommand}" />
+-            </WrapPanel>
+-            <TextBlock Text="Creating a new private link signs existing Web browsers out. It does not unpair native Radio Vault clients."
+-                       Classes="muted" FontSize="10" TextWrapping="Wrap" />
+-          </StackPanel>
+-
+-          <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top">
+-            <TextBlock Text="SCAN TO OPEN WEB" Classes="eyebrow" HorizontalAlignment="Center"
+-                       IsVisible="{Binding WebQrCode.IsAvailable}" />
+-            <Border Background="#FFFFFF" CornerRadius="12" Padding="10" IsVisible="{Binding WebQrCode.IsAvailable}">
+-              <ItemsControl ItemsSource="{Binding WebQrCode.Rows}">
+-                <ItemsControl.ItemTemplate>
+-                  <DataTemplate>
+-                    <ItemsControl ItemsSource="{Binding Cells}">
+-                      <ItemsControl.ItemsPanel>
+-                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+-                      </ItemsControl.ItemsPanel>
+-                      <ItemsControl.ItemTemplate>
+-                        <DataTemplate><Border Width="4" Height="4" Background="{Binding Fill}" /></DataTemplate>
+-                      </ItemsControl.ItemTemplate>
+-                    </ItemsControl>
+-                  </DataTemplate>
+-                </ItemsControl.ItemTemplate>
+-              </ItemsControl>
+-            </Border>
+-            <TextBlock Text="FIRST-TIME HTTPS SETUP" Classes="eyebrow" HorizontalAlignment="Center"
+-                       IsVisible="{Binding SecureSetupQrCode.IsAvailable}" />
+-            <Border Background="#FFFFFF" CornerRadius="10" Padding="8" HorizontalAlignment="Center"
+-                    IsVisible="{Binding SecureSetupQrCode.IsAvailable}">
+-              <ItemsControl ItemsSource="{Binding SecureSetupQrCode.Rows}">
+-                <ItemsControl.ItemTemplate>
+-                  <DataTemplate>
+-                    <ItemsControl ItemsSource="{Binding Cells}">
+-                      <ItemsControl.ItemsPanel>
+-                        <ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate>
+-                      </ItemsControl.ItemsPanel>
+-                      <ItemsControl.ItemTemplate>
+-                        <DataTemplate><Border Width="3" Height="3" Background="{Binding Fill}" /></DataTemplate>
+-                      </ItemsControl.ItemTemplate>
+-                    </ItemsControl>
+-                  </DataTemplate>
+-                </ItemsControl.ItemTemplate>
+-              </ItemsControl>
+-            </Border>
+-          </StackPanel>
+-        </Grid>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16">
+-          <StackPanel Spacing="4">
+-            <TextBlock Text="BACKGROUND LIFECYCLE" Classes="eyebrow" />
+-            <TextBlock Text="Runs without an open settings window" FontSize="17" FontWeight="SemiBold" />
+-            <TextBlock Text="{Binding StartupStatusText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-            <TextBlock Text="Closing this window hides it. Use the Radio Vault tray icon to reopen settings or exit the server."
+-                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-          </StackPanel>
+-          <CheckBox Grid.Column="1" Content="{Binding StartAutomaticallyLabel}"
+-                    IsChecked="{Binding StartAutomatically, Mode=TwoWay}" VerticalAlignment="Center" />
+-        </Grid>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <StackPanel Spacing="14">
+-          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="9">
+-            <StackPanel Spacing="3">
+-              <TextBlock Text="LIBRARY FOLDERS" Classes="eyebrow" />
+-              <TextBlock Text="Archive locations on this computer" FontSize="17" FontWeight="SemiBold" />
+-              <TextBlock Text="Add folders from the server computer that physically owns the archive. Radio Vault asks which show each folder contains; use mixed only when it really contains several shows. Removing a registration never deletes audio files."
+-                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-            </StackPanel>
+-            <Button Grid.Column="1" Content="Scan Library now" Classes="secondary" Command="{Binding ScanLibraryCommand}" VerticalAlignment="Center" />
+-            <Button Grid.Column="2" Content="Add folder" Classes="primary" Command="{Binding AddLibraryFolderCommand}" VerticalAlignment="Center" />
+-          </Grid>
+-
+-          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
+-            <TextBlock Text="{Binding LibraryStatusText}" FontSize="11" TextWrapping="Wrap" />
+-          </Border>
+-
+-          <ListBox ItemsSource="{Binding LibraryFolders}" SelectedItem="{Binding SelectedLibraryFolder, Mode=TwoWay}"
+-                   MaxHeight="230" Background="Transparent" BorderThickness="0" IsVisible="{Binding HasLibraryFolders}">
+-            <ListBox.ItemTemplate>
+-              <DataTemplate>
+-                <Border Background="#151A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,6">
+-                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+-                    <StackPanel Spacing="3">
+-                      <TextBlock Text="{Binding Path}" FontWeight="SemiBold" TextWrapping="Wrap" />
+-                      <TextBlock Text="{Binding AssignmentDisplayName}" Classes="muted" FontSize="10" />
+-                    </StackPanel>
+-                    <TextBlock Grid.Column="1" Text="ENABLED" Foreground="#52D6A2" FontWeight="Bold" FontSize="9"
+-                               VerticalAlignment="Center" IsVisible="{Binding Enabled}" />
+-                    <TextBlock Grid.Column="1" Text="DISABLED" Foreground="#E2A84A" FontWeight="Bold" FontSize="9"
+-                               VerticalAlignment="Center" IsVisible="{Binding !Enabled}" />
+-                  </Grid>
+-                </Border>
+-              </DataTemplate>
+-            </ListBox.ItemTemplate>
+-          </ListBox>
+-
+-          <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding HasLibraryFolders}">
+-            <Button Content="Change selected show" Classes="primary" Command="{Binding AssignLibraryFolderCommand}" />
+-            <Button Content="Enable or disable selected" Classes="secondary" Command="{Binding ToggleLibraryFolderCommand}" />
+-            <Button Content="Remove selected registration" Classes="secondary" Command="{Binding RemoveLibraryFolderCommand}" />
+-          </WrapPanel>
+-        </StackPanel>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <StackPanel Spacing="14">
+-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+-            <StackPanel Spacing="3">
+-              <TextBlock Text="RSS ARCHIVE INBOX" Classes="eyebrow" />
+-              <TextBlock Text="Automatically collect new broadcasts" FontSize="17" FontWeight="SemiBold" />
+-              <TextBlock Text="Radio Vault checks private or public RSS feeds while the Server app is running, downloads new audio into a registered Library folder, then indexes it normally. Feed addresses and credentials remain encrypted on this server."
+-                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-            </StackPanel>
+-            <Button Grid.Column="1" Content="Check all now" Classes="secondary"
+-                    Command="{Binding CheckAllRssFeedsCommand}" VerticalAlignment="Center" />
+-          </Grid>
+-
+-          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
+-            <TextBlock Text="{Binding RssStatusText}" FontSize="11" TextWrapping="Wrap" />
+-          </Border>
+-
+-          <Grid ColumnDefinitions="*,*" ColumnSpacing="12" RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+-            <StackPanel Spacing="5">
+-              <TextBlock Text="Feed name" Classes="muted" FontSize="10" />
+-              <TextBox Text="{Binding RssFeedName, Mode=TwoWay}" PlaceholderText="Bennington private feed" />
+-            </StackPanel>
+-            <StackPanel Grid.Column="1" Spacing="5">
+-              <TextBlock Text="Private RSS address" Classes="muted" FontSize="10" />
+-              <TextBox Text="{Binding RssFeedUrl, Mode=TwoWay}" PlaceholderText="https://…" />
+-            </StackPanel>
+-            <StackPanel Grid.Row="1" Spacing="5">
+-              <TextBlock Text="Username (optional)" Classes="muted" FontSize="10" />
+-              <TextBox Text="{Binding RssUsername, Mode=TwoWay}" />
+-            </StackPanel>
+-            <StackPanel Grid.Row="1" Grid.Column="1" Spacing="5">
+-              <TextBlock Text="Password (optional)" Classes="muted" FontSize="10" />
+-              <TextBox Text="{Binding RssPassword, Mode=TwoWay}" PasswordChar="●" />
+-            </StackPanel>
+-            <StackPanel Grid.Row="2" Spacing="5">
+-              <TextBlock Text="Archive destination" Classes="muted" FontSize="10" />
+-              <ComboBox ItemsSource="{Binding RssDestinationFolders}"
+-                        SelectedItem="{Binding RssDestinationFolder, Mode=TwoWay}"
+-                        IsEnabled="{Binding HasRssDestinationFolders}">
+-                <ComboBox.ItemTemplate>
+-                  <DataTemplate>
+-                    <StackPanel Spacing="2">
+-                      <TextBlock Text="{Binding AssignmentDisplayName}" FontWeight="SemiBold" />
+-                      <TextBlock Text="{Binding Path}" Classes="muted" FontSize="9" TextTrimming="CharacterEllipsis" />
+-                    </StackPanel>
+-                  </DataTemplate>
+-                </ComboBox.ItemTemplate>
+-              </ComboBox>
+-            </StackPanel>
+-            <StackPanel Grid.Row="2" Grid.Column="1" Spacing="5">
+-              <TextBlock Text="Check every (minutes)" Classes="muted" FontSize="10" />
+-              <TextBox Text="{Binding RssIntervalMinutesText, Mode=TwoWay}" />
+-            </StackPanel>
+-          </Grid>
+-
+-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+-            <StackPanel Spacing="4">
+-              <CheckBox Content="Import episodes already present on the first check"
+-                        IsChecked="{Binding RssImportExisting, Mode=TwoWay}" />
+-              <TextBlock Text="Leave this off to establish the current feed as a baseline and download only episodes published afterward."
+-                         Classes="muted" FontSize="10" TextWrapping="Wrap" />
+-            </StackPanel>
+-            <Button Grid.Column="1" Content="Add RSS feed" Classes="primary"
+-                    Command="{Binding AddRssFeedCommand}" VerticalAlignment="Center" />
+-          </Grid>
+-
+-          <ListBox ItemsSource="{Binding RssFeeds}" SelectedItem="{Binding SelectedRssFeed, Mode=TwoWay}"
+-                   MaxHeight="260" Background="Transparent" BorderThickness="0" IsVisible="{Binding HasRssFeeds}">
+-            <ListBox.ItemTemplate>
+-              <DataTemplate>
+-                <Border Background="#151A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,6">
+-                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+-                    <StackPanel Spacing="3">
+-                      <TextBlock Text="{Binding Name}" FontWeight="SemiBold" />
+-                      <TextBlock Text="{Binding DisplayUrl}" Classes="muted" FontSize="10" />
+-                      <TextBlock Text="{Binding DestinationPath}" Classes="muted" FontSize="10" TextTrimming="CharacterEllipsis" />
+-                      <TextBlock Text="{Binding StatusText}" FontSize="10" TextWrapping="Wrap" />
+-                    </StackPanel>
+-                    <StackPanel Grid.Column="1" Spacing="4" VerticalAlignment="Center" HorizontalAlignment="Right">
+-                      <TextBlock Text="{Binding IntervalText}" Classes="muted" FontSize="9" HorizontalAlignment="Right" />
+-                      <TextBlock Text="ENABLED" Foreground="#52D6A2" FontWeight="Bold" FontSize="9"
+-                                 HorizontalAlignment="Right" IsVisible="{Binding Enabled}" />
+-                      <TextBlock Text="PAUSED" Foreground="#E2A84A" FontWeight="Bold" FontSize="9"
+-                                 HorizontalAlignment="Right" IsVisible="{Binding !Enabled}" />
+-                    </StackPanel>
+-                  </Grid>
+-                </Border>
+-              </DataTemplate>
+-            </ListBox.ItemTemplate>
+-          </ListBox>
+-
+-          <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding HasRssFeeds}">
+-            <Button Content="Check selected now" Classes="primary" Command="{Binding CheckSelectedRssFeedCommand}" />
+-            <Button Content="Enable or pause selected" Classes="secondary" Command="{Binding ToggleRssFeedCommand}" />
+-            <Button Content="Remove selected feed" Classes="secondary" Command="{Binding DeleteRssFeedCommand}" />
+-          </WrapPanel>
+-          <TextBlock Text="Removing a subscription never deletes broadcasts already downloaded into the archive."
+-                     Classes="muted" FontSize="10" TextWrapping="Wrap" IsVisible="{Binding HasRssFeeds}" />
+-        </StackPanel>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <StackPanel Spacing="14">
+-          <StackPanel Spacing="3">
+-            <TextBlock Text="KNOWLEDGE DATABASE" Classes="eyebrow" />
+-            <TextBlock Text="Import, protect and export archive knowledge" FontSize="17" FontWeight="SemiBold" />
+-            <TextBlock Text="Imports run as cancellable background jobs owned by the server. Closing this window or disconnecting a client does not stop a healthy import. Every import remains transactional and creates a verified safety backup before changing the archive."
+-                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-          </StackPanel>
+-
+-          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
+-            <StackPanel Spacing="8">
+-              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+-                <TextBlock Text="{Binding KnowledgeStatusText}" FontSize="11" TextWrapping="Wrap" />
+-                <TextBlock Grid.Column="1" Text="{Binding KnowledgeProgressCountText}" Classes="muted" FontSize="10"
+-                           VerticalAlignment="Center" />
+-                <TextBlock Grid.Column="2" Text="{Binding KnowledgeProgressPercentText}" FontWeight="Bold"
+-                           Foreground="#F2C94C" VerticalAlignment="Center" />
+-              </Grid>
+-              <ProgressBar Minimum="0" Maximum="100" Value="{Binding KnowledgeProgressPercent}"
+-                           Height="8" Foreground="#F2C94C" Background="#343B45" />
+-            </StackPanel>
+-          </Border>
+-
+-          <Border Background="#1B2027" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12"
+-                  IsVisible="{Binding HasKnowledgeImportPreview}">
+-            <StackPanel Spacing="4">
+-              <TextBlock Text="{Binding KnowledgeImportFileText}" FontWeight="SemiBold" />
+-              <TextBlock Text="{Binding KnowledgeImportPreviewText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+-            </StackPanel>
+-          </Border>
+-
+-          <WrapPanel ItemSpacing="8" LineSpacing="8">
+-            <Button Content="Choose Knowledge Database…" Classes="primary" Command="{Binding ChooseKnowledgeImportCommand}" />
+-            <Button Content="Import now" Classes="primary" Command="{Binding ApplyKnowledgeImportCommand}"
+-                    IsVisible="{Binding HasKnowledgeImportPreview}" />
+-            <Button Content="Cancel import" Classes="secondary" Command="{Binding CancelKnowledgeImportCommand}"
+-                    IsVisible="{Binding HasKnowledgeImportPreview}" />
+-          </WrapPanel>
+-
+-          <Button Content="Export complete Knowledge Database…" Classes="secondary"
+-                  HorizontalAlignment="Left" Command="{Binding ExportKnowledgeCommand}" />
+-        </StackPanel>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+-            <StackPanel Spacing="3">
+-              <TextBlock Text="TRANSCRIPTION SERVICE" Classes="eyebrow" />
+-              <TextBlock Text="{Binding TranscriptionStatusText}" FontSize="17" FontWeight="SemiBold" />
+-              <TextBlock Text="{Binding TranscriptionDetailText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-            </StackPanel>
+-            <Border Grid.Column="1" Background="{Binding TranscriptionStateBrush}" CornerRadius="999" Padding="13,7" VerticalAlignment="Top">
+-              <TextBlock Text="{Binding TranscriptionStateLabel}" Foreground="#101318" FontWeight="Bold" FontSize="10" />
+-            </Border>
+-          </Grid>
+-          <TextBlock Grid.Row="1" Text="Whisper, VAD, diarization, remembered voices and batch jobs continue in the server even when every client is closed."
+-                     Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-          <WrapPanel Grid.Row="2" ItemSpacing="8" LineSpacing="8">
+-            <Button Content="Install recommended transcription setup" Classes="primary" Command="{Binding InstallTranscriptionCommand}"
+-                    IsVisible="{Binding ShowAutomaticTranscriptionSetup}" />
+-            <Button Content="Cancel setup" Classes="secondary" Command="{Binding CancelTranscriptionCommand}"
+-                    IsVisible="{Binding IsTranscriptionBusy}" />
+-            <TextBlock Text="No setup action is needed." Classes="muted" FontSize="11" VerticalAlignment="Center"
+-                       IsVisible="{Binding IsTranscriptionReady}" />
+-            <TextBlock Text="{Binding TranscriptionPlatformGuidance}" Classes="muted" FontSize="11"
+-                       MaxWidth="540" TextWrapping="Wrap" IsVisible="{Binding !IsAutomaticTranscriptionSetupSupported}" />
+-          </WrapPanel>
+-        </Grid>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+-          <StackPanel Spacing="3">
+-            <TextBlock Text="SERVER SETTINGS" Classes="eyebrow" />
+-            <TextBlock Text="Identity and network access" FontSize="17" FontWeight="SemiBold" />
+-          </StackPanel>
+-          <Grid Grid.Row="1" ColumnDefinitions="170,*" ColumnSpacing="12">
+-            <TextBlock Text="Server name" VerticalAlignment="Center" />
+-            <TextBox Grid.Column="1" Text="{Binding ServerDisplayName, Mode=TwoWay}" />
+-          </Grid>
+-          <Grid Grid.Row="2" ColumnDefinitions="170,*,20,*" ColumnSpacing="12">
+-            <TextBlock Text="Network ports" VerticalAlignment="Center" />
+-            <TextBox Grid.Column="1" Text="{Binding HttpPortText, Mode=TwoWay}" PlaceholderText="HTTP" />
+-            <TextBlock Grid.Column="2" Text="/" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" />
+-            <TextBox Grid.Column="3" Text="{Binding HttpsPortText, Mode=TwoWay}" PlaceholderText="HTTPS" />
+-          </Grid>
+-          <WrapPanel Grid.Row="3" ItemSpacing="20" LineSpacing="8">
+-            <CheckBox Content="Server enabled" IsChecked="{Binding Enabled, Mode=TwoWay}" />
+-            <CheckBox Content="Secure HTTPS access" IsChecked="{Binding SecureAccessEnabled, Mode=TwoWay}" />
+-          </WrapPanel>
+-          <Grid Grid.Row="4" ColumnDefinitions="170,*" ColumnSpacing="12">
+-            <TextBlock Text="Discovery port" VerticalAlignment="Center" />
+-            <TextBox Grid.Column="1" Text="{Binding LanDiscoveryPortText, Mode=TwoWay}" />
+-          </Grid>
+-        </Grid>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <StackPanel Spacing="14">
+-          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+-            <StackPanel Spacing="3">
+-              <TextBlock Text="REMOTE NATIVE CLIENTS" Classes="eyebrow" />
+-              <TextBlock Text="Pair another Radio Vault computer" FontSize="17" FontWeight="SemiBold" />
+-              <TextBlock Text="Pairing uses the pinned HTTPS certificate and gives that client its own revocable token."
+-                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-            </StackPanel>
+-            <CheckBox Grid.Column="1" Content="Allow remote native clients"
+-                      IsChecked="{Binding LanFederationEnabled, Mode=TwoWay}" VerticalAlignment="Top" />
+-          </Grid>
+-
+-          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="14">
+-            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+-              <StackPanel Spacing="4">
+-                <TextBlock Text="ONE-TIME PAIRING CODE" Classes="eyebrow" />
+-                <TextBlock Text="{Binding PairingCode}" FontSize="32" FontWeight="Bold"
+-                           IsVisible="{Binding HasPairingCode}" />
+-                <TextBlock Text="{Binding PairingExpiryText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-              </StackPanel>
+-              <WrapPanel Grid.Column="1" ItemSpacing="8" LineSpacing="8" VerticalAlignment="Center">
+-                <Button Content="Create pairing code" Classes="primary" Command="{Binding GeneratePairingCodeCommand}" />
+-                <Button Content="Cancel code" Classes="secondary" Command="{Binding CancelPairingCommand}" />
+-              </WrapPanel>
+-            </Grid>
+-          </Border>
+-
+-          <TextBlock Text="Trusted clients" FontWeight="SemiBold" />
+-          <ListBox ItemsSource="{Binding PairedClients}" SelectedItem="{Binding SelectedPairedClient, Mode=TwoWay}"
+-                   MaxHeight="180" Background="Transparent" BorderThickness="0" IsVisible="{Binding HasPairedClients}">
+-            <ListBox.ItemTemplate>
+-              <DataTemplate>
+-                <Border Background="#151A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,6">
+-                  <StackPanel Spacing="3">
+-                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+-                    <TextBlock Text="{Binding DetailText}" Classes="muted" FontSize="10" />
+-                  </StackPanel>
+-                </Border>
+-              </DataTemplate>
+-            </ListBox.ItemTemplate>
+-          </ListBox>
+-          <TextBlock Text="No native clients are currently paired." Classes="muted" IsVisible="{Binding !HasPairedClients}" />
+-          <WrapPanel ItemSpacing="8" LineSpacing="8">
+-            <Button Content="Revoke selected client" Classes="secondary" Command="{Binding RevokeClientCommand}" />
+-            <Button Content="Revoke every client" Classes="secondary" Command="{Binding RevokeAllClientsCommand}" />
+-          </WrapPanel>
+-        </StackPanel>
+-      </Border>
+-
+-      <Border Classes="card">
+-        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+-          <StackPanel Spacing="3">
+-            <TextBlock Text="AUTHORITATIVE STORAGE" Classes="eyebrow" />
+-            <TextBlock Text="RadioVault Server owns this database" FontSize="17" FontWeight="SemiBold" />
+-          </StackPanel>
+-          <TextBox Grid.Row="1" Text="{Binding DatabasePath}" IsReadOnly="True" />
+-          <Button Grid.Row="2" Content="Open data folder" Classes="secondary" Command="{Binding OpenDataFolderCommand}"
+-                  HorizontalAlignment="Left" />
+-        </Grid>
+-      </Border>
+-
+-      <Border Background="#161A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="14">
+-        <TextBlock Text="The server keeps running when this settings window is closed. Every paired native client can be revoked independently without changing the Radio Vault Web private link."
+-                   Classes="muted" FontSize="11" TextWrapping="Wrap" />
+-      </Border>
+-
+-      <Button Content="Save server settings" Classes="primary" Command="{Binding SaveCommand}"
+-              HorizontalAlignment="Right" MinWidth="190" />
+-    </StackPanel>
+-  </ScrollViewer>
++      </Grid>
++    </Border>
++
++    <TabControl Grid.Row="1" TabStripPlacement="Left" SelectedIndex="0">
++      <TabItem Header="Dashboard"><views:ServerDashboardView /></TabItem>
++      <TabItem Header="Library"><views:ServerLibraryView /></TabItem>
++      <TabItem Header="Archive Reconciliation"><views:ServerReconciliationView /></TabItem>
++      <TabItem Header="Automation"><views:ServerAutomationView /></TabItem>
++      <TabItem Header="Knowledge"><views:ServerKnowledgeView /></TabItem>
++      <TabItem Header="Transcription"><views:ServerTranscriptionView /></TabItem>
++      <TabItem Header="Access"><views:ServerAccessView /></TabItem>
++      <TabItem Header="Recovery"><views:ServerRecoveryView /></TabItem>
++    </TabControl>
++  </Grid>
+ </Window>
+diff --git a/TheRadioVault.Server/Views/ServerTranscriptionView.axaml b/TheRadioVault.Server/Views/ServerTranscriptionView.axaml
+new file mode 100644
+index 0000000000000000000000000000000000000000..394183d95b36f63c20c67a7aeb6fa7254db1e8c4
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerTranscriptionView.axaml
+@@ -0,0 +1,39 @@
++<UserControl xmlns="https://github.com/avaloniaui"
++             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
++             x:Class="TheRadioVault.Server.Views.ServerTranscriptionView">
++  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
++    <StackPanel Margin="26" Spacing="16">
++      <StackPanel Spacing="4">
++        <TextBlock Text="TRANSCRIPTION" Classes="eyebrow" />
++        <TextBlock Text="Turn recordings into searchable text" FontSize="28" FontWeight="Bold" />
++        <TextBlock Text="Manage the server-owned Whisper, voice activity and speaker recognition services." Classes="muted" FontSize="12" />
++      </StackPanel>
++      <Border Classes="card">
++        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
++          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
++            <StackPanel Spacing="3">
++              <TextBlock Text="TRANSCRIPTION SERVICE" Classes="eyebrow" />
++              <TextBlock Text="{Binding TranscriptionStatusText}" FontSize="19" FontWeight="SemiBold" />
++              <TextBlock Text="{Binding TranscriptionDetailText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
++            </StackPanel>
++            <Border Grid.Column="1" Background="{Binding TranscriptionStateBrush}" CornerRadius="999" Padding="13,7" VerticalAlignment="Top">
++              <TextBlock Text="{Binding TranscriptionStateLabel}" Foreground="#101318" FontWeight="Bold" FontSize="10" />
++            </Border>
++          </Grid>
++          <TextBlock Grid.Row="1" Text="Whisper, VAD, diarization, remembered voices and batch jobs continue in the server even when every client is closed."
++                     Classes="muted" FontSize="11" TextWrapping="Wrap" />
++          <WrapPanel Grid.Row="2" ItemSpacing="8" LineSpacing="8">
++            <Button Content="Install recommended transcription setup" Classes="primary" Command="{Binding InstallTranscriptionCommand}"
++                    IsVisible="{Binding ShowAutomaticTranscriptionSetup}" />
++            <Button Content="Cancel setup" Classes="secondary" Command="{Binding CancelTranscriptionCommand}"
++                    IsVisible="{Binding IsTranscriptionBusy}" />
++            <TextBlock Text="No setup action is needed." Classes="muted" FontSize="11" VerticalAlignment="Center"
++                       IsVisible="{Binding IsTranscriptionReady}" />
++            <TextBlock Text="{Binding TranscriptionPlatformGuidance}" Classes="muted" FontSize="11" MaxWidth="540"
++                       TextWrapping="Wrap" IsVisible="{Binding !IsAutomaticTranscriptionSetupSupported}" />
++          </WrapPanel>
++        </Grid>
++      </Border>
++    </StackPanel>
++  </ScrollViewer>
++</UserControl>
+diff --git a/TheRadioVault.Server/Views/ServerTranscriptionView.axaml.cs b/TheRadioVault.Server/Views/ServerTranscriptionView.axaml.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..628faccdae71f83badc267605ac8381cbe0da527
+--- /dev/null
++++ b/TheRadioVault.Server/Views/ServerTranscriptionView.axaml.cs
+@@ -0,0 +1,8 @@
++using Avalonia.Controls;
++
++namespace TheRadioVault.Server.Views;
++
++public partial class ServerTranscriptionView : UserControl
++{
++    public ServerTranscriptionView() => InitializeComponent();
++}
+diff --git a/TheRadioVault.Services/Models/ArchiveReconciliationModels.cs b/TheRadioVault.Services/Models/ArchiveReconciliationModels.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..b5420282402dc9509eb1c8f8bdd9177a9615bdb4
+--- /dev/null
++++ b/TheRadioVault.Services/Models/ArchiveReconciliationModels.cs
+@@ -0,0 +1,37 @@
++namespace TheRadioVault.Services.Models;
++
++/// <summary>
++/// Server-facing status for the non-destructive archive reconciliation index.
++/// This deliberately hides the legacy Library Truth implementation from UI code.
++/// </summary>
++public sealed record ArchiveReconciliationSnapshot(
++    bool HasCompletedAnalysis,
++    long AnalysisId,
++    string AnalysisState,
++    DateTimeOffset? CompletedAt,
++    int PhysicalFiles,
++    int CurrentBroadcasts,
++    int CanonicalBroadcasts,
++    int UnchangedFiles,
++    int ProposedFileChanges,
++    int RecoveredDates,
++    int UnknownDates,
++    int NeedsReview,
++    int DuplicateGroups,
++    int MultipartBroadcasts,
++    int ReadyBroadcasts,
++    int ReviewRecommendedBroadcasts,
++    int BlockedBroadcasts,
++    int PartialOrDamagedRecordings,
++    int IdentityConflicts,
++    string Message)
++{
++    public static ArchiveReconciliationSnapshot NotAnalysed { get; } = new(
++        false, 0, "Not analysed", null,
++        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
++        0, 0, 0, 0, 0,
++        "Run archive reconciliation to build a non-destructive view of every physical recording.");
++
++    public int AttentionTotal => ReviewRecommendedBroadcasts + BlockedBroadcasts;
++    public string CompletedDisplay => CompletedAt?.ToLocalTime().ToString("g") ?? "Never";
++}
+diff --git a/TheRadioVault.Services/Models/CanonicalLibraryModels.cs b/TheRadioVault.Services/Models/CanonicalLibraryModels.cs
+index 03763c26600194f8ca7a96106badf0f87595bd51..7d6f2c45ecd1a2f88f40a283a07897bb8c7c2f04 100644
+--- a/TheRadioVault.Services/Models/CanonicalLibraryModels.cs
++++ b/TheRadioVault.Services/Models/CanonicalLibraryModels.cs
+@@ -168,10 +168,14 @@ public sealed record CanonicalLibraryAuditSnapshot(
+     int CloudOnlyPhysicalFiles,
+     int LegacyFallbackBroadcasts,
+     int InvalidPreferredRecordingBroadcasts,
++    int DuplicatePlayableIdentityGroups,
++    int DuplicateCanonicalAliases,
+     DateTimeOffset GeneratedAt)
+ {
+     public bool IsClean =>
+         InvalidPreferredRecordingBroadcasts == 0 &&
++        DuplicatePlayableIdentityGroups == 0 &&
++        DuplicateCanonicalAliases == 0 &&
+         IncompleteRecordings == 0 &&
+         ReviewRequiredCoverageRows == 0;
+ }
+diff --git a/TheRadioVault.Services/Services/ArchiveReconciliationService.cs b/TheRadioVault.Services/Services/ArchiveReconciliationService.cs
+new file mode 100644
+index 0000000000000000000000000000000000000000..2a30c17684a99ff3a7ca0dd19840b20b4457d075
+--- /dev/null
++++ b/TheRadioVault.Services/Services/ArchiveReconciliationService.cs
+@@ -0,0 +1,65 @@
++using TheRadioVault.Data.Database;
++using TheRadioVault.Services.Models;
++
++namespace TheRadioVault.Services.Services;
++
++/// <summary>
++/// Stable server orchestration boundary for archive reconciliation. The existing
++/// parser, evidence and recording-ranking engine remains an internal implementation
++/// detail until it can be replaced incrementally without changing the server UI.
++/// </summary>
++public sealed class ArchiveReconciliationService
++{
++    private readonly LibraryTruthEngine _engine;
++
++    public ArchiveReconciliationService(SqliteDatabase database)
++        => _engine = new LibraryTruthEngine(database ?? throw new ArgumentNullException(nameof(database)));
++
++    public ArchiveReconciliationSnapshot GetSnapshot()
++    {
++        var run = _engine.GetLatestSummary();
++        if (run.RunId == 0 || !string.Equals(run.Status, "completed", StringComparison.OrdinalIgnoreCase))
++            return ArchiveReconciliationSnapshot.NotAnalysed with
++            {
++                AnalysisId = run.RunId,
++                AnalysisState = run.RunId == 0 ? "Not analysed" : run.Status,
++                Message = run.RunId == 0 ? ArchiveReconciliationSnapshot.NotAnalysed.Message : run.Message
++            };
++
++        var adoption = _engine.GetAdoptionSummary();
++        return ToSnapshot(run, adoption);
++    }
++
++    public ArchiveReconciliationSnapshot Reconcile(
++        IProgress<(double Percent, string Message)>? progress = null,
++        CancellationToken cancellationToken = default)
++    {
++        var result = _engine.BuildShadowIndex(progress, cancellationToken);
++        return ToSnapshot(result.Summary, _engine.GetAdoptionSummary());
++    }
++
++    private static ArchiveReconciliationSnapshot ToSnapshot(
++        LibraryTruthRunSummary run,
++        LibraryTruthAdoptionSummary adoption)
++        => new(
++            true,
++            run.RunId,
++            "Complete",
++            run.CompletedAt,
++            run.PhysicalFiles,
++            run.CurrentBroadcasts,
++            run.ProposedBroadcasts,
++            run.UnchangedFiles,
++            run.ChangedFiles,
++            run.RecoveredDates,
++            run.UnknownDates,
++            run.NeedsReview,
++            run.ExactDuplicateGroups + run.StrongDuplicateGroups,
++            run.MultipartBroadcasts,
++            adoption.AdoptionReadyTotal,
++            adoption.ReviewRecommendedBroadcasts,
++            adoption.BlockedBroadcasts,
++            adoption.PartialRecordings + adoption.FragmentRecordings + adoption.TruncatedRecordings,
++            adoption.CrossIdentityConflicts,
++            run.Message);
++}
+diff --git a/TheRadioVault.Services/Services/CanonicalLibraryQueryService.cs b/TheRadioVault.Services/Services/CanonicalLibraryQueryService.cs
+index e7c0b7895d1179d0110210e546d90a19a07bebb8..8bfba2cc103d208198f80988a6fa78ea02a8fa3b 100644
+--- a/TheRadioVault.Services/Services/CanonicalLibraryQueryService.cs
++++ b/TheRadioVault.Services/Services/CanonicalLibraryQueryService.cs
+@@ -724,7 +724,13 @@ public sealed class CanonicalLibraryQueryService
+     {
+         var summary = GetSummary();
+         if (!summary.IsCutoverReady)
+-            return new CanonicalLibraryAuditSnapshot(0,0,0,0,0,0,0,0,0,0,0,0,0,0,DateTimeOffset.UtcNow);
++            return new CanonicalLibraryAuditSnapshot(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,DateTimeOffset.UtcNow);
++
++        var duplicateIdentities = GetBroadcasts()
++            .GroupBy(value => value.RepresentativeEpisodeId)
++            .Where(group => group.Count() > 1)
++            .Select(group => group.Count())
++            .ToArray();
+ 
+         using var connection = _database.OpenConnection();
+         var run = summary.LatestTruthRunId;
+@@ -755,7 +761,8 @@ public sealed class CanonicalLibraryQueryService
+             run, summary.Broadcasts, summary.AdoptedBroadcasts, summary.NeedsAttentionBroadcasts,
+             summary.ReviewRecommendedBroadcasts, summary.BlockedBroadcasts, summary.Recordings,
+             multipart, incomplete, reviewCoverage, missing, cloudOnly, summary.NeedsAttentionBroadcasts,
+-            invalidPreferred, DateTimeOffset.UtcNow);
++            invalidPreferred, duplicateIdentities.Length,
++            duplicateIdentities.Sum(count => count - 1), DateTimeOffset.UtcNow);
+     }
+ 
+     public CanonicalDownloadManifest? GetDownloadManifest(string canonicalKey, string? recordingKey = null)
+diff --git a/TheRadioVault.Services/Services/CanonicalScanPromotionService.cs b/TheRadioVault.Services/Services/CanonicalScanPromotionService.cs
+index bf42212ac6c0847cabfa5f1c17167472a08591ae..f73116b681b76ab864fffbb711dbed6ba4f268b4 100644
+--- a/TheRadioVault.Services/Services/CanonicalScanPromotionService.cs
++++ b/TheRadioVault.Services/Services/CanonicalScanPromotionService.cs
+@@ -29,7 +29,7 @@ public sealed class CanonicalScanPromotionService
+             !TableExists(connection, "episode_canonical_map"))
+             return CanonicalScanPromotionResult.Empty;
+ 
+-        var candidates = ReadUnmappedCandidates(connection);
++        var candidates = ReadUnmappedCandidates(connection, truthRunId);
+         if (candidates.Count == 0) return CanonicalScanPromotionResult.Empty;
+ 
+         var broadcastsAdded = 0;
+@@ -119,7 +119,9 @@ public sealed class CanonicalScanPromotionService
+             needsReview);
+     }
+ 
+-    private static IReadOnlyList<ScannedEpisodeCandidate> ReadUnmappedCandidates(SqliteConnection connection)
++    private static IReadOnlyList<ScannedEpisodeCandidate> ReadUnmappedCandidates(
++        SqliteConnection connection,
++        long truthRunId)
+     {
+         var builders = new Dictionary<long, CandidateBuilder>();
+         using var command = connection.CreateCommand();
+@@ -140,8 +142,15 @@ public sealed class CanonicalScanPromotionService
+                AND NOT EXISTS(
+                    SELECT 1 FROM episode_canonical_map map WHERE map.episode_id=e.id
+                )
++               AND NOT EXISTS(
++                   SELECT 1
++                     FROM library_truth_files truth_file
++                    WHERE truth_file.run_id=$truthRun
++                      AND truth_file.current_episode_id=e.id
++               )
+              ORDER BY e.id,COALESCE(mf.is_preferred,0) DESC,mf.id
+             """;
++        command.Parameters.AddWithValue("$truthRun", truthRunId);
+         using var reader = command.ExecuteReader();
+         while (reader.Read())
+         {
+diff --git a/TheRadioVault.Services/Services/LibraryBrowseService.cs b/TheRadioVault.Services/Services/LibraryBrowseService.cs
+index 1b183fc130625ecaac13feec00ef04a3b8f805a0..0646eb8c442c3d17e0b941ee87ec4b62e8a0c5ae 100644
+--- a/TheRadioVault.Services/Services/LibraryBrowseService.cs
++++ b/TheRadioVault.Services/Services/LibraryBrowseService.cs
+@@ -383,7 +383,10 @@ public sealed class LibraryBrowseService : ILibraryBrowseService
+         if (canonicalSummary.IsCutoverReady)
+         {
+             var canonical = await Task.Run(_canonical.GetBroadcasts, cancellationToken).ConfigureAwait(false);
+-            return new LibrarySnapshot(canonical.Select(MapCanonical).ToArray(), true);
++            var playable = IndexByRepresentativeEpisodeId(canonical.Select(MapCanonical))
++                .Values
++                .ToArray();
++            return new LibrarySnapshot(playable, true);
+         }
+ 
+         var legacy = new List<LibraryBroadcastSummary>();
+diff --git a/TheRadioVault.Services/Services/LibraryTruthEngine.cs b/TheRadioVault.Services/Services/LibraryTruthEngine.cs
+index 3be1fcac6e79d46efd98f97a2f3eebf01ec136bb..5d453ca2da9f9710ac6f530d2004ed6568bff6b4 100644
+--- a/TheRadioVault.Services/Services/LibraryTruthEngine.cs
++++ b/TheRadioVault.Services/Services/LibraryTruthEngine.cs
+@@ -7,8 +7,9 @@ using TheRadioVault.Services.Models;
+ namespace TheRadioVault.Services.Services;
+ 
+ /// <summary>
+-/// Builds a non-destructive shadow interpretation of the physical archive.
+-/// Alpha7 preserves the confirmed shadow model and adds a disposable transactional adoption rehearsal. Live episodes, playback, research, transcripts and files remain untouched.
++/// Compatibility implementation behind ArchiveReconciliationService. It builds a
++/// non-destructive shadow interpretation of physical files while preserving the
++/// established parser, evidence and guarded-adoption contracts.
+ /// </summary>
+ public sealed class LibraryTruthEngine
+ {
+diff --git a/TheRadioVault.Tests/Program.cs b/TheRadioVault.Tests/Program.cs
+index 1f192d7bed782d88588c9085dd4f52a49d0ab521..07bb9b2640ec0062c48618ad9a3301481a9f1015 100644
+--- a/TheRadioVault.Tests/Program.cs
++++ b/TheRadioVault.Tests/Program.cs
+@@ -84,6 +84,8 @@ var tests = new (string Name, Action Run)[]
+     ("Media consolidation rehearses without moving and commits without deleting", MediaConsolidationIsVerifiedAndNonDestructive),
+     ("Media consolidation blocks changed sources and conflicting destinations", MediaConsolidationBlocksChangedFiles),
+     ("Media consolidation holds alternates whose runtime cannot be ranked", MediaConsolidationHoldsUnknownRuntimeAlternates),
++    ("Media consolidation requires a complete current inventory snapshot", MediaConsolidationRequiresCompleteInventory),
++    ("Archive reconciliation exposes a server-owned read-only facade", ArchiveReconciliationIsServerOwnedAndReadOnly),
+     ("Scanner content identity rejects weak partial-hash collisions", ScannerContentIdentityRejectsWeakCollisions),
+     ("Archive content identity is path and machine independent when verified", ArchiveContentIdentityIsStable),
+     ("Moment deduplication keeps one near-identical save", () =>
+@@ -319,6 +321,7 @@ var tests = new (string Name, Action Run)[]
+     ("Long-form transcription protects continuity and timestamps", LongFormTranscriptionProtectsContinuityAndTimestamps),
+     ("Dedicated server foundation is UI-isolated and revision-safe", DedicatedServerFoundationIsUiIsolatedAndRevisionSafe),
+     ("Dedicated server health polling never blocks the settings UI", DedicatedServerHealthPollingNeverBlocksSettingsUi),
++    ("Dedicated server administration uses focused screens", DedicatedServerAdministrationUsesFocusedScreens),
+     ("Dedicated server owns transcription workers and batch controls", DedicatedServerOwnsTranscriptionWorkers),
+     ("Loopback native handoff maps server ownership", LoopbackNativeHandoffMapsServerOwnership),
+     ("Transcription jobs preserve worker options", TranscriptionJobsPreserveWorkerOptions),
+@@ -620,6 +623,11 @@ static void MediaConsolidationIsVerifiedAndNonDestructive()
+         var service = new MediaConsolidationService(fixture.Database);
+         var plan = service.CreatePlan(managed, quarantine);
+ 
++        Equal(4, plan.InventoryMediaRecords);
++        Equal(4, plan.InventoryAvailableFiles);
++        Equal(0, plan.InventoryMissingFiles);
++        Equal(0, plan.HeldSourceFiles);
++        Equal(plan.InventoryAvailableFiles, plan.AccountedAvailableFiles);
+         Equal(1, plan.ManagedFiles);
+         Equal(3, plan.RejectedFiles);
+         Equal(1, plan.Items.Count(item => item.Disposition == MediaConsolidationDisposition.RejectedDuplicate));
+@@ -631,6 +639,7 @@ static void MediaConsolidationIsVerifiedAndNonDestructive()
+ 
+         var rehearsal = service.Rehearse(plan);
+         True(rehearsal.CanCommit, string.Join(Environment.NewLine, rehearsal.Problems));
++        Throws<InvalidDataException>(() => service.Rehearse(plan with { InventoryAvailableFiles = 3 }));
+         True(fixture.Sources.All(File.Exists), "Rehearsal must not move a source file.");
+         True(plan.Items.Where(item => item.IsManagedCopy).All(item => !File.Exists(item.ManagedPath)),
+             "Rehearsal must not create managed media.");
+@@ -774,6 +783,114 @@ static void MediaConsolidationHoldsUnknownRuntimeAlternates()
+     }
+ }
+ 
++static void MediaConsolidationRequiresCompleteInventory()
++{
++    var root = Path.Combine(ConsolidationTestTempRoot(), "RadioVaultConsolidationInventoryTests", Guid.NewGuid().ToString("N"));
++    Directory.CreateDirectory(root);
++    try
++    {
++        var fixture = CreateMediaConsolidationFixture(root);
++        var service = new MediaConsolidationService(fixture.Database);
++        var originalPlan = service.CreatePlan(Path.Combine(root, "managed"), Path.Combine(root, "quarantine"));
++        Equal(4, originalPlan.AccountedAvailableFiles);
++
++        var latePath = Path.Combine(root, "source", "arrived-after-library-truth.mp3");
++        File.WriteAllBytes(latePath, Enumerable.Repeat((byte)0xA5, 128).ToArray());
++        using (var connection = fixture.Database.OpenConnection())
++        using (var command = connection.CreateCommand())
++        {
++            command.CommandText = """
++                INSERT INTO episodes(
++                    id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,part_number)
++                VALUES(9401,(SELECT id FROM collections WHERE name='Bennington'),'2026-08-15','High',
++                       'Late inventory','Unplayed',$now,$now,'CONSOLIDATION-LATE',1);
++                INSERT INTO media_files(
++                    id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,
++                    duration_ms,partial_hash,full_hash,storage_state,is_preferred)
++                VALUES(9402,9401,$path,$filename,$bytes,$now,0,$now,3000,'late-partial',$full,'AvailableOffline',1);
++                """;
++            command.Parameters.AddWithValue("$path", latePath);
++            command.Parameters.AddWithValue("$filename", Path.GetFileName(latePath));
++            command.Parameters.AddWithValue("$bytes", new FileInfo(latePath).Length);
++            command.Parameters.AddWithValue("$full", TestSha256(latePath));
++            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
++            command.ExecuteNonQuery();
++        }
++
++        try
++        {
++            service.CreatePlan(Path.Combine(root, "managed-new"), Path.Combine(root, "quarantine-new"));
++        }
++        catch (InvalidOperationException exception) when (exception.Message.Contains(
++                   "safely consolidatable", StringComparison.OrdinalIgnoreCase))
++        {
++            // The deliberately artificial filenames in this duplicate-ranking
++            // fixture may be held by the real parser. The refresh itself is the
++            // contract under test here; production files remain safely held.
++        }
++        using (var connection = fixture.Database.OpenConnection())
++        using (var refreshed = connection.CreateCommand())
++        {
++            refreshed.CommandText = "SELECT id,source_file_count FROM library_truth_runs WHERE status='completed' ORDER BY id DESC LIMIT 1";
++            using var reader = refreshed.ExecuteReader();
++            True(reader.Read());
++            True(reader.GetInt64(0) > 9200,
++                "Planning must automatically build a fresh non-destructive reconciliation when the inventory grew.");
++            Equal(5L, reader.GetInt64(1));
++        }
++
++        var staleRehearsal = service.Rehearse(originalPlan);
++        True(!staleRehearsal.CanCommit);
++        True(staleRehearsal.Problems.Any(problem =>
++            problem.Contains("inventory changed", StringComparison.OrdinalIgnoreCase)));
++        True(File.Exists(latePath), "Inventory reconciliation must never move or delete a newly discovered file.");
++        True(fixture.Sources.All(File.Exists));
++
++        var hiddenPath = Path.Combine(root, "source", "hidden-unreconciled.mp3");
++        File.WriteAllBytes(hiddenPath, Enumerable.Repeat((byte)0x5A, 96).ToArray());
++        using (var connection = fixture.Database.OpenConnection())
++        using (var command = connection.CreateCommand())
++        {
++            command.CommandText = """
++                INSERT INTO episodes(
++                    id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,part_number,hidden)
++                VALUES(9403,(SELECT id FROM collections WHERE name='Bennington'),'2026-08-16','High',
++                       'Hidden inventory','Unplayed',$now,$now,'CONSOLIDATION-HIDDEN',1,1);
++                INSERT INTO media_files(
++                    id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,
++                    duration_ms,partial_hash,full_hash,storage_state,is_preferred)
++                VALUES(9404,9403,$path,$filename,$bytes,$now,0,$now,3000,'hidden-partial',$full,'AvailableOffline',1);
++                """;
++            command.Parameters.AddWithValue("$path", hiddenPath);
++            command.Parameters.AddWithValue("$filename", Path.GetFileName(hiddenPath));
++            command.Parameters.AddWithValue("$bytes", new FileInfo(hiddenPath).Length);
++            command.Parameters.AddWithValue("$full", TestSha256(hiddenPath));
++            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
++            command.ExecuteNonQuery();
++        }
++
++        string stoppedMessage;
++        try
++        {
++            service.CreatePlan(Path.Combine(root, "managed-hidden"), Path.Combine(root, "quarantine-hidden"));
++            throw new InvalidOperationException("Expected hidden physical media outside Library Truth to stop plan creation.");
++        }
++        catch (InvalidOperationException exception)
++        {
++            stoppedMessage = exception.Message;
++        }
++        True(stoppedMessage.Contains("1 hidden", StringComparison.OrdinalIgnoreCase), stoppedMessage);
++        True(stoppedMessage.Contains("No plan was created", StringComparison.OrdinalIgnoreCase) ||
++             stoppedMessage.Contains("Run a fresh archive reconciliation", StringComparison.OrdinalIgnoreCase), stoppedMessage);
++        True(File.Exists(hiddenPath));
++    }
++    finally
++    {
++        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
++        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
++    }
++}
++
+ static void ScannerContentIdentityRejectsWeakCollisions()
+ {
+     var root = Path.Combine(Path.GetTempPath(), "RadioVaultIdentityTests", Guid.NewGuid().ToString("N"));
+@@ -850,6 +967,43 @@ static void ScannerContentIdentityRejectsWeakCollisions()
+     }
+ }
+ 
++static void ArchiveReconciliationIsServerOwnedAndReadOnly()
++{
++    var root = Path.Combine(Path.GetTempPath(), "RadioVaultReconciliationTests", Guid.NewGuid().ToString("N"));
++    Directory.CreateDirectory(root);
++    try
++    {
++        var database = new SqliteDatabase(Path.Combine(root, "reconciliation.sqlite"));
++        database.Initialize();
++        var service = new ArchiveReconciliationService(database);
++        var initial = service.GetSnapshot();
++        True(!initial.HasCompletedAnalysis);
++        Equal("Not analysed", initial.AnalysisState);
++
++        var progressWasReported = false;
++        var reconciled = service.Reconcile(new InlineProgress<(double Percent, string Message)>(_ => progressWasReported = true));
++        True(reconciled.HasCompletedAnalysis);
++        True(reconciled.AnalysisId > 0);
++        Equal(0, reconciled.PhysicalFiles);
++        Equal(reconciled.AnalysisId, service.GetSnapshot().AnalysisId);
++        True(progressWasReported);
++
++        var serverRuntime = File.ReadAllText(Path.Combine(
++            SourceRoot(), "TheRadioVault.Infrastructure", "Services", "RadioVaultServerRuntime.cs"));
++        True(serverRuntime.Contains("GetArchiveReconciliationSnapshot", StringComparison.Ordinal));
++        True(serverRuntime.Contains("ReconcileArchive", StringComparison.Ordinal));
++        var desktopViews = Directory.GetFiles(
++                Path.Combine(SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views"), "*.axaml")
++            .Select(File.ReadAllText);
++        True(desktopViews.All(source => !source.Contains("RunArchiveReconciliationCommand", StringComparison.Ordinal)));
++    }
++    finally
++    {
++        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
++        try { Directory.Delete(root, recursive: true); } catch { }
++    }
++}
++
+ static void ArchiveContentIdentityIsStable()
+ {
+     var exactA = ArchiveContentIdentity.Create("AABBCC", "partial-one", 100, 1_000, "machine-a:1");
+@@ -1547,8 +1701,7 @@ static void Alpha12CompletesServerOwnershipAndStatusUx()
+     True(transcriptionServices.Contains("ServerOwnedTranscriptionEngine", StringComparison.Ordinal));
+     True(transcriptionServices.Contains("install-recommended", StringComparison.Ordinal));
+ 
+-    var serverView = File.ReadAllText(Path.Combine(
+-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
++    var serverView = ReadServerAdministrationViews();
+     True(serverView.Contains("IsVisible=\"{Binding IsServerStopped}\"", StringComparison.Ordinal));
+     True(serverView.Contains("IsVisible=\"{Binding IsServerRunning}\"", StringComparison.Ordinal));
+     True(serverView.Contains("TranscriptionStateBrush", StringComparison.Ordinal));
+@@ -1598,8 +1751,7 @@ static void Alpha13Buildfix1RestoresFoldersListeningActionsAndDualInstallers()
+     True(serverRuntime.Contains("RemoveLibraryFolderAsync", StringComparison.Ordinal));
+     True(serverRuntime.Contains("ScanLibraryAsync", StringComparison.Ordinal));
+ 
+-    var serverView = File.ReadAllText(Path.Combine(
+-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
++    var serverView = ReadServerAdministrationViews();
+     True(serverView.Contains("LIBRARY FOLDERS", StringComparison.Ordinal));
+     True(serverView.Contains("AddLibraryFolderCommand", StringComparison.Ordinal));
+     True(serverView.Contains("RemoveLibraryFolderCommand", StringComparison.Ordinal));
+@@ -1652,8 +1804,7 @@ static void Alpha14RenamesWebAndRestoresPhoneConnectionControls()
+     True(clientSettings.Contains("AnywhereQrCode.Rows", StringComparison.Ordinal));
+     True(clientSettings.Contains("AnywhereSetupQrCode.Rows", StringComparison.Ordinal));
+ 
+-    var serverSettings = File.ReadAllText(Path.Combine(
+-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
++    var serverSettings = ReadServerAdministrationViews();
+     True(serverSettings.Contains("RADIO VAULT WEB", StringComparison.Ordinal));
+     True(serverSettings.Contains("CopyWebLinkCommand", StringComparison.Ordinal));
+     True(serverSettings.Contains("RegenerateWebLinkCommand", StringComparison.Ordinal));
+@@ -1671,8 +1822,7 @@ static void Alpha15RestoresServerFolderAssignmentAndNativeAudioQuality()
+     True(serverViewModel.Contains("SetLibraryFolderCollectionAsync", StringComparison.Ordinal));
+     True(serverViewModel.Contains("ScanLibraryAsync", StringComparison.Ordinal));
+ 
+-    var serverView = File.ReadAllText(Path.Combine(
+-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
++    var serverView = ReadServerAdministrationViews();
+     True(serverView.Contains("Change selected show", StringComparison.Ordinal));
+     True(serverView.Contains("AssignLibraryFolderCommand", StringComparison.Ordinal));
+ 
+@@ -3894,7 +4044,7 @@ static void KnowledgeImportProgressBarsAreDeterminate()
+     True(research.Contains("Value=\"{Binding ImportProgressPercent}\"", StringComparison.Ordinal));
+     True(!research.Contains("IsIndeterminate=\"True\"", StringComparison.Ordinal));
+ 
+-    var server = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
++    var server = ReadServerAdministrationViews();
+     True(server.Contains("Value=\"{Binding KnowledgeProgressPercent}\"", StringComparison.Ordinal));
+     True(server.Contains("KnowledgeProgressCountText", StringComparison.Ordinal));
+ 
+@@ -4462,6 +4612,44 @@ static void CanonicalLibraryCutoverProjectsBroadcasts()
+         Equal(1, audit.HeldBroadcasts);
+         Equal(0, audit.InvalidPreferredRecordingBroadcasts);
+ 
++        var guardedPromotion = new CanonicalScanPromotionService(database).PromoteUnmappedEpisodes();
++        Equal(0, guardedPromotion.BroadcastsAdded);
++        Equal(0, guardedPromotion.EpisodesMapped);
++
++        // Older servers could append a second canonical key for an episode that
++        // was already represented by the sealed, held Library Truth baseline.
++        // Preserve that historical anomaly in this fixture to prove the public
++        // Library still projects one playable broadcast identity.
++        using (var connection = database.OpenConnection())
++        using (var command = connection.CreateCommand())
++        {
++            command.CommandText = """
++                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
++                VALUES(2005,1001,'/archive/a-alias.mp3','a-alias.mp3',100,$now,0,$now,2200,'AvailableOffline',0);
++                INSERT INTO library_truth_broadcasts(run_id,canonical_key,collection_name,air_date,broadcast_slot,file_count,segment_count,recording_count,current_episode_count,status,confidence_score,adoption_state,adoption_reason,preferred_recording_key)
++                VALUES(3001,'CANONICAL-ALIAS','Canonical Test','2001-01-01','PM',1,1,1,1,'Needs attention',60,'Review recommended','Duplicate playable identity','REC-ALIAS');
++                INSERT INTO library_truth_files(run_id,media_file_id,current_episode_id,path,original_filename,canonical_broadcast_key,recording_key,proposed_part)
++                VALUES(3001,2005,1001,'/archive/a-alias.mp3','a-alias.mp3','CANONICAL-ALIAS','REC-ALIAS',1);
++                INSERT INTO library_truth_recordings(run_id,canonical_broadcast_key,recording_key,label,file_count,segment_count,duration_ms,role,is_preferred_candidate)
++                VALUES(3001,'CANONICAL-ALIAS','REC-ALIAS','Alias',1,1,2200,'Full capture',1);
++                """;
++            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
++            command.ExecuteNonQuery();
++        }
++
++        Equal(3, service.GetBroadcasts().Count);
++        var conflictedAudit = service.GetAuditSnapshot();
++        Equal(1, conflictedAudit.DuplicatePlayableIdentityGroups);
++        Equal(1, conflictedAudit.DuplicateCanonicalAliases);
++        True(!conflictedAudit.IsClean);
++
++        var browse = new LibraryBrowseService(database);
++        var overview = browse.GetOverviewAsync().GetAwaiter().GetResult();
++        Equal(2, overview.TotalBroadcasts);
++        var browseResult = browse.BrowseAsync(new LibraryBrowseRequest(Limit: 100)).GetAwaiter().GetResult();
++        Equal(2, browseResult.TotalMatching);
++        Equal(2, browseResult.Broadcasts.Select(value => value.RepresentativeEpisodeId).Distinct().Count());
++
+     }
+     finally
+     {
+@@ -4978,10 +5166,10 @@ static void DedicatedServerFoundationIsUiIsolatedAndRevisionSafe()
+     True(serverProject.Contains("RadioVault.Server", StringComparison.Ordinal));
+     True(serverProject.Contains("TheRadioVault.Infrastructure", StringComparison.Ordinal));
+     True(!serverProject.Contains("TheRadioVault.Presentation", StringComparison.Ordinal));
+-    var serverView = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+-    True(serverView.Contains("Background archive service", StringComparison.Ordinal));
+-    True(serverView.Contains("It contains settings only", StringComparison.Ordinal));
+-    True(!serverView.Contains("Dashboard", StringComparison.Ordinal));
++    var serverView = ReadServerAdministrationViews();
++    True(serverView.Contains("Archive administration", StringComparison.Ordinal));
++    True(serverView.Contains("ServerDashboardView", StringComparison.Ordinal));
++    True(serverView.Contains("Your archive at a glance", StringComparison.Ordinal));
+     True(!serverView.Contains("Now Playing", StringComparison.Ordinal));
+     var webServer = ReadWebServerSourceBundle();
+     True(webServer.Contains("Re-resolve once before returning a 404", StringComparison.Ordinal));
+@@ -5029,6 +5217,30 @@ static void DedicatedServerHealthPollingNeverBlocksSettingsUi()
+     True(!viewModel.Contains("if (DateTimeOffset.UtcNow - _lastHealthRefresh >= TimeSpan.FromSeconds(5)) RefreshHealth();", StringComparison.Ordinal));
+ }
+ 
++static void DedicatedServerAdministrationUsesFocusedScreens()
++{
++    var root = SourceRoot();
++    var shell = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
++    True(shell.Contains("TabStripPlacement=\"Left\"", StringComparison.Ordinal));
++    True(shell.Contains("SelectedIndex=\"0\"", StringComparison.Ordinal));
++    foreach (var section in new[]
++             {
++                 "ServerDashboardView", "ServerLibraryView", "ServerReconciliationView", "ServerAutomationView",
++                 "ServerKnowledgeView", "ServerTranscriptionView", "ServerAccessView", "ServerRecoveryView"
++             })
++        True(shell.Contains(section, StringComparison.Ordinal));
++
++    var dashboard = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerDashboardView.axaml"));
++    True(dashboard.Contains("Your archive at a glance", StringComparison.Ordinal));
++    True(dashboard.Contains("ArchiveReconciliationDashboardText", StringComparison.Ordinal));
++    True(dashboard.Contains("DatabaseHealthText", StringComparison.Ordinal));
++
++    var reconciliation = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerReconciliationView.axaml"));
++    True(reconciliation.Contains("RunArchiveReconciliationCommand", StringComparison.Ordinal));
++    True(reconciliation.Contains("PrepareMediaConsolidationCommand", StringComparison.Ordinal));
++    True(reconciliation.Contains("does not rename, move, merge or delete media", StringComparison.Ordinal));
++}
++
+ static void LoopbackNativeHandoffMapsServerOwnership()
+ {
+     var now = new DateTimeOffset(2026, 8, 1, 20, 45, 0, TimeSpan.Zero);
+@@ -5096,7 +5308,7 @@ static void DedicatedServerOwnsTranscriptionWorkers()
+     True(host.Contains("LoopbackVoiceLearningCoordinator", StringComparison.Ordinal));
+     True(!host.Contains("RegisterSingleton<TranscriptionCoordinator>", StringComparison.Ordinal));
+ 
+-    var serverView = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
++    var serverView = ReadServerAdministrationViews();
+     True(serverView.Contains("TRANSCRIPTION SERVICE", StringComparison.Ordinal));
+     True(serverView.Contains("Install recommended transcription setup", StringComparison.Ordinal));
+ }
+@@ -5971,6 +6183,16 @@ static string ReadWebServerSourceBundle()
+     return string.Join(Environment.NewLine, sources.Select(File.ReadAllText));
+ }
+ 
++static string ReadServerAdministrationViews()
++{
++    var views = Path.Combine(SourceRoot(), "TheRadioVault.Server", "Views");
++    return string.Join(
++        Environment.NewLine,
++        Directory.GetFiles(views, "Server*.axaml")
++            .OrderBy(path => path, StringComparer.Ordinal)
++            .Select(File.ReadAllText));
++}
++
+ static void Equal<T>(T expected, T actual)
+ {
+     if (!EqualityComparer<T>.Default.Equals(expected, actual))
+@@ -6492,6 +6714,11 @@ sealed class CompositionCycleA
+     public CompositionCycleB Dependency { get; }
+ }
+ 
++sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
++{
++    public void Report(T value) => report(value);
++}
++
+ sealed class CompositionCycleB
+ {
+     public CompositionCycleB(CompositionCycleA dependency) => Dependency = dependency;
+diff --git a/docs/architecture/ARCHIVE_RECONCILIATION.md b/docs/architecture/ARCHIVE_RECONCILIATION.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..35ad5ab0a3ddbb095e8ea420e1f7294cf0ef5d11
+--- /dev/null
++++ b/docs/architecture/ARCHIVE_RECONCILIATION.md
+@@ -0,0 +1,42 @@
++# Archive reconciliation
++
++Archive Reconciliation is the Radio Vault Server's read-only understanding of the physical archive. It replaces “Library Truth” as the product and UI boundary without discarding the mature parsing, evidence and recording-ranking rules that already have extensive regression coverage.
++
++## Ownership and visibility
++
++- The feature is owned by Radio Vault Server.
++- It is not exposed in the desktop, iPhone or Web clients.
++- The Server dashboard shows only the latest status and actionable counts.
++- Detailed evidence, a fresh-analysis command and media consolidation live on the dedicated **Archive Reconciliation** screen.
++
++## Service boundary
++
++`ArchiveReconciliationService` is the stable orchestration boundary. It returns an `ArchiveReconciliationSnapshot` containing physical-file coverage, canonical broadcast counts, proposed corrections, duplicate evidence and readiness totals.
++
++The existing `LibraryTruthEngine` is currently an implementation detail behind that service. This allows the older monolithic engine to be split incrementally into inventory reading, interpretation, recording analysis and shadow-index persistence without forcing another Server UI rewrite or exposing legacy terminology to new code.
++
++## Safety model
++
++A normal reconciliation:
++
++1. reads the authoritative `media_files` inventory;
++2. interprets filenames and folder context;
++3. constructs canonical broadcast and recording evidence;
++4. writes only versioned shadow-index tables;
++5. reports review and blocked work.
++
++It does not rename, move, merge or delete files. It does not alter the live client library or listening state. A cancelled or failed run leaves the last completed snapshot available.
++
++Media consolidation consumes a fresh completed reconciliation but remains a separate, explicitly confirmed workflow with its own rehearsal, signed plan, verified backup, journal and quarantine contract.
++
++## Planned internal decomposition
++
++The compatibility engine should be reduced behind the façade in small tested stages:
++
++- `ArchiveInventoryReader`: authoritative physical file rows and coverage signature;
++- `ArchiveInterpretationService`: parser plus folder-context analysis;
++- `RecordingEvidenceAnalyzer`: multipart, alternate, duplicate and quality ranking;
++- `ReconciliationIndexStore`: transactional shadow-run persistence and queries;
++- `ArchiveReconciliationService`: cancellation, progress and stable server status.
++
++Parser rules and identity/ranking policies must keep their existing behavioural tests during each extraction. No internal refactor may weaken the complete-inventory equation required by consolidation.
+diff --git a/docs/architecture/MEDIA_CONSOLIDATION_SAFETY.md b/docs/architecture/MEDIA_CONSOLIDATION_SAFETY.md
+index 8c8609c35bf2e2f798a5b86779ff1adcfcf24a1b..87fe01851595eef86feb5a4d2275a2355ce0e1ed 100644
+--- a/docs/architecture/MEDIA_CONSOLIDATION_SAFETY.md
++++ b/docs/architecture/MEDIA_CONSOLIDATION_SAFETY.md
+@@ -17,6 +17,11 @@ Radio Vault can build one logically organised managed archive from the physical
+ - Symbolic-link media and symbolic-link destinations are rejected.
+ - Managed and quarantine folders must be separate, non-nested locations outside the existing Library roots.
+ - Held or review-required Library Truth broadcasts are not touched.
++- A plan cannot exist unless every currently available `media_files` row is represented by the exact Library Truth snapshot used for ranking.
++- If no snapshot exists—or scanning added files after the last one—Prepare automatically builds a fresh non-destructive archive reconciliation before fingerprinting.
++- Available media still attached to hidden legacy rows stop planning and require review; they are never silently omitted or moved.
++- The signed plan records the total, available, missing, planned and held physical-file counts plus a complete inventory signature.
++- Any database inventory change after planning invalidates rehearsal and commit. A completed matching journal remains idempotently recoverable.
+ 
+ The only files the implementation may delete are its own incomplete `.partial` copies, manifest temporary files and write-test probes. It never calls a deletion operation for a source, managed recording or quarantine recording.
+ 
+@@ -64,8 +69,8 @@ Quarantine is deliberately outside the indexed Library so rejected files do not
+ 
+ ## Workflow and recovery
+ 
+-1. Complete a fresh Library Truth run and resolve anything that must not be held.
+-2. Choose a new managed folder and a separate quarantine folder in Server settings.
++1. Let Library scanning finish. Prepare automatically refreshes the non-destructive archive reconciliation when the inventory changed; resolve anything it must hold.
++2. Open **Archive Reconciliation** in Radio Vault Server and choose a new managed folder and a separate quarantine folder.
+ 3. Prepare the preview. Review managed, rejected and held counts.
+ 4. Run the no-move rehearsal. It re-hashes sources, checks containment, collisions, write access and free space, and writes the signed manifest.
+ 5. Stop Radio Vault Server.
+@@ -74,6 +79,8 @@ Quarantine is deliberately outside the indexed Library so rejected files do not
+ 
+ The journal is written after every verified phase. If the process or computer stops during commit, select the same quarantine folder after restarting the Server app. It discovers a non-completed journal, reloads the signed plan and requires another full rehearsal and exact confirmation. Existing managed and quarantine files are accepted only when their byte length and complete hash match the plan, making resume idempotent.
+ 
++The preview summary must satisfy `planned source files + held source files = available physical files`. Records already marked missing are reported separately and are not presented as physical files that can be moved. If that equation cannot be proved—or a new scan changes the inventory signature—Radio Vault produces no committable plan.
++
+ ## File and broadcast identity audit
+ 
+ Radio Vault uses different identifiers for different jobs:
