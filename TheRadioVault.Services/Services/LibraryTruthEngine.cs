@@ -1792,7 +1792,15 @@ public sealed class LibraryTruthEngine
             cleanup.Transaction = transaction;
             cleanup.CommandText = """
                 DELETE FROM library_truth_runs
-                 WHERE id NOT IN (SELECT id FROM library_truth_runs ORDER BY id DESC LIMIT 5);
+                 WHERE id NOT IN (SELECT id FROM library_truth_runs ORDER BY id DESC LIMIT 5)
+                   AND id NOT IN (
+                       SELECT truth_run_id
+                         FROM library_truth_adoption_runs)
+                   AND id NOT IN (
+                       SELECT rehearsal.truth_run_id
+                         FROM library_truth_rehearsal_runs rehearsal
+                         JOIN library_truth_adoption_runs adoption
+                           ON adoption.rehearsal_run_id=rehearsal.id);
                 """;
             cleanup.ExecuteNonQuery();
         }

@@ -44,6 +44,7 @@ var tests = new (string Name, Action Run)[]
     ("Library Truth prepares guarded adoption plans without live writes", LibraryTruthPreparesGuardedAdoptionPreview),
     ("Library Truth rehearses adoption on a disposable clone and verifies rollback", LibraryTruthRehearsalRollsBackDisposableClone),
     ("Library Truth guarded adoption commits only the verified plan", LibraryTruthGuardedAdoptionCommitsVerifiedPlan),
+    ("Library Truth retention preserves historically adopted runs", LibraryTruthRetentionPreservesHistoricallyAdoptedRun),
     ("Library Truth classifies metadata conflicts and preserves alternates", LibraryTruthClassifiesMetadataConflicts),
     ("Library Truth refines generated metadata policies", LibraryTruthRefinesGeneratedMetadataPolicies),
 };
@@ -1360,6 +1361,91 @@ static void LibraryTruthGuardedAdoptionCommitsVerifiedPlan()
         liveReader.Close();
 
         True(!adoption.GetAdoptionEligibility().CanAdopt);
+    }
+    finally
+    {
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void LibraryTruthRetentionPreservesHistoricallyAdoptedRun()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var databasePath = Path.Combine(directory, "truth-retention.sqlite");
+    try
+    {
+        var database = new SqliteDatabase(databasePath);
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name) VALUES('Ron & Fez','Ron & Fez');
+                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
+                VALUES('D:\Radio\Retention',(SELECT id FROM collections WHERE name='Ron & Fez'),1,1);
+                INSERT INTO episodes(collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid)
+                VALUES((SELECT id FROM collections WHERE name='Ron & Fez'),'2005-05-12','High','Retention test','Unplayed',$now,$now,'RETENTION-A');
+                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
+                VALUES((SELECT id FROM episodes WHERE broadcast_uid='RETENTION-A'),'D:\Radio\Retention\a.mp3','R&F 05-12-2005.mp3',1000,$now,0,$now,10800000,'RETENTION-ONE','AvailableOffline',1);
+                """;
+            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            setup.ExecuteNonQuery();
+        }
+
+        var engine = new LibraryTruthEngine(database);
+        var adoptedTruthRunId = engine.BuildShadowIndex().Summary.RunId;
+        using (var connection = database.OpenConnection())
+        using (var transaction = connection.BeginTransaction())
+        {
+            long rehearsalRunId;
+            using (var rehearsal = connection.CreateCommand())
+            {
+                rehearsal.Transaction = transaction;
+                rehearsal.CommandText = """
+                    INSERT INTO library_truth_rehearsal_runs(
+                        truth_run_id,started_at,completed_at,status,rollback_verified,message)
+                    VALUES($truth,$now,$now,'completed',1,'Historical rehearsal')
+                    RETURNING id;
+                    """;
+                rehearsal.Parameters.AddWithValue("$truth", adoptedTruthRunId);
+                rehearsal.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+                rehearsalRunId = Convert.ToInt64(rehearsal.ExecuteScalar());
+            }
+            using (var adoption = connection.CreateCommand())
+            {
+                adoption.Transaction = transaction;
+                adoption.CommandText = """
+                    INSERT INTO library_truth_adoption_runs(
+                        truth_run_id,rehearsal_run_id,app_version,started_at,completed_at,status,
+                        commit_verified,message)
+                    VALUES($truth,$rehearsal,'retention-test',$now,$now,'completed',1,'Historical adoption');
+                    """;
+                adoption.Parameters.AddWithValue("$truth", adoptedTruthRunId);
+                adoption.Parameters.AddWithValue("$rehearsal", rehearsalRunId);
+                adoption.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+                adoption.ExecuteNonQuery();
+            }
+            transaction.Commit();
+        }
+
+        for (var index = 0; index < 5; index++)
+            engine.BuildShadowIndex();
+
+        using var verify = database.OpenConnection();
+        using var command = verify.CreateCommand();
+        command.CommandText = """
+            SELECT
+                EXISTS(SELECT 1 FROM library_truth_runs WHERE id=$truth),
+                (SELECT COUNT(*) FROM library_truth_adoption_runs WHERE truth_run_id=$truth),
+                (SELECT COUNT(*) FROM library_truth_runs WHERE status='completed');
+            """;
+        command.Parameters.AddWithValue("$truth", adoptedTruthRunId);
+        using var reader = command.ExecuteReader();
+        True(reader.Read());
+        Equal(1L, reader.GetInt64(0));
+        Equal(1L, reader.GetInt64(1));
+        Equal(6L, reader.GetInt64(2));
     }
     finally
     {
