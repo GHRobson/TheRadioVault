@@ -11,9 +11,14 @@ namespace TheRadioVault.Services.Services;
 public sealed class ArchiveReconciliationService
 {
     private readonly LibraryTruthEngine _engine;
+    private readonly ResearchDateAuthorityEvidenceService _dateAuthorityEvidence;
 
     public ArchiveReconciliationService(SqliteDatabase database)
-        => _engine = new LibraryTruthEngine(database ?? throw new ArgumentNullException(nameof(database)));
+    {
+        ArgumentNullException.ThrowIfNull(database);
+        _engine = new LibraryTruthEngine(database);
+        _dateAuthorityEvidence = new ResearchDateAuthorityEvidenceService(database);
+    }
 
     public ArchiveReconciliationSnapshot GetSnapshot()
     {
@@ -83,6 +88,9 @@ public sealed class ArchiveReconciliationService
 
     public void ExportReport(string path, string appVersion)
         => _engine.ExportLatest(path, appVersion);
+
+    public void ExportDateAuthorityEvidence(string path, string appVersion)
+        => _dateAuthorityEvidence.ExportLatest(path, appVersion);
 
     private static IReadOnlyList<ArchiveReconciliationReviewItem> MapReviewItems(
         IReadOnlyList<LibraryTruthBroadcastView> broadcasts,

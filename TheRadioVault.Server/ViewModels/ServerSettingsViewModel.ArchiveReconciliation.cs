@@ -16,6 +16,7 @@ public sealed partial class ServerSettingsViewModel
     private ServerCommand? _runArchiveReconciliationCommand;
     private ServerCommand? _cancelArchiveReconciliationCommand;
     private ServerCommand? _exportArchiveReconciliationReportCommand;
+    private ServerCommand? _exportArchiveDateAuthorityEvidenceCommand;
 
     public bool HasArchiveReconciliation => _archiveReconciliation.HasCompletedAnalysis;
     public bool IsArchiveReconciliationBusy
@@ -100,6 +101,7 @@ public sealed partial class ServerSettingsViewModel
     public ICommand RunArchiveReconciliationCommand { get; private set; } = null!;
     public ICommand CancelArchiveReconciliationCommand { get; private set; } = null!;
     public ICommand ExportArchiveReconciliationReportCommand { get; private set; } = null!;
+    public ICommand ExportArchiveDateAuthorityEvidenceCommand { get; private set; } = null!;
 
     private void InitializeArchiveReconciliationCommands()
     {
@@ -115,10 +117,14 @@ public sealed partial class ServerSettingsViewModel
         _exportArchiveReconciliationReportCommand = new ServerCommand(
             () => _ = ExportArchiveReconciliationReportAsync(),
             () => HasArchiveReconciliation && !IsArchiveReconciliationBusy);
+        _exportArchiveDateAuthorityEvidenceCommand = new ServerCommand(
+            () => _ = ExportArchiveDateAuthorityEvidenceAsync(),
+            () => HasArchiveReconciliation && _archiveReconciliation.UnknownDates > 0 && !IsArchiveReconciliationBusy);
         RefreshArchiveReconciliationCommand = _refreshArchiveReconciliationCommand;
         RunArchiveReconciliationCommand = _runArchiveReconciliationCommand;
         CancelArchiveReconciliationCommand = _cancelArchiveReconciliationCommand;
         ExportArchiveReconciliationReportCommand = _exportArchiveReconciliationReportCommand;
+        ExportArchiveDateAuthorityEvidenceCommand = _exportArchiveDateAuthorityEvidenceCommand;
     }
 
     private async Task RefreshArchiveReconciliationAsync()
@@ -220,6 +226,31 @@ public sealed partial class ServerSettingsViewModel
         }
     }
 
+    private async Task ExportArchiveDateAuthorityEvidenceAsync()
+    {
+        if (_runtime is null || _knowledgeFiles is null || !HasArchiveReconciliation ||
+            _archiveReconciliation.UnknownDates <= 0 || IsArchiveReconciliationBusy) return;
+        var path = await _knowledgeFiles.PickDateAuthorityEvidenceExportAsync(
+            $"RadioVault-Date-Authority-Evidence-{DateTime.Now:yyyyMMdd-HHmmss}.trvdateevidence.json").ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(path)) return;
+
+        IsArchiveReconciliationBusy = true;
+        ArchiveReconciliationStatusText = "Exporting unresolved-date authority evidence…";
+        try
+        {
+            await Task.Run(() => _runtime.ExportArchiveDateAuthorityEvidence(path)).ConfigureAwait(true);
+            ArchiveReconciliationStatusText = $"Date-authority evidence exported to {path}";
+        }
+        catch (Exception exception)
+        {
+            ArchiveReconciliationStatusText = $"Date-authority evidence could not be exported: {exception.Message}";
+        }
+        finally
+        {
+            IsArchiveReconciliationBusy = false;
+        }
+    }
+
     private void CancelArchiveReconciliation()
         => _archiveReconciliationCancellation?.Cancel();
 
@@ -229,6 +260,7 @@ public sealed partial class ServerSettingsViewModel
         _runArchiveReconciliationCommand?.RaiseCanExecuteChanged();
         _cancelArchiveReconciliationCommand?.RaiseCanExecuteChanged();
         _exportArchiveReconciliationReportCommand?.RaiseCanExecuteChanged();
+        _exportArchiveDateAuthorityEvidenceCommand?.RaiseCanExecuteChanged();
     }
 
     private static string FormatSignedDifference(int value)

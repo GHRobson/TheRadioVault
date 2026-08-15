@@ -20,6 +20,11 @@ public sealed class ServerKnowledgeFileService
         Patterns = ["*.trvreconcile.json"],
         MimeTypes = ["application/json"]
     };
+    private static readonly FilePickerFileType DateAuthorityEvidenceType = new("Radio Vault date-authority evidence")
+    {
+        Patterns = ["*.trvdateevidence.json"],
+        MimeTypes = ["application/json"]
+    };
 
     private readonly Window _owner;
 
@@ -77,6 +82,21 @@ public sealed class ServerKnowledgeFileService
             SuggestedFileName = suggestedFileName,
             DefaultExtension = "trvreconcile.json",
             FileTypeChoices = [ReconciliationReportType],
+            ShowOverwritePrompt = true
+        }).WaitAsync(cancellationToken).ConfigureAwait(true);
+        return file?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickDateAuthorityEvidenceExportAsync(
+        string suggestedFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export unresolved-date authority evidence",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "trvdateevidence.json",
+            FileTypeChoices = [DateAuthorityEvidenceType],
             ShowOverwritePrompt = true
         }).WaitAsync(cancellationToken).ConfigureAwait(true);
         return file?.TryGetLocalPath();

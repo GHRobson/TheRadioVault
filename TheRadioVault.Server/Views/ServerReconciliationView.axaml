@@ -75,6 +75,8 @@
             <Button Content="Run full reconciliation" Classes="primary" Command="{Binding RunArchiveReconciliationCommand}" />
             <Button Content="Refresh saved status" Classes="secondary" Command="{Binding RefreshArchiveReconciliationCommand}" />
             <Button Content="Export full evidence report…" Classes="secondary" Command="{Binding ExportArchiveReconciliationReportCommand}" />
+            <Button Content="Export unresolved-date evidence…" Classes="secondary" Command="{Binding ExportArchiveDateAuthorityEvidenceCommand}"
+                    ToolTip.Tip="Small diagnostic export containing only unresolved broadcasts and their historical date evidence." />
             <Button Content="Cancel analysis" Classes="secondary" Command="{Binding CancelArchiveReconciliationCommand}"
                     IsVisible="{Binding IsArchiveReconciliationBusy}" />
           </WrapPanel>

@@ -147,6 +147,8 @@ public sealed class RadioVaultServerRuntime : IDisposable
         => _archiveReconciliation.Reconcile(progress, cancellationToken);
     public void ExportArchiveReconciliationReport(string destinationPath)
         => _archiveReconciliation.ExportReport(destinationPath, AppVersionService.Version);
+    public void ExportArchiveDateAuthorityEvidence(string destinationPath)
+        => _archiveReconciliation.ExportDateAuthorityEvidence(destinationPath, AppVersionService.Version);
     public MediaConsolidationPlan PrepareMediaConsolidation(
         string managedRoot,
         string quarantineRoot,

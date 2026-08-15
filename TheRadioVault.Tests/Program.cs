@@ -1036,12 +1036,76 @@ static void ArchiveReconciliationIsServerOwnedAndReadOnly()
         True(reportJson.Contains("\"schemaVersion\": 6", StringComparison.Ordinal));
         True(reportJson.Contains("\"appVersion\": \"test-version\"", StringComparison.Ordinal));
 
+        using (var connection = database.OpenConnection())
+        using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = """
+                INSERT INTO episodes(collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid)
+                VALUES((SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown','Tribute to Patrice Part 1','Unplayed',$now,$now,'DATE-EVIDENCE-EPISODE');
+                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
+                VALUES('/Radio',(SELECT id FROM collections WHERE name='Opie & Anthony'),1,1);
+                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
+                VALUES((SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'/Radio/Tribute to Patrice - Part 01.mp3','Tribute to Patrice - Part 01.mp3',1000,$now,0,$now,3600000,'DATE-EVIDENCE-HASH','AvailableOffline',1);
+                INSERT INTO research_import_runs(package_name,package_sha256,schema_version,app_version,imported_at,status)
+                VALUES('legacy-date-pack.trvknowledge','DATE-EVIDENCE-PACK',1,'test-version',$now,'completed');
+                INSERT INTO research_broadcasts(identity_key,collection_id,episode_id,source_broadcast_id,air_date,headline,research_json,research_state,existence_status,confidence,import_run_id,created_at,updated_at)
+                VALUES('DATE-EVIDENCE-LINKED',(SELECT id FROM collections WHERE name='Opie & Anthony'),
+                       (SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'DATE-EVIDENCE-EPISODE',NULL,
+                       'Tribute to Patrice Part 1','{"research":{"catalogue":{"date_review_status":"pending","date_review_date":"2011-11-30"}}}',
+                       'conflicting_information','in_library',80,(SELECT id FROM research_import_runs WHERE package_sha256='DATE-EVIDENCE-PACK'),$now,$now);
+                INSERT INTO research_broadcasts(identity_key,collection_id,episode_id,source_broadcast_id,air_date,headline,research_json,research_state,existence_status,confidence,created_at,updated_at)
+                VALUES('DATE-EVIDENCE-ORPHAN',(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'DATE-EVIDENCE-ORPHAN','2011-11-30',
+                       'Tribute to Patrice Part 1','{}','fully_researched','confirmed_missing',95,$now,$now);
+                INSERT INTO research_field_provenance(research_broadcast_id,episode_id,field_name,value_text,source_kind,source_label,import_run_id,confidence,evidence_count,protected,active,created_at)
+                VALUES((SELECT id FROM research_broadcasts WHERE identity_key='DATE-EVIDENCE-LINKED'),
+                       (SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'broadcast_date','2011-11-30','research_pack','legacy-date-pack.trvknowledge',
+                       (SELECT id FROM research_import_runs WHERE package_sha256='DATE-EVIDENCE-PACK'),95,1,1,1,$now);
+                INSERT INTO research_import_changes(import_run_id,research_broadcast_id,episode_id,record_identity,field_name,before_value,after_value,decision,reason,created_at)
+                VALUES((SELECT id FROM research_import_runs WHERE package_sha256='DATE-EVIDENCE-PACK'),
+                       (SELECT id FROM research_broadcasts WHERE identity_key='DATE-EVIDENCE-LINKED'),
+                       (SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'DATE-EVIDENCE-EPISODE','broadcast_date','',
+                       '2011-11-30','applied','Imported authoritative date',$now);
+                INSERT INTO missing_broadcast_research(stable_key,broadcast_uid,show_name,normalized_show_name,broadcast_date,slot,part_number,headline,confidence,research_json,status,matched_episode_id,match_notes,created_at,updated_at)
+                VALUES('DATE-EVIDENCE-MISSING','DATE-EVIDENCE-EPISODE','Opie & Anthony','opie-anthony','2011-11-30','Standard',1,
+                       'Tribute to Patrice Part 1',95,'{"broadcast_date":"2011-11-30"}','resolved',
+                       (SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'Original match',$now,$now);
+                UPDATE missing_broadcast_research SET match_notes='Revised match' WHERE stable_key='DATE-EVIDENCE-MISSING';
+                """;
+            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            setup.ExecuteNonQuery();
+        }
+
+        var datedEvidenceRun = service.Reconcile();
+        True(datedEvidenceRun.UnknownDates == 1,
+            $"Expected one unresolved date in the diagnostic fixture, got {datedEvidenceRun.UnknownDates}.");
+        var dateEvidencePath = Path.Combine(root, "date-authority.trvdateevidence.json");
+        service.ExportDateAuthorityEvidence(dateEvidencePath, "test-version");
+        using (var evidenceDocument = JsonDocument.Parse(File.ReadAllText(dateEvidencePath)))
+        {
+            var evidenceRoot = evidenceDocument.RootElement;
+            True(evidenceRoot.GetProperty("schemaVersion").GetInt32() == 1, "Date-evidence schema was not version 1.");
+            var diagnosticCollection = evidenceRoot.GetProperty("unresolvedBroadcasts")[0].GetProperty("collectionName").GetString();
+            True(diagnosticCollection == "Opie & Anthony",
+                $"Expected the diagnostic fixture to resolve to Opie & Anthony, got '{diagnosticCollection}'.");
+            foreach (var metric in new[]
+                     {
+                         "unresolvedBroadcasts", "linkedResearchRecords", "orphanResearchRecords",
+                         "provenanceEntries", "importHistoryEntries", "legacyMissingRecords", "legacyRevisionRecords"
+                     })
+            {
+                var actual = evidenceRoot.GetProperty("summary").GetProperty(metric).GetInt32();
+                True(actual == 1, $"Expected date-evidence metric '{metric}' to be 1, got {actual}.");
+            }
+            True(!File.ReadAllText(dateEvidencePath).Contains("rss_feed", StringComparison.OrdinalIgnoreCase));
+        }
+
         var serverRuntime = File.ReadAllText(Path.Combine(
             SourceRoot(), "TheRadioVault.Infrastructure", "Services", "RadioVaultServerRuntime.cs"));
         True(serverRuntime.Contains("GetArchiveReconciliationSnapshot", StringComparison.Ordinal));
         True(serverRuntime.Contains("GetArchiveReconciliationAudit", StringComparison.Ordinal));
         True(serverRuntime.Contains("ReconcileArchive", StringComparison.Ordinal));
         True(serverRuntime.Contains("ExportArchiveReconciliationReport", StringComparison.Ordinal));
+        True(serverRuntime.Contains("ExportArchiveDateAuthorityEvidence", StringComparison.Ordinal));
         var desktopViews = Directory.GetFiles(
                 Path.Combine(SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views"), "*.axaml")
             .Select(File.ReadAllText);
@@ -5467,6 +5531,7 @@ static void DedicatedServerAdministrationUsesFocusedScreens()
     var reconciliation = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerReconciliationView.axaml"));
     True(reconciliation.Contains("RunArchiveReconciliationCommand", StringComparison.Ordinal));
     True(reconciliation.Contains("ExportArchiveReconciliationReportCommand", StringComparison.Ordinal));
+    True(reconciliation.Contains("ExportArchiveDateAuthorityEvidenceCommand", StringComparison.Ordinal));
     True(reconciliation.Contains("ArchiveReconciliationBroadcastComparisonText", StringComparison.Ordinal));
     True(reconciliation.Contains("ArchiveReconciliationYearDifferences", StringComparison.Ordinal));
     True(reconciliation.Contains("ArchiveReconciliationSplitCandidates", StringComparison.Ordinal));

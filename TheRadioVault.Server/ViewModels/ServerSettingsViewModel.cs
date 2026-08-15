@@ -170,6 +170,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             RehearseBackupCommand = ExportDiagnosticsCommand = ChooseManagedArchiveCommand = ChooseQuarantineCommand =
             PrepareMediaConsolidationCommand = RehearseMediaConsolidationCommand = CommitMediaConsolidationCommand = CancelMediaConsolidationCommand =
             RefreshArchiveReconciliationCommand = RunArchiveReconciliationCommand = CancelArchiveReconciliationCommand = ExportArchiveReconciliationReportCommand =
+            ExportArchiveDateAuthorityEvidenceCommand =
                 new ServerCommand(() => { }, () => false);
     }
 
