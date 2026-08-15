@@ -1,0 +1,73 @@
+name: Radio Vault Windows Server installer
+
+on:
+  push:
+    branches:
+      - "build/windows-server-installer-*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-server-installer-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  DOTNET_NOLOGO: true
+
+jobs:
+  windows-server-installer:
+    name: Windows Server installer
+    runs-on: windows-2022
+    timeout-minutes: 45
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v5
+
+      - name: Install .NET 8 runtime and pinned SDK
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: |
+            8.0.423
+            10.0.302
+
+      - name: Run complete Windows release gate
+        shell: pwsh
+        run: ./release-gate.ps1
+
+      - name: Publish Windows Server
+        shell: pwsh
+        run: >-
+          dotnet publish
+          ./TheRadioVault.Server/TheRadioVault.Server.csproj
+          -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=false
+          -p:ContinuousIntegrationBuild=true
+          -p:Deterministic=true
+          -o ./artifacts/ci/windows-server
+
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Create Windows Server setup executable
+        shell: pwsh
+        run: |
+          $version = (Get-Content ./VERSION.txt -Raw).Trim()
+          $output = (Resolve-Path ./artifacts/ci).Path + "\windows-installers"
+          New-Item -ItemType Directory -Path $output -Force | Out-Null
+          $env:RV_VERSION = $version
+          $env:RV_SERVER_PUBLISH = (Resolve-Path ./artifacts/ci/windows-server).Path
+          $env:RV_INSTALLER_OUTPUT = $output
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" /Qp ./installer/RadioVault.Server.iss
+          if ($LASTEXITCODE -ne 0) { throw "Inno Setup failed with exit code $LASTEXITCODE." }
+
+      - name: Upload Windows Server installer
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-server-installer-2431fbb
+          path: artifacts/ci/windows-installers/RadioVault.Server-*-Setup.exe
+          if-no-files-found: error
+          retention-days: 14
