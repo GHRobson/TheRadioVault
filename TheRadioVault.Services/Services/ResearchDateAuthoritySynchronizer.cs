@@ -22,6 +22,8 @@ public static partial class ResearchDateAuthoritySynchronizer
         await AttachUnambiguousOrphanedResearchAsync(connection, cancellationToken).ConfigureAwait(false);
 
         var rows = await ReadLinkedResearchDatesAsync(connection, cancellationToken).ConfigureAwait(false);
+        rows.AddRange(await ReadProtectedProvenanceDatesAsync(connection, cancellationToken).ConfigureAwait(false));
+        rows.AddRange(await ReadIdentityDatesAsync(connection, cancellationToken).ConfigureAwait(false));
         var updates = rows
             .GroupBy(row => row.EpisodeId)
             .Select(group => new DateUpdate(
@@ -87,6 +89,24 @@ public static partial class ResearchDateAuthoritySynchronizer
             updateCanonical.Parameters.AddWithValue("$date", date);
             updateCanonical.Parameters.AddWithValue("$episode", item.EpisodeId);
             await updateCanonical.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+
+            await using var preserveAuthority = connection.CreateCommand();
+            preserveAuthority.Transaction = transaction;
+            preserveAuthority.CommandText = """
+                INSERT INTO research_field_provenance(
+                    research_broadcast_id,episode_id,field_name,value_text,source_kind,source_label,
+                    import_run_id,confidence,evidence_count,protected,active,created_at,superseded_at)
+                SELECT NULL,$episode,'air_date',$date,'system','Date authority synchronizer',
+                       NULL,95,1,1,1,$now,NULL
+                 WHERE NOT EXISTS(
+                       SELECT 1 FROM research_field_provenance
+                        WHERE episode_id=$episode AND field_name='air_date'
+                          AND value_text=$date AND protected=1 AND active=1);
+                """;
+            preserveAuthority.Parameters.AddWithValue("$episode", item.EpisodeId);
+            preserveAuthority.Parameters.AddWithValue("$date", date);
+            preserveAuthority.Parameters.AddWithValue("$now", now);
+            await preserveAuthority.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
         }
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -119,6 +139,100 @@ public static partial class ResearchDateAuthoritySynchronizer
                 reader.GetString(5)));
         }
         return rows;
+    }
+
+    private static async Task<List<ResearchDateRow>> ReadProtectedProvenanceDatesAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var rows = new List<ResearchDateRow>();
+        await using var read = connection.CreateCommand();
+        read.CommandText = """
+            SELECT p.id,p.episode_id,p.value_text,e.air_date,COALESCE(e.date_confidence,'Unknown')
+              FROM research_field_provenance p
+              JOIN episodes e ON e.id=p.episode_id
+             WHERE p.episode_id IS NOT NULL
+               AND p.active=1 AND p.protected=1
+               AND lower(trim(p.field_name)) IN ('air_date','broadcast_date')
+             ORDER BY p.episode_id,p.id;
+            """;
+        await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (!TryParseDate(reader.GetString(2), out var researchDate)) continue;
+            rows.Add(new ResearchDateRow(
+                reader.GetInt64(0),
+                reader.GetInt64(1),
+                researchDate,
+                reader.IsDBNull(3) || !TryParseDate(reader.GetString(3), out var episodeDate) ? null : episodeDate,
+                reader.GetString(4)));
+        }
+        return rows;
+    }
+
+    private static async Task<List<ResearchDateRow>> ReadIdentityDatesAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        var rows = new List<ResearchDateRow>();
+        await using var read = connection.CreateCommand();
+        read.CommandText = """
+            SELECT e.id,COALESCE(e.title,''),e.air_date,COALESCE(e.date_confidence,'Unknown'),
+                   COALESCE((SELECT group_concat(mf.original_filename,char(31))
+                               FROM media_files mf
+                              WHERE mf.episode_id=e.id AND COALESCE(mf.is_missing,0)=0),'')
+              FROM episodes e
+             WHERE COALESCE(e.hidden,0)=0
+               AND EXISTS(SELECT 1 FROM media_files mf
+                           WHERE mf.episode_id=e.id AND COALESCE(mf.is_missing,0)=0)
+             ORDER BY e.id;
+            """;
+        await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            var title = reader.GetString(1);
+            var filenames = reader.GetString(4)
+                .Split((char)31, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var identityValues = new List<string>(filenames);
+            // An exact date in a physical filename is direct archive identity evidence.
+            // Enriched prose titles can mention historical dates for other reasons, so
+            // only use a title date when multipart markers independently identify it
+            // as part of a recording set. Conflicting dates are rejected below.
+            if (IdentityIsoDateAtStart().IsMatch(title)
+                || MultipartMarker().IsMatch(title)
+                || filenames.Any(filename => MultipartMarker().IsMatch(filename)))
+                identityValues.Add(title);
+            var identityDates = identityValues
+                .SelectMany(ReadExactIdentityDates)
+                .Distinct()
+                .ToArray();
+            if (identityDates.Length != 1) continue;
+            rows.Add(new ResearchDateRow(
+                0,
+                reader.GetInt64(0),
+                identityDates[0],
+                reader.IsDBNull(2) || !TryParseDate(reader.GetString(2), out var episodeDate) ? null : episodeDate,
+                reader.GetString(3)));
+        }
+        return rows;
+    }
+
+    private static IEnumerable<DateOnly> ReadExactIdentityDates(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) yield break;
+        var matches = IdentityIsoDate().Matches(value);
+        if (matches.Count > 0)
+        {
+            foreach (Match match in matches)
+            {
+                var parsed = CatalogueDateService.ResolveExactDate(match.Value);
+                if (parsed.HasValue) yield return parsed.Value;
+            }
+            yield break;
+        }
+
+        var named = CatalogueDateService.ResolveExactDate(value);
+        if (named.HasValue) yield return named.Value;
     }
 
     private static async Task AttachUnambiguousOrphanedResearchAsync(
@@ -301,7 +415,9 @@ public static partial class ResearchDateAuthoritySynchronizer
     private static string MultipartGroupKey(MultipartEpisode episode)
     {
         var filename = Path.GetFileNameWithoutExtension(episode.Path);
-        var value = string.IsNullOrWhiteSpace(episode.Title) ? filename : episode.Title;
+        var value = MultipartMarker().IsMatch(filename) || string.IsNullOrWhiteSpace(episode.Title)
+            ? filename
+            : episode.Title;
         var stem = MultipartMarker().Replace(value, " ");
         stem = NormalizeMatchText(stem, string.Empty);
         var folder = Path.GetDirectoryName(episode.Path)?.Trim() ?? string.Empty;
@@ -427,6 +543,12 @@ public static partial class ResearchDateAuthoritySynchronizer
 
     [GeneratedRegex(@"\b(?:part|pt\.?)[\s_-]*0*\d+(?:[\s_-]*(?:of|/)[\s_-]*0*\d+)?\b", RegexOptions.IgnoreCase)]
     private static partial Regex MultipartMarker();
+
+    [GeneratedRegex(@"(?<!\d)(?:19|20)\d{2}[-_./](?:0?[1-9]|1[0-2])[-_./](?:0?[1-9]|[12]\d|3[01])(?!\d)", RegexOptions.CultureInvariant)]
+    private static partial Regex IdentityIsoDate();
+
+    [GeneratedRegex(@"^\s*(?:19|20)\d{2}[-_./](?:0?[1-9]|1[0-2])[-_./](?:0?[1-9]|[12]\d|3[01])(?!\d)", RegexOptions.CultureInvariant)]
+    private static partial Regex IdentityIsoDateAtStart();
 
     private sealed record ResearchDateRow(
         long ResearchId,

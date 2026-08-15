@@ -312,6 +312,7 @@ var tests = new (string Name, Action Run)[]
     ("Research date updates the active adopted Library projection", ResearchDateUpdatesActiveAdoptedLibraryProjection),
     ("Research dates stay durable across multipart review and scanning", ResearchDatesStayDurableAcrossMultipartReviewAndScanning),
     ("Legacy approved Research dates reattach only unique archive matches", LegacyApprovedResearchDatesReattachUniqueArchiveMatches),
+    ("Exact identity dates become durable multipart authority", ExactIdentityDatesBecomeDurableMultipartAuthority),
     ("Quick date-review decisions persist and reopen safely", QuickDateReviewDecisionsPersistAndReopenSafely),
     ("Research packs round-trip date-review decisions", ResearchPacksRoundTripDateReviewDecisions),
     ("Research packs tolerate harmless AI scalar variations", ResearchPacksTolerateAiScalarVariations),
@@ -5124,6 +5125,102 @@ static void LegacyApprovedResearchDatesReattachUniqueArchiveMatches()
         Equal("Research authoritative", reader.GetString(2));
         True(reader.IsDBNull(3), "An ambiguous Research record was attached automatically.");
         Equal(0L, reader.GetInt64(4));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void ExactIdentityDatesBecomeDurableMultipartAuthority()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "rv-identity-date-authority-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(directory, "identity-date.db"));
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name)
+                VALUES('Opie & Anthony','Opie & Anthony');
+
+                INSERT INTO episodes(id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,part_number,hidden)
+                VALUES
+                  (6301,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   'Tribute to Patrice O''Neal - 2011-12-03 Sat (part 1)','Unplayed',$now,$now,1,0),
+                  (6302,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   'Tribute to Patrice','Unplayed',$now,$now,11,0),
+                  (6303,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   'Memories of 2011-12-04','Unplayed',$now,$now,1,0),
+                  (6304,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   '2010-09-10 - O&A Worst Of AFRO','Unplayed',$now,$now,1,0);
+
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES
+                  (7301,6301,$path1,'Tribute to Patrice - Part 01.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7302,6302,$path2,'Tribute to Patrice - Part 11.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7303,6303,$path3,'retrospective.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7304,6304,$path4,'worst-of-afro.mp3',100,$now,0,$now,1000,'AvailableOffline',1);
+                """;
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.Parameters.AddWithValue("$path1", Path.Combine(directory, "Tribute to Patrice - Part 01.mp3"));
+            command.Parameters.AddWithValue("$path2", Path.Combine(directory, "Tribute to Patrice - Part 11.mp3"));
+            command.Parameters.AddWithValue("$path3", Path.Combine(directory, "retrospective.mp3"));
+            command.Parameters.AddWithValue("$path4", Path.Combine(directory, "worst-of-afro.mp3"));
+            command.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var migrated = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(3, migrated);
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = """
+                SELECT
+                  (SELECT COUNT(*) FROM episodes WHERE id IN (6301,6302) AND air_date='2011-12-03' AND date_confidence='Research authoritative'),
+                  (SELECT COUNT(*) FROM research_field_provenance WHERE episode_id IN (6301,6302)
+                    AND field_name='air_date' AND value_text='2011-12-03' AND protected=1 AND active=1),
+                  (SELECT COUNT(*) FROM episodes WHERE id=6303 AND air_date IS NULL),
+                  (SELECT air_date FROM episodes WHERE id=6304);
+                """;
+            using var reader = verify.ExecuteReader();
+            True(reader.Read());
+            Equal(2L, reader.GetInt64(0));
+            Equal(2L, reader.GetInt64(1));
+            Equal(1L, reader.GetInt64(2));
+            Equal("2010-09-10", reader.GetString(3));
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var clearProjection = connection.CreateCommand())
+        {
+            clearProjection.CommandText = """
+                UPDATE episodes SET air_date=NULL,date_confidence='Unknown',title='Tribute to Patrice'
+                 WHERE id IN (6301,6302);
+                """;
+            clearProjection.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var restored = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(2, restored);
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = "SELECT COUNT(*) FROM episodes WHERE id IN (6301,6302) AND air_date='2011-12-03'";
+            Equal(2L, Convert.ToInt64(verify.ExecuteScalar(), CultureInfo.InvariantCulture));
+        }
     }
     finally
     {
