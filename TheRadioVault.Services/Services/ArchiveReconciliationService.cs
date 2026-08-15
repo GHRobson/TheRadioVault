@@ -38,6 +38,62 @@ public sealed class ArchiveReconciliationService
         return ToSnapshot(result.Summary, _engine.GetAdoptionSummary());
     }
 
+    public ArchiveReconciliationAudit GetAudit(int detailLimit = 250)
+    {
+        var snapshot = GetSnapshot();
+        if (!snapshot.HasCompletedAnalysis) return ArchiveReconciliationAudit.NotAnalysed;
+
+        var limit = Math.Clamp(detailLimit, 25, 2_000);
+        var run = _engine.GetLatestSummary();
+        var adoption = _engine.GetAdoptionSummary();
+        var dispositions = _engine.GetDispositionSummary();
+        var changes = new ArchiveReconciliationChangeBreakdown(
+            dispositions.MetadataCorrectionFiles,
+            dispositions.MultipartCorrectionFiles,
+            dispositions.BroadcastSplitFiles,
+            dispositions.BroadcastMergeFiles,
+            dispositions.RecoveredDateFiles,
+            dispositions.NeedsAttentionFiles,
+            dispositions.OtherChangedFiles);
+        var years = _engine.GetYears()
+            .Where(year => year.ProposedBroadcasts != year.CurrentBroadcasts || year.MergeGroups > 0 || year.SplitGroups > 0)
+            .Select(year => new ArchiveReconciliationYearDifference(
+                year.Year, year.CurrentBroadcasts, year.ProposedBroadcasts, year.MergeGroups, year.SplitGroups))
+            .OrderByDescending(year => Math.Abs(year.Difference))
+            .ThenBy(year => year.Year, StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return new ArchiveReconciliationAudit(
+            snapshot,
+            changes,
+            run.MergeGroups,
+            run.SplitGroups,
+            run.ExactDuplicateGroups,
+            run.StrongDuplicateGroups,
+            adoption.SuspiciousMergeGroups,
+            years,
+            MapReviewItems(_engine.GetBroadcasts("split-candidates", limit),
+                "One live broadcast record is being interpreted as more than one canonical broadcast."),
+            MapReviewItems(_engine.GetBroadcasts("review-recommended", limit),
+                "This proposed broadcast should be checked before adoption."),
+            MapReviewItems(_engine.GetBroadcasts("blocked", limit),
+                "This proposed broadcast is blocked from automatic adoption."),
+            limit);
+    }
+
+    public void ExportReport(string path, string appVersion)
+        => _engine.ExportLatest(path, appVersion);
+
+    private static IReadOnlyList<ArchiveReconciliationReviewItem> MapReviewItems(
+        IReadOnlyList<LibraryTruthBroadcastView> broadcasts,
+        string fallbackReason)
+        => broadcasts.Select(broadcast => new ArchiveReconciliationReviewItem(
+                broadcast.IdentityDisplay,
+                broadcast.StructureDisplay,
+                broadcast.AdoptionState,
+                string.IsNullOrWhiteSpace(broadcast.AdoptionReason) ? fallbackReason : broadcast.AdoptionReason))
+            .ToArray();
+
     private static ArchiveReconciliationSnapshot ToSnapshot(
         LibraryTruthRunSummary run,
         LibraryTruthAdoptionSummary adoption)

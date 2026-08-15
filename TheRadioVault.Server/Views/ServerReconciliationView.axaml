@@ -23,17 +23,19 @@
             </Border>
           </Grid>
 
-          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="10">
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="10" RowSpacing="10">
             <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
               <StackPanel Spacing="3">
                 <TextBlock Text="PHYSICAL INVENTORY" Classes="eyebrow" />
                 <TextBlock Text="{Binding ArchiveReconciliationInventoryText}" FontSize="11" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ArchiveReconciliationBroadcastComparisonText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
             <Border Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
               <StackPanel Spacing="3">
-                <TextBlock Text="PROPOSED INTERPRETATION" Classes="eyebrow" />
+                <TextBlock Text="FILE INTERPRETATIONS" Classes="eyebrow" />
                 <TextBlock Text="{Binding ArchiveReconciliationChangeText}" FontSize="11" TextWrapping="Wrap" />
+                <TextBlock Text="{Binding ArchiveReconciliationFileBreakdownText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
             <Border Grid.Row="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
@@ -48,6 +50,18 @@
                 <TextBlock Text="{Binding ArchiveReconciliationDuplicateText}" FontSize="11" TextWrapping="Wrap" />
               </StackPanel>
             </Border>
+            <Border Grid.Row="2" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+              <StackPanel Spacing="3">
+                <TextBlock Text="IDENTITY STRUCTURE" Classes="eyebrow" />
+                <TextBlock Text="{Binding ArchiveReconciliationStructureText}" FontSize="11" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
+            <Border Grid.Row="2" Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+              <StackPanel Spacing="3">
+                <TextBlock Text="UNRESOLVED EVIDENCE" Classes="eyebrow" />
+                <TextBlock Text="{Binding ArchiveReconciliationUnresolvedText}" FontSize="11" TextWrapping="Wrap" />
+              </StackPanel>
+            </Border>
           </Grid>
 
           <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
@@ -60,11 +74,109 @@
           <WrapPanel ItemSpacing="8" LineSpacing="8">
             <Button Content="Run full reconciliation" Classes="primary" Command="{Binding RunArchiveReconciliationCommand}" />
             <Button Content="Refresh saved status" Classes="secondary" Command="{Binding RefreshArchiveReconciliationCommand}" />
+            <Button Content="Export full evidence report…" Classes="secondary" Command="{Binding ExportArchiveReconciliationReportCommand}" />
             <Button Content="Cancel analysis" Classes="secondary" Command="{Binding CancelArchiveReconciliationCommand}"
                     IsVisible="{Binding IsArchiveReconciliationBusy}" />
           </WrapPanel>
           <TextBlock Text="Reconciliation writes only a shadow index. It does not rename, move, merge or delete media and it does not change the live client library."
                      Classes="muted" FontSize="10" TextWrapping="Wrap" />
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="14">
+          <StackPanel Spacing="3">
+            <TextBlock Text="AUDIT THE DIFFERENCE" Classes="eyebrow" />
+            <TextBlock Text="See why the proposed library total changed" FontSize="17" FontWeight="SemiBold" />
+            <TextBlock Text="These are read-only explanations from the shadow index. Nothing listed here has been adopted into the live library."
+                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
+          </StackPanel>
+
+          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
+            <StackPanel Spacing="8">
+              <TextBlock Text="DIFFERENCE BY YEAR" Classes="eyebrow" />
+              <TextBlock Text="{Binding ArchiveReconciliationYearDifferenceSummary}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+              <ListBox ItemsSource="{Binding ArchiveReconciliationYearDifferences}" MaxHeight="220">
+                <ListBox.ItemTemplate>
+                  <DataTemplate>
+                    <Border BorderBrush="#2D343E" BorderThickness="0,0,0,1" Padding="4,8">
+                      <Grid ColumnDefinitions="80,*,Auto" ColumnSpacing="10">
+                        <TextBlock Text="{Binding Year}" FontWeight="SemiBold" />
+                        <TextBlock Grid.Column="1" Text="{Binding DetailDisplay}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                        <TextBlock Grid.Column="2" Text="{Binding DifferenceDisplay}" Foreground="#F2C94C" FontSize="10" FontWeight="SemiBold" />
+                      </Grid>
+                    </Border>
+                  </DataTemplate>
+                </ListBox.ItemTemplate>
+              </ListBox>
+            </StackPanel>
+          </Border>
+
+          <TabControl>
+            <TabItem Header="Split candidates">
+              <StackPanel Spacing="8" Margin="0,10,0,0">
+                <TextBlock Text="{Binding ArchiveReconciliationSplitCandidateSummary}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                <ListBox ItemsSource="{Binding ArchiveReconciliationSplitCandidates}" Height="280">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="#2D343E" BorderThickness="0,0,0,1" Padding="5,9">
+                        <StackPanel Spacing="3">
+                          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <TextBlock Text="{Binding Identity}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Grid.Column="1" Text="{Binding State}" Foreground="#F2C94C" FontSize="10" />
+                          </Grid>
+                          <TextBlock Text="{Binding Structure}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding Reason}" FontSize="10" TextWrapping="Wrap" />
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </StackPanel>
+            </TabItem>
+            <TabItem Header="Review recommended">
+              <StackPanel Spacing="8" Margin="0,10,0,0">
+                <TextBlock Text="{Binding ArchiveReconciliationReviewSummary}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                <ListBox ItemsSource="{Binding ArchiveReconciliationReviewRecommended}" Height="280">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="#2D343E" BorderThickness="0,0,0,1" Padding="5,9">
+                        <StackPanel Spacing="3">
+                          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <TextBlock Text="{Binding Identity}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Grid.Column="1" Text="{Binding State}" Foreground="#F2C94C" FontSize="10" />
+                          </Grid>
+                          <TextBlock Text="{Binding Structure}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding Reason}" FontSize="10" TextWrapping="Wrap" />
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </StackPanel>
+            </TabItem>
+            <TabItem Header="Blocked">
+              <StackPanel Spacing="8" Margin="0,10,0,0">
+                <TextBlock Text="{Binding ArchiveReconciliationBlockedSummary}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                <ListBox ItemsSource="{Binding ArchiveReconciliationBlocked}" Height="280">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="#2D343E" BorderThickness="0,0,0,1" Padding="5,9">
+                        <StackPanel Spacing="3">
+                          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <TextBlock Text="{Binding Identity}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Grid.Column="1" Text="{Binding State}" Foreground="#E07A7A" FontSize="10" />
+                          </Grid>
+                          <TextBlock Text="{Binding Structure}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding Reason}" FontSize="10" TextWrapping="Wrap" />
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </StackPanel>
+            </TabItem>
+          </TabControl>
         </StackPanel>
       </Border>
 

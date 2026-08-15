@@ -127,10 +127,14 @@ public sealed class RadioVaultServerRuntime : IDisposable
             GetHealthSnapshot(), AppVersionService.Version, destinationPath, cancellationToken);
     public ArchiveReconciliationSnapshot GetArchiveReconciliationSnapshot()
         => _archiveReconciliation.GetSnapshot();
+    public ArchiveReconciliationAudit GetArchiveReconciliationAudit(int detailLimit = 250)
+        => _archiveReconciliation.GetAudit(detailLimit);
     public ArchiveReconciliationSnapshot ReconcileArchive(
         IProgress<(double Percent, string Message)>? progress = null,
         CancellationToken cancellationToken = default)
         => _archiveReconciliation.Reconcile(progress, cancellationToken);
+    public void ExportArchiveReconciliationReport(string destinationPath)
+        => _archiveReconciliation.ExportReport(destinationPath, AppVersionService.Version);
     public MediaConsolidationPlan PrepareMediaConsolidation(
         string managedRoot,
         string quarantineRoot,

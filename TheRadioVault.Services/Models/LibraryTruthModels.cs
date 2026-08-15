@@ -32,6 +32,22 @@ public sealed record LibraryTruthRunSummary(
 
 public sealed record LibraryTruthRunResult(LibraryTruthRunSummary Summary);
 
+public sealed record LibraryTruthDispositionSummary(
+    int UnchangedFiles,
+    int MetadataCorrectionFiles,
+    int MultipartCorrectionFiles,
+    int BroadcastSplitFiles,
+    int BroadcastMergeFiles,
+    int RecoveredDateFiles,
+    int NeedsAttentionFiles,
+    int OtherChangedFiles)
+{
+    public static LibraryTruthDispositionSummary Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0);
+    public int InterpretedDifferentlyFiles => MetadataCorrectionFiles + MultipartCorrectionFiles +
+                                              BroadcastSplitFiles + BroadcastMergeFiles + RecoveredDateFiles +
+                                              NeedsAttentionFiles + OtherChangedFiles;
+}
+
 public sealed record LibraryTruthFileView(
     long Id,
     long MediaFileId,

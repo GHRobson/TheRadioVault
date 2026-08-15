@@ -979,6 +979,7 @@ static void ArchiveReconciliationIsServerOwnedAndReadOnly()
         var initial = service.GetSnapshot();
         True(!initial.HasCompletedAnalysis);
         Equal("Not analysed", initial.AnalysisState);
+        True(!service.GetAudit().Snapshot.HasCompletedAnalysis);
 
         var progressWasReported = false;
         var reconciled = service.Reconcile(new InlineProgress<(double Percent, string Message)>(_ => progressWasReported = true));
@@ -987,11 +988,26 @@ static void ArchiveReconciliationIsServerOwnedAndReadOnly()
         Equal(0, reconciled.PhysicalFiles);
         Equal(reconciled.AnalysisId, service.GetSnapshot().AnalysisId);
         True(progressWasReported);
+        var audit = service.GetAudit();
+        True(audit.Snapshot.HasCompletedAnalysis);
+        Equal(0, audit.ChangeBreakdown.InterpretedDifferentlyFiles);
+        Equal(0, audit.YearDifferences.Count);
+        Equal(0, audit.SplitCandidates.Count);
+        Equal(0, audit.ReviewRecommended.Count);
+        Equal(0, audit.Blocked.Count);
+        var reportPath = Path.Combine(root, "reconciliation.trvreconcile.json");
+        service.ExportReport(reportPath, "test-version");
+        True(File.Exists(reportPath));
+        var reportJson = File.ReadAllText(reportPath);
+        True(reportJson.Contains("\"schemaVersion\": 6", StringComparison.Ordinal));
+        True(reportJson.Contains("\"appVersion\": \"test-version\"", StringComparison.Ordinal));
 
         var serverRuntime = File.ReadAllText(Path.Combine(
             SourceRoot(), "TheRadioVault.Infrastructure", "Services", "RadioVaultServerRuntime.cs"));
         True(serverRuntime.Contains("GetArchiveReconciliationSnapshot", StringComparison.Ordinal));
+        True(serverRuntime.Contains("GetArchiveReconciliationAudit", StringComparison.Ordinal));
         True(serverRuntime.Contains("ReconcileArchive", StringComparison.Ordinal));
+        True(serverRuntime.Contains("ExportArchiveReconciliationReport", StringComparison.Ordinal));
         var desktopViews = Directory.GetFiles(
                 Path.Combine(SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views"), "*.axaml")
             .Select(File.ReadAllText);
@@ -5237,6 +5253,13 @@ static void DedicatedServerAdministrationUsesFocusedScreens()
 
     var reconciliation = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerReconciliationView.axaml"));
     True(reconciliation.Contains("RunArchiveReconciliationCommand", StringComparison.Ordinal));
+    True(reconciliation.Contains("ExportArchiveReconciliationReportCommand", StringComparison.Ordinal));
+    True(reconciliation.Contains("ArchiveReconciliationBroadcastComparisonText", StringComparison.Ordinal));
+    True(reconciliation.Contains("ArchiveReconciliationYearDifferences", StringComparison.Ordinal));
+    True(reconciliation.Contains("ArchiveReconciliationSplitCandidates", StringComparison.Ordinal));
+    True(reconciliation.Contains("files interpreted differently", StringComparison.OrdinalIgnoreCase) ||
+         File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "ViewModels", "ServerSettingsViewModel.ArchiveReconciliation.cs"))
+             .Contains("files interpreted differently", StringComparison.OrdinalIgnoreCase));
     True(reconciliation.Contains("PrepareMediaConsolidationCommand", StringComparison.Ordinal));
     True(reconciliation.Contains("does not rename, move, merge or delete media", StringComparison.Ordinal));
 }

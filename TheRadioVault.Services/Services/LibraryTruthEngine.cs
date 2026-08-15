@@ -97,6 +97,35 @@ public sealed class LibraryTruthEngine
         return reader.Read() ? ReadSummary(reader) : LibraryTruthRunSummary.Empty;
     }
 
+    public LibraryTruthDispositionSummary GetDispositionSummary()
+    {
+        var run = GetLatestCompletedRunId();
+        if (run == 0) return LibraryTruthDispositionSummary.Empty;
+        using var connection = _database.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT
+                SUM(CASE WHEN disposition='Unchanged' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN disposition='Proposed correction' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN disposition='Multipart correction' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN disposition='Broadcast split' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN disposition='Broadcast merge' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN disposition='Recovered date' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN disposition='Needs attention' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN disposition NOT IN (
+                    'Unchanged','Proposed correction','Multipart correction','Broadcast split',
+                    'Broadcast merge','Recovered date','Needs attention') THEN 1 ELSE 0 END)
+              FROM library_truth_files
+             WHERE run_id=$run
+            """;
+        command.Parameters.AddWithValue("$run", run);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return LibraryTruthDispositionSummary.Empty;
+        return new LibraryTruthDispositionSummary(
+            SafeInt(reader, 0), SafeInt(reader, 1), SafeInt(reader, 2), SafeInt(reader, 3),
+            SafeInt(reader, 4), SafeInt(reader, 5), SafeInt(reader, 6), SafeInt(reader, 7));
+    }
+
     public IReadOnlyList<LibraryTruthFileView> GetFiles(string? filter = null, string? search = null, int limit = 10000)
     {
         var run = GetLatestCompletedRunId();
@@ -1775,6 +1804,7 @@ public sealed class LibraryTruthEngine
     private static string BroadcastFilterSql(string? filter, string? alias = null)
     {
         var prefix = string.IsNullOrWhiteSpace(alias) ? string.Empty : alias + ".";
+        var owner = string.IsNullOrWhiteSpace(alias) ? "library_truth_broadcasts" : alias;
         return (filter ?? string.Empty).Trim().ToLowerInvariant() switch
         {
             "needs-attention" => $"AND ({prefix}status='Needs attention' OR {prefix}adoption_state='Blocked')",
@@ -1785,6 +1815,8 @@ public sealed class LibraryTruthEngine
             "blocked" => $"AND {prefix}adoption_state='Blocked'",
             "ready" => $"AND {prefix}adoption_state IN ('Ready','Ready with recording choice')",
             "suspicious-merges" => $"AND {prefix}suspicious_merge=1",
+            "split-candidates" => $"AND EXISTS (SELECT 1 FROM library_truth_files sf WHERE sf.run_id={owner}.run_id AND sf.canonical_broadcast_key={owner}.canonical_key AND sf.disposition='Broadcast split')",
+            "merge-candidates" => $"AND EXISTS (SELECT 1 FROM library_truth_files mf WHERE mf.run_id={owner}.run_id AND mf.canonical_broadcast_key={owner}.canonical_key AND mf.disposition='Broadcast merge')",
             "unknown" => $"AND {prefix}air_date IS NULL",
             "unchanged" => $"AND {prefix}status='Stable'",
             _ => string.Empty

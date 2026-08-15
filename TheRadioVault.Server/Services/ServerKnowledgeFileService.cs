@@ -15,6 +15,11 @@ public sealed class ServerKnowledgeFileService
         Patterns = ["*.trvdiag.json"],
         MimeTypes = ["application/json"]
     };
+    private static readonly FilePickerFileType ReconciliationReportType = new("Radio Vault reconciliation report")
+    {
+        Patterns = ["*.trvreconcile.json"],
+        MimeTypes = ["application/json"]
+    };
 
     private readonly Window _owner;
 
@@ -57,6 +62,21 @@ public sealed class ServerKnowledgeFileService
             SuggestedFileName = suggestedFileName,
             DefaultExtension = "json",
             FileTypeChoices = [DiagnosticsType],
+            ShowOverwritePrompt = true
+        }).WaitAsync(cancellationToken).ConfigureAwait(true);
+        return file?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickReconciliationReportExportAsync(
+        string suggestedFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export a Radio Vault archive reconciliation report",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "trvreconcile.json",
+            FileTypeChoices = [ReconciliationReportType],
             ShowOverwritePrompt = true
         }).WaitAsync(cancellationToken).ConfigureAwait(true);
         return file?.TryGetLocalPath();
