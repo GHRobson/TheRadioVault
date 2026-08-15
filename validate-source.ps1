@@ -744,7 +744,9 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-STABLE.
 $serverProjectPath = Join-Path $root "TheRadioVault.Server\TheRadioVault.Server.csproj"
 $serverRuntimePath = Join-Path $root "TheRadioVault.Infrastructure\Services\RadioVaultServerRuntime.cs"
 $serverWindowPath = Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml"
-foreach ($path in @($serverProjectPath, $serverRuntimePath, $serverWindowPath)) {
+$serverDashboardPath = Join-Path $root "TheRadioVault.Server\Views\ServerDashboardView.axaml"
+$serverReconciliationPath = Join-Path $root "TheRadioVault.Server\Views\ServerReconciliationView.axaml"
+foreach ($path in @($serverProjectPath, $serverRuntimePath, $serverWindowPath, $serverDashboardPath, $serverReconciliationPath)) {
     if (-not (Test-Path $path)) { throw "Alpha 1 dedicated server file is missing: $path" }
 }
 [xml]$serverProject = Get-Content $serverProjectPath -Raw
@@ -759,10 +761,18 @@ foreach ($marker in @('RadioVaultServerRuntime', 'HeadlessWebPlaybackController'
     if ($serverRuntimeText -notmatch [regex]::Escape($marker)) { throw "Alpha 1 server runtime marker missing: $marker" }
 }
 $serverWindowText = Get-Content $serverWindowPath -Raw
-foreach ($marker in @('Background archive service', 'SERVER SETTINGS', 'AUTHORITATIVE STORAGE')) {
-    if ($serverWindowText -notmatch [regex]::Escape($marker)) { throw "Alpha 1 settings-only server marker missing: $marker" }
+foreach ($marker in @('Radio Vault Server', 'Dashboard', 'Library', 'Archive Reconciliation', 'Automation', 'Recovery')) {
+    if ($serverWindowText -notmatch [regex]::Escape($marker)) { throw "Dedicated server navigation marker missing: $marker" }
 }
-if ($serverWindowText -match 'Dashboard|Now Playing|Transcripts') { throw "Normal client feature UI leaked into the settings-only server." }
+$serverDashboardText = Get-Content $serverDashboardPath -Raw
+foreach ($marker in @('SERVER STATUS', 'ARCHIVE MEDIA', 'VERIFIED BACKUP')) {
+    if ($serverDashboardText -notmatch [regex]::Escape($marker)) { throw "Dedicated server dashboard marker missing: $marker" }
+}
+$serverReconciliationText = Get-Content $serverReconciliationPath -Raw
+foreach ($marker in @('ARCHIVE RECONCILIATION', 'Run full reconciliation', 'SAFE MEDIA CONSOLIDATION')) {
+    if ($serverReconciliationText -notmatch [regex]::Escape($marker)) { throw "Archive reconciliation workspace marker missing: $marker" }
+}
+if ($serverWindowText -match 'Now Playing') { throw "Normal client playback UI leaked into the dedicated server shell." }
 if ($solutionText -notmatch [regex]::Escape('TheRadioVault.Server\TheRadioVault.Server.csproj')) {
     throw "The dedicated server project is missing from the solution."
 }
@@ -932,7 +942,11 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA11
 $alpha12HostText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Composition\AvaloniaApplicationHost.cs") -Raw
 $alpha12TranscriptionText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\LoopbackTranscriptionServices.cs") -Raw
 $alpha12ServerViewModelText = Get-Content (Join-Path $root "TheRadioVault.Server\ViewModels\ServerSettingsViewModel.cs") -Raw
-$alpha12ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml") -Raw
+$alpha12ServerViewText = @(
+    Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml") -Raw
+    Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerDashboardView.axaml") -Raw
+    Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerTranscriptionView.axaml") -Raw
+) -join [Environment]::NewLine
 $alpha12ClientStylesText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\App.axaml") -Raw
 $alpha12TranscriptsViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\TranscriptsView.axaml") -Raw
 foreach ($marker in @('LoopbackServerLibraryFolderService', 'LoopbackServerArchiveHealthService', 'LoopbackServerLibraryMaintenanceService', 'IServerTranscriptionAdministrationService')) {
@@ -972,7 +986,7 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA13
 }
 
 $alpha13Buildfix1RuntimeText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\RadioVaultServerRuntime.cs") -Raw
-$alpha13Buildfix1ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml") -Raw
+$alpha13Buildfix1ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerLibraryView.axaml") -Raw
 $alpha13Buildfix1LibraryViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\LibraryView.axaml") -Raw
 $alpha13Buildfix1ActionsText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\LoopbackUserStateServices.cs") -Raw
 $alpha13Buildfix1ClientInstallerText = Get-Content (Join-Path $root "installer\RadioVault.Client.iss") -Raw
@@ -997,7 +1011,7 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA13
 $alpha14WebServerText = $anywhereWebText
 $alpha14ClientAdapterText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Anywhere\DedicatedServerRadioVaultAnywhereService.cs") -Raw
 $alpha14ClientViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\DesktopToolsView.axaml") -Raw
-$alpha14ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml") -Raw
+$alpha14ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerAccessView.axaml") -Raw
 $alpha14QrText = Get-Content (Join-Path $root "TheRadioVault.Application\Models\PhoneQrCode.cs") -Raw
 foreach ($marker in @('productName = "Radio Vault Web"', 'GetAccessUrls().FirstOrDefault()', 'GetSecureSetupUrls().FirstOrDefault()', '<title>Radio Vault Web</title>', 'radio-vault-anywhere-shell-v68')) {
     if ($alpha14WebServerText -notmatch [regex]::Escape($marker)) { throw "Alpha 14 Radio Vault Web server marker missing: $marker" }
