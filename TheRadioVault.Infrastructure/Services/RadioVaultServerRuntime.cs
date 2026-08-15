@@ -1,5 +1,6 @@
 using TheRadioVault.Core.Events;
 using TheRadioVault.Core.Playback;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Data.Database;
 using TheRadioVault.Services.Jobs;
 using TheRadioVault.Services.Contracts;
@@ -119,8 +120,10 @@ public sealed class RadioVaultServerRuntime : IDisposable
         => _server.GetResearchPackImportStatus(sessionId);
     public bool CancelKnowledgeDatabaseImport(Guid sessionId)
         => _server.CancelResearchPackImport(sessionId);
-    public Task<WebResearchPackExportPayload> ExportKnowledgeDatabaseAsync(CancellationToken cancellationToken = default)
-        => _server.ExportResearchPackAsync(cancellationToken);
+    public Task<WebResearchPackExportPayload> ExportKnowledgeDatabaseAsync(
+        KnowledgeExportScope scope = KnowledgeExportScope.Complete,
+        CancellationToken cancellationToken = default)
+        => _server.ExportResearchPackAsync(scope, cancellationToken);
     public Task<IReadOnlyList<RssFeedSubscription>> GetRssFeedsAsync(CancellationToken cancellationToken = default)
         => _rssFeeds.GetAllAsync(cancellationToken);
     public Task<RssFeedSubscription> AddRssFeedAsync(RssFeedSaveRequest request, CancellationToken cancellationToken = default)

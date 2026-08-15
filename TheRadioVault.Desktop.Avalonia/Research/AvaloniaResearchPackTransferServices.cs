@@ -291,20 +291,27 @@ public sealed class LocalResearchPackTransferService : IResearchPackTransferServ
         return Task.CompletedTask;
     }
 
-    public async Task<ResearchPackExportSummary> ExportAsync(CancellationToken cancellationToken = default)
+    public async Task<ResearchPackExportSummary> ExportAsync(
+        KnowledgeExportScope scope = KnowledgeExportScope.Complete,
+        CancellationToken cancellationToken = default)
     {
         var database = new DatabaseService(_database);
         var pack = await Task.Run(
             () => database.BuildCompleteKnowledgePack(AppVersionService.Version),
             cancellationToken).ConfigureAwait(false);
-        var databaseName = Path.GetFileName(_database.DatabasePath);
-        var databaseIdentity = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(databaseName)))[..16].ToLowerInvariant();
-        pack.Wiki = await new WikiService(_database)
-            .GetAuthoringSnapshotAsync(AppVersionService.Version, databaseIdentity, cancellationToken)
-            .ConfigureAwait(false);
+        KnowledgeExportScopeFilter.Apply(pack, scope);
+        if (scope == KnowledgeExportScope.Complete)
+        {
+            var databaseName = Path.GetFileName(_database.DatabasePath);
+            var databaseIdentity = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(databaseName)))[..16].ToLowerInvariant();
+            pack.Wiki = await new WikiService(_database)
+                .GetAuthoringSnapshotAsync(AppVersionService.Version, databaseIdentity, cancellationToken)
+                .ConfigureAwait(false);
+            KnowledgeExportScopeFilter.Apply(pack, scope);
+        }
         var bytes = _packs.ExportBytes(pack);
-        return new ResearchPackExportSummary(bytes, "RadioVault-Archive-Knowledge.trvknowledge",
-            pack.Broadcasts.Count, pack.MissingBroadcasts.Count, pack.Transcripts.Count, pack.Wiki.Pages.Count);
+        return new ResearchPackExportSummary(bytes, scope.SuggestedFileName(),
+            pack.Broadcasts.Count, pack.MissingBroadcasts.Count, pack.Transcripts.Count, pack.Wiki?.Pages.Count ?? 0);
     }
 
     private async Task<ResearchPackExportSummary> ExportScopedAsync(int collectionId, string collectionName, int? year, CancellationToken cancellationToken = default)

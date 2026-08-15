@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Web.Contracts;
 using TheRadioVault.Web.Models;
 
@@ -270,9 +271,15 @@ public sealed partial class LocalWebServer
                     "The export request was invalid.", diagnosticId, cancellationToken).ConfigureAwait(false);
                 return;
             }
-            var result = await _archive.ExportResearchPackAsync(cancellationToken).ConfigureAwait(false);
+            if (!KnowledgeExportScopePolicy.TryParse(exportRequest.Scope, out var scope))
+            {
+                await WriteApiErrorAsync(stream, 400, "Bad Request", "invalid-research-export-scope",
+                    "Choose complete, undated, or missing-topics-or-summaries.", diagnosticId, cancellationToken).ConfigureAwait(false);
+                return;
+            }
+            var result = await _archive.ExportResearchPackAsync(scope, cancellationToken).ConfigureAwait(false);
             var safeName = Uri.EscapeDataString(result.FileName);
-            var headers = $"Cache-Control: no-store\r\nContent-Disposition: attachment; filename*=UTF-8''{safeName}\r\nX-Radio-Vault-Broadcast-Count: {result.BroadcastCount}\r\nX-Radio-Vault-Missing-Count: {result.MissingBroadcastCount}\r\nX-Radio-Vault-Transcript-Count: {result.TranscriptCount}\r\nX-Radio-Vault-Wiki-Page-Count: {result.WikiPageCount}\r\n";
+            var headers = $"Cache-Control: no-store\r\nContent-Disposition: attachment; filename*=UTF-8''{safeName}\r\nX-Radio-Vault-Export-Scope: {scope.ToWireValue()}\r\nX-Radio-Vault-Broadcast-Count: {result.BroadcastCount}\r\nX-Radio-Vault-Missing-Count: {result.MissingBroadcastCount}\r\nX-Radio-Vault-Transcript-Count: {result.TranscriptCount}\r\nX-Radio-Vault-Wiki-Page-Count: {result.WikiPageCount}\r\n";
             await WriteBytesResponseAsync(stream, 200, "OK", result.Bytes,
                 "application/vnd.theradiovault.research-pack+zip", false, cancellationToken, headers).ConfigureAwait(false);
         }

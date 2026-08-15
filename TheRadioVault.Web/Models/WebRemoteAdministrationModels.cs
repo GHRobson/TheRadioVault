@@ -75,7 +75,7 @@ public sealed record WebResearchPackImportResult(
     int WikiPagesChanged = 0,
     int WikiConflicts = 0);
 
-public sealed record WebResearchPackExportRequest;
+public sealed record WebResearchPackExportRequest(string Scope = "complete");
 
 public sealed record WebResearchPackExportPayload(
     byte[] Bytes,

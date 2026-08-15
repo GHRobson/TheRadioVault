@@ -4,6 +4,7 @@ using System.Security.Authentication;
 using System.Security.Cryptography.X509Certificates;
 using TheRadioVault.Core.Events;
 using TheRadioVault.Core.Playback;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Services.Jobs;
 using TheRadioVault.Web.Contracts;
 using TheRadioVault.Web.Models;
@@ -115,8 +116,10 @@ public sealed class LocalWebServerService : IDisposable
         => _provider.GetResearchPackImportStatus(sessionId);
     public bool CancelResearchPackImport(Guid sessionId)
         => _provider.CancelResearchPackImport(sessionId);
-    public Task<WebResearchPackExportPayload> ExportResearchPackAsync(CancellationToken cancellationToken = default)
-        => _provider.ExportResearchPackAsync(cancellationToken);
+    public Task<WebResearchPackExportPayload> ExportResearchPackAsync(
+        KnowledgeExportScope scope = KnowledgeExportScope.Complete,
+        CancellationToken cancellationToken = default)
+        => _provider.ExportResearchPackAsync(scope, cancellationToken);
 
     public BackupRestoreRehearsalResult RehearseLatestScheduledBackup()
     {

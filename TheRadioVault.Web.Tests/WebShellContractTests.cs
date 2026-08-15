@@ -181,6 +181,8 @@ static void AnywhereShellMatchesNativeStructure()
         True(!html.Contains("â€¦", StringComparison.Ordinal));
         True(html.Contains("Knowledge database", StringComparison.Ordinal));
         True(html.Contains("Export complete knowledge database", StringComparison.Ordinal));
+        True(html.Contains("Export broadcasts without dates", StringComparison.Ordinal));
+        True(html.Contains("Export broadcasts missing topics or summaries", StringComparison.Ordinal));
         True(html.Contains("loadMoments", StringComparison.Ordinal));
         True(html.Contains("loadResearch", StringComparison.Ordinal));
         True(html.Contains("loadSettings", StringComparison.Ordinal));

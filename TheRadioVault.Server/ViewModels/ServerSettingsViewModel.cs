@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia.Threading;
 using TheRadioVault.Application.Models;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Server.Services;
 using TheRadioVault.Services;
 using TheRadioVault.Services.Models;
@@ -84,6 +85,8 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     private readonly ServerCommand? _applyKnowledgeImportCommand;
     private readonly ServerCommand? _cancelKnowledgeImportCommand;
     private readonly ServerCommand? _exportKnowledgeCommand;
+    private readonly ServerCommand? _exportUndatedKnowledgeCommand;
+    private readonly ServerCommand? _exportMissingResearchKnowledgeCommand;
     private readonly ServerCommand? _rehearseBackupCommand;
     private readonly ServerCommand? _exportDiagnosticsCommand;
 
@@ -139,13 +142,23 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         _chooseKnowledgeImportCommand = new ServerCommand(() => _ = ChooseKnowledgeImportAsync(), () => !IsKnowledgeBusy);
         _applyKnowledgeImportCommand = new ServerCommand(() => _ = ApplyKnowledgeImportAsync(), () => HasKnowledgeImportPreview && !IsKnowledgeBusy);
         _cancelKnowledgeImportCommand = new ServerCommand(CancelKnowledgeImport, () => HasKnowledgeImportPreview);
-        _exportKnowledgeCommand = new ServerCommand(() => _ = ExportKnowledgeAsync(), () => !IsKnowledgeBusy);
+        _exportKnowledgeCommand = new ServerCommand(
+            () => _ = ExportKnowledgeAsync(KnowledgeExportScope.Complete),
+            () => !IsKnowledgeBusy);
+        _exportUndatedKnowledgeCommand = new ServerCommand(
+            () => _ = ExportKnowledgeAsync(KnowledgeExportScope.UndatedBroadcasts),
+            () => !IsKnowledgeBusy);
+        _exportMissingResearchKnowledgeCommand = new ServerCommand(
+            () => _ = ExportKnowledgeAsync(KnowledgeExportScope.MissingTopicsOrSummaries),
+            () => !IsKnowledgeBusy);
         _rehearseBackupCommand = new ServerCommand(RehearseLatestBackup, () => _health?.ScheduledBackup.LastCompletedAt.HasValue == true);
         _exportDiagnosticsCommand = new ServerCommand(() => _ = ExportDiagnosticsAsync(), () => _health is not null);
         ChooseKnowledgeImportCommand = _chooseKnowledgeImportCommand;
         ApplyKnowledgeImportCommand = _applyKnowledgeImportCommand;
         CancelKnowledgeImportCommand = _cancelKnowledgeImportCommand;
         ExportKnowledgeCommand = _exportKnowledgeCommand;
+        ExportUndatedKnowledgeCommand = _exportUndatedKnowledgeCommand;
+        ExportMissingResearchKnowledgeCommand = _exportMissingResearchKnowledgeCommand;
         RehearseBackupCommand = _rehearseBackupCommand;
         ExportDiagnosticsCommand = _exportDiagnosticsCommand;
         LoadPreferences();
@@ -167,6 +180,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             GeneratePairingCodeCommand = CancelPairingCommand = RevokeClientCommand = RevokeAllClientsCommand = AddLibraryFolderCommand =
             ToggleLibraryFolderCommand = AssignLibraryFolderCommand = RemoveLibraryFolderCommand = ScanLibraryCommand =
             ChooseKnowledgeImportCommand = ApplyKnowledgeImportCommand = CancelKnowledgeImportCommand = ExportKnowledgeCommand =
+            ExportUndatedKnowledgeCommand = ExportMissingResearchKnowledgeCommand =
             RehearseBackupCommand = ExportDiagnosticsCommand = ChooseManagedArchiveCommand = ChooseQuarantineCommand =
             PrepareMediaConsolidationCommand = RehearseMediaConsolidationCommand = CommitMediaConsolidationCommand = CancelMediaConsolidationCommand =
             RefreshArchiveReconciliationCommand = RunArchiveReconciliationCommand = CancelArchiveReconciliationCommand = ExportArchiveReconciliationReportCommand =
@@ -393,6 +407,8 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     public ICommand ApplyKnowledgeImportCommand { get; }
     public ICommand CancelKnowledgeImportCommand { get; }
     public ICommand ExportKnowledgeCommand { get; }
+    public ICommand ExportUndatedKnowledgeCommand { get; }
+    public ICommand ExportMissingResearchKnowledgeCommand { get; }
     public ICommand RehearseBackupCommand { get; }
     public ICommand ExportDiagnosticsCommand { get; }
 
@@ -535,18 +551,18 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         }
     }
 
-    private async Task ExportKnowledgeAsync()
+    private async Task ExportKnowledgeAsync(KnowledgeExportScope scope)
     {
         if (_runtime is null || _knowledgeFiles is null) return;
-        var path = await _knowledgeFiles.PickExportAsync("RadioVault-Archive-Knowledge.trvknowledge").ConfigureAwait(true);
+        var path = await _knowledgeFiles.PickExportAsync(scope.SuggestedFileName()).ConfigureAwait(true);
         if (string.IsNullOrWhiteSpace(path)) return;
         IsKnowledgeBusy = true;
         KnowledgeProgressPercent = 5;
         KnowledgeProgressCountText = string.Empty;
-        KnowledgeStatusText = "Building the complete Archive Knowledge Database…";
+        KnowledgeStatusText = $"Building an export of {scope.DisplayName()}…";
         try
         {
-            var export = await _runtime.ExportKnowledgeDatabaseAsync().ConfigureAwait(true);
+            var export = await _runtime.ExportKnowledgeDatabaseAsync(scope).ConfigureAwait(true);
             KnowledgeProgressPercent = 90;
             KnowledgeStatusText = "Writing the portable Knowledge Database…";
             await File.WriteAllBytesAsync(path, export.Bytes).ConfigureAwait(true);
@@ -585,6 +601,8 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         _applyKnowledgeImportCommand?.RaiseCanExecuteChanged();
         _cancelKnowledgeImportCommand?.RaiseCanExecuteChanged();
         _exportKnowledgeCommand?.RaiseCanExecuteChanged();
+        _exportUndatedKnowledgeCommand?.RaiseCanExecuteChanged();
+        _exportMissingResearchKnowledgeCommand?.RaiseCanExecuteChanged();
     }
 
     private async Task LoadLibraryFoldersAsync()

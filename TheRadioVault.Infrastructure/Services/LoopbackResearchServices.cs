@@ -1,3 +1,4 @@
+using TheRadioVault.Core.Services;
 using TheRadioVault.Services.Contracts;
 using TheRadioVault.Services.Models;
 using TheRadioVault.Web.Contracts;
@@ -172,12 +173,18 @@ public sealed class LoopbackResearchPackTransferService : IResearchPackTransferS
         _pendingSessionId = null;
     }
 
-    public async Task<ResearchPackExportSummary> ExportAsync(CancellationToken cancellationToken = default)
+    public async Task<ResearchPackExportSummary> ExportAsync(
+        KnowledgeExportScope scope = KnowledgeExportScope.Complete,
+        CancellationToken cancellationToken = default)
     {
         var response = await _connection.PostJsonForBytesAsync(
             WebApiRoutes.FederationResearchExport,
-            new WebResearchPackExportRequest(),
+            new WebResearchPackExportRequest(scope.ToWireValue()),
             cancellationToken).ConfigureAwait(false);
+        if (scope != KnowledgeExportScope.Complete &&
+            !string.Equals(response.ExportScope, scope.ToWireValue(), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException(
+                "The connected Radio Vault Server does not support focused Knowledge exports yet. Update the server before exporting this research queue.");
         return new ResearchPackExportSummary(
             response.Bytes,
             response.FileName,

@@ -293,7 +293,8 @@ var tests = new (string Name, Action Run)[]
     ("Ambiguous research review uses a schema-valid state", AmbiguousResearchReviewUsesSchemaValidState),
     ("Knowledge exports teach AI agents the portable database", KnowledgeExportsTeachAiAgentsThePortableDatabase),
     ("Complete knowledge exports include every show and transcript", CompleteKnowledgeExportsIncludeEveryShowAndTranscript),
-    ("Knowledge export UI is always archive-wide", KnowledgeExportUiIsAlwaysArchiveWide),
+    ("Focused knowledge exports contain only outstanding research", FocusedKnowledgeExportsContainOnlyOutstandingResearch),
+    ("Knowledge export UI offers complete and focused scopes", KnowledgeExportUiOffersCompleteAndFocusedScopes),
     ("Knowledge import progress bars are determinate", KnowledgeImportProgressBarsAreDeterminate),
     ("Knowledge matching uses one archive index", KnowledgeMatchingUsesOneArchiveIndex),
     ("Installers prevent accidental downgrades", InstallersPreventAccidentalDowngrades),
@@ -4131,24 +4132,78 @@ static void CompleteKnowledgeExportsIncludeEveryShowAndTranscript()
     finally { try { Directory.Delete(directory, true); } catch { } }
 }
 
-static void KnowledgeExportUiIsAlwaysArchiveWide()
+static void FocusedKnowledgeExportsContainOnlyOutstandingResearch()
+{
+    TrvKnowledgePack CreatePack()
+    {
+        var pageId = Guid.NewGuid();
+        return new TrvKnowledgePack
+        {
+            Manifest = new TrvPackManifest { AppVersion = "test", Show = "Whole archive" },
+            Broadcasts = new List<TrvPackBroadcast>
+            {
+                new() { BroadcastId = "UNDATED", Show = "Test", Research = new TrvPackResearch { Summary = "Already summarised.", Topics = new List<string> { "Date research" } } },
+                new() { BroadcastId = "NO-TOPICS", Show = "Test", BroadcastDate = "2020-01-02", Research = new TrvPackResearch { Summary = "A summary without topics." } },
+                new() { BroadcastId = "NO-SUMMARY", Show = "Test", BroadcastDate = "2020-01-03", Research = new TrvPackResearch { Topics = new List<string> { "Archive" } } },
+                new() { BroadcastId = "COMPLETE", Show = "Test", BroadcastDate = "2020-01-04", Research = new TrvPackResearch { Summary = "Complete research.", Topics = new List<string> { "Archive" } } }
+            },
+            Transcripts = new[] { "UNDATED", "NO-TOPICS", "NO-SUMMARY", "COMPLETE" }
+                .Select(id => new TrvPackTranscript { BroadcastId = id, Show = "Test", FullText = $"Transcript for {id}." })
+                .ToList(),
+            Wiki = new WikiAuthoringSnapshot(
+                new WikiAuthoringPackManifest(1, "test", Guid.NewGuid(), DateTimeOffset.UtcNow, "test", 1, 0, 0, 0, 0,
+                    new Dictionary<string, string>()),
+                new[] { new WikiAuthoringPageRecord(pageId, 1, "test", "Test", "Show", "Test page", "Published", "test", "test", Array.Empty<string>()) },
+                new Dictionary<Guid, string> { [pageId] = "# Test" },
+                Array.Empty<WikiRelationshipRecord>(), Array.Empty<WikiSourceRecord>(), Array.Empty<WikiCitationRecord>(),
+                Array.Empty<WikiAuthoringImageRecord>(), new Dictionary<Guid, byte[]>(), Array.Empty<WikiPageImageLink>(),
+                Array.Empty<WikiTimelineEventRecord>())
+        };
+    }
+
+    var undated = KnowledgeExportScopeFilter.Apply(CreatePack(), KnowledgeExportScope.UndatedBroadcasts);
+    Equal("undated", undated.Manifest.ExportScope);
+    Equal(1, undated.Broadcasts.Count);
+    Equal("UNDATED", undated.Broadcasts.Single().BroadcastId);
+    Equal("UNDATED", undated.Transcripts.Single().BroadcastId);
+    True(undated.Wiki is null);
+
+    var incomplete = KnowledgeExportScopeFilter.Apply(CreatePack(), KnowledgeExportScope.MissingTopicsOrSummaries);
+    Equal("missing-topics-or-summaries", incomplete.Manifest.ExportScope);
+    Equal(2, incomplete.Broadcasts.Count);
+    True(incomplete.Broadcasts.Any(item => item.BroadcastId == "NO-TOPICS"));
+    True(incomplete.Broadcasts.Any(item => item.BroadcastId == "NO-SUMMARY"));
+    Equal(2, incomplete.Transcripts.Count);
+    True(incomplete.Transcripts.All(item => item.BroadcastId is "NO-TOPICS" or "NO-SUMMARY"));
+    True(incomplete.Wiki is null);
+
+    var bytes = new KnowledgePackService().ExportBytes(incomplete);
+    var imported = new KnowledgePackService().Import(bytes);
+    Equal("missing-topics-or-summaries", imported.Manifest.ExportScope);
+    Equal(2, imported.Manifest.BroadcastCount);
+}
+
+static void KnowledgeExportUiOffersCompleteAndFocusedScopes()
 {
     var root = SourceRoot();
     var desktopView = File.ReadAllText(Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "Views", "ResearchWorkspaceView.axaml"));
-    True(desktopView.Contains("Export full Knowledge Database", StringComparison.Ordinal));
+    True(desktopView.Contains("Export Knowledge Database", StringComparison.Ordinal));
     True(desktopView.Contains("Command=\"{Binding ExportCommand}\"", StringComparison.Ordinal));
+    True(desktopView.Contains("Broadcasts without dates", StringComparison.Ordinal));
+    True(desktopView.Contains("Broadcasts missing topics or summaries", StringComparison.Ordinal));
     True(!desktopView.Contains("ExportPackButton_OnClick", StringComparison.Ordinal));
     True(!File.Exists(Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "Views", "ResearchPackExportDialog.axaml")));
     True(!File.Exists(Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "Views", "ResearchPackExportDialog.axaml.cs")));
 
     var contract = File.ReadAllText(Path.Combine(root, "TheRadioVault.Services", "Contracts", "IResearchPackTransferService.cs"));
-    True(contract.Contains("ExportAsync(CancellationToken cancellationToken = default)", StringComparison.Ordinal));
+    True(contract.Contains("KnowledgeExportScope scope", StringComparison.Ordinal));
     True(!contract.Contains("collectionName", StringComparison.Ordinal));
     True(!contract.Contains("int? year", StringComparison.Ordinal));
 
     var web = ReadWebServerSourceBundle();
-    True(web.Contains("async function exportResearchPack()", StringComparison.Ordinal));
-    True(web.Contains("await exportResearchPack();", StringComparison.Ordinal));
+    True(web.Contains("async function exportResearchPack(scope", StringComparison.Ordinal));
+    True(web.Contains("data-research-export=\"undated\"", StringComparison.Ordinal));
+    True(web.Contains("data-research-export=\"missing-topics-or-summaries\"", StringComparison.Ordinal));
     True(!web.Contains("Choose a show to export.", StringComparison.Ordinal));
 }
 
@@ -4327,7 +4382,7 @@ static void Alpha9HardensDocumentedKnowledgePortability()
     var provider = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Infrastructure", "Services", "WebArchiveProvider.RemoteAdministration.cs"));
     True(database.Contains("BuildCompleteKnowledgePack", StringComparison.Ordinal));
     True(provider.Contains("BuildCompleteKnowledgePack(AppVersionService.Version)", StringComparison.Ordinal));
-    True(provider.Contains("RadioVault-Archive-Knowledge.trvknowledge", StringComparison.Ordinal));
+    True(provider.Contains("scope.SuggestedFileName()", StringComparison.Ordinal));
 
     var wikiService = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Services", "Services", "WikiService.cs"));
     True(wikiService.Contains("ResolveImportedSourceTitle", StringComparison.Ordinal));

@@ -498,9 +498,12 @@ public sealed class KnowledgePackService
     private static string BuildInstructions(TrvKnowledgePack pack) => $"""
         # Radio Vault Archive Knowledge Database
 
-        This inspectable SQLite file is the complete portable Knowledge database for {pack.Manifest.Show}{(pack.Manifest.Year.HasValue ? $" ({pack.Manifest.Year})" : "")}.
+        This inspectable SQLite file is a portable Knowledge database for {pack.Manifest.Show}{(pack.Manifest.Year.HasValue ? $" ({pack.Manifest.Year})" : "")}.
         Its goal is to let a research agent understand the archive, enrich it with well-sourced knowledge, connect related people/topics/events,
         and return one file that Radio Vault can preview and import safely.
+
+        Export scope: {pack.Manifest.ExportScope}.
+        {BuildScopeAssignment(pack.Manifest.ExportScope)}
 
         Export contents: {pack.Broadcasts.Count:N0} present broadcasts, {pack.MissingBroadcasts.Count:N0} known archive gaps,
         {pack.Transcripts.Count:N0} transcripts, {pack.Wiki?.Pages.Count ?? 0:N0} Explore pages,
@@ -519,6 +522,23 @@ public sealed class KnowledgePackService
         Add genuinely absent broadcasts with is_missing=1. Leave unsupported facts empty and state uncertainty in quality fields or source notes.
         Run PRAGMA quick_check, check references, and return this same SQLite database with the .trvknowledge extension.
         """;
+
+    private static string BuildScopeAssignment(string? scope) => scope?.Trim().ToLowerInvariant() switch
+    {
+        "undated" => """
+            This is a focused date-research assignment. Every included record lacks an established broadcast date.
+            Research and fill broadcast_date only when reliable evidence supports an exact YYYY-MM-DD date. Apply one confirmed date
+            consistently to every legitimate part of the same multipart broadcast. Preserve broadcast_id, show_name, part numbers and
+            all unrelated metadata. If an exact date cannot be supported, leave it empty and document the evidence and uncertainty.
+            """,
+        "missing-topics-or-summaries" => """
+            This is a focused metadata-research assignment. Every included record is missing topics, a summary, or both.
+            Add a concise factual summary and useful topic labels from the supplied transcript and sources. Preserve broadcast_id,
+            broadcast_date and all unrelated metadata. Do not invent subjects that the evidence does not support; leave a field empty
+            when the available material is insufficient.
+            """,
+        _ => "This is the complete archive-wide Knowledge export, including Explore and linked research material."
+    };
 
     private const string ResearchRules = """
         # Research and evidence rules

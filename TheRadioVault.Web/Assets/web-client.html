@@ -4704,7 +4704,7 @@
           content = `<div class="researchRecords">${sources.map((item) => `<article class="researchRecord"><div class="researchRecordHead"><div><h3>${esc(item.publisher || item.domain || "Research source")}</h3><div class="muted">${esc(item.domain || "")} · ${esc(item.sourceType || "Source")}</div></div><strong>${Number(item.averageConfidence || 0)}%</strong></div><div class="researchBadges"><span class="researchBadge">${Number(item.sourceCount || 0)} sources</span><span class="researchBadge">${Number(item.broadcastCount || 0)} broadcasts</span></div></article>`).join("") || '<div class="empty">No research sources have been indexed.</div>'}</div>`;
         } else {
           const preview = researchPackPreview, p = preview?.preview;
-          content = `${researchImportProgressCard(researchImportJob)}<div class="packDrop"><div><h3>Import an Archive Knowledge Database</h3><div class="muted">One inspectable SQLite database carries Knowledge records, Explore pages, citations, images, timelines, transcripts and their stable archive links.</div></div><input id="researchPackFile" type="file" accept=".trvknowledge,application/vnd.radiovault.knowledge+sqlite3,application/x-sqlite3" ${researchImportJob ? "disabled" : ""}><div class="actions"><button id="previewResearchPack" ${researchImportJob ? "disabled" : ""}>Analyse selected database</button>${preview && !researchImportJob ? '<button class="secondary" id="cancelResearchPack">Cancel preview</button>' : ""}</div>${p && !researchImportJob ? `<div class="packPreview">${researchMetric(p.totalRecords,"knowledge records")}${researchMetric(p.wikiPageCount,"Explore pages")}${researchMetric(p.wikiImageCount,"images")}${researchMetric(p.transcriptCount,"transcripts")}${researchMetric(p.fieldsExpectedToApply,"fields to apply")}${researchMetric(p.fieldsExpectedToMerge,"fields to merge")}</div><div class="actions"><button id="applyResearchPack">Import this database</button></div>` : ""}</div><section class="settingsCard"><div><h3>Export the Archive Knowledge Database</h3><div class="muted">Every export includes all shows and all years, plus Explore content, images, timelines, citations, missing-broadcast knowledge and matching transcripts.</div></div><div class="actions"><button id="exportResearchPack">Export complete knowledge database</button></div></section>`;
+          content = `${researchImportProgressCard(researchImportJob)}<div class="packDrop"><div><h3>Import an Archive Knowledge Database</h3><div class="muted">One inspectable SQLite database carries Knowledge records, Explore pages, citations, images, timelines, transcripts and their stable archive links.</div></div><input id="researchPackFile" type="file" accept=".trvknowledge,application/vnd.radiovault.knowledge+sqlite3,application/x-sqlite3" ${researchImportJob ? "disabled" : ""}><div class="actions"><button id="previewResearchPack" ${researchImportJob ? "disabled" : ""}>Analyse selected database</button>${preview && !researchImportJob ? '<button class="secondary" id="cancelResearchPack">Cancel preview</button>' : ""}</div>${p && !researchImportJob ? `<div class="packPreview">${researchMetric(p.totalRecords,"knowledge records")}${researchMetric(p.wikiPageCount,"Explore pages")}${researchMetric(p.wikiImageCount,"images")}${researchMetric(p.transcriptCount,"transcripts")}${researchMetric(p.fieldsExpectedToApply,"fields to apply")}${researchMetric(p.fieldsExpectedToMerge,"fields to merge")}</div><div class="actions"><button id="applyResearchPack">Import this database</button></div>` : ""}</div><section class="settingsCard"><div><h3>Export the Archive Knowledge Database</h3><div class="muted">Use a focused export to repair only outstanding dates, topics or summaries. Matching transcripts are included; unrelated Explore pages and images are left out.</div></div><div class="actions"><button data-research-export="complete">Export complete knowledge database</button><button class="secondary" data-research-export="undated">Export broadcasts without dates</button><button class="secondary" data-research-export="missing-topics-or-summaries">Export broadcasts missing topics or summaries</button></div></section>`;
         }
         list.innerHTML = connectionBoundaryBanner() + `<div class="researchWorkspace">${researchTabs()}${content}</div>`;
         const field = document.getElementById("researchSearch");
@@ -4743,9 +4743,10 @@
         researchImportJob = null;
         renderResearch();
       }
-      async function exportResearchPack() {
-        const response = await fetch(auth(api + "/federation/research-packs/export"), { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({}), cache:"no-store" });
+      async function exportResearchPack(scope = "complete") {
+        const response = await fetch(auth(api + "/federation/research-packs/export"), { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({scope}), cache:"no-store" });
         if (!response.ok) { const data = await response.json().catch(() => null); throw new Error(data?.error?.message || "The research pack could not be exported."); }
+        if (scope !== "complete" && response.headers.get("X-Radio-Vault-Export-Scope") !== scope) throw new Error("This Radio Vault Server does not support focused Knowledge exports yet. Update the server and try again.");
         const blob = await response.blob(), disposition = response.headers.get("Content-Disposition") || "", matched = disposition.match(/filename\*=UTF-8''([^;]+)/i), fileName = matched ? decodeURIComponent(matched[1]) : "RadioVault-Archive.trvknowledge", link = document.createElement("a");
         link.href = URL.createObjectURL(blob); link.download = fileName; link.click(); setTimeout(() => URL.revokeObjectURL(link.href),1000);
         notify(`Knowledge database exported with ${response.headers.get("X-Radio-Vault-Transcript-Count") || 0} transcripts and ${response.headers.get("X-Radio-Vault-Wiki-Page-Count") || 0} Wiki pages`);
@@ -6935,9 +6936,9 @@
           if (!researchImportJob) researchPackPreview = null;
           renderResearch(); return;
         }
-        if (e.target.id === "exportResearchPack") {
+        if (e.target.dataset.researchExport) {
           e.target.disabled = true;
-          try { await exportResearchPack(); }
+          try { await exportResearchPack(e.target.dataset.researchExport); }
           catch (error) { notify(error.message || "The research pack could not be exported.", true); }
           finally { e.target.disabled = false; }
           return;

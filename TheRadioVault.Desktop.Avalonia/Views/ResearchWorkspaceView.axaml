@@ -31,8 +31,16 @@
             <TextBlock Text="{Binding ChooseImportButtonText}" VerticalAlignment="Center" />
           </StackPanel>
         </Button>
-        <Button Content="Export full Knowledge Database…" Classes="secondary" Command="{Binding ExportCommand}"
-                IsEnabled="{Binding IsPackTransferAvailable}" />
+        <Button Content="Export Knowledge Database…" Classes="secondary"
+                IsEnabled="{Binding IsPackTransferAvailable}">
+          <Button.Flyout>
+            <MenuFlyout>
+              <MenuItem Header="Complete archive…" Command="{Binding ExportCommand}" />
+              <MenuItem Header="Broadcasts without dates…" Command="{Binding ExportUndatedCommand}" />
+              <MenuItem Header="Broadcasts missing topics or summaries…" Command="{Binding ExportMissingResearchCommand}" />
+            </MenuFlyout>
+          </Button.Flyout>
+        </Button>
         <Button Content="Refresh" Classes="ghost" Command="{Binding RefreshCommand}" />
       </StackPanel>
     </Grid>

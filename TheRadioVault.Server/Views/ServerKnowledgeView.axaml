@@ -39,8 +39,16 @@
             <Button Content="Import now" Classes="primary" Command="{Binding ApplyKnowledgeImportCommand}" IsVisible="{Binding HasKnowledgeImportPreview}" />
             <Button Content="Cancel import" Classes="secondary" Command="{Binding CancelKnowledgeImportCommand}" IsVisible="{Binding HasKnowledgeImportPreview}" />
           </WrapPanel>
-          <Button Content="Export complete Knowledge Database…" Classes="secondary" HorizontalAlignment="Left"
-                  Command="{Binding ExportKnowledgeCommand}" />
+          <StackPanel Spacing="7">
+            <TextBlock Text="EXPORT FOR RESEARCH" Classes="eyebrow" />
+            <TextBlock Text="Focused exports keep matching transcripts but omit unrelated Explore pages and images, making outstanding research much quicker to triage."
+                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
+            <WrapPanel ItemSpacing="8" LineSpacing="8">
+              <Button Content="Complete archive…" Classes="secondary" Command="{Binding ExportKnowledgeCommand}" />
+              <Button Content="Broadcasts without dates…" Classes="secondary" Command="{Binding ExportUndatedKnowledgeCommand}" />
+              <Button Content="Missing topics or summaries…" Classes="secondary" Command="{Binding ExportMissingResearchKnowledgeCommand}" />
+            </WrapPanel>
+          </StackPanel>
         </StackPanel>
       </Border>
     </StackPanel>

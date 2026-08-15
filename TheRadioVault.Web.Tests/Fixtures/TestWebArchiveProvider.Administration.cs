@@ -143,7 +143,9 @@ internal sealed partial class TestWebArchiveProvider
     public WebResearchPackImportJob GetResearchPackImportStatus(Guid sessionId)
         => CompletedResearchImport(sessionId);
     public bool CancelResearchPackImport(Guid sessionId) => false;
-    public Task<WebResearchPackExportPayload> ExportResearchPackAsync(CancellationToken cancellationToken = default)
+    public Task<WebResearchPackExportPayload> ExportResearchPackAsync(
+        TheRadioVault.Core.Services.KnowledgeExportScope scope = TheRadioVault.Core.Services.KnowledgeExportScope.Complete,
+        CancellationToken cancellationToken = default)
         => throw new NotSupportedException();
     public Task<WebWikiPackPreview> PreviewWikiPackAsync(Stream packageStream, string sourceName, CancellationToken cancellationToken = default)
         => Task.FromResult(new WebWikiPackPreview(sourceName, "hash", 1, 1, 0, 0, 0, 1, 1, 1, 1, Array.Empty<string>(), true, "Ready", Array.Empty<WebWikiPackPageChangePreview>()));

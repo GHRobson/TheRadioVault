@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using TheRadioVault.Core.Events;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Models;
 using TheRadioVault.Services.Jobs;
 using TheRadioVault.Services.Models;
@@ -428,21 +429,27 @@ internal sealed partial class WebArchiveProvider
     }
 
     public async Task<WebResearchPackExportPayload> ExportResearchPackAsync(
+        KnowledgeExportScope scope = KnowledgeExportScope.Complete,
         CancellationToken cancellationToken = default)
     {
         var pack = await Task.Run(
             () => _database.BuildCompleteKnowledgePack(AppVersionService.Version),
             cancellationToken).ConfigureAwait(false);
-        var databaseName = Path.GetFileName(_database.PlatformDatabase.DatabasePath);
-        var identityBytes = SHA256.HashData(Encoding.UTF8.GetBytes(databaseName));
-        var databaseIdentity = Convert.ToHexString(identityBytes)[..16].ToLowerInvariant();
-        pack.Wiki = await new WikiService(_database.PlatformDatabase)
-            .GetAuthoringSnapshotAsync(AppVersionService.Version, databaseIdentity, cancellationToken)
-            .ConfigureAwait(false);
+        KnowledgeExportScopeFilter.Apply(pack, scope);
+        if (scope == KnowledgeExportScope.Complete)
+        {
+            var databaseName = Path.GetFileName(_database.PlatformDatabase.DatabasePath);
+            var identityBytes = SHA256.HashData(Encoding.UTF8.GetBytes(databaseName));
+            var databaseIdentity = Convert.ToHexString(identityBytes)[..16].ToLowerInvariant();
+            pack.Wiki = await new WikiService(_database.PlatformDatabase)
+                .GetAuthoringSnapshotAsync(AppVersionService.Version, databaseIdentity, cancellationToken)
+                .ConfigureAwait(false);
+            KnowledgeExportScopeFilter.Apply(pack, scope);
+        }
         var bytes = await Task.Run(() => new KnowledgePackService().ExportBytes(pack), cancellationToken).ConfigureAwait(false);
-        var fileName = "RadioVault-Archive-Knowledge.trvknowledge";
+        var fileName = scope.SuggestedFileName();
         return new WebResearchPackExportPayload(bytes, fileName, pack.Broadcasts.Count, pack.MissingBroadcasts.Count,
-            pack.Transcripts?.Count ?? 0, pack.Wiki.Pages.Count);
+            pack.Transcripts?.Count ?? 0, pack.Wiki?.Pages.Count ?? 0);
     }
 
     private void ExpireResearchImportSessions()
