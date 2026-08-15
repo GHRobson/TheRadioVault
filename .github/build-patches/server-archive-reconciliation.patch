@@ -2853,3 +2853,40 @@ index 8c8609c35bf2e2f798a5b86779ff1adcfcf24a1b..87fe01851595eef86feb5a4d2275a235
  ## File and broadcast identity audit
  
  Radio Vault uses different identifiers for different jobs:
+diff --git a/validate-source.ps1 b/validate-source.ps1
+index 27c8d9340a98497dd55a146268c1d8c67aee02fb..e5d93d4b8856dc4bc7142d5e1d239080aa69fb05 100644
+--- a/validate-source.ps1
++++ b/validate-source.ps1
+@@ -744,7 +744,9 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-STABLE.
+ $serverProjectPath = Join-Path $root "TheRadioVault.Server\TheRadioVault.Server.csproj"
+ $serverRuntimePath = Join-Path $root "TheRadioVault.Infrastructure\Services\RadioVaultServerRuntime.cs"
+ $serverWindowPath = Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml"
+-foreach ($path in @($serverProjectPath, $serverRuntimePath, $serverWindowPath)) {
++$serverDashboardPath = Join-Path $root "TheRadioVault.Server\Views\ServerDashboardView.axaml"
++$serverReconciliationPath = Join-Path $root "TheRadioVault.Server\Views\ServerReconciliationView.axaml"
++foreach ($path in @($serverProjectPath, $serverRuntimePath, $serverWindowPath, $serverDashboardPath, $serverReconciliationPath)) {
+     if (-not (Test-Path $path)) { throw "Alpha 1 dedicated server file is missing: $path" }
+ }
+ [xml]$serverProject = Get-Content $serverProjectPath -Raw
+@@ -759,10 +761,18 @@ foreach ($marker in @('RadioVaultServerRuntime', 'HeadlessWebPlaybackController'
+     if ($serverRuntimeText -notmatch [regex]::Escape($marker)) { throw "Alpha 1 server runtime marker missing: $marker" }
+ }
+ $serverWindowText = Get-Content $serverWindowPath -Raw
+-foreach ($marker in @('Background archive service', 'SERVER SETTINGS', 'AUTHORITATIVE STORAGE')) {
+-    if ($serverWindowText -notmatch [regex]::Escape($marker)) { throw "Alpha 1 settings-only server marker missing: $marker" }
++foreach ($marker in @('Radio Vault Server', 'Dashboard', 'Library', 'Archive Reconciliation', 'Automation', 'Recovery')) {
++    if ($serverWindowText -notmatch [regex]::Escape($marker)) { throw "Dedicated server navigation marker missing: $marker" }
+ }
+-if ($serverWindowText -match 'Dashboard|Now Playing|Transcripts') { throw "Normal client feature UI leaked into the settings-only server." }
++$serverDashboardText = Get-Content $serverDashboardPath -Raw
++foreach ($marker in @('SERVER STATUS', 'ARCHIVE MEDIA', 'VERIFIED BACKUP')) {
++    if ($serverDashboardText -notmatch [regex]::Escape($marker)) { throw "Dedicated server dashboard marker missing: $marker" }
++}
++$serverReconciliationText = Get-Content $serverReconciliationPath -Raw
++foreach ($marker in @('ARCHIVE RECONCILIATION', 'Run full reconciliation', 'SAFE MEDIA CONSOLIDATION')) {
++    if ($serverReconciliationText -notmatch [regex]::Escape($marker)) { throw "Archive reconciliation workspace marker missing: $marker" }
++}
++if ($serverWindowText -match 'Now Playing') { throw "Normal client playback UI leaked into the dedicated server shell." }
+ if ($solutionText -notmatch [regex]::Escape('TheRadioVault.Server\TheRadioVault.Server.csproj')) {
+     throw "The dedicated server project is missing from the solution."
+ }
