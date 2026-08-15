@@ -212,6 +212,80 @@ internal sealed class RssFeedSubscriptionStore
         return await command.ExecuteScalarAsync(cancellationToken).ConfigureAwait(false) as string;
     }
 
+    public async Task<IReadOnlyList<RssLegacyFileNameCandidate>> GetLegacyFileNameCandidatesAsync(
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await _database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT i.id,i.title,i.published_at,i.file_name,i.file_path,lf.path
+              FROM rss_feed_items i
+              JOIN rss_feed_subscriptions f ON f.id=i.feed_id
+              JOIN library_folders lf ON lf.id=f.library_folder_id
+             WHERE i.status IN ('Downloaded','Imported')
+               AND i.published_at IS NOT NULL
+               AND trim(COALESCE(i.file_name,''))<>''
+               AND trim(COALESCE(i.file_path,''))<>''
+             ORDER BY i.id;
+            """;
+        var values = new List<RssLegacyFileNameCandidate>();
+        await using var reader = await command.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+        while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (!DateTimeOffset.TryParse(reader.GetString(2), out var publishedAt))
+                continue;
+            values.Add(new RssLegacyFileNameCandidate(
+                reader.GetInt64(0),
+                reader.GetString(1),
+                publishedAt,
+                reader.GetString(3),
+                reader.GetString(4),
+                reader.GetString(5)));
+        }
+        return values;
+    }
+
+    public async Task UpdateDownloadedFileLocationAsync(
+        long itemId,
+        string expectedOldPath,
+        string fileName,
+        string filePath,
+        CancellationToken cancellationToken = default)
+    {
+        await using var connection = await _database.OpenConnectionAsync(cancellationToken).ConfigureAwait(false);
+        await using var transaction = (SqliteTransaction)await connection.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        await using (var item = connection.CreateCommand())
+        {
+            item.Transaction = transaction;
+            item.CommandText = """
+                UPDATE rss_feed_items
+                   SET file_name=$name,file_path=$path
+                 WHERE id=$id AND file_path=$old_path;
+                """;
+            item.Parameters.AddWithValue("$id", itemId);
+            item.Parameters.AddWithValue("$old_path", expectedOldPath);
+            item.Parameters.AddWithValue("$name", fileName);
+            item.Parameters.AddWithValue("$path", filePath);
+            if (await item.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false) != 1)
+                throw new InvalidOperationException("The RSS download record changed before its legacy filename could be updated.");
+        }
+
+        await using (var media = connection.CreateCommand())
+        {
+            media.Transaction = transaction;
+            media.CommandText = """
+                UPDATE media_files
+                   SET path=$path,original_filename=$name
+                 WHERE path=$old_path;
+                """;
+            media.Parameters.AddWithValue("$old_path", expectedOldPath);
+            media.Parameters.AddWithValue("$name", fileName);
+            media.Parameters.AddWithValue("$path", filePath);
+            await media.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+    }
+
     public async Task MarkItemDownloadedAsync(
         long itemId,
         string fileName,
@@ -389,3 +463,11 @@ internal sealed class RssFeedSubscriptionStore
         return message.Length <= 500 ? message : message[..500];
     }
 }
+
+internal sealed record RssLegacyFileNameCandidate(
+    long ItemId,
+    string Title,
+    DateTimeOffset PublishedAt,
+    string FileName,
+    string FilePath,
+    string DestinationPath);

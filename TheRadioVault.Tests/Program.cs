@@ -311,6 +311,7 @@ var tests = new (string Name, Action Run)[]
     ("Post-cutover scans append new broadcasts to the canonical library", PostCutoverScanAppendsCanonicalBroadcasts),
     ("Research date updates the active adopted Library projection", ResearchDateUpdatesActiveAdoptedLibraryProjection),
     ("Research dates stay durable across multipart review and scanning", ResearchDatesStayDurableAcrossMultipartReviewAndScanning),
+    ("Legacy approved Research dates reattach only unique archive matches", LegacyApprovedResearchDatesReattachUniqueArchiveMatches),
     ("Quick date-review decisions persist and reopen safely", QuickDateReviewDecisionsPersistAndReopenSafely),
     ("Research packs round-trip date-review decisions", ResearchPacksRoundTripDateReviewDecisions),
     ("Research packs tolerate harmless AI scalar variations", ResearchPacksTolerateAiScalarVariations),
@@ -456,16 +457,48 @@ static void RssArchiveInboxIsSafeAndIncremental()
         var newItems = service.CheckNowAsync(feed.Id).GetAwaiter().GetResult();
         Equal(1, newItems.NewDownloads);
         Equal(1, Directory.EnumerateFiles(archive, "*.mp3").Count());
+        Equal("Bennington 2026-08-12.mp3", Path.GetFileName(Directory.EnumerateFiles(archive, "*.mp3").Single()));
         Equal(1, scanCount);
         Equal(1, handler.AudioRequests);
         True(handler.SawConditionalRequest, "The second RSS check did not use the saved ETag.");
         True(handler.SawFeedBasicAuthentication, "Private RSS Basic authentication was not sent to the feed host.");
         True(!handler.SentAuthenticationToMediaHost, "RSS credentials were forwarded to a different enclosure host.");
 
+        var cleanPath = Directory.EnumerateFiles(archive, "*.mp3").Single();
+        var legacyPath = Path.Combine(archive, "2026-08-13 - Bennington 2026-08-12.mp3");
+        File.Copy(cleanPath, legacyPath);
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                UPDATE rss_feed_items
+                   SET file_name=$name,file_path=$path
+                 WHERE feed_id=$id AND title='Bennington 2026-08-12';
+                """;
+            command.Parameters.AddWithValue("$id", feed.Id);
+            command.Parameters.AddWithValue("$name", Path.GetFileName(legacyPath));
+            command.Parameters.AddWithValue("$path", legacyPath);
+            Equal(1, command.ExecuteNonQuery());
+        }
+
         var repeated = service.CheckNowAsync(feed.Id).GetAwaiter().GetResult();
         Equal(0, repeated.NewDownloads);
         Equal(1, handler.AudioRequests);
-        Equal(1, scanCount);
+        Equal(2, scanCount);
+        True(File.Exists(cleanPath), "The existing clean archive copy was overwritten by the RSS filename migration.");
+        True(!File.Exists(legacyPath), "The old publication-date-prefixed RSS filename was not migrated.");
+        var renamedRssCopy = Path.Combine(archive, "Bennington 2026-08-12 - RSS copy.mp3");
+        True(File.Exists(renamedRssCopy), "The colliding legacy RSS file was not preserved with a safe name.");
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT file_name,file_path FROM rss_feed_items WHERE feed_id=$id AND title='Bennington 2026-08-12';";
+            command.Parameters.AddWithValue("$id", feed.Id);
+            using var reader = command.ExecuteReader();
+            True(reader.Read());
+            Equal(Path.GetFileName(renamedRssCopy), reader.GetString(0));
+            Equal(renamedRssCopy, reader.GetString(1));
+        }
 
         using (var connection = database.OpenConnection())
         using (var command = connection.CreateCommand())
@@ -475,7 +508,7 @@ static void RssArchiveInboxIsSafeAndIncremental()
             command.ExecuteNonQuery();
         }
         _ = service.RunIfDueAsync().GetAwaiter().GetResult();
-        Equal(2, scanCount);
+        Equal(3, scanCount);
         using (var connection = database.OpenConnection())
         using (var command = connection.CreateCommand())
         {
@@ -499,9 +532,9 @@ static void RssArchiveInboxIsSafeAndIncremental()
             True(!protectedSource.Contains("graham", StringComparison.OrdinalIgnoreCase));
         }
 
-        var downloadedPath = Directory.EnumerateFiles(archive, "*.mp3").Single();
+        var downloadedPaths = Directory.EnumerateFiles(archive, "*.mp3").ToArray();
         service.DeleteAsync(feed.Id).GetAwaiter().GetResult();
-        True(File.Exists(downloadedPath), "Removing an RSS subscription deleted archive audio.");
+        True(downloadedPaths.All(File.Exists), "Removing an RSS subscription deleted archive audio.");
 
         handler.IncludeNewEpisode = false;
         var backCatalogueFeed = service.CreateAsync(new RssFeedSaveRequest(
@@ -512,7 +545,7 @@ static void RssArchiveInboxIsSafeAndIncremental()
             ImportExistingOnFirstCheck: true)).GetAwaiter().GetResult();
         var importedExisting = service.CheckNowAsync(backCatalogueFeed.Id).GetAwaiter().GetResult();
         Equal(1, importedExisting.NewDownloads);
-        Equal(2, Directory.EnumerateFiles(archive, "*.mp3").Count());
+        Equal(3, Directory.EnumerateFiles(archive, "*.mp3").Count());
         service.DeleteAsync(backCatalogueFeed.Id).GetAwaiter().GetResult();
     }
     finally
@@ -4884,17 +4917,32 @@ static void ResearchDatesStayDurableAcrossMultipartReviewAndScanning()
 
                 INSERT INTO research_broadcasts(id,identity_key,collection_id,episode_id,source_broadcast_id,air_date,headline,research_json,research_state,existence_status,confidence,needs_review,created_at,updated_at)
                 VALUES
-                  (8101,'PATRICE-TRIBUTE-1',(SELECT id FROM collections WHERE name='Opie & Anthony'),6101,'PATRICE-TRIBUTE-1','2011-11-01','Patrice O''Neal Tribute Part 1',$json,'in_library','in_library',100,1,$now,$now),
-                  (8102,'PATRICE-TRIBUTE-2',(SELECT id FROM collections WHERE name='Opie & Anthony'),6102,'PATRICE-TRIBUTE-2','2011-11-01','Patrice O''Neal Tribute Part 2',$json,'in_library','in_library',100,1,$now,$now);
+                  (8101,'PATRICE-TRIBUTE-1',(SELECT id FROM collections WHERE name='Opie & Anthony'),6101,'PATRICE-TRIBUTE-1',NULL,'Patrice O''Neal Tribute Part 1',$json1,'in_library','in_library',100,0,$now,$now),
+                  (8102,'PATRICE-TRIBUTE-2',(SELECT id FROM collections WHERE name='Opie & Anthony'),6102,'PATRICE-TRIBUTE-2',NULL,'Patrice O''Neal Tribute Part 2',$json2,'in_library','in_library',100,1,$now,$now);
                 """;
             command.Parameters.AddWithValue("$now", now);
             command.Parameters.AddWithValue("$path1", Path.Combine(directory, "patrice-part-1.mp3"));
             command.Parameters.AddWithValue("$path2", Path.Combine(directory, "patrice-part-2.mp3"));
-            command.Parameters.AddWithValue("$json", """
-                {"broadcast_date":"2011-11-01","research":{"catalogue":{"date_review_status":"pending","date_review_date":"2011-11-01"}}}
+            command.Parameters.AddWithValue("$json1", """
+                {"broadcast_date":"2011-11-01","research":{"catalogue":{"date_review_status":"approved_library_date","date_review_date":"2011-11-01","original_filename":"Patrice O'Neal Tribute Part 1.mp3"}}}
+                """);
+            command.Parameters.AddWithValue("$json2", """
+                {"research":{"catalogue":{"date_review_status":"pending","date_review_date":"2011-11-01","original_filename":"Patrice O'Neal Tribute Part 2.mp3"}}}
                 """);
             command.ExecuteNonQuery();
         }
+
+        using (var connection = database.OpenConnection())
+        {
+            var migrated = ResearchDateAuthoritySynchronizer
+                .SynchronizeAsync(connection)
+                .GetAwaiter()
+                .GetResult();
+            Equal(2, migrated);
+        }
+
+        var reconciliation = new LibraryTruthEngine(database).BuildShadowIndex().Summary;
+        Equal(0, reconciliation.UnknownDates);
 
         var reviews = new ResearchWorkspaceService(database)
             .GetCatalogueDateReviewsAsync()
@@ -4921,7 +4969,11 @@ static void ResearchDatesStayDurableAcrossMultipartReviewAndScanning()
 
         using var verification = database.OpenConnection();
         using var verify = verification.CreateCommand();
-        verify.CommandText = "SELECT air_date,date_confidence FROM episodes WHERE id IN (6101,6102) ORDER BY id";
+        verify.CommandText = """
+            SELECT e.air_date,e.date_confidence,
+                   (SELECT rb.air_date FROM research_broadcasts rb WHERE rb.episode_id=e.id ORDER BY rb.id LIMIT 1)
+              FROM episodes e WHERE e.id IN (6101,6102) ORDER BY e.id;
+            """;
         using var reader = verify.ExecuteReader();
         var count = 0;
         while (reader.Read())
@@ -4929,8 +4981,85 @@ static void ResearchDatesStayDurableAcrossMultipartReviewAndScanning()
             count++;
             Equal("2011-11-01", reader.GetString(0));
             Equal("Research authoritative", reader.GetString(1));
+            Equal("2011-11-01", reader.GetString(2));
         }
         Equal(2, count);
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void LegacyApprovedResearchDatesReattachUniqueArchiveMatches()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "rv-legacy-research-reattach-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(directory, "legacy-date.db"));
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name)
+                VALUES('Ron Bennington Interviews','Ron Bennington Interviews');
+
+                INSERT INTO episodes(id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,hidden)
+                VALUES
+                  (6201,(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'Unknown','Aaron Schneider','Unplayed',$now,$now,0),
+                  (6202,(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'Unknown','Repeated Guest','Unplayed',$now,$now,0),
+                  (6203,(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'Unknown','Repeated Guest','Unplayed',$now,$now,0);
+
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES
+                  (7201,6201,$path1,'rbi_aaron_schneider.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7202,6202,$path2,'rbi_repeated_guest_a.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7203,6203,$path3,'rbi_repeated_guest_b.mp3',100,$now,0,$now,1000,'AvailableOffline',1);
+
+                INSERT INTO research_broadcasts(id,identity_key,collection_id,episode_id,source_broadcast_id,air_date,headline,research_json,research_state,existence_status,confidence,needs_review,created_at,updated_at)
+                VALUES
+                  (8201,'LEGACY-AARON',(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'',NULL,'Aaron Schneider',$uniqueJson,'partially_researched','unknown_gap',100,0,$now,$now),
+                  (8202,'LEGACY-REPEATED',(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'',NULL,'Repeated Guest',$ambiguousJson,'partially_researched','unknown_gap',100,0,$now,$now);
+                """;
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.Parameters.AddWithValue("$path1", Path.Combine(directory, "rbi_aaron_schneider.mp3"));
+            command.Parameters.AddWithValue("$path2", Path.Combine(directory, "one", "rbi_repeated_guest_a.mp3"));
+            command.Parameters.AddWithValue("$path3", Path.Combine(directory, "two", "rbi_repeated_guest_b.mp3"));
+            command.Parameters.AddWithValue("$uniqueJson", """
+                {"broadcast_date":"2016-06-07","research":{"catalogue":{"date_review_status":"approved_library_date","date_review_date":"2016-06-07","original_filename":"rbi_aaron_schneider.mp3"}}}
+                """);
+            command.Parameters.AddWithValue("$ambiguousJson", """
+                {"broadcast_date":"2017-07-08","research":{"catalogue":{"date_review_status":"approved_library_date","date_review_date":"2017-07-08"}}}
+                """);
+            command.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var migrated = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(1, migrated);
+        }
+
+        using var verification = database.OpenConnection();
+        using var verify = verification.CreateCommand();
+        verify.CommandText = """
+            SELECT
+              (SELECT episode_id FROM research_broadcasts WHERE id=8201),
+              (SELECT air_date FROM episodes WHERE id=6201),
+              (SELECT date_confidence FROM episodes WHERE id=6201),
+              (SELECT episode_id FROM research_broadcasts WHERE id=8202),
+              (SELECT COUNT(*) FROM episodes WHERE id IN (6202,6203) AND air_date IS NOT NULL);
+            """;
+        using var reader = verify.ExecuteReader();
+        True(reader.Read());
+        Equal(6201L, reader.GetInt64(0));
+        Equal("2016-06-07", reader.GetString(1));
+        Equal("Research authoritative", reader.GetString(2));
+        True(reader.IsDBNull(3), "An ambiguous Research record was attached automatically.");
+        Equal(0L, reader.GetInt64(4));
     }
     finally
     {
@@ -6771,7 +6900,7 @@ sealed class RssScenarioHandler : HttpMessageHandler
             var newer = IncludeNewEpisode
                 ? """
                   <item>
-                    <title>Bennington - New episode</title>
+                    <title>Bennington 2026-08-12</title>
                     <guid>bennington-new</guid>
                     <pubDate>Thu, 13 Aug 2026 12:00:00 GMT</pubDate>
                     <enclosure url="https://media.example/bennington-new.mp3?token=private-audio" type="audio/mpeg" />
@@ -6782,7 +6911,7 @@ sealed class RssScenarioHandler : HttpMessageHandler
                 <?xml version="1.0" encoding="utf-8"?>
                 <rss version="2.0"><channel><title>Private Bennington</title>
                   <item>
-                    <title>Bennington - Existing episode</title>
+                    <title>Bennington 2026-08-11</title>
                     <guid>bennington-existing</guid>
                     <pubDate>Wed, 12 Aug 2026 12:00:00 GMT</pubDate>
                     <enclosure url="https://media.example/bennington-existing.mp3?token=private-audio" type="audio/mpeg" />

@@ -39,6 +39,18 @@ public sealed class RadioVaultServerRuntime : IDisposable
         _platformDatabase = new SqliteDatabase(DatabasePath);
         _database = new DatabaseService(_platformDatabase);
         _database.Initialize();
+        try
+        {
+            using var migrationConnection = _platformDatabase.OpenConnection();
+            ResearchDateAuthoritySynchronizer.SynchronizeAsync(migrationConnection).GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            // The repair is idempotent and will be retried on the next launch.
+            // A locked or partially restored Research ledger must not prevent
+            // the server UI and playback service from starting.
+            DiagnosticLog.Write("Research dates", "The legacy approved-date repair was deferred safely.", exception);
+        }
         _events = new ApplicationEventBus();
         _livePlayback = new LivePlaybackStateStore();
         _jobs = new BackgroundJobQueue(2, _events);

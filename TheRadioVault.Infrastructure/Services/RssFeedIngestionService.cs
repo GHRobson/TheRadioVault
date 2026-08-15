@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using TheRadioVault.Data.Database;
 using TheRadioVault.Services.Models;
 using TheRadioVault.Services.Services;
@@ -21,6 +22,9 @@ public sealed class RssFeedIngestionService : IDisposable
     private static readonly TimeSpan DownloadInactivityTimeout = TimeSpan.FromSeconds(90);
     private static readonly HashSet<string> AudioExtensions = new(StringComparer.OrdinalIgnoreCase)
         { ".mp3", ".m4a", ".aac", ".flac", ".ogg", ".wav", ".wma" };
+    private static readonly Regex BroadcastDateInTitle = new(
+        @"(?<!\d)(?:19|20)\d{2}[\s._-]+\d{1,2}[\s._-]+\d{1,2}(?!\d)",
+        RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     private readonly RssFeedSubscriptionStore _store;
     private readonly RssFeedSecretProtector _protector;
@@ -108,6 +112,8 @@ public sealed class RssFeedIngestionService : IDisposable
         var scanStarted = false;
         try
         {
+            var legacyRename = await RenameLegacyRssFilesAsync(token).ConfigureAwait(false);
+            failures += legacyRename.Failures;
             var now = DateTimeOffset.UtcNow;
             var feeds = await _store.GetDueAsync(now, feedId, force, token).ConfigureAwait(false);
             foreach (var feed in feeds)
@@ -120,7 +126,9 @@ public sealed class RssFeedIngestionService : IDisposable
                 failures += outcome.Failures;
             }
 
-            var awaitingScan = downloaded > 0 || await _store.HasDownloadsAwaitingScanAsync(token).ConfigureAwait(false);
+            var awaitingScan = downloaded > 0
+                               || legacyRename.Renamed > 0
+                               || await _store.HasDownloadsAwaitingScanAsync(token).ConfigureAwait(false);
             if (awaitingScan)
             {
                 try
@@ -138,10 +146,14 @@ public sealed class RssFeedIngestionService : IDisposable
             }
 
             var message = checkedFeeds == 0
-                ? "No RSS feeds are due for a check."
+                ? legacyRename.Renamed > 0
+                    ? $"Renamed {legacyRename.Renamed:N0} legacy RSS broadcast file{(legacyRename.Renamed == 1 ? string.Empty : "s")}."
+                    : "No RSS feeds are due for a check."
                 : downloaded == 0
                     ? $"Checked {checkedFeeds:N0} RSS feed{(checkedFeeds == 1 ? string.Empty : "s")}; no new broadcasts were found."
                     : $"Downloaded {downloaded:N0} new broadcast{(downloaded == 1 ? string.Empty : "s")} from {checkedFeeds:N0} RSS feed{(checkedFeeds == 1 ? string.Empty : "s")}.";
+            if (checkedFeeds > 0 && legacyRename.Renamed > 0)
+                message += $" Renamed {legacyRename.Renamed:N0} legacy RSS file{(legacyRename.Renamed == 1 ? string.Empty : "s")}.";
             if (failures > 0) message += $" {failures:N0} item{(failures == 1 ? string.Empty : "s")} need another attempt.";
             return new RssFeedCheckResult(checkedFeeds, downloaded, known, failures, scanStarted, message);
         }
@@ -276,7 +288,7 @@ public sealed class RssFeedIngestionService : IDisposable
 
             var effectiveUri = response.RequestMessage?.RequestUri ?? item.EnclosureUri;
             var extension = ExtensionFor(effectiveUri, mediaType);
-            var fileName = BuildFileName(item.Title, item.PublishedAt, extension);
+            var fileName = BuildFileName(item.Title, extension);
             var incoming = Path.Combine(subscription.DestinationPath, ".radiovault-incoming");
             Directory.CreateDirectory(incoming);
             var temporary = Path.Combine(incoming, item.StableKey.Replace(':', '-') + ".part");
@@ -417,16 +429,119 @@ public sealed class RssFeedIngestionService : IDisposable
         request.Headers.Authorization = new AuthenticationHeaderValue("Basic", value);
     }
 
-    private static string BuildFileName(string title, DateTimeOffset? publishedAt, string extension)
+    private static string BuildFileName(string title, string extension)
     {
-        var prefix = publishedAt.HasValue ? publishedAt.Value.ToLocalTime().ToString("yyyy-MM-dd") + " - " : string.Empty;
+        // pubDate describes when the feed published the item, which can be the
+        // following day and is not part of the broadcast identity. Preserve the
+        // feed title (and its actual broadcast date) without adding pubDate.
+        return SanitizeFileName(title, extension);
+    }
+
+    private static string BuildLegacyFileName(string title, DateTimeOffset publishedAt, string extension)
+        => SanitizeFileName($"{publishedAt.ToLocalTime():yyyy-MM-dd} - {title}", extension);
+
+    private static string SanitizeFileName(string value, string extension)
+    {
         var invalid = Path.GetInvalidFileNameChars().Concat(['/', '\\', ':', '*', '?', '"', '<', '>', '|']).ToHashSet();
-        var cleaned = new string((prefix + title).Select(character => invalid.Contains(character) || char.IsControl(character) ? ' ' : character).ToArray());
+        var cleaned = new string(value.Select(character => invalid.Contains(character) || char.IsControl(character) ? ' ' : character).ToArray());
         cleaned = string.Join(' ', cleaned.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries)).Trim(' ', '.');
         if (string.IsNullOrWhiteSpace(cleaned)) cleaned = "RSS broadcast";
         var maximumStem = Math.Max(40, 180 - extension.Length);
         if (cleaned.Length > maximumStem) cleaned = cleaned[..maximumStem].TrimEnd();
         return cleaned + extension;
+    }
+
+    private async Task<LegacyRenameOutcome> RenameLegacyRssFilesAsync(CancellationToken cancellationToken)
+    {
+        var renamed = 0;
+        var failures = 0;
+        var candidates = await _store.GetLegacyFileNameCandidatesAsync(cancellationToken).ConfigureAwait(false);
+        foreach (var candidate in candidates)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            string? target = null;
+            try
+            {
+                if (!TryPrepareLegacyRename(candidate, out var desiredName, out var sourcePath))
+                    continue;
+                target = ChooseLegacyRenameTarget(candidate.DestinationPath, desiredName);
+                File.Move(sourcePath, target);
+                try
+                {
+                    await _store.UpdateDownloadedFileLocationAsync(
+                        candidate.ItemId,
+                        sourcePath,
+                        Path.GetFileName(target),
+                        target,
+                        cancellationToken).ConfigureAwait(false);
+                }
+                catch
+                {
+                    if (!File.Exists(sourcePath) && File.Exists(target))
+                        File.Move(target, sourcePath);
+                    throw;
+                }
+                renamed++;
+                DiagnosticLog.Write(
+                    "RSS ingestion",
+                    $"Renamed legacy RSS file ‘{candidate.FileName}’ to ‘{Path.GetFileName(target)}’. No audio was deleted or overwritten.");
+            }
+            catch (OperationCanceledException) { throw; }
+            catch (Exception exception)
+            {
+                failures++;
+                DiagnosticLog.Write(
+                    "RSS ingestion",
+                    $"Legacy RSS file ‘{candidate.FileName}’ was left unchanged because its safe rename could not be completed.",
+                    exception);
+            }
+        }
+        return new LegacyRenameOutcome(renamed, failures);
+    }
+
+    private static bool TryPrepareLegacyRename(
+        RssLegacyFileNameCandidate candidate,
+        out string desiredName,
+        out string sourcePath)
+    {
+        desiredName = string.Empty;
+        sourcePath = string.Empty;
+        if (string.IsNullOrWhiteSpace(candidate.Title) || !BroadcastDateInTitle.IsMatch(candidate.Title))
+            return false;
+
+        var extension = Path.GetExtension(candidate.FileName);
+        if (!AudioExtensions.Contains(extension))
+            return false;
+        desiredName = BuildFileName(candidate.Title, extension);
+        var expectedLegacyName = BuildLegacyFileName(candidate.Title, candidate.PublishedAt, extension);
+        if (!candidate.FileName.Equals(expectedLegacyName, StringComparison.OrdinalIgnoreCase)
+            || !Path.GetFileName(candidate.FilePath).Equals(candidate.FileName, StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        sourcePath = Path.GetFullPath(candidate.FilePath);
+        var sourceDirectory = Path.TrimEndingDirectorySeparator(Path.GetDirectoryName(sourcePath) ?? string.Empty);
+        var destination = Path.TrimEndingDirectorySeparator(Path.GetFullPath(candidate.DestinationPath));
+        if (!string.Equals(sourceDirectory, destination, StringComparison.OrdinalIgnoreCase)
+            || !File.Exists(sourcePath))
+            return false;
+        return true;
+    }
+
+    private static string ChooseLegacyRenameTarget(string destinationPath, string desiredName)
+    {
+        var desired = Path.Combine(destinationPath, desiredName);
+        if (!File.Exists(desired)) return desired;
+
+        var stem = Path.GetFileNameWithoutExtension(desiredName);
+        var extension = Path.GetExtension(desiredName);
+        var copy = Path.Combine(destinationPath, $"{stem} - RSS copy{extension}");
+        if (!File.Exists(copy)) return copy;
+        for (var suffix = 2; suffix <= 99; suffix++)
+        {
+            copy = Path.Combine(destinationPath, $"{stem} - RSS copy {suffix}{extension}");
+            if (!File.Exists(copy)) return copy;
+        }
+        throw new IOException("Radio Vault could not choose a collision-free filename for the legacy RSS broadcast.");
     }
 
     private static string ExtensionFor(Uri uri, string? mediaType)
@@ -500,4 +615,5 @@ public sealed class RssFeedIngestionService : IDisposable
 
     private sealed record FeedOutcome(int Downloaded, int Known, int Failures);
     private sealed record DownloadOutcome(bool CreatedNewFile);
+    private sealed record LegacyRenameOutcome(int Renamed, int Failures);
 }
