@@ -690,7 +690,7 @@ $researchViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia
 $researchTransferText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Research\AvaloniaResearchPackTransferServices.cs") -Raw
 $researchViewModelText = Get-Content (Join-Path $root "TheRadioVault.Presentation\ViewModels\ResearchWorkspaceViewModel.cs") -Raw
 $knowledgePackText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\KnowledgePackService.cs") -Raw
-foreach ($marker in @('Export full Knowledge Database', 'Archive Knowledge Database ready')) {
+foreach ($marker in @('Export Knowledge Database', 'Archive Knowledge Database ready')) {
     if ($researchViewText -notmatch [regex]::Escape($marker)) { throw "Buildfix 1 Deep Research Pack UI marker missing: $marker" }
 }
 foreach ($marker in @('pack.Transcripts.Count', 'TranscriptCount = pack.Transcripts.Count')) {
