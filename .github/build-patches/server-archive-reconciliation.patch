@@ -2854,7 +2854,7 @@ index 8c8609c35bf2e2f798a5b86779ff1adcfcf24a1b..87fe01851595eef86feb5a4d2275a235
  
  Radio Vault uses different identifiers for different jobs:
 diff --git a/validate-source.ps1 b/validate-source.ps1
-index 27c8d9340a98497dd55a146268c1d8c67aee02fb..92c259d98d6b2b0ffbcd79ba70b3b133cb195385 100644
+index 27c8d9340a98497dd55a146268c1d8c67aee02fb..944906f5f92403d0331f191b4fab130ac625d965 100644
 --- a/validate-source.ps1
 +++ b/validate-source.ps1
 @@ -744,7 +744,9 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.33.0-STABLE.
@@ -2903,3 +2903,21 @@ index 27c8d9340a98497dd55a146268c1d8c67aee02fb..92c259d98d6b2b0ffbcd79ba70b3b133
  $alpha12ClientStylesText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\App.axaml") -Raw
  $alpha12TranscriptsViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\TranscriptsView.axaml") -Raw
  foreach ($marker in @('LoopbackServerLibraryFolderService', 'LoopbackServerArchiveHealthService', 'LoopbackServerLibraryMaintenanceService', 'IServerTranscriptionAdministrationService')) {
+@@ -972,7 +986,7 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA13
+ }
+ 
+ $alpha13Buildfix1RuntimeText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\RadioVaultServerRuntime.cs") -Raw
+-$alpha13Buildfix1ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml") -Raw
++$alpha13Buildfix1ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerLibraryView.axaml") -Raw
+ $alpha13Buildfix1LibraryViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\LibraryView.axaml") -Raw
+ $alpha13Buildfix1ActionsText = Get-Content (Join-Path $root "TheRadioVault.Infrastructure\Services\LoopbackUserStateServices.cs") -Raw
+ $alpha13Buildfix1ClientInstallerText = Get-Content (Join-Path $root "installer\RadioVault.Client.iss") -Raw
+@@ -997,7 +1011,7 @@ if (-not (Test-Path (Join-Path $root "docs/history/release-notes/V0.34.0-ALPHA13
+ $alpha14WebServerText = $anywhereWebText
+ $alpha14ClientAdapterText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Anywhere\DedicatedServerRadioVaultAnywhereService.cs") -Raw
+ $alpha14ClientViewText = Get-Content (Join-Path $root "TheRadioVault.Desktop.Avalonia\Views\DesktopToolsView.axaml") -Raw
+-$alpha14ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerSettingsWindow.axaml") -Raw
++$alpha14ServerViewText = Get-Content (Join-Path $root "TheRadioVault.Server\Views\ServerAccessView.axaml") -Raw
+ $alpha14QrText = Get-Content (Join-Path $root "TheRadioVault.Application\Models\PhoneQrCode.cs") -Raw
+ foreach ($marker in @('productName = "Radio Vault Web"', 'GetAccessUrls().FirstOrDefault()', 'GetSecureSetupUrls().FirstOrDefault()', '<title>Radio Vault Web</title>', 'radio-vault-anywhere-shell-v68')) {
+     if ($alpha14WebServerText -notmatch [regex]::Escape($marker)) { throw "Alpha 14 Radio Vault Web server marker missing: $marker" }
