@@ -26,6 +26,7 @@ public sealed class RadioVaultServerRuntime : IDisposable
     private readonly ILibraryFolderService _libraryFolders;
     private readonly RssFeedIngestionService _rssFeeds;
     private readonly MediaConsolidationService _mediaConsolidation;
+    private readonly ArchiveReconciliationService _archiveReconciliation;
     private bool _disposed;
 
     public RadioVaultServerRuntime(
@@ -56,6 +57,7 @@ public sealed class RadioVaultServerRuntime : IDisposable
                 return result.Started && !result.IsRunning;
             });
         _mediaConsolidation = new MediaConsolidationService(_platformDatabase);
+        _archiveReconciliation = new ArchiveReconciliationService(_platformDatabase);
         _rssFeeds.Start();
 
         if (honorAutomaticStart && Preferences.Enabled && Preferences.StartAutomatically)
@@ -123,6 +125,12 @@ public sealed class RadioVaultServerRuntime : IDisposable
     public Task ExportRedactedDiagnosticsAsync(string destinationPath, CancellationToken cancellationToken = default)
         => new ServerHealthDiagnosticsService().ExportAsync(
             GetHealthSnapshot(), AppVersionService.Version, destinationPath, cancellationToken);
+    public ArchiveReconciliationSnapshot GetArchiveReconciliationSnapshot()
+        => _archiveReconciliation.GetSnapshot();
+    public ArchiveReconciliationSnapshot ReconcileArchive(
+        IProgress<(double Percent, string Message)>? progress = null,
+        CancellationToken cancellationToken = default)
+        => _archiveReconciliation.Reconcile(progress, cancellationToken);
     public MediaConsolidationPlan PrepareMediaConsolidation(
         string managedRoot,
         string quarantineRoot,

@@ -1,0 +1,68 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Server.Views.ServerLibraryView">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="26" Spacing="16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="LIBRARY" Classes="eyebrow" />
+        <TextBlock Text="Archive locations and indexing" FontSize="28" FontWeight="Bold" />
+        <TextBlock Text="Choose the folders this server owns and scan them into the Radio Vault library." Classes="muted" FontSize="12" />
+      </StackPanel>
+
+      <Border Classes="card">
+        <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="9">
+            <StackPanel Spacing="3">
+              <TextBlock Text="LIBRARY FOLDERS" Classes="eyebrow" />
+              <TextBlock Text="Archive locations on this computer" FontSize="17" FontWeight="SemiBold" />
+              <TextBlock Text="Add folders from the server computer that physically owns the archive. Radio Vault asks which show each folder contains; use mixed only when it really contains several shows. Removing a registration never deletes audio files."
+                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+            <Button Grid.Column="1" Content="Scan Library now" Classes="secondary" Command="{Binding ScanLibraryCommand}" VerticalAlignment="Center" />
+            <Button Grid.Column="2" Content="Add folder" Classes="primary" Command="{Binding AddLibraryFolderCommand}" VerticalAlignment="Center" />
+          </Grid>
+          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
+            <TextBlock Text="{Binding LibraryStatusText}" FontSize="11" TextWrapping="Wrap" />
+          </Border>
+          <ListBox ItemsSource="{Binding LibraryFolders}" SelectedItem="{Binding SelectedLibraryFolder, Mode=TwoWay}"
+                   MaxHeight="420" Background="Transparent" BorderThickness="0" IsVisible="{Binding HasLibraryFolders}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Border Background="#151A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,6">
+                  <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <StackPanel Spacing="3">
+                      <TextBlock Text="{Binding Path}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                      <TextBlock Text="{Binding AssignmentDisplayName}" Classes="muted" FontSize="10" />
+                    </StackPanel>
+                    <TextBlock Grid.Column="1" Text="ENABLED" Foreground="#52D6A2" FontWeight="Bold" FontSize="9"
+                               VerticalAlignment="Center" IsVisible="{Binding Enabled}" />
+                    <TextBlock Grid.Column="1" Text="DISABLED" Foreground="#E2A84A" FontWeight="Bold" FontSize="9"
+                               VerticalAlignment="Center" IsVisible="{Binding !Enabled}" />
+                  </Grid>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <WrapPanel ItemSpacing="8" LineSpacing="8" IsVisible="{Binding HasLibraryFolders}">
+            <Button Content="Change selected show" Classes="primary" Command="{Binding AssignLibraryFolderCommand}" />
+            <Button Content="Enable or disable selected" Classes="secondary" Command="{Binding ToggleLibraryFolderCommand}" />
+            <Button Content="Remove selected registration" Classes="secondary" Command="{Binding RemoveLibraryFolderCommand}" />
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+
+      <Border Classes="card">
+        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="10">
+          <StackPanel Spacing="3">
+            <TextBlock Text="AUTHORITATIVE STORAGE" Classes="eyebrow" />
+            <TextBlock Text="RadioVault Server owns this database" FontSize="17" FontWeight="SemiBold" />
+            <TextBlock Text="Playback state, metadata, pairings and archive indexes all use this server database."
+                       Classes="muted" FontSize="11" />
+          </StackPanel>
+          <TextBox Grid.Row="1" Text="{Binding DatabasePath}" IsReadOnly="True" />
+          <Button Grid.Row="2" Content="Open data folder" Classes="secondary" Command="{Binding OpenDataFolderCommand}" HorizontalAlignment="Left" />
+        </Grid>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

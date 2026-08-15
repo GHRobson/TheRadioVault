@@ -17,6 +17,11 @@ Radio Vault can build one logically organised managed archive from the physical 
 - Symbolic-link media and symbolic-link destinations are rejected.
 - Managed and quarantine folders must be separate, non-nested locations outside the existing Library roots.
 - Held or review-required Library Truth broadcasts are not touched.
+- A plan cannot exist unless every currently available `media_files` row is represented by the exact Library Truth snapshot used for ranking.
+- If no snapshot exists—or scanning added files after the last one—Prepare automatically builds a fresh non-destructive archive reconciliation before fingerprinting.
+- Available media still attached to hidden legacy rows stop planning and require review; they are never silently omitted or moved.
+- The signed plan records the total, available, missing, planned and held physical-file counts plus a complete inventory signature.
+- Any database inventory change after planning invalidates rehearsal and commit. A completed matching journal remains idempotently recoverable.
 
 The only files the implementation may delete are its own incomplete `.partial` copies, manifest temporary files and write-test probes. It never calls a deletion operation for a source, managed recording or quarantine recording.
 
@@ -64,8 +69,8 @@ Quarantine is deliberately outside the indexed Library so rejected files do not 
 
 ## Workflow and recovery
 
-1. Complete a fresh Library Truth run and resolve anything that must not be held.
-2. Choose a new managed folder and a separate quarantine folder in Server settings.
+1. Let Library scanning finish. Prepare automatically refreshes the non-destructive archive reconciliation when the inventory changed; resolve anything it must hold.
+2. Open **Archive Reconciliation** in Radio Vault Server and choose a new managed folder and a separate quarantine folder.
 3. Prepare the preview. Review managed, rejected and held counts.
 4. Run the no-move rehearsal. It re-hashes sources, checks containment, collisions, write access and free space, and writes the signed manifest.
 5. Stop Radio Vault Server.
@@ -73,6 +78,8 @@ Quarantine is deliberately outside the indexed Library so rejected files do not 
 7. Verify playback from the managed archive and keep an independent backup before considering any manual deletion from quarantine.
 
 The journal is written after every verified phase. If the process or computer stops during commit, select the same quarantine folder after restarting the Server app. It discovers a non-completed journal, reloads the signed plan and requires another full rehearsal and exact confirmation. Existing managed and quarantine files are accepted only when their byte length and complete hash match the plan, making resume idempotent.
+
+The preview summary must satisfy `planned source files + held source files = available physical files`. Records already marked missing are reported separately and are not presented as physical files that can be moved. If that equation cannot be proved—or a new scan changes the inventory signature—Radio Vault produces no committable plan.
 
 ## File and broadcast identity audit
 

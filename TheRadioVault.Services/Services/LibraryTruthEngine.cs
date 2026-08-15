@@ -7,8 +7,9 @@ using TheRadioVault.Services.Models;
 namespace TheRadioVault.Services.Services;
 
 /// <summary>
-/// Builds a non-destructive shadow interpretation of the physical archive.
-/// Alpha7 preserves the confirmed shadow model and adds a disposable transactional adoption rehearsal. Live episodes, playback, research, transcripts and files remain untouched.
+/// Compatibility implementation behind ArchiveReconciliationService. It builds a
+/// non-destructive shadow interpretation of physical files while preserving the
+/// established parser, evidence and guarded-adoption contracts.
 /// </summary>
 public sealed class LibraryTruthEngine
 {

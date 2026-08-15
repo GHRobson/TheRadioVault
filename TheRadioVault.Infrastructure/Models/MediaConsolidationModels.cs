@@ -43,12 +43,18 @@ public sealed record MediaConsolidationPlan(
     IReadOnlyList<MediaConsolidationPlanItem> Items,
     int EligibleBroadcasts,
     int HeldBroadcasts,
+    int InventoryMediaRecords,
+    int InventoryAvailableFiles,
+    int InventoryMissingFiles,
+    int HeldSourceFiles,
+    string InventorySignature,
     long ManagedBytes,
     long QuarantinedOriginalBytes,
     IReadOnlyList<string> Warnings)
 {
     public int ManagedFiles => Items.Count(item => item.IsManagedCopy);
     public int RejectedFiles => Items.Count(item => item.IsRejected);
+    public int AccountedAvailableFiles => Items.Count + HeldSourceFiles;
     public string ConfirmationText => $"CONSOLIDATE {PlanId}";
 }
 

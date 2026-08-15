@@ -1,0 +1,48 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Server.Views.ServerKnowledgeView">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="26" Spacing="16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="KNOWLEDGE" Classes="eyebrow" />
+        <TextBlock Text="Protect the story behind the archive" FontSize="28" FontWeight="Bold" />
+        <TextBlock Text="Import or export portable Radio Vault knowledge, Explore pages and linked research." Classes="muted" FontSize="12" />
+      </StackPanel>
+      <Border Classes="card">
+        <StackPanel Spacing="14">
+          <StackPanel Spacing="3">
+            <TextBlock Text="KNOWLEDGE DATABASE" Classes="eyebrow" />
+            <TextBlock Text="Import, protect and export archive knowledge" FontSize="17" FontWeight="SemiBold" />
+            <TextBlock Text="Imports run as cancellable background jobs owned by the server. Closing this window or disconnecting a client does not stop a healthy import. Every import remains transactional and creates a verified safety backup before changing the archive."
+                       Classes="muted" FontSize="11" TextWrapping="Wrap" />
+          </StackPanel>
+          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="12">
+            <StackPanel Spacing="8">
+              <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
+                <TextBlock Text="{Binding KnowledgeStatusText}" FontSize="11" TextWrapping="Wrap" />
+                <TextBlock Grid.Column="1" Text="{Binding KnowledgeProgressCountText}" Classes="muted" FontSize="10" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="{Binding KnowledgeProgressPercentText}" FontWeight="Bold" Foreground="#F2C94C" VerticalAlignment="Center" />
+              </Grid>
+              <ProgressBar Minimum="0" Maximum="100" Value="{Binding KnowledgeProgressPercent}" Height="8"
+                           Foreground="#F2C94C" Background="#343B45" />
+            </StackPanel>
+          </Border>
+          <Border Background="#1B2027" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12"
+                  IsVisible="{Binding HasKnowledgeImportPreview}">
+            <StackPanel Spacing="4">
+              <TextBlock Text="{Binding KnowledgeImportFileText}" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding KnowledgeImportPreviewText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+            </StackPanel>
+          </Border>
+          <WrapPanel ItemSpacing="8" LineSpacing="8">
+            <Button Content="Choose Knowledge Database…" Classes="primary" Command="{Binding ChooseKnowledgeImportCommand}" />
+            <Button Content="Import now" Classes="primary" Command="{Binding ApplyKnowledgeImportCommand}" IsVisible="{Binding HasKnowledgeImportPreview}" />
+            <Button Content="Cancel import" Classes="secondary" Command="{Binding CancelKnowledgeImportCommand}" IsVisible="{Binding HasKnowledgeImportPreview}" />
+          </WrapPanel>
+          <Button Content="Export complete Knowledge Database…" Classes="secondary" HorizontalAlignment="Left"
+                  Command="{Binding ExportKnowledgeCommand}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

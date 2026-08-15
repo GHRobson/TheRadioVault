@@ -13,7 +13,7 @@ public sealed class ServerClipboardService
     public async Task SetTextAsync(string text, CancellationToken cancellationToken = default)
     {
         var clipboard = _owner.Clipboard
-            ?? throw new InvalidOperationException("The server settings clipboard is not available yet.");
+            ?? throw new InvalidOperationException("The server administration clipboard is not available yet.");
         await clipboard.SetTextAsync(text ?? string.Empty).WaitAsync(cancellationToken).ConfigureAwait(false);
     }
 }

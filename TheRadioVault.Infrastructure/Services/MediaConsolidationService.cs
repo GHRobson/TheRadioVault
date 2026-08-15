@@ -1,9 +1,11 @@
+using System.Globalization;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using TheRadioVault.Data.Database;
 using TheRadioVault.Services.Models;
+using TheRadioVault.Services.Services;
 
 namespace TheRadioVault.Services;
 
@@ -36,17 +38,37 @@ public sealed class MediaConsolidationService
 
         var runId = LatestCompletedTruthRun();
         if (runId <= 0)
-            throw new InvalidOperationException("Run and complete Library Truth before preparing media consolidation.");
+            runId = BuildFreshArchiveReconciliation(
+                "No archive reconciliation exists yet. Building the first non-destructive snapshot…",
+                progress,
+                cancellationToken);
 
+        var inventory = ReadInventorySnapshot(runId);
+        if (inventory.HiddenAvailableOutsideTruthFiles > 0)
+            EnsureTruthCoversCurrentInventory(inventory, runId);
+        if (inventory.AvailableOutsideTruthFiles > 0)
+        {
+            runId = BuildFreshArchiveReconciliation(
+                $"The archive changed after reconciliation run {runId:N0}. Building a fresh non-destructive snapshot…",
+                progress,
+                cancellationToken);
+            inventory = ReadInventorySnapshot(runId);
+        }
+        EnsureTruthCoversCurrentInventory(inventory, runId);
         var raw = ReadCandidates(runId);
         if (raw.Count == 0)
-            throw new InvalidOperationException("The latest Library Truth run contains no available media files.");
+            throw new InvalidOperationException("The latest archive reconciliation contains no available media files.");
+        if (raw.Count != inventory.TruthCoveredAvailableFiles)
+            throw new InvalidOperationException(
+                $"Media consolidation stopped because archive reconciliation {runId:N0} returned {raw.Count:N0} candidate row(s), " +
+                $"but the current inventory reconciliation found {inventory.TruthCoveredAvailableFiles:N0}. No plan was created.");
 
         var planId = DateTimeOffset.UtcNow.ToString("yyyyMMdd-HHmmss") + "-" + Guid.NewGuid().ToString("N")[..8];
         var warnings = new List<string>();
         var items = new List<MediaConsolidationPlanItem>();
         var eligibleBroadcasts = 0;
         var heldBroadcasts = 0;
+        var heldSourceFiles = 0;
         var completedFiles = 0;
 
         foreach (var broadcast in raw.GroupBy(candidate => candidate.CanonicalKey, StringComparer.OrdinalIgnoreCase))
@@ -58,6 +80,7 @@ public sealed class MediaConsolidationService
                 candidates.Any(candidate => string.IsNullOrWhiteSpace(candidate.RecordingKey)))
             {
                 heldBroadcasts++;
+                heldSourceFiles += candidates.Length;
                 warnings.Add($"Held {first.CanonicalKey}: {HeldReason(first)}");
                 continue;
             }
@@ -89,7 +112,7 @@ public sealed class MediaConsolidationService
                 var file = new FileInfo(candidate.SourcePath);
                 if (file.Length != candidate.SourceBytes)
                 {
-                    warnings.Add($"Held {first.CanonicalKey}: {Path.GetFileName(candidate.SourcePath)} changed after Library Truth ran.");
+                    warnings.Add($"Held {first.CanonicalKey}: {Path.GetFileName(candidate.SourcePath)} changed after archive reconciliation ran.");
                     unsafeGroup = true;
                     break;
                 }
@@ -114,6 +137,7 @@ public sealed class MediaConsolidationService
             if (unsafeGroup)
             {
                 heldBroadcasts++;
+                heldSourceFiles += candidates.Length;
                 continue;
             }
 
@@ -124,12 +148,14 @@ public sealed class MediaConsolidationService
             if (variants.Any(variant => !variant.IsInternallySafe))
             {
                 heldBroadcasts++;
-                warnings.Add($"Held {first.CanonicalKey}: a proposed recording segment contains non-identical files. Run Library Truth again or review that recording manually.");
+                heldSourceFiles += candidates.Length;
+                warnings.Add($"Held {first.CanonicalKey}: a proposed recording segment contains non-identical files. Run archive reconciliation again or review that recording manually.");
                 continue;
             }
             if (variants.Length > 1 && variants.Any(variant => variant.DurationMs <= 0))
             {
                 heldBroadcasts++;
+                heldSourceFiles += candidates.Length;
                 warnings.Add($"Held {first.CanonicalKey}: alternate recordings cannot be ranked safely until every runtime is known.");
                 continue;
             }
@@ -204,10 +230,20 @@ public sealed class MediaConsolidationService
         }
 
         if (items.Count == 0)
-            throw new InvalidOperationException("Library Truth did not find any safely consolidatable broadcasts. Review the held items before moving physical media.");
+            throw new InvalidOperationException("Archive reconciliation did not find any safely consolidatable broadcasts. Review the held items before moving physical media.");
 
         EnsureUniqueTargets(items);
         EnsureUniqueSources(items);
+        var finalInventory = ReadInventorySnapshot(runId);
+        if (!inventory.Signature.Equals(finalInventory.Signature, StringComparison.Ordinal) ||
+            inventory.TotalMediaRecords != finalInventory.TotalMediaRecords ||
+            inventory.AvailableFiles != finalInventory.AvailableFiles ||
+            inventory.MissingFiles != finalInventory.MissingFiles)
+            throw new InvalidOperationException(
+                "The physical-media inventory changed while the consolidation plan was being prepared. No plan was created; run archive reconciliation again after scanning has settled.");
+        if (items.Count + heldSourceFiles != inventory.AvailableFiles)
+            throw new InvalidOperationException(
+                $"Media consolidation could account for only {items.Count + heldSourceFiles:N0} of {inventory.AvailableFiles:N0} available physical files. No plan was created.");
         var unsigned = new MediaConsolidationPlan(
             planId,
             DateTimeOffset.UtcNow,
@@ -218,6 +254,11 @@ public sealed class MediaConsolidationService
             items,
             eligibleBroadcasts,
             heldBroadcasts,
+            inventory.TotalMediaRecords,
+            inventory.AvailableFiles,
+            inventory.MissingFiles,
+            heldSourceFiles,
+            inventory.Signature,
             items.Where(item => item.IsManagedCopy).Sum(item => item.SourceBytes),
             items.Sum(item => item.SourceBytes),
             warnings);
@@ -275,6 +316,19 @@ public sealed class MediaConsolidationService
         EnsureUniqueSources(plan.Items);
 
         var problems = new List<string>();
+        if (!IsCompletedPlan(plan))
+        {
+            var currentInventory = ReadInventorySnapshot(plan.LibraryTruthRunId);
+            if (!plan.InventorySignature.Equals(currentInventory.Signature, StringComparison.Ordinal) ||
+                plan.InventoryMediaRecords != currentInventory.TotalMediaRecords ||
+                plan.InventoryAvailableFiles != currentInventory.AvailableFiles ||
+                plan.InventoryMissingFiles != currentInventory.MissingFiles)
+                problems.Add(
+                    "The physical-media inventory changed after this plan was prepared. Prepare a new consolidation plan; Radio Vault will refresh archive reconciliation automatically.");
+        }
+        if (plan.AccountedAvailableFiles != plan.InventoryAvailableFiles)
+            problems.Add(
+                $"The signed plan accounts for {plan.AccountedAvailableFiles:N0} of {plan.InventoryAvailableFiles:N0} available physical files.");
         long verifiedBytes = 0;
         var verifiedFiles = 0;
         for (var index = 0; index < plan.Items.Count; index++)
@@ -504,6 +558,129 @@ public sealed class MediaConsolidationService
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT COALESCE(MAX(id),0) FROM library_truth_runs WHERE status='completed'";
         return Convert.ToInt64(command.ExecuteScalar());
+    }
+
+    private long BuildFreshArchiveReconciliation(
+        string initialMessage,
+        IProgress<MediaConsolidationProgress>? progress,
+        CancellationToken cancellationToken)
+    {
+        progress?.Report(new(
+            "Reconciling inventory",
+            0,
+            100,
+            string.Empty,
+            initialMessage));
+        var truthProgress = progress is null
+            ? null
+            : new SynchronousProgress<(double Percent, string Message)>(value => progress.Report(new(
+                "Reconciling inventory",
+                (int)Math.Round(value.Percent),
+                100,
+                string.Empty,
+                value.Message)));
+        var refreshed = new LibraryTruthEngine(_database)
+            .BuildShadowIndex(truthProgress, cancellationToken)
+            .Summary;
+        if (!refreshed.Status.Equals("completed", StringComparison.OrdinalIgnoreCase) || refreshed.RunId <= 0)
+            throw new InvalidOperationException("The fresh archive reconciliation did not complete. No consolidation plan was created.");
+        return refreshed.RunId;
+    }
+
+    private MediaInventorySnapshot ReadInventorySnapshot(long truthRunId)
+    {
+        using var connection = _database.OpenConnection();
+        using var counts = connection.CreateCommand();
+        counts.CommandText = """
+            SELECT COUNT(*),
+                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 THEN 1 ELSE 0 END),0),
+                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)<>0 THEN 1 ELSE 0 END),0),
+                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 AND EXISTS(
+                       SELECT 1 FROM library_truth_files f
+                        WHERE f.run_id=$run AND f.media_file_id=mf.id
+                   ) THEN 1 ELSE 0 END),0),
+                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 AND NOT EXISTS(
+                       SELECT 1 FROM library_truth_files f
+                        WHERE f.run_id=$run AND f.media_file_id=mf.id
+                   ) THEN 1 ELSE 0 END),0),
+                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 AND COALESCE(e.hidden,0)=0 AND NOT EXISTS(
+                       SELECT 1 FROM library_truth_files f
+                        WHERE f.run_id=$run AND f.media_file_id=mf.id
+                   ) THEN 1 ELSE 0 END),0),
+                   COALESCE(SUM(CASE WHEN COALESCE(mf.is_missing,0)=0 AND COALESCE(e.hidden,0)<>0 AND NOT EXISTS(
+                       SELECT 1 FROM library_truth_files f
+                        WHERE f.run_id=$run AND f.media_file_id=mf.id
+                   ) THEN 1 ELSE 0 END),0)
+              FROM media_files mf
+              JOIN episodes e ON e.id=mf.episode_id
+            """;
+        counts.Parameters.AddWithValue("$run", truthRunId);
+        using var reader = counts.ExecuteReader();
+        if (!reader.Read()) throw new InvalidOperationException("The physical-media inventory could not be counted.");
+        var total = reader.GetInt32(0);
+        var available = reader.GetInt32(1);
+        var missing = reader.GetInt32(2);
+        var covered = reader.GetInt32(3);
+        var outside = reader.GetInt32(4);
+        var visibleOutside = reader.GetInt32(5);
+        var hiddenOutside = reader.GetInt32(6);
+        reader.Close();
+
+        using var hash = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
+        using var rows = connection.CreateCommand();
+        rows.CommandText = """
+            SELECT mf.id,mf.episode_id,mf.path,mf.file_size,mf.modified_time,
+                   COALESCE(mf.is_missing,0),COALESCE(mf.storage_state,''),COALESCE(e.hidden,0)
+              FROM media_files mf
+              JOIN episodes e ON e.id=mf.episode_id
+             ORDER BY mf.id
+            """;
+        using var rowReader = rows.ExecuteReader();
+        while (rowReader.Read())
+        {
+            for (var index = 0; index < rowReader.FieldCount; index++)
+            {
+                var value = rowReader.IsDBNull(index)
+                    ? string.Empty
+                    : Convert.ToString(rowReader.GetValue(index), CultureInfo.InvariantCulture) ?? string.Empty;
+                AppendInventorySignatureField(hash, value);
+            }
+        }
+
+        return new(
+            total,
+            available,
+            missing,
+            covered,
+            outside,
+            visibleOutside,
+            hiddenOutside,
+            Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant());
+    }
+
+    private static void EnsureTruthCoversCurrentInventory(MediaInventorySnapshot inventory, long truthRunId)
+    {
+        if (inventory.AvailableFiles <= 0)
+            throw new InvalidOperationException("The current inventory contains no available physical media files.");
+        if (inventory.AvailableOutsideTruthFiles == 0) return;
+
+        var hiddenAdvice = inventory.HiddenAvailableOutsideTruthFiles == 0
+            ? string.Empty
+            : $" {inventory.HiddenAvailableOutsideTruthFiles:N0} omitted file(s) belong to hidden legacy rows and require archive reconciliation review rather than automatic movement.";
+        throw new InvalidOperationException(
+            $"Media consolidation stopped safely: archive reconciliation {truthRunId:N0} accounts for " +
+            $"{inventory.TruthCoveredAvailableFiles:N0} of {inventory.AvailableFiles:N0} currently available physical files. " +
+            $"{inventory.AvailableOutsideTruthFiles:N0} file(s) were scanned or changed after that snapshot " +
+            $"({inventory.VisibleAvailableOutsideTruthFiles:N0} active, {inventory.HiddenAvailableOutsideTruthFiles:N0} hidden). " +
+            "Run a fresh archive reconciliation, let scanning finish, then prepare a new consolidation plan." + hiddenAdvice);
+    }
+
+    private static void AppendInventorySignatureField(IncrementalHash hash, string value)
+    {
+        var prefix = Encoding.UTF8.GetBytes(value.Length.ToString(CultureInfo.InvariantCulture) + ":");
+        hash.AppendData(prefix);
+        hash.AppendData(Encoding.UTF8.GetBytes(value));
+        hash.AppendData(new byte[] { (byte)'\n' });
     }
 
     private IReadOnlyList<string> RegisteredRoots()
@@ -792,7 +969,14 @@ public sealed class MediaConsolidationService
             .AppendLine(plan.PlanId)
             .AppendLine(Path.GetFullPath(plan.ManagedRoot))
             .AppendLine(Path.GetFullPath(plan.QuarantineRoot))
-            .AppendLine(plan.LibraryTruthRunId.ToString());
+            .AppendLine(plan.LibraryTruthRunId.ToString(CultureInfo.InvariantCulture))
+            .AppendLine(plan.EligibleBroadcasts.ToString(CultureInfo.InvariantCulture))
+            .AppendLine(plan.HeldBroadcasts.ToString(CultureInfo.InvariantCulture))
+            .AppendLine(plan.InventoryMediaRecords.ToString(CultureInfo.InvariantCulture))
+            .AppendLine(plan.InventoryAvailableFiles.ToString(CultureInfo.InvariantCulture))
+            .AppendLine(plan.InventoryMissingFiles.ToString(CultureInfo.InvariantCulture))
+            .AppendLine(plan.HeldSourceFiles.ToString(CultureInfo.InvariantCulture))
+            .AppendLine(plan.InventorySignature);
         foreach (var item in plan.Items.OrderBy(value => value.ItemId, StringComparer.Ordinal))
             text.Append(item.ItemId).Append('|').Append(item.SourcePath).Append('|').Append(item.SourceBytes)
                 .Append('|').Append(item.FullSha256).Append('|').Append(item.Disposition).Append('|')
@@ -839,6 +1023,16 @@ public sealed class MediaConsolidationService
         if (!journal.PlanId.Equals(plan.PlanId, StringComparison.Ordinal) ||
             !journal.PlanSignature.Equals(plan.PlanSignature, StringComparison.Ordinal))
             throw new InvalidDataException("The consolidation recovery journal belongs to a different signed plan.");
+    }
+
+    private static bool IsCompletedPlan(MediaConsolidationPlan plan)
+    {
+        var journalPath = Path.Combine(PlanDirectory(plan), "journal.json");
+        if (!File.Exists(journalPath)) return false;
+        var journal = ReadJournal(journalPath);
+        if (journal is null) return false;
+        ValidateJournal(journal, plan);
+        return journal.Status.Equals("completed", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void WriteSafetyNotice(string planDirectory, MediaConsolidationPlan plan)
@@ -959,7 +1153,7 @@ public sealed class MediaConsolidationService
         => candidate.AirDate is null
             ? "the broadcast date is not known"
             : !IsSafeAdoptionState(candidate.AdoptionState)
-                ? $"Library Truth state is {candidate.AdoptionState}"
+                ? $"Archive reconciliation state is {candidate.AdoptionState}"
                 : "the recording structure is incomplete";
 
     private static long EstimateBitrate(long bytes, long durationMs)
@@ -1022,6 +1216,21 @@ public sealed class MediaConsolidationService
         int PreferredScore,
         string ContentIdentity,
         bool IsInternallySafe);
+
+    private sealed record MediaInventorySnapshot(
+        int TotalMediaRecords,
+        int AvailableFiles,
+        int MissingFiles,
+        int TruthCoveredAvailableFiles,
+        int AvailableOutsideTruthFiles,
+        int VisibleAvailableOutsideTruthFiles,
+        int HiddenAvailableOutsideTruthFiles,
+        string Signature);
+
+    private sealed class SynchronousProgress<T>(Action<T> report) : IProgress<T>
+    {
+        public void Report(T value) => report(value);
+    }
 
     private sealed class ConsolidationJournal
     {

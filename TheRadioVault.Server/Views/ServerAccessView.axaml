@@ -1,0 +1,138 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Server.Views.ServerAccessView">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="26" Spacing="16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="ACCESS" Classes="eyebrow" />
+        <TextBlock Text="Web, network and trusted clients" FontSize="28" FontWeight="Bold" />
+        <TextBlock Text="Control how this server is named, reached and paired without exposing archive tools to clients." Classes="muted" FontSize="12" />
+      </StackPanel>
+
+      <Border Classes="card">
+        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="22">
+          <StackPanel Spacing="12">
+            <StackPanel Spacing="3">
+              <TextBlock Text="RADIO VAULT WEB" Classes="eyebrow" />
+              <TextBlock Text="Phone, tablet and browser access" FontSize="17" FontWeight="SemiBold" />
+              <TextBlock Text="Radio Vault Web is hosted by this server computer. Scan the code with a phone on the same network, or copy the private link."
+                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+            <TextBox Text="{Binding AccessUrl}" IsReadOnly="True" PlaceholderText="Start the server to create the private Web address" />
+            <WrapPanel ItemSpacing="8" LineSpacing="8">
+              <Button Content="Open Web" Classes="primary" Command="{Binding OpenAnywhereCommand}" />
+              <Button Content="Copy phone link" Classes="secondary" Command="{Binding CopyWebLinkCommand}" />
+              <Button Content="Phone HTTPS setup" Classes="secondary" Command="{Binding OpenSecureSetupCommand}" IsVisible="{Binding IsServerSecure}" />
+              <Button Content="Create a new private link" Classes="secondary" Command="{Binding RegenerateWebLinkCommand}" />
+            </WrapPanel>
+            <TextBlock Text="Creating a new private link signs existing Web browsers out. It does not unpair native Radio Vault clients."
+                       Classes="muted" FontSize="10" TextWrapping="Wrap" />
+          </StackPanel>
+          <StackPanel Grid.Column="1" Spacing="10" VerticalAlignment="Top">
+            <TextBlock Text="SCAN TO OPEN WEB" Classes="eyebrow" HorizontalAlignment="Center" IsVisible="{Binding WebQrCode.IsAvailable}" />
+            <Border Background="#FFFFFF" CornerRadius="12" Padding="10" IsVisible="{Binding WebQrCode.IsAvailable}">
+              <ItemsControl ItemsSource="{Binding WebQrCode.Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <ItemsControl ItemsSource="{Binding Cells}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate><Border Width="4" Height="4" Background="{Binding Fill}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+            <TextBlock Text="FIRST-TIME HTTPS SETUP" Classes="eyebrow" HorizontalAlignment="Center" IsVisible="{Binding SecureSetupQrCode.IsAvailable}" />
+            <Border Background="#FFFFFF" CornerRadius="10" Padding="8" HorizontalAlignment="Center" IsVisible="{Binding SecureSetupQrCode.IsAvailable}">
+              <ItemsControl ItemsSource="{Binding SecureSetupQrCode.Rows}">
+                <ItemsControl.ItemTemplate>
+                  <DataTemplate>
+                    <ItemsControl ItemsSource="{Binding Cells}">
+                      <ItemsControl.ItemsPanel><ItemsPanelTemplate><StackPanel Orientation="Horizontal" /></ItemsPanelTemplate></ItemsControl.ItemsPanel>
+                      <ItemsControl.ItemTemplate><DataTemplate><Border Width="3" Height="3" Background="{Binding Fill}" /></DataTemplate></ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                  </DataTemplate>
+                </ItemsControl.ItemTemplate>
+              </ItemsControl>
+            </Border>
+          </StackPanel>
+        </Grid>
+      </Border>
+
+      <Border Classes="card">
+        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto" RowSpacing="12">
+          <StackPanel Spacing="3">
+            <TextBlock Text="SERVER IDENTITY" Classes="eyebrow" />
+            <TextBlock Text="Name and network ports" FontSize="17" FontWeight="SemiBold" />
+          </StackPanel>
+          <Grid Grid.Row="1" ColumnDefinitions="170,*" ColumnSpacing="12">
+            <TextBlock Text="Server name" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Text="{Binding ServerDisplayName, Mode=TwoWay}" />
+          </Grid>
+          <Grid Grid.Row="2" ColumnDefinitions="170,*,20,*" ColumnSpacing="12">
+            <TextBlock Text="Network ports" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Text="{Binding HttpPortText, Mode=TwoWay}" PlaceholderText="HTTP" />
+            <TextBlock Grid.Column="2" Text="/" Classes="muted" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <TextBox Grid.Column="3" Text="{Binding HttpsPortText, Mode=TwoWay}" PlaceholderText="HTTPS" />
+          </Grid>
+          <WrapPanel Grid.Row="3" ItemSpacing="20" LineSpacing="8">
+            <CheckBox Content="Server enabled" IsChecked="{Binding Enabled, Mode=TwoWay}" />
+            <CheckBox Content="Secure HTTPS access" IsChecked="{Binding SecureAccessEnabled, Mode=TwoWay}" />
+          </WrapPanel>
+          <Grid Grid.Row="4" ColumnDefinitions="170,*" ColumnSpacing="12">
+            <TextBlock Text="Discovery port" VerticalAlignment="Center" />
+            <TextBox Grid.Column="1" Text="{Binding LanDiscoveryPortText, Mode=TwoWay}" />
+          </Grid>
+        </Grid>
+      </Border>
+
+      <Border Classes="card">
+        <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+            <StackPanel Spacing="3">
+              <TextBlock Text="REMOTE NATIVE CLIENTS" Classes="eyebrow" />
+              <TextBlock Text="Pair another Radio Vault computer" FontSize="17" FontWeight="SemiBold" />
+              <TextBlock Text="Pairing uses the pinned HTTPS certificate and gives that client its own revocable token."
+                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+            <CheckBox Grid.Column="1" Content="Allow remote native clients" IsChecked="{Binding LanFederationEnabled, Mode=TwoWay}" VerticalAlignment="Top" />
+          </Grid>
+          <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="10" Padding="14">
+            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+              <StackPanel Spacing="4">
+                <TextBlock Text="ONE-TIME PAIRING CODE" Classes="eyebrow" />
+                <TextBlock Text="{Binding PairingCode}" FontSize="32" FontWeight="Bold" IsVisible="{Binding HasPairingCode}" />
+                <TextBlock Text="{Binding PairingExpiryText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+              </StackPanel>
+              <WrapPanel Grid.Column="1" ItemSpacing="8" LineSpacing="8" VerticalAlignment="Center">
+                <Button Content="Create pairing code" Classes="primary" Command="{Binding GeneratePairingCodeCommand}" />
+                <Button Content="Cancel code" Classes="secondary" Command="{Binding CancelPairingCommand}" />
+              </WrapPanel>
+            </Grid>
+          </Border>
+          <TextBlock Text="Trusted clients" FontWeight="SemiBold" />
+          <ListBox ItemsSource="{Binding PairedClients}" SelectedItem="{Binding SelectedPairedClient, Mode=TwoWay}"
+                   MaxHeight="220" Background="Transparent" BorderThickness="0" IsVisible="{Binding HasPairedClients}">
+            <ListBox.ItemTemplate>
+              <DataTemplate>
+                <Border Background="#151A20" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12" Margin="0,0,0,6">
+                  <StackPanel Spacing="3">
+                    <TextBlock Text="{Binding DisplayName}" FontWeight="SemiBold" />
+                    <TextBlock Text="{Binding DetailText}" Classes="muted" FontSize="10" />
+                  </StackPanel>
+                </Border>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+          <TextBlock Text="No native clients are currently paired." Classes="muted" IsVisible="{Binding !HasPairedClients}" />
+          <WrapPanel ItemSpacing="8" LineSpacing="8">
+            <Button Content="Revoke selected client" Classes="secondary" Command="{Binding RevokeClientCommand}" />
+            <Button Content="Revoke every client" Classes="secondary" Command="{Binding RevokeAllClientsCommand}" />
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+
+      <Button Content="Save access settings" Classes="primary" Command="{Binding SaveCommand}" HorizontalAlignment="Right" MinWidth="190" />
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

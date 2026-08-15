@@ -73,6 +73,7 @@ public sealed partial class ServerSettingsViewModel
             if (!Set(ref _isMediaConsolidationBusy, value)) return;
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(IsMediaConsolidationIdle)));
             RaiseMediaConsolidationCommandState();
+            RaiseArchiveReconciliationCommandState();
         }
     }
 
@@ -83,7 +84,9 @@ public sealed partial class ServerSettingsViewModel
         ? "No consolidation plan has been prepared."
         : $"Plan {_mediaConsolidationPlan.PlanId}: {_mediaConsolidationPlan.EligibleBroadcasts:N0} broadcasts · " +
           $"{_mediaConsolidationPlan.ManagedFiles:N0} managed files · {_mediaConsolidationPlan.RejectedFiles:N0} files retained for review · " +
-          $"{_mediaConsolidationPlan.HeldBroadcasts:N0} broadcasts held unchanged.";
+          $"{_mediaConsolidationPlan.HeldBroadcasts:N0} broadcasts / {_mediaConsolidationPlan.HeldSourceFiles:N0} files held unchanged · " +
+          $"all {_mediaConsolidationPlan.InventoryAvailableFiles:N0} available physical files accounted for " +
+          $"({_mediaConsolidationPlan.InventoryMissingFiles:N0} missing records excluded).";
     public string MediaConsolidationConfirmationHint => _mediaConsolidationPlan is null
         ? "Prepare a plan to receive its confirmation phrase."
         : $"After rehearsal and after stopping the server, enter exactly: {_mediaConsolidationPlan.ConfirmationText}";
@@ -105,15 +108,15 @@ public sealed partial class ServerSettingsViewModel
             () => !IsMediaConsolidationBusy);
         _prepareMediaConsolidationCommand = new ServerCommand(
             () => _ = PrepareMediaConsolidationAsync(),
-            () => !IsMediaConsolidationBusy &&
+            () => !IsMediaConsolidationBusy && !IsArchiveReconciliationBusy &&
                   !string.IsNullOrWhiteSpace(ManagedArchivePath) &&
                   !string.IsNullOrWhiteSpace(ConsolidationQuarantinePath));
         _rehearseMediaConsolidationCommand = new ServerCommand(
             () => _ = RehearseMediaConsolidationAsync(),
-            () => !IsMediaConsolidationBusy && _mediaConsolidationPlan is not null);
+            () => !IsMediaConsolidationBusy && !IsArchiveReconciliationBusy && _mediaConsolidationPlan is not null);
         _commitMediaConsolidationCommand = new ServerCommand(
             () => _ = CommitMediaConsolidationAsync(),
-            () => !IsMediaConsolidationBusy && !IsServerRunning &&
+            () => !IsMediaConsolidationBusy && !IsArchiveReconciliationBusy && !IsServerRunning &&
                   _mediaConsolidationPlan is not null &&
                   _mediaConsolidationRehearsal?.CanCommit == true &&
                   string.Equals(
@@ -178,11 +181,14 @@ public sealed partial class ServerSettingsViewModel
                     cancellationToken);
                 _mediaConsolidationPlan = plan;
                 _mediaConsolidationRehearsal = null;
-                return $"Preview ready. {plan.ManagedFiles:N0} files would form the managed archive; " +
+                return $"Preview ready. All {plan.InventoryAvailableFiles:N0} available physical files are accounted for: " +
+                       $"{plan.ManagedFiles:N0} files would form the managed archive; " +
                        $"{plan.RejectedFiles:N0} originals or alternates would remain in quarantine. " +
-                       $"{plan.HeldBroadcasts:N0} unsafe broadcasts will not be touched.";
+                       $"{plan.HeldBroadcasts:N0} unsafe broadcasts containing {plan.HeldSourceFiles:N0} file(s) will not be touched. " +
+                       $"{plan.InventoryMissingFiles:N0} database record(s) already marked missing are explicitly outside the move.";
             }).ConfigureAwait(true);
         RaiseMediaConsolidationPlanState();
+        await RefreshArchiveReconciliationAsync().ConfigureAwait(true);
     }
 
     private async Task RehearseMediaConsolidationAsync()

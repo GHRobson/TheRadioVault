@@ -84,6 +84,8 @@ var tests = new (string Name, Action Run)[]
     ("Media consolidation rehearses without moving and commits without deleting", MediaConsolidationIsVerifiedAndNonDestructive),
     ("Media consolidation blocks changed sources and conflicting destinations", MediaConsolidationBlocksChangedFiles),
     ("Media consolidation holds alternates whose runtime cannot be ranked", MediaConsolidationHoldsUnknownRuntimeAlternates),
+    ("Media consolidation requires a complete current inventory snapshot", MediaConsolidationRequiresCompleteInventory),
+    ("Archive reconciliation exposes a server-owned read-only facade", ArchiveReconciliationIsServerOwnedAndReadOnly),
     ("Scanner content identity rejects weak partial-hash collisions", ScannerContentIdentityRejectsWeakCollisions),
     ("Archive content identity is path and machine independent when verified", ArchiveContentIdentityIsStable),
     ("Moment deduplication keeps one near-identical save", () =>
@@ -319,6 +321,7 @@ var tests = new (string Name, Action Run)[]
     ("Long-form transcription protects continuity and timestamps", LongFormTranscriptionProtectsContinuityAndTimestamps),
     ("Dedicated server foundation is UI-isolated and revision-safe", DedicatedServerFoundationIsUiIsolatedAndRevisionSafe),
     ("Dedicated server health polling never blocks the settings UI", DedicatedServerHealthPollingNeverBlocksSettingsUi),
+    ("Dedicated server administration uses focused screens", DedicatedServerAdministrationUsesFocusedScreens),
     ("Dedicated server owns transcription workers and batch controls", DedicatedServerOwnsTranscriptionWorkers),
     ("Loopback native handoff maps server ownership", LoopbackNativeHandoffMapsServerOwnership),
     ("Transcription jobs preserve worker options", TranscriptionJobsPreserveWorkerOptions),
@@ -620,6 +623,11 @@ static void MediaConsolidationIsVerifiedAndNonDestructive()
         var service = new MediaConsolidationService(fixture.Database);
         var plan = service.CreatePlan(managed, quarantine);
 
+        Equal(4, plan.InventoryMediaRecords);
+        Equal(4, plan.InventoryAvailableFiles);
+        Equal(0, plan.InventoryMissingFiles);
+        Equal(0, plan.HeldSourceFiles);
+        Equal(plan.InventoryAvailableFiles, plan.AccountedAvailableFiles);
         Equal(1, plan.ManagedFiles);
         Equal(3, plan.RejectedFiles);
         Equal(1, plan.Items.Count(item => item.Disposition == MediaConsolidationDisposition.RejectedDuplicate));
@@ -631,6 +639,7 @@ static void MediaConsolidationIsVerifiedAndNonDestructive()
 
         var rehearsal = service.Rehearse(plan);
         True(rehearsal.CanCommit, string.Join(Environment.NewLine, rehearsal.Problems));
+        Throws<InvalidDataException>(() => service.Rehearse(plan with { InventoryAvailableFiles = 3 }));
         True(fixture.Sources.All(File.Exists), "Rehearsal must not move a source file.");
         True(plan.Items.Where(item => item.IsManagedCopy).All(item => !File.Exists(item.ManagedPath)),
             "Rehearsal must not create managed media.");
@@ -774,6 +783,114 @@ static void MediaConsolidationHoldsUnknownRuntimeAlternates()
     }
 }
 
+static void MediaConsolidationRequiresCompleteInventory()
+{
+    var root = Path.Combine(ConsolidationTestTempRoot(), "RadioVaultConsolidationInventoryTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var fixture = CreateMediaConsolidationFixture(root);
+        var service = new MediaConsolidationService(fixture.Database);
+        var originalPlan = service.CreatePlan(Path.Combine(root, "managed"), Path.Combine(root, "quarantine"));
+        Equal(4, originalPlan.AccountedAvailableFiles);
+
+        var latePath = Path.Combine(root, "source", "arrived-after-library-truth.mp3");
+        File.WriteAllBytes(latePath, Enumerable.Repeat((byte)0xA5, 128).ToArray());
+        using (var connection = fixture.Database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO episodes(
+                    id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,part_number)
+                VALUES(9401,(SELECT id FROM collections WHERE name='Bennington'),'2026-08-15','High',
+                       'Late inventory','Unplayed',$now,$now,'CONSOLIDATION-LATE',1);
+                INSERT INTO media_files(
+                    id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,
+                    duration_ms,partial_hash,full_hash,storage_state,is_preferred)
+                VALUES(9402,9401,$path,$filename,$bytes,$now,0,$now,3000,'late-partial',$full,'AvailableOffline',1);
+                """;
+            command.Parameters.AddWithValue("$path", latePath);
+            command.Parameters.AddWithValue("$filename", Path.GetFileName(latePath));
+            command.Parameters.AddWithValue("$bytes", new FileInfo(latePath).Length);
+            command.Parameters.AddWithValue("$full", TestSha256(latePath));
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        try
+        {
+            service.CreatePlan(Path.Combine(root, "managed-new"), Path.Combine(root, "quarantine-new"));
+        }
+        catch (InvalidOperationException exception) when (exception.Message.Contains(
+                   "safely consolidatable", StringComparison.OrdinalIgnoreCase))
+        {
+            // The deliberately artificial filenames in this duplicate-ranking
+            // fixture may be held by the real parser. The refresh itself is the
+            // contract under test here; production files remain safely held.
+        }
+        using (var connection = fixture.Database.OpenConnection())
+        using (var refreshed = connection.CreateCommand())
+        {
+            refreshed.CommandText = "SELECT id,source_file_count FROM library_truth_runs WHERE status='completed' ORDER BY id DESC LIMIT 1";
+            using var reader = refreshed.ExecuteReader();
+            True(reader.Read());
+            True(reader.GetInt64(0) > 9200,
+                "Planning must automatically build a fresh non-destructive reconciliation when the inventory grew.");
+            Equal(5L, reader.GetInt64(1));
+        }
+
+        var staleRehearsal = service.Rehearse(originalPlan);
+        True(!staleRehearsal.CanCommit);
+        True(staleRehearsal.Problems.Any(problem =>
+            problem.Contains("inventory changed", StringComparison.OrdinalIgnoreCase)));
+        True(File.Exists(latePath), "Inventory reconciliation must never move or delete a newly discovered file.");
+        True(fixture.Sources.All(File.Exists));
+
+        var hiddenPath = Path.Combine(root, "source", "hidden-unreconciled.mp3");
+        File.WriteAllBytes(hiddenPath, Enumerable.Repeat((byte)0x5A, 96).ToArray());
+        using (var connection = fixture.Database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO episodes(
+                    id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,part_number,hidden)
+                VALUES(9403,(SELECT id FROM collections WHERE name='Bennington'),'2026-08-16','High',
+                       'Hidden inventory','Unplayed',$now,$now,'CONSOLIDATION-HIDDEN',1,1);
+                INSERT INTO media_files(
+                    id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,
+                    duration_ms,partial_hash,full_hash,storage_state,is_preferred)
+                VALUES(9404,9403,$path,$filename,$bytes,$now,0,$now,3000,'hidden-partial',$full,'AvailableOffline',1);
+                """;
+            command.Parameters.AddWithValue("$path", hiddenPath);
+            command.Parameters.AddWithValue("$filename", Path.GetFileName(hiddenPath));
+            command.Parameters.AddWithValue("$bytes", new FileInfo(hiddenPath).Length);
+            command.Parameters.AddWithValue("$full", TestSha256(hiddenPath));
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        string stoppedMessage;
+        try
+        {
+            service.CreatePlan(Path.Combine(root, "managed-hidden"), Path.Combine(root, "quarantine-hidden"));
+            throw new InvalidOperationException("Expected hidden physical media outside Library Truth to stop plan creation.");
+        }
+        catch (InvalidOperationException exception)
+        {
+            stoppedMessage = exception.Message;
+        }
+        True(stoppedMessage.Contains("1 hidden", StringComparison.OrdinalIgnoreCase), stoppedMessage);
+        True(stoppedMessage.Contains("No plan was created", StringComparison.OrdinalIgnoreCase) ||
+             stoppedMessage.Contains("Run a fresh archive reconciliation", StringComparison.OrdinalIgnoreCase), stoppedMessage);
+        True(File.Exists(hiddenPath));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
 static void ScannerContentIdentityRejectsWeakCollisions()
 {
     var root = Path.Combine(Path.GetTempPath(), "RadioVaultIdentityTests", Guid.NewGuid().ToString("N"));
@@ -847,6 +964,43 @@ static void ScannerContentIdentityRejectsWeakCollisions()
     {
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void ArchiveReconciliationIsServerOwnedAndReadOnly()
+{
+    var root = Path.Combine(Path.GetTempPath(), "RadioVaultReconciliationTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(root, "reconciliation.sqlite"));
+        database.Initialize();
+        var service = new ArchiveReconciliationService(database);
+        var initial = service.GetSnapshot();
+        True(!initial.HasCompletedAnalysis);
+        Equal("Not analysed", initial.AnalysisState);
+
+        var progressWasReported = false;
+        var reconciled = service.Reconcile(new InlineProgress<(double Percent, string Message)>(_ => progressWasReported = true));
+        True(reconciled.HasCompletedAnalysis);
+        True(reconciled.AnalysisId > 0);
+        Equal(0, reconciled.PhysicalFiles);
+        Equal(reconciled.AnalysisId, service.GetSnapshot().AnalysisId);
+        True(progressWasReported);
+
+        var serverRuntime = File.ReadAllText(Path.Combine(
+            SourceRoot(), "TheRadioVault.Infrastructure", "Services", "RadioVaultServerRuntime.cs"));
+        True(serverRuntime.Contains("GetArchiveReconciliationSnapshot", StringComparison.Ordinal));
+        True(serverRuntime.Contains("ReconcileArchive", StringComparison.Ordinal));
+        var desktopViews = Directory.GetFiles(
+                Path.Combine(SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views"), "*.axaml")
+            .Select(File.ReadAllText);
+        True(desktopViews.All(source => !source.Contains("RunArchiveReconciliationCommand", StringComparison.Ordinal)));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { Directory.Delete(root, recursive: true); } catch { }
     }
 }
 
@@ -1547,8 +1701,7 @@ static void Alpha12CompletesServerOwnershipAndStatusUx()
     True(transcriptionServices.Contains("ServerOwnedTranscriptionEngine", StringComparison.Ordinal));
     True(transcriptionServices.Contains("install-recommended", StringComparison.Ordinal));
 
-    var serverView = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverView = ReadServerAdministrationViews();
     True(serverView.Contains("IsVisible=\"{Binding IsServerStopped}\"", StringComparison.Ordinal));
     True(serverView.Contains("IsVisible=\"{Binding IsServerRunning}\"", StringComparison.Ordinal));
     True(serverView.Contains("TranscriptionStateBrush", StringComparison.Ordinal));
@@ -1598,8 +1751,7 @@ static void Alpha13Buildfix1RestoresFoldersListeningActionsAndDualInstallers()
     True(serverRuntime.Contains("RemoveLibraryFolderAsync", StringComparison.Ordinal));
     True(serverRuntime.Contains("ScanLibraryAsync", StringComparison.Ordinal));
 
-    var serverView = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverView = ReadServerAdministrationViews();
     True(serverView.Contains("LIBRARY FOLDERS", StringComparison.Ordinal));
     True(serverView.Contains("AddLibraryFolderCommand", StringComparison.Ordinal));
     True(serverView.Contains("RemoveLibraryFolderCommand", StringComparison.Ordinal));
@@ -1652,8 +1804,7 @@ static void Alpha14RenamesWebAndRestoresPhoneConnectionControls()
     True(clientSettings.Contains("AnywhereQrCode.Rows", StringComparison.Ordinal));
     True(clientSettings.Contains("AnywhereSetupQrCode.Rows", StringComparison.Ordinal));
 
-    var serverSettings = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverSettings = ReadServerAdministrationViews();
     True(serverSettings.Contains("RADIO VAULT WEB", StringComparison.Ordinal));
     True(serverSettings.Contains("CopyWebLinkCommand", StringComparison.Ordinal));
     True(serverSettings.Contains("RegenerateWebLinkCommand", StringComparison.Ordinal));
@@ -1671,8 +1822,7 @@ static void Alpha15RestoresServerFolderAssignmentAndNativeAudioQuality()
     True(serverViewModel.Contains("SetLibraryFolderCollectionAsync", StringComparison.Ordinal));
     True(serverViewModel.Contains("ScanLibraryAsync", StringComparison.Ordinal));
 
-    var serverView = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverView = ReadServerAdministrationViews();
     True(serverView.Contains("Change selected show", StringComparison.Ordinal));
     True(serverView.Contains("AssignLibraryFolderCommand", StringComparison.Ordinal));
 
@@ -3894,7 +4044,7 @@ static void KnowledgeImportProgressBarsAreDeterminate()
     True(research.Contains("Value=\"{Binding ImportProgressPercent}\"", StringComparison.Ordinal));
     True(!research.Contains("IsIndeterminate=\"True\"", StringComparison.Ordinal));
 
-    var server = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var server = ReadServerAdministrationViews();
     True(server.Contains("Value=\"{Binding KnowledgeProgressPercent}\"", StringComparison.Ordinal));
     True(server.Contains("KnowledgeProgressCountText", StringComparison.Ordinal));
 
@@ -5016,10 +5166,10 @@ static void DedicatedServerFoundationIsUiIsolatedAndRevisionSafe()
     True(serverProject.Contains("RadioVault.Server", StringComparison.Ordinal));
     True(serverProject.Contains("TheRadioVault.Infrastructure", StringComparison.Ordinal));
     True(!serverProject.Contains("TheRadioVault.Presentation", StringComparison.Ordinal));
-    var serverView = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
-    True(serverView.Contains("Background archive service", StringComparison.Ordinal));
-    True(serverView.Contains("It contains settings only", StringComparison.Ordinal));
-    True(!serverView.Contains("Dashboard", StringComparison.Ordinal));
+    var serverView = ReadServerAdministrationViews();
+    True(serverView.Contains("Archive administration", StringComparison.Ordinal));
+    True(serverView.Contains("ServerDashboardView", StringComparison.Ordinal));
+    True(serverView.Contains("Your archive at a glance", StringComparison.Ordinal));
     True(!serverView.Contains("Now Playing", StringComparison.Ordinal));
     var webServer = ReadWebServerSourceBundle();
     True(webServer.Contains("Re-resolve once before returning a 404", StringComparison.Ordinal));
@@ -5065,6 +5215,30 @@ static void DedicatedServerHealthPollingNeverBlocksSettingsUi()
     True(viewModel.Contains("Task.Run(runtime.GetHealthSnapshot", StringComparison.Ordinal));
     True(viewModel.Contains("Task.Run(() => new ServerDetailSnapshot", StringComparison.Ordinal));
     True(!viewModel.Contains("if (DateTimeOffset.UtcNow - _lastHealthRefresh >= TimeSpan.FromSeconds(5)) RefreshHealth();", StringComparison.Ordinal));
+}
+
+static void DedicatedServerAdministrationUsesFocusedScreens()
+{
+    var root = SourceRoot();
+    var shell = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    True(shell.Contains("TabStripPlacement=\"Left\"", StringComparison.Ordinal));
+    True(shell.Contains("SelectedIndex=\"0\"", StringComparison.Ordinal));
+    foreach (var section in new[]
+             {
+                 "ServerDashboardView", "ServerLibraryView", "ServerReconciliationView", "ServerAutomationView",
+                 "ServerKnowledgeView", "ServerTranscriptionView", "ServerAccessView", "ServerRecoveryView"
+             })
+        True(shell.Contains(section, StringComparison.Ordinal));
+
+    var dashboard = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerDashboardView.axaml"));
+    True(dashboard.Contains("Your archive at a glance", StringComparison.Ordinal));
+    True(dashboard.Contains("ArchiveReconciliationDashboardText", StringComparison.Ordinal));
+    True(dashboard.Contains("DatabaseHealthText", StringComparison.Ordinal));
+
+    var reconciliation = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerReconciliationView.axaml"));
+    True(reconciliation.Contains("RunArchiveReconciliationCommand", StringComparison.Ordinal));
+    True(reconciliation.Contains("PrepareMediaConsolidationCommand", StringComparison.Ordinal));
+    True(reconciliation.Contains("does not rename, move, merge or delete media", StringComparison.Ordinal));
 }
 
 static void LoopbackNativeHandoffMapsServerOwnership()
@@ -5134,7 +5308,7 @@ static void DedicatedServerOwnsTranscriptionWorkers()
     True(host.Contains("LoopbackVoiceLearningCoordinator", StringComparison.Ordinal));
     True(!host.Contains("RegisterSingleton<TranscriptionCoordinator>", StringComparison.Ordinal));
 
-    var serverView = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverView = ReadServerAdministrationViews();
     True(serverView.Contains("TRANSCRIPTION SERVICE", StringComparison.Ordinal));
     True(serverView.Contains("Install recommended transcription setup", StringComparison.Ordinal));
 }
@@ -6009,6 +6183,16 @@ static string ReadWebServerSourceBundle()
     return string.Join(Environment.NewLine, sources.Select(File.ReadAllText));
 }
 
+static string ReadServerAdministrationViews()
+{
+    var views = Path.Combine(SourceRoot(), "TheRadioVault.Server", "Views");
+    return string.Join(
+        Environment.NewLine,
+        Directory.GetFiles(views, "Server*.axaml")
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .Select(File.ReadAllText));
+}
+
 static void Equal<T>(T expected, T actual)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
@@ -6528,6 +6712,11 @@ sealed class CompositionCycleA
 {
     public CompositionCycleA(CompositionCycleB dependency) => Dependency = dependency;
     public CompositionCycleB Dependency { get; }
+}
+
+sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+{
+    public void Report(T value) => report(value);
 }
 
 sealed class CompositionCycleB

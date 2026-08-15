@@ -135,6 +135,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         ScanLibraryCommand = _scanLibraryCommand;
         InitializeRssFeedCommands();
         InitializeMediaConsolidationCommands();
+        InitializeArchiveReconciliationCommands();
         _chooseKnowledgeImportCommand = new ServerCommand(() => _ = ChooseKnowledgeImportAsync(), () => !IsKnowledgeBusy);
         _applyKnowledgeImportCommand = new ServerCommand(() => _ = ApplyKnowledgeImportAsync(), () => HasKnowledgeImportPreview && !IsKnowledgeBusy);
         _cancelKnowledgeImportCommand = new ServerCommand(CancelKnowledgeImport, () => HasKnowledgeImportPreview);
@@ -151,6 +152,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         RefreshStatus();
         _ = LoadLibraryFoldersAsync();
         _ = LoadRssFeedsAsync();
+        _ = RefreshArchiveReconciliationAsync();
         _refreshTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => RefreshStatus());
         _refreshTimer.Start();
     }
@@ -167,6 +169,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             ChooseKnowledgeImportCommand = ApplyKnowledgeImportCommand = CancelKnowledgeImportCommand = ExportKnowledgeCommand =
             RehearseBackupCommand = ExportDiagnosticsCommand = ChooseManagedArchiveCommand = ChooseQuarantineCommand =
             PrepareMediaConsolidationCommand = RehearseMediaConsolidationCommand = CommitMediaConsolidationCommand = CancelMediaConsolidationCommand =
+            RefreshArchiveReconciliationCommand = RunArchiveReconciliationCommand = CancelArchiveReconciliationCommand =
                 new ServerCommand(() => { }, () => false);
     }
 
@@ -765,7 +768,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
                 throw new InvalidOperationException("Secure HTTPS access is required before enabling native remote clients.");
             _runtime.Apply(preferences, Enabled);
             StartupStatusText = _startup?.SetEnabled(StartAutomatically) ?? string.Empty;
-            DetailText = "Server settings and background startup were saved.";
+            DetailText = "Server administration settings and background startup were saved.";
         }
         catch (Exception exception)
         {
@@ -1092,6 +1095,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         if (_disposed) return;
         _disposed = true;
         DisposeMediaConsolidation();
+        DisposeArchiveReconciliation();
         _refreshTimer?.Stop();
         _refreshCancellation.Cancel();
         _transcriptionCancellation?.Cancel();
