@@ -19,6 +19,7 @@ public static partial class ResearchDateAuthoritySynchronizer
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(connection);
+        await SeedVerifiedArchiveDateAuthoritiesAsync(connection, cancellationToken).ConfigureAwait(false);
         await AttachUnambiguousOrphanedResearchAsync(connection, cancellationToken).ConfigureAwait(false);
 
         var rows = await ReadLinkedResearchDatesAsync(connection, cancellationToken).ConfigureAwait(false);
@@ -111,6 +112,113 @@ public static partial class ResearchDateAuthoritySynchronizer
 
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return updates.Count;
+    }
+
+    private static async Task SeedVerifiedArchiveDateAuthoritiesAsync(
+        SqliteConnection connection,
+        CancellationToken cancellationToken)
+    {
+        // SiriusXM announced that O&A20: Unmasked would air live on 17 April 2014.
+        // Match the physical archive identity, not an episode id, so this remains
+        // valid after database rebuilds without assigning the date to similarly
+        // named O&A material.
+        // https://investor.siriusxm.com/news-events/press-releases/detail/1709/
+        // siriusxms-oa20-unmasked-with-opie-anthony-special-to
+        var authorities = new[]
+        {
+            new VerifiedArchiveDateAuthority(
+                "Unmasked",
+                "unmaskedopieandanthony",
+                new DateOnly(2014, 4, 17),
+                "SiriusXM O&A20: Unmasked announcement (1 April 2014)")
+        };
+
+        foreach (var authority in authorities)
+        {
+            var candidates = new List<VerifiedArchiveDateCandidate>();
+            await using (var read = connection.CreateCommand())
+            {
+                read.CommandText = """
+                    SELECT DISTINCT e.id,e.air_date,COALESCE(e.date_confidence,'Unknown')
+                      FROM episodes e
+                      JOIN collections c ON c.id=e.collection_id
+                      JOIN media_files mf ON mf.episode_id=e.id
+                     WHERE lower(trim(c.name))=lower($collection)
+                       AND COALESCE(e.hidden,0)=0
+                       AND COALESCE(mf.is_missing,0)=0
+                     ORDER BY e.id;
+                    """;
+                read.Parameters.AddWithValue("$collection", authority.CollectionName);
+                await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    candidates.Add(new VerifiedArchiveDateCandidate(
+                        reader.GetInt64(0),
+                        reader.IsDBNull(1) || !TryParseDate(reader.GetString(1), out var currentDate)
+                            ? null
+                            : currentDate,
+                        reader.GetString(2)));
+                }
+            }
+
+            var matchingEpisodeIds = new HashSet<long>();
+            await using (var readFiles = connection.CreateCommand())
+            {
+                readFiles.CommandText = """
+                    SELECT e.id,COALESCE(mf.original_filename,'')
+                      FROM episodes e
+                      JOIN collections c ON c.id=e.collection_id
+                      JOIN media_files mf ON mf.episode_id=e.id
+                     WHERE lower(trim(c.name))=lower($collection)
+                       AND COALESCE(e.hidden,0)=0
+                       AND COALESCE(mf.is_missing,0)=0
+                     ORDER BY e.id,mf.id;
+                    """;
+                readFiles.Parameters.AddWithValue("$collection", authority.CollectionName);
+                await using var reader = await readFiles.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
+                while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    if (string.Equals(
+                            NormalizeArchiveIdentity(reader.GetString(1)),
+                            authority.NormalizedFilename,
+                            StringComparison.Ordinal))
+                        matchingEpisodeIds.Add(reader.GetInt64(0));
+                }
+            }
+
+            if (matchingEpisodeIds.Count != 1) continue;
+            var candidate = candidates.Single(item => matchingEpisodeIds.Contains(item.EpisodeId));
+            if (candidate.CurrentDate.HasValue
+                && candidate.CurrentDate.Value != authority.Date
+                && !DateConfidencePolicy.IsUncertain(candidate.DateConfidence))
+                continue;
+
+            var date = authority.Date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+            var now = DateTimeOffset.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+            await using var preserveAuthority = connection.CreateCommand();
+            preserveAuthority.CommandText = """
+                INSERT INTO research_field_provenance(
+                    research_broadcast_id,episode_id,field_name,value_text,source_kind,source_label,
+                    import_run_id,confidence,evidence_count,protected,active,created_at,superseded_at)
+                SELECT NULL,$episode,'air_date',$date,'system',$source,
+                       NULL,100,1,1,1,$now,NULL
+                 WHERE NOT EXISTS(
+                       SELECT 1 FROM research_field_provenance
+                        WHERE episode_id=$episode AND field_name='air_date'
+                          AND value_text=$date AND protected=1 AND active=1);
+                """;
+            preserveAuthority.Parameters.AddWithValue("$episode", candidate.EpisodeId);
+            preserveAuthority.Parameters.AddWithValue("$date", date);
+            preserveAuthority.Parameters.AddWithValue("$source", authority.SourceLabel);
+            preserveAuthority.Parameters.AddWithValue("$now", now);
+            await preserveAuthority.ExecuteNonQueryAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private static string NormalizeArchiveIdentity(string value)
+    {
+        var stem = Path.GetFileNameWithoutExtension(value ?? string.Empty);
+        return new string(stem.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
     }
 
     private static async Task<List<ResearchDateRow>> ReadLinkedResearchDatesAsync(
@@ -593,4 +701,15 @@ public static partial class ResearchDateAuthoritySynchronizer
         DateOnly? CurrentDate,
         string DateConfidence,
         string Path);
+
+    private sealed record VerifiedArchiveDateAuthority(
+        string CollectionName,
+        string NormalizedFilename,
+        DateOnly Date,
+        string SourceLabel);
+
+    private sealed record VerifiedArchiveDateCandidate(
+        long EpisodeId,
+        DateOnly? CurrentDate,
+        string DateConfidence);
 }

@@ -53,19 +53,19 @@ public sealed partial class ServerSettingsViewModel
         ? $"{_archiveReconciliation.PhysicalFiles:N0} physical files inspected"
         : "Physical files and canonical broadcasts have not been compared yet.";
     public string ArchiveReconciliationBroadcastComparisonText => HasArchiveReconciliation
-        ? $"{_archiveReconciliation.CurrentBroadcasts:N0} live broadcast records represented → {_archiveReconciliation.CanonicalBroadcasts:N0} proposed canonical broadcasts ({FormatSignedDifference(_archiveReconciliation.CanonicalBroadcasts - _archiveReconciliation.CurrentBroadcasts)})"
+        ? $"{_archiveReconciliation.CurrentBroadcasts:N0} live records represented → {_archiveReconciliation.CanonicalBroadcasts:N0} proposed canonical broadcasts ({FormatSignedDifference(_archiveReconciliation.CanonicalBroadcasts - _archiveReconciliation.CurrentBroadcasts)}) plus {_archiveReconciliation.PreservedArchiveItems:N0} recognised clips"
         : "The live and proposed broadcast totals will appear after analysis.";
     public string ArchiveReconciliationChangeText => HasArchiveReconciliation
         ? $"{_archiveReconciliation.UnchangedFiles:N0} unchanged files · {_archiveReconciliation.ProposedFileChanges:N0} files interpreted differently"
         : "The analysis is read-only and never changes live broadcasts or media.";
     public string ArchiveReconciliationFileBreakdownText => HasArchiveReconciliation
-        ? $"{_archiveReconciliationAudit.ChangeBreakdown.MetadataCorrectionFiles:N0} metadata · {_archiveReconciliationAudit.ChangeBreakdown.MultipartCorrectionFiles:N0} multipart · {_archiveReconciliationAudit.ChangeBreakdown.BroadcastSplitFiles:N0} split · {_archiveReconciliationAudit.ChangeBreakdown.BroadcastMergeFiles:N0} merge · {_archiveReconciliationAudit.ChangeBreakdown.RecoveredDateFiles:N0} recovered dates · {_archiveReconciliationAudit.ChangeBreakdown.NeedsAttentionFiles:N0} needs attention · {_archiveReconciliationAudit.ChangeBreakdown.OtherChangedFiles:N0} other"
+        ? $"{_archiveReconciliationAudit.ChangeBreakdown.MetadataCorrectionFiles:N0} metadata · {_archiveReconciliationAudit.ChangeBreakdown.MultipartCorrectionFiles:N0} multipart · {_archiveReconciliationAudit.ChangeBreakdown.BroadcastSplitFiles:N0} split · {_archiveReconciliationAudit.ChangeBreakdown.BroadcastMergeFiles:N0} merge · {_archiveReconciliationAudit.ChangeBreakdown.RecoveredDateFiles:N0} recovered dates · {_archiveReconciliationAudit.ChangeBreakdown.NeedsAttentionFiles:N0} needs attention · {_archiveReconciliationAudit.ChangeBreakdown.ArchiveItemFiles:N0} recognised clips · {_archiveReconciliationAudit.ChangeBreakdown.OtherChangedFiles:N0} other"
         : "File-level change categories will appear after analysis.";
     public string ArchiveReconciliationStructureText => HasArchiveReconciliation
         ? $"{_archiveReconciliationAudit.MergeGroups:N0} broadcast merge groups · {_archiveReconciliationAudit.SplitGroups:N0} broadcast split groups · {_archiveReconciliation.MultipartBroadcasts:N0} multipart broadcasts"
         : "Merge, split and multipart groups will appear after analysis.";
     public string ArchiveReconciliationAttentionText => HasArchiveReconciliation
-        ? $"{_archiveReconciliation.ReadyBroadcasts:N0} ready · {_archiveReconciliation.ReviewRecommendedBroadcasts:N0} review · {_archiveReconciliation.BlockedBroadcasts:N0} blocked"
+        ? $"{_archiveReconciliation.ReadyBroadcasts:N0} ready · {_archiveReconciliation.PreservedArchiveItems:N0} clips preserved · {_archiveReconciliation.ReviewRecommendedBroadcasts:N0} review · {_archiveReconciliation.BlockedBroadcasts:N0} blocked"
         : "Review and blocked counts will appear after analysis.";
     public string ArchiveReconciliationDuplicateText => HasArchiveReconciliation
         ? $"{_archiveReconciliationAudit.ExactDuplicateGroups:N0} exact duplicate groups · {_archiveReconciliationAudit.StrongDuplicateGroups:N0} strong duplicate groups · {_archiveReconciliation.PartialOrDamagedRecordings:N0} partial or damaged recordings"
@@ -81,6 +81,8 @@ public sealed partial class ServerSettingsViewModel
         => _archiveReconciliationAudit.ReviewRecommended;
     public IReadOnlyList<ArchiveReconciliationReviewItem> ArchiveReconciliationBlocked
         => _archiveReconciliationAudit.Blocked;
+    public IReadOnlyList<ArchiveReconciliationReviewItem> ArchiveReconciliationPreservedArchiveItems
+        => _archiveReconciliationAudit.PreservedArchiveItems;
     public string ArchiveReconciliationYearDifferenceSummary => HasArchiveReconciliation
         ? $"{_archiveReconciliationAudit.YearDifferences.Count:N0} year groups contain a net difference, merge or split."
         : "Year-by-year differences will appear after analysis.";
@@ -93,8 +95,11 @@ public sealed partial class ServerSettingsViewModel
     public string ArchiveReconciliationBlockedSummary => HasArchiveReconciliation
         ? $"Showing up to {_archiveReconciliationAudit.DetailLimit:N0} of {_archiveReconciliation.BlockedBroadcasts:N0} blocked broadcasts."
         : "Blocked cases will appear after analysis.";
+    public string ArchiveReconciliationPreservedSummary => HasArchiveReconciliation
+        ? $"{_archiveReconciliation.PreservedArchiveItems:N0} recognised clips or compilation tracks are retained without being treated as full dated broadcasts."
+        : "Recognised clips and compilation tracks will appear after analysis.";
     public string ArchiveReconciliationDashboardText => HasArchiveReconciliation
-        ? $"{_archiveReconciliation.CanonicalBroadcasts:N0} canonical broadcasts · {_archiveReconciliation.AttentionTotal:N0} need attention · last run {_archiveReconciliation.CompletedDisplay}"
+        ? $"{_archiveReconciliation.CanonicalBroadcasts:N0} canonical broadcasts · {_archiveReconciliation.PreservedArchiveItems:N0} clips preserved · {_archiveReconciliation.AttentionTotal:N0} need attention · last run {_archiveReconciliation.CompletedDisplay}"
         : "Archive reconciliation has not been run. Consolidation will build a fresh inventory before it can prepare a plan.";
 
     public ICommand RefreshArchiveReconciliationCommand { get; private set; } = null!;
@@ -194,9 +199,9 @@ public sealed partial class ServerSettingsViewModel
                      nameof(ArchiveReconciliationAttentionText), nameof(ArchiveReconciliationDuplicateText),
                      nameof(ArchiveReconciliationUnresolvedText), nameof(ArchiveReconciliationYearDifferences),
                      nameof(ArchiveReconciliationSplitCandidates), nameof(ArchiveReconciliationReviewRecommended),
-                     nameof(ArchiveReconciliationBlocked), nameof(ArchiveReconciliationYearDifferenceSummary),
+                     nameof(ArchiveReconciliationBlocked), nameof(ArchiveReconciliationPreservedArchiveItems), nameof(ArchiveReconciliationYearDifferenceSummary),
                      nameof(ArchiveReconciliationSplitCandidateSummary), nameof(ArchiveReconciliationReviewSummary),
-                     nameof(ArchiveReconciliationBlockedSummary), nameof(ArchiveReconciliationDashboardText)
+                     nameof(ArchiveReconciliationBlockedSummary), nameof(ArchiveReconciliationPreservedSummary), nameof(ArchiveReconciliationDashboardText)
                  })
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
         RaiseArchiveReconciliationCommandState();

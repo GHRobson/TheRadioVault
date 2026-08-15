@@ -178,6 +178,27 @@
                 </ListBox>
               </StackPanel>
             </TabItem>
+            <TabItem Header="Preserved clips">
+              <StackPanel Spacing="8" Margin="0,10,0,0">
+                <TextBlock Text="{Binding ArchiveReconciliationPreservedSummary}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                <ListBox ItemsSource="{Binding ArchiveReconciliationPreservedArchiveItems}" Height="280">
+                  <ListBox.ItemTemplate>
+                    <DataTemplate>
+                      <Border BorderBrush="#2D343E" BorderThickness="0,0,0,1" Padding="5,9">
+                        <StackPanel Spacing="3">
+                          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                            <TextBlock Text="{Binding Identity}" FontWeight="SemiBold" TextWrapping="Wrap" />
+                            <TextBlock Grid.Column="1" Text="{Binding State}" Foreground="#66A7D7" FontSize="10" />
+                          </Grid>
+                          <TextBlock Text="{Binding Structure}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+                          <TextBlock Text="{Binding Reason}" FontSize="10" TextWrapping="Wrap" />
+                        </StackPanel>
+                      </Border>
+                    </DataTemplate>
+                  </ListBox.ItemTemplate>
+                </ListBox>
+              </StackPanel>
+            </TabItem>
           </TabControl>
         </StackPanel>
       </Border>

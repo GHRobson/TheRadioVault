@@ -113,9 +113,10 @@ public sealed class LibraryTruthEngine
                 SUM(CASE WHEN disposition='Broadcast merge' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN disposition='Recovered date' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN disposition='Needs attention' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN disposition='Archive item' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN disposition NOT IN (
                     'Unchanged','Proposed correction','Multipart correction','Broadcast split',
-                    'Broadcast merge','Recovered date','Needs attention') THEN 1 ELSE 0 END)
+                    'Broadcast merge','Recovered date','Needs attention','Archive item') THEN 1 ELSE 0 END)
               FROM library_truth_files
              WHERE run_id=$run
             """;
@@ -124,7 +125,8 @@ public sealed class LibraryTruthEngine
         if (!reader.Read()) return LibraryTruthDispositionSummary.Empty;
         return new LibraryTruthDispositionSummary(
             SafeInt(reader, 0), SafeInt(reader, 1), SafeInt(reader, 2), SafeInt(reader, 3),
-            SafeInt(reader, 4), SafeInt(reader, 5), SafeInt(reader, 6), SafeInt(reader, 7));
+            SafeInt(reader, 4), SafeInt(reader, 5), SafeInt(reader, 6), SafeInt(reader, 7),
+            SafeInt(reader, 8));
     }
 
     public IReadOnlyList<LibraryTruthFileView> GetFiles(string? filter = null, string? search = null, int limit = 10000)
@@ -275,6 +277,7 @@ public sealed class LibraryTruthEngine
                 SUM(CASE WHEN adoption_state='Ready with recording choice' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN adoption_state='Review recommended' THEN 1 ELSE 0 END),
                 SUM(CASE WHEN adoption_state='Blocked' THEN 1 ELSE 0 END),
+                SUM(CASE WHEN adoption_state='Preserved archive item' THEN 1 ELSE 0 END),
                 (SELECT COUNT(*) FROM library_truth_recordings WHERE run_id=$run AND is_preferred_candidate=1),
                 (SELECT COUNT(*) FROM library_truth_recordings WHERE run_id=$run AND role IN ('Partial recording','Partial multipart recording','Incomplete multipart recording','Multipart recording with unknown extent')),
                 (SELECT COUNT(*) FROM library_truth_recordings WHERE run_id=$run AND role='Short fragment or clip'),
@@ -289,7 +292,8 @@ public sealed class LibraryTruthEngine
         if (!reader.Read()) return LibraryTruthAdoptionSummary.Empty;
         return new LibraryTruthAdoptionSummary(
             SafeInt(reader, 0), SafeInt(reader, 1), SafeInt(reader, 2), SafeInt(reader, 3), SafeInt(reader, 4),
-            SafeInt(reader, 5), SafeInt(reader, 6), SafeInt(reader, 7), SafeInt(reader, 8), SafeInt(reader, 9));
+            SafeInt(reader, 5), SafeInt(reader, 6), SafeInt(reader, 7), SafeInt(reader, 8), SafeInt(reader, 9),
+            SafeInt(reader, 10));
     }
 
     public IReadOnlyList<LibraryTruthYearView> GetYears()
@@ -435,6 +439,7 @@ public sealed class LibraryTruthEngine
                    SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN 1 ELSE 0 END),
                    SUM(CASE WHEN adoption_state='Review recommended' THEN 1 ELSE 0 END),
                    SUM(CASE WHEN adoption_state='Blocked' THEN 1 ELSE 0 END),
+                   SUM(CASE WHEN adoption_state='Preserved archive item' THEN 1 ELSE 0 END),
                    SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN 1 ELSE 0 END),
                    SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN recording_count ELSE 0 END),
                    SUM(CASE WHEN eligible_for_guarded_adoption=1 THEN coverage_count ELSE 0 END),
@@ -449,18 +454,27 @@ public sealed class LibraryTruthEngine
         if (!reader.Read()) return LibraryTruthAdoptionPlanSummary.Empty;
         return new LibraryTruthAdoptionPlanSummary(
             SafeInt(reader, 0), SafeInt(reader, 1), SafeInt(reader, 2), SafeInt(reader, 3), SafeInt(reader, 4),
-            SafeInt(reader, 5), SafeInt(reader, 6), SafeInt(reader, 7), SafeInt(reader, 8), SafeInt(reader, 9));
+            SafeInt(reader, 5), SafeInt(reader, 6), SafeInt(reader, 7), SafeInt(reader, 8), SafeInt(reader, 9),
+            SafeInt(reader, 10));
     }
 
     public void ExportLatest(string path, string appVersion)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         var rehearsal = new LibraryTruthAdoptionRehearsalService(_database);
+        var summary = GetLatestSummary();
+        var latestRehearsal = rehearsal.GetLatestSummary();
+        var rehearsalMatchesAnalysis = summary.RunId > 0 && latestRehearsal.TruthRunId == summary.RunId;
+        var rehearsalNotice = rehearsalMatchesAnalysis
+            ? $"Adoption rehearsal {latestRehearsal.Id:N0} belongs to reconciliation {summary.RunId:N0}."
+            : latestRehearsal.Id == 0
+                ? $"No adoption rehearsal has been run for reconciliation {summary.RunId:N0}."
+                : $"No adoption rehearsal has been run for reconciliation {summary.RunId:N0}. The latest saved rehearsal belongs to reconciliation {latestRehearsal.TruthRunId:N0} and was intentionally omitted from this export.";
         var report = new LibraryTruthExportReport
         {
             AppVersion = appVersion,
             ExportedAt = DateTimeOffset.UtcNow,
-            Summary = GetLatestSummary(),
+            Summary = summary,
             Adoption = GetAdoptionSummary(),
             Files = GetFiles(limit: 50000),
             Broadcasts = GetBroadcasts(limit: 50000),
@@ -470,9 +484,11 @@ public sealed class LibraryTruthEngine
             AdoptionPlan = GetAdoptionPlanSummary(),
             Coverages = GetCoverages(limit: 50000),
             AdoptionPreviews = GetAdoptionPreviews(limit: 50000),
-            Rehearsal = rehearsal.GetLatestSummary(),
-            RehearsalItems = rehearsal.GetLatestItems(limit: 50000),
-            ConflictForensics = rehearsal.GetLatestConflictForensics(limit: 50000)
+            Rehearsal = rehearsalMatchesAnalysis ? latestRehearsal : LibraryTruthRehearsalSummary.Empty,
+            RehearsalMatchesAnalysis = rehearsalMatchesAnalysis,
+            RehearsalNotice = rehearsalNotice,
+            RehearsalItems = rehearsalMatchesAnalysis ? rehearsal.GetLatestItems(limit: 50000) : Array.Empty<LibraryTruthRehearsalItem>(),
+            ConflictForensics = rehearsalMatchesAnalysis ? rehearsal.GetLatestConflictForensics(limit: 50000) : Array.Empty<LibraryTruthConflictForensic>()
         };
         var directory = Path.GetDirectoryName(Path.GetFullPath(path));
         if (!string.IsNullOrWhiteSpace(directory)) Directory.CreateDirectory(directory);
@@ -637,6 +653,7 @@ public sealed class LibraryTruthEngine
             var hasSplit = files.Any(x => splitEpisodes.Contains(x.Input.CurrentEpisodeId));
             var parserNeedsReview = files.Any(x => x.NeedsReview);
             var unknownDate = files.Any(x => !x.AirDate.HasValue);
+            var archiveItem = ArchiveItemClassificationPolicy.Classify(files);
             var suspiciousAssessment = DetectSuspiciousMerge(recordings);
             var suspiciousMerge = suspiciousAssessment.IsSuspicious;
             var incompleteMultipartWithoutCompleteAlternative = recordings.Any(x => x.Role is "Incomplete multipart recording" or "Multipart recording with unknown extent") &&
@@ -646,14 +663,7 @@ public sealed class LibraryTruthEngine
 
             string adoptionState;
             string adoptionReason;
-            if (parserNeedsReview || unknownDate)
-            {
-                adoptionState = "Blocked";
-                adoptionReason = unknownDate
-                    ? "A trustworthy broadcast date is still missing."
-                    : "Parser V3 retained evidence that requires a human identity decision.";
-            }
-            else if (broadcastConflicts.Length > 0)
+            if (broadcastConflicts.Length > 0)
             {
                 adoptionState = "Blocked";
                 adoptionReason = "The same audio evidence appears under a different broadcast identity.";
@@ -662,6 +672,18 @@ public sealed class LibraryTruthEngine
             {
                 adoptionState = "Blocked";
                 adoptionReason = "One live episode currently contains files that Parser V3 assigns to different broadcasts.";
+            }
+            else if (archiveItem.IsArchiveItem)
+            {
+                adoptionState = "Preserved archive item";
+                adoptionReason = $"{archiveItem.Kind}. {archiveItem.Evidence} An exact air date is not required and Radio Vault will not invent one.";
+            }
+            else if (parserNeedsReview || unknownDate)
+            {
+                adoptionState = "Blocked";
+                adoptionReason = unknownDate
+                    ? "A trustworthy broadcast date is still missing."
+                    : "Parser V3 retained evidence that requires a human identity decision.";
             }
             else if (suspiciousMerge)
             {
@@ -1155,6 +1177,7 @@ public sealed class LibraryTruthEngine
         var result = new List<SegmentCoverageAnalysis>();
         foreach (var broadcast in broadcasts)
         {
+            if (broadcast.AdoptionState == "Preserved archive item") continue;
             var filesByMediaId = broadcast.Files.ToDictionary(x => x.Input.MediaFileId);
             foreach (var recording in broadcast.Recordings)
             {
@@ -1348,7 +1371,15 @@ public sealed class LibraryTruthEngine
                 ? sourceCoverage.Length
                 : 0;
             var eligible = broadcast.AdoptionState is "Ready" or "Ready with recording choice";
-            var plannedAction = !eligible
+            var preservedArchiveItem = broadcast.AdoptionState == "Preserved archive item";
+            if (preservedArchiveItem)
+            {
+                reassignFiles = 0;
+                retireEpisodes = 0;
+            }
+            var plannedAction = preservedArchiveItem
+                ? "Preserve this clip or compilation track in the existing archive without converting it into a canonical broadcast"
+                : !eligible
                 ? broadcast.AdoptionState == "Blocked"
                     ? "Hold until blocking identity evidence is resolved"
                     : "Hold for focused recording or coverage review"
@@ -1359,11 +1390,15 @@ public sealed class LibraryTruthEngine
                         : broadcast.Recordings.Count > 1 || sourceCoverageCount > 1
                             ? "Attach ranked recordings and explicit coverage to the existing broadcast"
                             : "Attach canonical recording structure to the existing broadcast";
-            var plannedWriteCount = 1 + broadcast.Files.Length + broadcast.Recordings.Count + sourceCoverageCount + retireEpisodes;
+            var plannedWriteCount = preservedArchiveItem
+                ? 0
+                : 1 + broadcast.Files.Length + broadcast.Recordings.Count + sourceCoverageCount + retireEpisodes;
             var guardReason = eligible
                 ? "Prepared for guarded adoption only after a validated backup, state preservation, a rollback-verified sealed rehearsal, fresh fingerprints and exact signature checks all pass."
                 : broadcast.AdoptionReason;
-            var evidence = $"Preview selects {(provisionalEpisodeId.HasValue ? $"live episode {provisionalEpisodeId.Value:N0}" : "no live episode")} as the provisional survivor using the largest physical-file contribution, then the lowest ID as a deterministic tie-break. " +
+            var evidence = preservedArchiveItem
+                ? $"This established {broadcast.AdoptionReason} It remains visible in reconciliation evidence, is excluded from unresolved broadcast-date work, and produces no live-library adoption writes."
+                : $"Preview selects {(provisionalEpisodeId.HasValue ? $"live episode {provisionalEpisodeId.Value:N0}" : "no live episode")} as the provisional survivor using the largest physical-file contribution, then the lowest ID as a deterministic tie-break. " +
                            $"It would preserve {broadcast.Files.Length:N0} media-file link(s), create {broadcast.Recordings.Count:N0} recording row(s), persist {sourceCoverageCount:N0} coverage row(s), and consolidate {retireEpisodes:N0} redundant live episode row(s). " +
                            "This is planning evidence only; no live rows are updated, hidden or deleted.";
             result.Add(new AdoptionPreviewAnalysis(
@@ -1418,14 +1453,21 @@ public sealed class LibraryTruthEngine
             .Concat(interpretations.Select(x => x.Input.CurrentAirDate?.Year.ToString() ?? "Unknown"))
             .Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
         var result = new List<YearAnalysis>();
+        var preservedCurrentEpisodeIds = broadcasts
+            .Where(broadcast => broadcast.AdoptionState == "Preserved archive item")
+            .SelectMany(broadcast => broadcast.Files)
+            .Select(file => file.Input.CurrentEpisodeId)
+            .ToHashSet();
         foreach (var label in labels)
         {
             var proposedFiles = interpretations.Where(x => (x.AirDate?.Year.ToString() ?? "Unknown") == label).ToArray();
             var currentFiles = interpretations.Where(x => (x.Input.CurrentAirDate?.Year.ToString() ?? "Unknown") == label).ToArray();
             var yearBroadcasts = broadcasts.Where(x => (x.Files.FirstOrDefault()?.AirDate?.Year.ToString() ?? "Unknown") == label).ToArray();
             result.Add(new YearAnalysis(label, proposedFiles.Length,
-                currentFiles.Select(x => x.Input.CurrentEpisodeId).Distinct().Count(), yearBroadcasts.Length,
-                yearBroadcasts.Count(x => x.CurrentEpisodeCount > 1),
+                currentFiles.Where(x => !preservedCurrentEpisodeIds.Contains(x.Input.CurrentEpisodeId))
+                    .Select(x => x.Input.CurrentEpisodeId).Distinct().Count(),
+                yearBroadcasts.Count(x => x.AdoptionState != "Preserved archive item"),
+                yearBroadcasts.Count(x => x.AdoptionState != "Preserved archive item" && x.CurrentEpisodeCount > 1),
                 proposedFiles.Where(x => splitEpisodeIds.Contains(x.Input.CurrentEpisodeId)).Select(x => x.Input.CurrentEpisodeId).Distinct().Count(),
                 yearBroadcasts.Count(x => x.AdoptionState is "Ready" or "Ready with recording choice"),
                 yearBroadcasts.Count(x => x.AdoptionState == "Review recommended"),
@@ -1536,10 +1578,23 @@ public sealed class LibraryTruthEngine
                 changeSummary = "Separate physical segments are assembled beneath one canonical broadcast.";
             }
 
+            if (group.AdoptionState == "Preserved archive item")
+            {
+                disposition = "Archive item";
+                changeSummary = "Preserved as a known clip or compilation track; no broadcast date was invented and no canonical-broadcast adoption is proposed.";
+                warnings.RemoveAll(warning => warning.Code.Equals("unknown-date", StringComparison.OrdinalIgnoreCase));
+                evidence.Add(new LibraryTruthEvidence(
+                    "content-kind",
+                    "Archive clip or compilation track",
+                    100,
+                    "archive convention",
+                    group.AdoptionReason));
+            }
+
             if (disposition == "Unchanged") unchanged++; else changed++;
             if (disposition == "Recovered date") recovered++;
-            if (!interpretation.AirDate.HasValue) unknown++;
-            if (interpretation.NeedsReview || hasConflictingExactIdentity) needsReview++;
+            if (!interpretation.AirDate.HasValue && group.AdoptionState != "Preserved archive item") unknown++;
+            if ((interpretation.NeedsReview && group.AdoptionState != "Preserved archive item") || hasConflictingExactIdentity) needsReview++;
 
             insertFile.Parameters.Clear();
             insertFile.Parameters.AddWithValue("$run", runId);
@@ -1744,8 +1799,13 @@ public sealed class LibraryTruthEngine
             insertYear.ExecuteNonQuery();
         }
 
-        var currentBroadcasts = interpretations.Select(x => x.Input.CurrentEpisodeId).Distinct().Count();
-        var mergeGroups = analysis.Broadcasts.Count(x => x.CurrentEpisodeCount > 1);
+        var currentBroadcasts = analysis.Broadcasts
+            .Where(x => x.AdoptionState != "Preserved archive item")
+            .SelectMany(x => x.Files)
+            .Select(x => x.Input.CurrentEpisodeId)
+            .Distinct()
+            .Count();
+        var mergeGroups = analysis.Broadcasts.Count(x => x.AdoptionState != "Preserved archive item" && x.CurrentEpisodeCount > 1);
         var splitGroups = analysis.SplitEpisodeIds.Count;
         var exactGroups = analysis.Broadcasts.Count(x => x.ExactDuplicateCount > 0);
         var strongGroups = analysis.Broadcasts.Count(x => x.StrongDuplicateCount > 0);
@@ -1753,8 +1813,10 @@ public sealed class LibraryTruthEngine
         var ready = analysis.Broadcasts.Count(x => x.AdoptionState is "Ready" or "Ready with recording choice");
         var reviewRecommended = analysis.Broadcasts.Count(x => x.AdoptionState == "Review recommended");
         var blocked = analysis.Broadcasts.Count(x => x.AdoptionState == "Blocked");
+        var preservedArchiveItems = analysis.Broadcasts.Count(x => x.AdoptionState == "Preserved archive item");
+        var canonicalBroadcasts = analysis.Broadcasts.Count - preservedArchiveItems;
         var inferredCoverage = analysis.Coverages.Count(x => x.RequiresReview);
-        var message = $"Shadow library built from {interpretations.Count:N0} physical files: {analysis.Broadcasts.Count:N0} canonical broadcasts; {ready:N0} adoption-ready, {reviewRecommended:N0} review recommended and {blocked:N0} blocked. {analysis.Coverages.Count:N0} segment coverage rows and {analysis.AdoptionPreviews.Count:N0} non-destructive adoption previews were persisted; {inferredCoverage:N0} coverage rows require confirmation. {unknown:N0} dates remain unresolved. The live library was not changed.";
+        var message = $"Shadow library built from {interpretations.Count:N0} physical files: {canonicalBroadcasts:N0} canonical broadcasts and {preservedArchiveItems:N0} recognised clips or compilation tracks; {ready:N0} adoption-ready, {reviewRecommended:N0} review recommended and {blocked:N0} blocked. {analysis.Coverages.Count:N0} segment coverage rows and {analysis.AdoptionPreviews.Count:N0} non-destructive adoption previews were persisted; {inferredCoverage:N0} coverage rows require confirmation. {unknown:N0} broadcast dates remain unresolved. The live library was not changed.";
 
         using (var updateRun = connection.CreateCommand())
         {
@@ -1771,7 +1833,7 @@ public sealed class LibraryTruthEngine
             updateRun.Parameters.AddWithValue("$completed", completedAt.ToString("O"));
             updateRun.Parameters.AddWithValue("$files", interpretations.Count);
             updateRun.Parameters.AddWithValue("$current", currentBroadcasts);
-            updateRun.Parameters.AddWithValue("$proposed", analysis.Broadcasts.Count);
+            updateRun.Parameters.AddWithValue("$proposed", canonicalBroadcasts);
             updateRun.Parameters.AddWithValue("$unchanged", unchanged);
             updateRun.Parameters.AddWithValue("$changed", changed);
             updateRun.Parameters.AddWithValue("$recovered", recovered);
@@ -1807,7 +1869,7 @@ public sealed class LibraryTruthEngine
         transaction.Commit();
 
         return new LibraryTruthRunSummary(runId, "completed", LibraryTruthParser.CurrentVersion, startedAt, completedAt,
-            interpretations.Count, currentBroadcasts, analysis.Broadcasts.Count, unchanged, changed, recovered, unknown,
+            interpretations.Count, currentBroadcasts, canonicalBroadcasts, unchanged, changed, recovered, unknown,
             needsReview, mergeGroups, splitGroups, exactGroups, strongGroups, multipart, message);
     }
 
@@ -1839,6 +1901,7 @@ public sealed class LibraryTruthEngine
             "proposed" => $"AND {prefix}status<>'Stable'",
             "review-recommended" => $"AND {prefix}adoption_state='Review recommended'",
             "blocked" => $"AND {prefix}adoption_state='Blocked'",
+            "preserved-archive-items" => $"AND {prefix}adoption_state='Preserved archive item'",
             "ready" => $"AND {prefix}adoption_state IN ('Ready','Ready with recording choice')",
             "suspicious-merges" => $"AND {prefix}suspicious_merge=1",
             "split-candidates" => $"AND EXISTS (SELECT 1 FROM library_truth_files sf WHERE sf.run_id={owner}.run_id AND sf.canonical_broadcast_key={owner}.canonical_key AND sf.disposition='Broadcast split')",
@@ -1855,6 +1918,7 @@ public sealed class LibraryTruthEngine
         "blocked" => "AND b.adoption_state='Blocked'",
         "review-recommended" => "AND b.adoption_state='Review recommended'",
         "ready" => "AND b.adoption_state IN ('Ready','Ready with recording choice')",
+        "preserved-archive-items" => "AND b.adoption_state='Preserved archive item'",
         "suspicious-merges" => "AND b.suspicious_merge=1",
         "proposed" => "AND f.disposition<>'Unchanged'",
         "recovered" => "AND f.disposition='Recovered date'",

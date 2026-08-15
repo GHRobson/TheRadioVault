@@ -107,6 +107,7 @@ public sealed class ResearchDateAuthorityEvidenceService
               JOIN episodes e ON e.id=f.current_episode_id
               JOIN collections c ON c.id=e.collection_id
              WHERE b.run_id=$run AND b.air_date IS NULL
+               AND b.adoption_state<>'Preserved archive item'
              ORDER BY b.collection_name,b.canonical_key,e.id,f.original_filename;
             """;
         command.Parameters.AddWithValue("$run", runId);

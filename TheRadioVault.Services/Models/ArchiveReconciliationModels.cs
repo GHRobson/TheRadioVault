@@ -22,14 +22,15 @@ public sealed record ArchiveReconciliationSnapshot(
     int ReadyBroadcasts,
     int ReviewRecommendedBroadcasts,
     int BlockedBroadcasts,
+    int PreservedArchiveItems,
     int PartialOrDamagedRecordings,
     int IdentityConflicts,
     string Message)
 {
     public static ArchiveReconciliationSnapshot NotAnalysed { get; } = new(
         false, 0, "Not analysed", null,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
         "Run archive reconciliation to build a non-destructive view of every physical recording.");
 
     public int AttentionTotal => ReviewRecommendedBroadcasts + BlockedBroadcasts;
@@ -43,12 +44,13 @@ public sealed record ArchiveReconciliationChangeBreakdown(
     int BroadcastMergeFiles,
     int RecoveredDateFiles,
     int NeedsAttentionFiles,
+    int ArchiveItemFiles,
     int OtherChangedFiles)
 {
-    public static ArchiveReconciliationChangeBreakdown Empty { get; } = new(0, 0, 0, 0, 0, 0, 0);
+    public static ArchiveReconciliationChangeBreakdown Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0);
     public int InterpretedDifferentlyFiles => MetadataCorrectionFiles + MultipartCorrectionFiles +
                                               BroadcastSplitFiles + BroadcastMergeFiles + RecoveredDateFiles +
-                                              NeedsAttentionFiles + OtherChangedFiles;
+                                              NeedsAttentionFiles + ArchiveItemFiles + OtherChangedFiles;
 }
 
 public sealed record ArchiveReconciliationYearDifference(
@@ -86,6 +88,7 @@ public sealed record ArchiveReconciliationAudit(
     IReadOnlyList<ArchiveReconciliationReviewItem> SplitCandidates,
     IReadOnlyList<ArchiveReconciliationReviewItem> ReviewRecommended,
     IReadOnlyList<ArchiveReconciliationReviewItem> Blocked,
+    IReadOnlyList<ArchiveReconciliationReviewItem> PreservedArchiveItems,
     int DetailLimit)
 {
     public static ArchiveReconciliationAudit NotAnalysed { get; } = new(
@@ -93,6 +96,7 @@ public sealed record ArchiveReconciliationAudit(
         ArchiveReconciliationChangeBreakdown.Empty,
         0, 0, 0, 0, 0,
         Array.Empty<ArchiveReconciliationYearDifference>(),
+        Array.Empty<ArchiveReconciliationReviewItem>(),
         Array.Empty<ArchiveReconciliationReviewItem>(),
         Array.Empty<ArchiveReconciliationReviewItem>(),
         Array.Empty<ArchiveReconciliationReviewItem>(),

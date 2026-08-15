@@ -314,6 +314,7 @@ var tests = new (string Name, Action Run)[]
     ("Research dates stay durable across multipart review and scanning", ResearchDatesStayDurableAcrossMultipartReviewAndScanning),
     ("Legacy approved Research dates reattach only unique archive matches", LegacyApprovedResearchDatesReattachUniqueArchiveMatches),
     ("Exact identity dates become durable multipart authority", ExactIdentityDatesBecomeDurableMultipartAuthority),
+    ("Verified Unmasked O&A20 date becomes durable archive authority", VerifiedUnmaskedOa20DateBecomesDurableArchiveAuthority),
     ("Quick date-review decisions persist and reopen safely", QuickDateReviewDecisionsPersistAndReopenSafely),
     ("Research packs round-trip date-review decisions", ResearchPacksRoundTripDateReviewDecisions),
     ("Research packs tolerate harmless AI scalar variations", ResearchPacksTolerateAiScalarVariations),
@@ -1031,11 +1032,12 @@ static void ArchiveReconciliationIsServerOwnedAndReadOnly()
         Equal(0, audit.SplitCandidates.Count);
         Equal(0, audit.ReviewRecommended.Count);
         Equal(0, audit.Blocked.Count);
+        Equal(0, audit.PreservedArchiveItems.Count);
         var reportPath = Path.Combine(root, "reconciliation.trvreconcile.json");
         service.ExportReport(reportPath, "test-version");
         True(File.Exists(reportPath));
         var reportJson = File.ReadAllText(reportPath);
-        True(reportJson.Contains("\"schemaVersion\": 6", StringComparison.Ordinal));
+        True(reportJson.Contains("\"schemaVersion\": 7", StringComparison.Ordinal));
         True(reportJson.Contains("\"appVersion\": \"test-version\"", StringComparison.Ordinal));
 
         using (var connection = database.OpenConnection())
@@ -5275,6 +5277,96 @@ static void ExactIdentityDatesBecomeDurableMultipartAuthority()
         {
             verify.CommandText = "SELECT COUNT(*) FROM episodes WHERE id IN (6301,6302) AND air_date='2011-12-03'";
             Equal(2L, Convert.ToInt64(verify.ExecuteScalar(), CultureInfo.InvariantCulture));
+        }
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void VerifiedUnmaskedOa20DateBecomesDurableArchiveAuthority()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "rv-unmasked-oa20-date-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(directory, "unmasked-oa20.db"));
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name)
+                VALUES('Unmasked','Unmasked'),('Opie & Anthony','Opie & Anthony');
+
+                INSERT INTO episodes(id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,hidden)
+                VALUES
+                  (6401,(SELECT id FROM collections WHERE name='Unmasked'),NULL,'Unknown',
+                   'Opie and Anthony','Unplayed',$now,$now,0),
+                  (6402,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   'Unrelated O&A archive item','Unplayed',$now,$now,0);
+
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES
+                  (7401,6401,$unmaskedPath,'Unmasked Opie and Anthony.mp3',100,$now,0,$now,3600000,'AvailableOffline',1),
+                  (7402,6402,$oaPath,'unmasked_opie_and_anthony.mp3',100,$now,0,$now,1000,'AvailableOffline',1);
+                """;
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.Parameters.AddWithValue("$unmaskedPath", Path.Combine(directory, "Unmasked Opie and Anthony.mp3"));
+            command.Parameters.AddWithValue("$oaPath", Path.Combine(directory, "oa", "unmasked_opie_and_anthony.mp3"));
+            command.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var migrated = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(1, migrated);
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = """
+                SELECT
+                  (SELECT air_date FROM episodes WHERE id=6401),
+                  (SELECT date_confidence FROM episodes WHERE id=6401),
+                  (SELECT air_date FROM episodes WHERE id=6402),
+                  (SELECT COUNT(*) FROM research_field_provenance
+                    WHERE episode_id=6401 AND field_name='air_date' AND value_text='2014-04-17'
+                      AND source_kind='system' AND protected=1 AND active=1),
+                  (SELECT source_label FROM research_field_provenance
+                    WHERE episode_id=6401 AND field_name='air_date' AND value_text='2014-04-17'
+                    ORDER BY id DESC LIMIT 1);
+                """;
+            using var reader = verify.ExecuteReader();
+            True(reader.Read());
+            Equal("2014-04-17", reader.GetString(0));
+            Equal("Research authoritative", reader.GetString(1));
+            True(reader.IsDBNull(2), "The same filename outside Unmasked received the verified date.");
+            Equal(1L, reader.GetInt64(3));
+            True(reader.GetString(4).Contains("SiriusXM O&A20", StringComparison.Ordinal));
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var clearProjection = connection.CreateCommand())
+        {
+            clearProjection.CommandText = "UPDATE episodes SET air_date=NULL,date_confidence='Unknown' WHERE id=6401;";
+            clearProjection.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var restored = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(1, restored);
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = "SELECT air_date FROM episodes WHERE id=6401;";
+            Equal("2014-04-17", Convert.ToString(verify.ExecuteScalar(), CultureInfo.InvariantCulture));
         }
     }
     finally

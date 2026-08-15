@@ -79,7 +79,15 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
                   FROM research_broadcasts rb
                   JOIN collections c ON c.id=rb.collection_id
                   JOIN episodes e ON e.id=rb.episode_id
-                 WHERE rb.episode_id IS NOT NULL;
+                 WHERE rb.episode_id IS NOT NULL
+                   AND NOT EXISTS(
+                       SELECT 1
+                         FROM library_truth_runs tr
+                         JOIN library_truth_files tf ON tf.run_id=tr.id AND tf.current_episode_id=e.id
+                         JOIN library_truth_broadcasts tb
+                           ON tb.run_id=tf.run_id AND tb.canonical_key=tf.canonical_broadcast_key
+                        WHERE tr.id=(SELECT COALESCE(MAX(id),0) FROM library_truth_runs WHERE status='completed')
+                          AND tb.adoption_state='Preserved archive item');
                 """;
             await using var reader = await read.ExecuteReaderAsync(cancellationToken).ConfigureAwait(false);
             while (await reader.ReadAsync(cancellationToken).ConfigureAwait(false))
@@ -380,6 +388,14 @@ public sealed class ResearchWorkspaceService : IResearchWorkspaceService
                AND EXISTS(SELECT 1 FROM media_files mf WHERE mf.episode_id=e.id AND mf.is_missing=0)
                AND (NOT EXISTS(SELECT 1 FROM episode_canonical_map ecm WHERE ecm.episode_id=e.id)
                     OR EXISTS(SELECT 1 FROM episode_canonical_map ecm WHERE ecm.episode_id=e.id AND ecm.is_survivor=1))
+               AND NOT EXISTS(
+                   SELECT 1
+                     FROM library_truth_runs tr
+                     JOIN library_truth_files tf ON tf.run_id=tr.id AND tf.current_episode_id=e.id
+                     JOIN library_truth_broadcasts tb
+                       ON tb.run_id=tf.run_id AND tb.canonical_key=tf.canonical_broadcast_key
+                    WHERE tr.id=(SELECT COALESCE(MAX(id),0) FROM library_truth_runs WHERE status='completed')
+                      AND tb.adoption_state='Preserved archive item')
              ORDER BY c.sort_name,c.name,COALESCE(rb.air_date,'9999-12-31'),rb.headline,e.id;
             """;
         command.CommandText = command.CommandText.Replace(

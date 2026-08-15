@@ -59,6 +59,7 @@ public sealed class ArchiveReconciliationService
             dispositions.BroadcastMergeFiles,
             dispositions.RecoveredDateFiles,
             dispositions.NeedsAttentionFiles,
+            dispositions.ArchiveItemFiles,
             dispositions.OtherChangedFiles);
         var years = _engine.GetYears()
             .Where(year => year.ProposedBroadcasts != year.CurrentBroadcasts || year.MergeGroups > 0 || year.SplitGroups > 0)
@@ -83,6 +84,8 @@ public sealed class ArchiveReconciliationService
                 "This proposed broadcast should be checked before adoption."),
             MapReviewItems(_engine.GetBroadcasts("blocked", limit),
                 "This proposed broadcast is blocked from automatic adoption."),
+            MapReviewItems(_engine.GetBroadcasts("preserved-archive-items", limit),
+                "This is a recognised archive clip or compilation track. It is preserved without inventing a broadcast date."),
             limit);
     }
 
@@ -123,6 +126,7 @@ public sealed class ArchiveReconciliationService
             adoption.AdoptionReadyTotal,
             adoption.ReviewRecommendedBroadcasts,
             adoption.BlockedBroadcasts,
+            adoption.PreservedArchiveItems,
             adoption.PartialRecordings + adoption.FragmentRecordings + adoption.TruncatedRecordings,
             adoption.CrossIdentityConflicts,
             run.Message);

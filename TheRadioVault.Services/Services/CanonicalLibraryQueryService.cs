@@ -42,7 +42,7 @@ public sealed class CanonicalLibraryQueryService
 
         var adopted = ScalarInt(connection, "SELECT COUNT(*) FROM canonical_broadcasts");
         var truthBroadcasts = ScalarInt(connection,
-            "SELECT COUNT(*) FROM library_truth_broadcasts WHERE run_id=$run",
+            "SELECT COUNT(*) FROM library_truth_broadcasts WHERE run_id=$run AND adoption_state<>'Preserved archive item'",
             ("$run", latestTruthRunId));
         var incrementalBroadcasts = ScalarInt(connection, """
             SELECT COUNT(*)
@@ -141,8 +141,9 @@ public sealed class CanonicalLibraryQueryService
             WITH
             truth_broadcasts AS (
                 SELECT *
-                  FROM library_truth_broadcasts
+                 FROM library_truth_broadcasts
                  WHERE run_id=$run
+                   AND adoption_state<>'Preserved archive item'
                    AND ($key IS NULL OR canonical_key=$key)
             ),
             members AS (
