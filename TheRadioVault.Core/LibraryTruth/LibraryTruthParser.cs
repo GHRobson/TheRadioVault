@@ -61,6 +61,28 @@ public sealed class LibraryTruthParser
         }
 
         var dateResult = DetectDate(filename, input.Path, collection, context);
+        if (!dateResult.Date.HasValue
+            && input.CurrentAirDate.HasValue
+            && DateConfidencePolicy.IsTrustedForLibraryIdentity(input.CurrentDateConfidence)
+            && dateResult.Warnings.Any(warning => warning.Code.Equals("unknown-date", StringComparison.OrdinalIgnoreCase)))
+        {
+            dateResult = new DateDetection(
+                input.CurrentAirDate,
+                "High",
+                new[]
+                {
+                    new LibraryTruthEvidence(
+                        "date",
+                        input.CurrentAirDate.Value.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                        99,
+                        "durable Library metadata",
+                        $"The filename has no date, so the previously confirmed {input.CurrentDateConfidence} date remains authoritative.")
+                },
+                dateResult.Warnings
+                    .Where(warning => !warning.Code.Equals("unknown-date", StringComparison.OrdinalIgnoreCase))
+                    .ToArray(),
+                dateResult.MatchedTexts);
+        }
         evidence.AddRange(dateResult.Evidence);
         warnings.AddRange(dateResult.Warnings);
 

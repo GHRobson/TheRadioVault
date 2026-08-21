@@ -1,0 +1,55 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Server.Views.ServerRecoveryView">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="26" Spacing="16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="RECOVERY" Classes="eyebrow" />
+        <TextBlock Text="Health, backups and diagnostics" FontSize="28" FontWeight="Bold" />
+        <TextBlock Text="Verify that the authoritative database can be recovered and export privacy-safe evidence when something goes wrong."
+                   Classes="muted" FontSize="12" TextWrapping="Wrap" />
+      </StackPanel>
+      <Border Classes="card">
+        <StackPanel Spacing="14">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="14">
+            <StackPanel Spacing="3">
+              <TextBlock Text="SERVER HEALTH" Classes="eyebrow" />
+              <TextBlock Text="{Binding HealthHeadline}" FontSize="19" FontWeight="SemiBold" />
+              <TextBlock Text="Live checks for the database, storage, backups, certificates and connected clients."
+                         Classes="muted" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+            <Border Grid.Column="1" Background="{Binding HealthStateBrush}" CornerRadius="999" Padding="13,7" VerticalAlignment="Top">
+              <TextBlock Text="HEALTH" Foreground="#101318" FontWeight="Bold" FontSize="10" />
+            </Border>
+          </Grid>
+          <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto,Auto" ColumnSpacing="12" RowSpacing="9">
+            <Border Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+              <StackPanel Spacing="3"><TextBlock Text="DATABASE" Classes="eyebrow" /><TextBlock Text="{Binding DatabaseHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
+            </Border>
+            <Border Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+              <StackPanel Spacing="3"><TextBlock Text="ARCHIVE MEDIA" Classes="eyebrow" /><TextBlock Text="{Binding MediaHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
+            </Border>
+            <Border Grid.Row="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+              <StackPanel Spacing="3"><TextBlock Text="VERIFIED BACKUP" Classes="eyebrow" /><TextBlock Text="{Binding BackupHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
+            </Border>
+            <Border Grid.Row="1" Grid.Column="1" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+              <StackPanel Spacing="3"><TextBlock Text="SECURE ACCESS" Classes="eyebrow" /><TextBlock Text="{Binding CertificateHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
+            </Border>
+            <Border Grid.Row="2" Grid.ColumnSpan="2" Background="#13171D" BorderBrush="#343B45" BorderThickness="1" CornerRadius="9" Padding="12">
+              <StackPanel Spacing="3"><TextBlock Text="CONNECTED CLIENTS" Classes="eyebrow" /><TextBlock Text="{Binding ClientHealthText}" FontSize="11" TextWrapping="Wrap" /></StackPanel>
+            </Border>
+          </Grid>
+          <TextBlock Text="{Binding HealthActionText}" Classes="muted" FontSize="10" TextWrapping="Wrap" />
+          <WrapPanel ItemSpacing="8" LineSpacing="8">
+            <Button Content="Test latest backup restore" Classes="primary" Command="{Binding RehearseBackupCommand}" />
+            <Button Content="Export privacy-safe diagnostics…" Classes="secondary" Command="{Binding ExportDiagnosticsCommand}" />
+          </WrapPanel>
+        </StackPanel>
+      </Border>
+      <Border Background="#241F13" BorderBrush="#E2A84A" BorderThickness="1" CornerRadius="10" Padding="14">
+        <TextBlock Text="A restore rehearsal uses an isolated temporary database and never replaces the live archive. Exported diagnostics redact private links, credentials and tokens."
+                   Foreground="#F2C94C" FontSize="11" FontWeight="SemiBold" TextWrapping="Wrap" />
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

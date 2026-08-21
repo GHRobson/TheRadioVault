@@ -77,14 +77,19 @@ public sealed class BackupService
 
     public BackupRestoreResult RestoreBackup(string backupPath)
     {
+        var rehearsal = new BackupRestoreRehearsalService().Rehearse(backupPath);
+        if (!rehearsal.CanRestore)
+            throw new InvalidDataException(rehearsal.Message);
         var extract = Path.Combine(Path.GetTempPath(), $"trv-restore-{Guid.NewGuid():N}");
         Directory.CreateDirectory(extract);
+        string? safety = null;
         try
         {
             ZipFile.ExtractToDirectory(backupPath, extract);
             var restoredDb = Path.Combine(extract, "radio_vault.db");
             if (!File.Exists(restoredDb)) throw new InvalidDataException("This backup does not contain a Radio Vault database.");
-            var safety = Path.Combine(AppPaths.BackupDirectory, $"pre-restore-{DateTime.Now:yyyyMMdd-HHmmss}.db");
+            safety = Path.Combine(AppPaths.BackupDirectory, $"pre-restore-{DateTime.Now:yyyyMMdd-HHmmss}.db");
+            Directory.CreateDirectory(AppPaths.BackupDirectory);
             SqliteConnection.ClearAllPools();
 
             var localFolders = CaptureLibraryFolders(AppPaths.DatabasePath);
@@ -96,9 +101,20 @@ public sealed class BackupService
             if (preserveLocalLibraries)
                 ApplyDestinationLibraryState(AppPaths.DatabasePath, localFolders);
 
+            var quickCheck = BackupRestoreRehearsalService.InspectQuickCheck(AppPaths.DatabasePath);
+            if (!string.Equals(quickCheck, "ok", StringComparison.OrdinalIgnoreCase))
+                throw new InvalidDataException($"The restored database failed SQLite validation: {quickCheck}.");
+
             var artwork = Path.Combine(extract, "Artwork");
             if (Directory.Exists(artwork)) CopyDirectory(artwork, AppPaths.ArtworkDirectory);
             return new BackupRestoreResult(preserveLocalLibraries, preserveLocalLibraries ? localFolders.Count : restoredFolders.Count);
+        }
+        catch
+        {
+            SqliteConnection.ClearAllPools();
+            if (!string.IsNullOrWhiteSpace(safety) && File.Exists(safety))
+                File.Copy(safety, AppPaths.DatabasePath, overwrite: true);
+            throw;
         }
         finally
         {

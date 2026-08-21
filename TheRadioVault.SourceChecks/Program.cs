@@ -84,15 +84,20 @@ static void FederationAdministrationRoutesStayBehindOneServerBoundary()
     var coordinator = File.ReadAllText(Path.Combine(services, "LocalWebServer.cs"));
     var dispatcher = File.ReadAllText(Path.Combine(services, "LocalWebServer.ApiRoutes.cs"));
     var federationAdministration = File.ReadAllText(Path.Combine(services, "LocalWebServer.FederationAdministration.cs"));
+    var lifecycleResolver = File.ReadAllText(Path.Combine(services, "WebRequestLifecycleResolver.cs"));
 
     const string boundaryCall = "TryHandleFederationAdministrationRouteAsync(";
-    var pairingIndex = coordinator.IndexOf("WebApiRoutes.FederationPair", StringComparison.Ordinal);
-    var authorizedBoundaryIndex = coordinator.IndexOf("TryHandleAuthorizedRouteAsync(", pairingIndex, StringComparison.Ordinal);
+    var pairingPolicyIndex = lifecycleResolver.IndexOf("context.Path.Equals(WebApiRoutes.FederationPair", StringComparison.Ordinal);
+    var authorizationPolicyIndex = lifecycleResolver.IndexOf("if (!authorized)", pairingPolicyIndex, StringComparison.Ordinal);
+    var pairingDispatchIndex = coordinator.IndexOf("lifecycle.Kind == WebRequestLifecycleKind.Pairing", StringComparison.Ordinal);
+    var authorizedBoundaryIndex = coordinator.IndexOf("TryHandleAuthorizedRouteAsync(", pairingDispatchIndex, StringComparison.Ordinal);
     var boundaryIndex = dispatcher.IndexOf(boundaryCall, StringComparison.Ordinal);
     var clientBoundaryIndex = dispatcher.IndexOf("TryHandleClientRouteAsync(", boundaryIndex, StringComparison.Ordinal);
 
-    True(pairingIndex >= 0);
-    True(authorizedBoundaryIndex > pairingIndex);
+    True(pairingPolicyIndex >= 0);
+    True(authorizationPolicyIndex > pairingPolicyIndex);
+    True(pairingDispatchIndex >= 0);
+    True(authorizedBoundaryIndex > pairingDispatchIndex);
     True(boundaryIndex >= 0);
     True(clientBoundaryIndex > boundaryIndex);
     var routeWindow = dispatcher[boundaryIndex..clientBoundaryIndex];

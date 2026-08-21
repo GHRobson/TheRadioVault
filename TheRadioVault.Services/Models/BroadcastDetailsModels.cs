@@ -1,3 +1,5 @@
+using TheRadioVault.Core.Domain;
+
 namespace TheRadioVault.Services.Models;
 
 public sealed record BroadcastMetadataField(string Label, string Value);
@@ -40,7 +42,8 @@ public sealed record BroadcastDetails(
     int RecordingCount,
     int SegmentCount,
     int PhysicalFileCount,
-    bool IsRemoteOwned = false)
+    bool IsRemoteOwned = false,
+    IReadOnlyList<ArchiveEntityLink>? EntityLinks = null)
 {
     public string DateText => AirDate?.ToString("dddd, d MMMM yyyy")
         ?? (!string.IsNullOrWhiteSpace(OriginalReleaseDate)
@@ -72,6 +75,17 @@ public sealed record BroadcastDetails(
         new("Research notes", ResearchNotes)
     }.Where(field => !string.IsNullOrWhiteSpace(field.Value)).ToArray();
     public bool HasCatalogueDetails => CatalogueFields.Count > 0;
+    public IReadOnlyList<ArchiveEntityLink> AllEntityLinks => EntityLinks is { Count: > 0 }
+        ? EntityLinks
+        : BuildFallbackEntityLinks();
+    public IReadOnlyList<ArchiveEntityLink> HostLinks => LinksForRelationship("host");
+    public IReadOnlyList<ArchiveEntityLink> GuestLinks => LinksForRelationship("guest");
+    public IReadOnlyList<ArchiveEntityLink> CallerLinks => LinksForRelationship("caller");
+    public IReadOnlyList<ArchiveEntityLink> MentionedPeopleLinks => LinksForRelationship("mentioned");
+    public IReadOnlyList<ArchiveEntityLink> TopicLinks => AllEntityLinks
+        .Where(link => link.Kind == ArchiveEntityKind.Topic)
+        .DistinctBy(link => link.EntityKey)
+        .ToArray();
     public string CatalogueContextText => string.Join(" · ", CatalogueFields
         .Where(field => field.Label is "Programme" or "Format" or "Original release" or "Venue")
         .Take(3)
@@ -87,4 +101,26 @@ public sealed record BroadcastDetails(
         string.IsNullOrWhiteSpace(BroadcastId) ? null : BroadcastId,
         IsRemoteOwned ? "Server-owned" : "Local authoritative library"
     }.Where(x => !string.IsNullOrWhiteSpace(x)));
+
+    private IReadOnlyList<ArchiveEntityLink> LinksForRelationship(string relationship)
+        => AllEntityLinks
+            .Where(link => link.Kind == ArchiveEntityKind.Person &&
+                           string.Equals(link.Relationship, relationship, StringComparison.OrdinalIgnoreCase))
+            .DistinctBy(link => link.EntityKey)
+            .ToArray();
+
+    private IReadOnlyList<ArchiveEntityLink> BuildFallbackEntityLinks()
+    {
+        var links = new List<ArchiveEntityLink>
+        {
+            ArchiveEntityLinkFactory.ForBroadcast(CanonicalKey, RepresentativeEpisodeId, Title),
+            ArchiveEntityLinkFactory.ForShow(CollectionId, CollectionName)
+        };
+        links.AddRange(ArchiveEntityLinkFactory.ForDelimitedNames(Hosts, "host"));
+        links.AddRange(ArchiveEntityLinkFactory.ForDelimitedNames(Guests, "guest"));
+        links.AddRange(ArchiveEntityLinkFactory.ForDelimitedNames(Callers, "caller"));
+        links.AddRange(ArchiveEntityLinkFactory.ForDelimitedNames(MentionedPeople, "mentioned"));
+        links.AddRange(Topics.Where(topic => !string.IsNullOrWhiteSpace(topic)).Select(ArchiveEntityLinkFactory.ForTopic));
+        return links.DistinctBy(link => (link.EntityKey, link.Relationship)).ToArray();
+    }
 }

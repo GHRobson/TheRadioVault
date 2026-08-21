@@ -17,9 +17,11 @@ public sealed class LibraryFolderService : ILibraryFolderService
         await using var connection = await _database.OpenConnectionAsync(cancellationToken);
         await using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT f.id,f.path,f.assigned_collection_id,c.name,f.recursive,f.enabled,f.last_scan_at
-            FROM library_folders f LEFT JOIN collections c ON c.id=f.assigned_collection_id
-            ORDER BY COALESCE(c.sort_name,''),f.path;
+            SELECT f.id,f.path,f.assigned_collection_id,c.name,f.recursive,f.enabled,f.last_scan_at,
+                   COALESCE(f.is_managed_archive,0)
+              FROM library_folders f
+              LEFT JOIN collections c ON c.id=f.assigned_collection_id
+             ORDER BY COALESCE(f.is_managed_archive,0) DESC,COALESCE(c.sort_name,''),f.path;
             """;
         await using var reader = await command.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))
@@ -27,7 +29,8 @@ public sealed class LibraryFolderService : ILibraryFolderService
             DateTimeOffset? lastScan = null;
             if (!reader.IsDBNull(6) && DateTimeOffset.TryParse(reader.GetString(6), CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)) lastScan = parsed;
             results.Add(new LibraryFolderRecord(reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? null : reader.GetInt32(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetInt32(4) != 0, reader.GetInt32(5) != 0, lastScan));
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.GetInt32(4) != 0, reader.GetInt32(5) != 0, lastScan,
+                reader.GetInt32(7) != 0));
         }
         return results;
     }

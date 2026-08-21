@@ -1,0 +1,39 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             x:Class="TheRadioVault.Server.Views.ServerTranscriptionView">
+  <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+    <StackPanel Margin="26" Spacing="16">
+      <StackPanel Spacing="4">
+        <TextBlock Text="TRANSCRIPTION" Classes="eyebrow" />
+        <TextBlock Text="Turn recordings into searchable text" FontSize="28" FontWeight="Bold" />
+        <TextBlock Text="Manage the server-owned Whisper, voice activity and speaker recognition services." Classes="muted" FontSize="12" />
+      </StackPanel>
+      <Border Classes="card">
+        <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="12">
+          <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+            <StackPanel Spacing="3">
+              <TextBlock Text="TRANSCRIPTION SERVICE" Classes="eyebrow" />
+              <TextBlock Text="{Binding TranscriptionStatusText}" FontSize="19" FontWeight="SemiBold" />
+              <TextBlock Text="{Binding TranscriptionDetailText}" Classes="muted" FontSize="11" TextWrapping="Wrap" />
+            </StackPanel>
+            <Border Grid.Column="1" Background="{Binding TranscriptionStateBrush}" CornerRadius="999" Padding="13,7" VerticalAlignment="Top">
+              <TextBlock Text="{Binding TranscriptionStateLabel}" Foreground="#101318" FontWeight="Bold" FontSize="10" />
+            </Border>
+          </Grid>
+          <TextBlock Grid.Row="1" Text="Whisper, VAD, diarization, remembered voices and batch jobs continue in the server even when every client is closed."
+                     Classes="muted" FontSize="11" TextWrapping="Wrap" />
+          <WrapPanel Grid.Row="2" ItemSpacing="8" LineSpacing="8">
+            <Button Content="Install recommended transcription setup" Classes="primary" Command="{Binding InstallTranscriptionCommand}"
+                    IsVisible="{Binding ShowAutomaticTranscriptionSetup}" />
+            <Button Content="Cancel setup" Classes="secondary" Command="{Binding CancelTranscriptionCommand}"
+                    IsVisible="{Binding IsTranscriptionBusy}" />
+            <TextBlock Text="No setup action is needed." Classes="muted" FontSize="11" VerticalAlignment="Center"
+                       IsVisible="{Binding IsTranscriptionReady}" />
+            <TextBlock Text="{Binding TranscriptionPlatformGuidance}" Classes="muted" FontSize="11" MaxWidth="540"
+                       TextWrapping="Wrap" IsVisible="{Binding !IsAutomaticTranscriptionSetupSupported}" />
+          </WrapPanel>
+        </Grid>
+      </Border>
+    </StackPanel>
+  </ScrollViewer>
+</UserControl>

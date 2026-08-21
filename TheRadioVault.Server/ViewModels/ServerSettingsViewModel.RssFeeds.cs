@@ -121,7 +121,9 @@ public sealed partial class ServerSettingsViewModel
         var selectedId = RssDestinationFolder?.Id;
         RssDestinationFolders.Clear();
         foreach (var folder in LibraryFolders.Where(value => value.Enabled)) RssDestinationFolders.Add(folder);
-        RssDestinationFolder = RssDestinationFolders.FirstOrDefault(value => value.Id == selectedId) ?? RssDestinationFolders.FirstOrDefault();
+        RssDestinationFolder = RssDestinationFolders.FirstOrDefault(value => value.IsManagedArchive)
+                               ?? RssDestinationFolders.FirstOrDefault(value => value.Id == selectedId)
+                               ?? RssDestinationFolders.FirstOrDefault();
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasRssDestinationFolders)));
         RaiseRssCommandState();
     }
@@ -145,7 +147,8 @@ public sealed partial class ServerSettingsViewModel
                 RssDestinationFolder.Id,
                 interval,
                 Enabled: true,
-                ImportExistingOnFirstCheck: RssImportExisting)).ConfigureAwait(true);
+                ImportExistingOnFirstCheck: RssImportExisting,
+                CollectionId: RssDestinationFolder.AssignedCollectionId)).ConfigureAwait(true);
             RssFeedName = string.Empty;
             RssFeedUrl = string.Empty;
             RssUsername = string.Empty;

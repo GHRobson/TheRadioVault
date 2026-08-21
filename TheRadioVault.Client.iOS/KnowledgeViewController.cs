@@ -196,6 +196,21 @@ public sealed class KnowledgeCoverageViewController : SessionTableViewController
         return cell;
     }
 
+    public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
+    {
+        tableView.DeselectRow(indexPath, true);
+        if (indexPath.Row >= Months.Count) return;
+        var month = Months[indexPath.Row];
+        NavigationController?.PushViewController(
+            new KnowledgeCoverageMonthViewController(
+                Session,
+                _showName,
+                month.Key.Year,
+                month.Key.Month,
+                month.OrderBy(value => value.Date).ToArray()),
+            true);
+    }
+
     private async Task LoadAsync()
     {
         var result = await Session.LoadKnowledgeCoverageAsync(_collectionId).ConfigureAwait(false);
@@ -215,7 +230,8 @@ internal sealed class KnowledgeHeatMapCell : UITableViewCell
     public KnowledgeHeatMapCell() : base(UITableViewCellStyle.Default, "knowledge-heat-map")
     {
         BackgroundColor = RadioVaultTheme.Surface;
-        SelectionStyle = UITableViewCellSelectionStyle.None;
+        SelectionStyle = UITableViewCellSelectionStyle.Default;
+        Accessory = UITableViewCellAccessory.DisclosureIndicator;
         _title.Font = UIFont.SystemFontOfSize(13, UIFontWeight.Semibold)!;
         _title.TextColor = RadioVaultTheme.Text;
         _title.TranslatesAutoresizingMaskIntoConstraints = false;
@@ -237,6 +253,103 @@ internal sealed class KnowledgeHeatMapCell : UITableViewCell
         _title.Text = new DateTime(year, month, 1).ToString("MMM yyyy");
         _strip.Days = days;
     }
+}
+
+public sealed class KnowledgeCoverageMonthViewController : SessionTableViewController
+{
+    private readonly string _showName;
+    private readonly int _year;
+    private readonly int _month;
+    private readonly IReadOnlyList<MobileKnowledgeCoverageDay> _days;
+
+    public KnowledgeCoverageMonthViewController(
+        MobileClientSession session,
+        string showName,
+        int year,
+        int month,
+        IReadOnlyList<MobileKnowledgeCoverageDay> days) : base(session)
+    {
+        _showName = showName;
+        _year = year;
+        _month = month;
+        _days = days;
+        Title = "Coverage";
+    }
+
+    protected override string? PageHeading => new DateTime(_year, _month, 1).ToString("MMMM yyyy");
+    protected override string PageDescription => $"{_showName} day-by-day coverage.";
+
+    public override void ViewDidLoad()
+    {
+        base.ViewDidLoad();
+        TableView.RowHeight = UITableView.AutomaticDimension;
+        TableView.EstimatedRowHeight = 68;
+    }
+
+    public override nint NumberOfSections(UITableView tableView) => 1;
+    public override nint RowsInSection(UITableView tableView, nint section) => _days.Count;
+    public override string? TitleForFooter(UITableView tableView, nint section)
+    {
+        var gaps = _days.Count(value => !value.IsWeekend && !value.HasAudio && !value.HasResearch && !value.IsKnownMissing);
+        return gaps == 0
+            ? "Every weekday is accounted for in this month."
+            : $"{gaps:N0} weekday gap{(gaps == 1 ? string.Empty : "s")} still need research.";
+    }
+
+    public override UITableViewCell GetCell(UITableView tableView, NSIndexPath indexPath)
+    {
+        var day = _days[indexPath.Row];
+        var detail = CoverageText(day);
+        if ((day.HasAudio || day.HasResearch) && !string.IsNullOrWhiteSpace(day.MissingFields))
+            detail += $" · Missing: {day.MissingFields}";
+        return IconDetailCell(
+            "knowledge-day",
+            day.Date.ToString("ddd d MMM"),
+            detail,
+            CoverageIcon(day),
+            disclosure: day.RepresentativeEpisodeId.HasValue);
+    }
+
+    public override void RowSelected(UITableView tableView, NSIndexPath indexPath)
+    {
+        tableView.DeselectRow(indexPath, true);
+        if (_days[indexPath.Row].RepresentativeEpisodeId is { } episodeId)
+            _ = OpenBroadcastAsync(episodeId);
+    }
+
+    private async Task OpenBroadcastAsync(long episodeId)
+    {
+        var broadcast = await Session.LoadBroadcastAsync(episodeId).ConfigureAwait(false);
+        if (broadcast is null) return;
+        BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+            new BroadcastDetailsViewController(Session, broadcast), true));
+    }
+
+    private static string CoverageText(MobileKnowledgeCoverageDay day)
+    {
+        var status = day switch
+        {
+            { IsKnownMissing: true } => "Known missing",
+            { HasAudio: true, HasResearch: true } => "Audio and research",
+            { HasAudio: true } => "Audio available",
+            { HasResearch: true } => "Research only",
+            { IsWeekend: true } => "Weekend",
+            _ => "Missing weekday"
+        };
+        return day.HasAudio || day.HasResearch
+            ? $"{status} · {day.MetadataScore:N0}% metadata"
+            : status;
+    }
+
+    private static RadioVaultIcon CoverageIcon(MobileKnowledgeCoverageDay day) => day switch
+    {
+        { IsKnownMissing: true } => RadioVaultIcon.Settings,
+        { HasAudio: true, HasResearch: true } => RadioVaultIcon.Completed,
+        { HasAudio: true } => RadioVaultIcon.Radio,
+        { HasResearch: true } => RadioVaultIcon.Knowledge,
+        { IsWeekend: true } => RadioVaultIcon.Grid,
+        _ => RadioVaultIcon.InProgress
+    };
 }
 
 internal sealed class KnowledgeHeatStripView : UIView

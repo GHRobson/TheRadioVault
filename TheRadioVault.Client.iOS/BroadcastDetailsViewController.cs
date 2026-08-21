@@ -1,6 +1,7 @@
 using Foundation;
 using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Models;
+using TheRadioVault.Core.Domain;
 using TheRadioVault.Web.Models;
 using UIKit;
 
@@ -96,9 +97,12 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
         var field = DetailFields()[indexPath.Row];
         if (field.IsEntity)
         {
-            var values = EntityValues(field.Value);
             var pills = new MetadataPillsCell();
-            pills.Configure(field.Label, values, EntityColor(field.Label), entity => _ = OpenEntityAsync(entity));
+            var links = EntityLinks(field.Label);
+            if (links.Count > 0)
+                pills.Configure(field.Label, links, EntityColor(field.Label), link => _ = OpenEntityAsync(link));
+            else
+                pills.Configure(field.Label, EntityValues(field.Value), EntityColor(field.Label), entity => _ = OpenEntityAsync(entity));
             return pills;
         }
         var cell = DetailCell("programme-field", field.Label, field.Value);
@@ -265,6 +269,29 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
             .Distinct(StringComparer.CurrentCultureIgnoreCase)
             .ToArray();
 
+    private IReadOnlyList<ArchiveEntityLink> EntityLinks(string label)
+    {
+        var links = _details?.EntityLinks ?? [];
+        return label switch
+        {
+            "Hosts" => PeopleLinks(links, "host"),
+            "Guests" => PeopleLinks(links, "guest"),
+            "Callers" => PeopleLinks(links, "caller"),
+            "Mentioned people" => PeopleLinks(links, "mentioned"),
+            "Topics" => links.Where(link => link.Kind == ArchiveEntityKind.Topic)
+                .DistinctBy(link => link.EntityKey).ToArray(),
+            _ => []
+        };
+    }
+
+    private static IReadOnlyList<ArchiveEntityLink> PeopleLinks(
+        IReadOnlyList<ArchiveEntityLink> links,
+        string relationship)
+        => links.Where(link => link.Kind == ArchiveEntityKind.Person &&
+                               string.Equals(link.Relationship, relationship, StringComparison.OrdinalIgnoreCase))
+            .DistinctBy(link => link.EntityKey)
+            .ToArray();
+
     private static UIColor EntityColor(string label) => label switch
     {
         "Hosts" => RadioVaultTheme.ActivityBlue,
@@ -285,6 +312,21 @@ public sealed class BroadcastDetailsViewController : SessionTableViewController
                 ? new ExploreArticleViewController(Session, page)
                 : new EntityBroadcastsViewController(Session, entity),
             true));
+    }
+
+    private async Task OpenEntityAsync(ArchiveEntityLink link)
+    {
+        var target = ArchiveEntityNavigation.Resolve(link);
+        if (target.Destination == ArchiveEntityDestination.LibraryShow)
+        {
+            BeginInvokeOnMainThread(() => NavigationController?.PushViewController(
+                new EntityBroadcastsViewController(Session, target.Label), true));
+            return;
+        }
+        if (target.Destination == ArchiveEntityDestination.Broadcast &&
+            long.TryParse(target.TargetId, out var episodeId) && episodeId == _broadcast.EpisodeId)
+            return;
+        await OpenEntityAsync(target.Label).ConfigureAwait(false);
     }
 
     private static UITableViewCell BodyCell(string identifier, string text)

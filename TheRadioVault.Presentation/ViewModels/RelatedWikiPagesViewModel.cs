@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.Windows.Input;
+using TheRadioVault.Core.Domain;
 using TheRadioVault.Presentation.Infrastructure;
 using TheRadioVault.Services.Contracts;
 using TheRadioVault.Services.Models;
@@ -11,6 +12,7 @@ public sealed class RelatedWikiPagesViewModel : ObservableObject
     private readonly IWikiService? _wiki;
     private Func<WikiPageSummary, Task>? _open;
     private Func<string, Task>? _openEntity;
+    private Func<ArchiveEntityLink, Task>? _openEntityLink;
     private bool _isLoading;
     private string _context = string.Empty;
 
@@ -23,6 +25,11 @@ public sealed class RelatedWikiPagesViewModel : ObservableObject
         });
         OpenEntityCommand = new DelegateCommand(parameter =>
         {
+            if (parameter is ArchiveEntityLink link && _openEntityLink is not null)
+            {
+                _ = _openEntityLink(link);
+                return;
+            }
             var entity = parameter?.ToString()?.Trim();
             if (!string.IsNullOrWhiteSpace(entity) && _openEntity is not null) _ = _openEntity(entity);
         });
@@ -37,6 +44,7 @@ public sealed class RelatedWikiPagesViewModel : ObservableObject
 
     public void SetOpenHandler(Func<WikiPageSummary, Task> handler) => _open = handler;
     public void SetOpenEntityHandler(Func<string, Task> handler) => _openEntity = handler;
+    public void SetOpenEntityLinkHandler(Func<ArchiveEntityLink, Task> handler) => _openEntityLink = handler;
 
     public async Task LoadAsync(params string?[] terms)
     {

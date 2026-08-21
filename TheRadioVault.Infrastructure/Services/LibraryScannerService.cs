@@ -134,7 +134,8 @@ public sealed class LibraryScannerService
                             parsed,
                             storageState,
                             inspection?.Fingerprint.PartialSha256,
-                            inspection?.Fingerprint.FullSha256);
+                            inspection?.Fingerprint.FullSha256,
+                            inspection?.Metadata.DurationMs);
 
                         if (upsert.Added) result.Added++;
                         else if (unchanged) result.Unchanged++;

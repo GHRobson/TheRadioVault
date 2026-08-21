@@ -6,6 +6,7 @@ using System.Runtime.CompilerServices;
 using System.Windows.Input;
 using Avalonia.Threading;
 using TheRadioVault.Application.Models;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Server.Services;
 using TheRadioVault.Services;
 using TheRadioVault.Services.Models;
@@ -17,6 +18,8 @@ namespace TheRadioVault.Server.ViewModels;
 
 public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, IDisposable
 {
+    private static readonly TimeSpan DetailRefreshInterval = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan HealthRefreshInterval = TimeSpan.FromMinutes(5);
     private readonly RadioVaultServerRuntime? _runtime;
     private readonly ServerStartupRegistrationService? _startup;
     private readonly ServerFolderSelectionService? _folderSelection;
@@ -24,6 +27,9 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     private readonly ServerKnowledgeFileService? _knowledgeFiles;
     private readonly ServerClipboardService? _clipboard;
     private readonly DispatcherTimer? _refreshTimer;
+    private readonly SemaphoreSlim _detailRefreshGate = new(1, 1);
+    private readonly SemaphoreSlim _healthRefreshGate = new(1, 1);
+    private readonly CancellationTokenSource _refreshCancellation = new();
     private string _serverDisplayName = string.Empty;
     private string _httpPortText = "8765";
     private string _httpsPortText = "8766";
@@ -59,6 +65,11 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     private Guid? _knowledgeImportSessionId;
     private string? _knowledgeImportPath;
     private WebResearchPackPreview? _knowledgeImportPreview;
+    private ServerHealthSnapshot? _health;
+    private DateTimeOffset _lastHealthRefresh = DateTimeOffset.MinValue;
+    private DateTimeOffset _lastDetailRefresh = DateTimeOffset.MinValue;
+    private bool _disposed;
+    private string _healthActionText = "Health checks have not run yet.";
     private readonly ServerCommand? _installTranscriptionCommand;
     private readonly ServerCommand? _cancelTranscriptionCommand;
     private readonly ServerCommand? _generatePairingCodeCommand;
@@ -74,6 +85,10 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     private readonly ServerCommand? _applyKnowledgeImportCommand;
     private readonly ServerCommand? _cancelKnowledgeImportCommand;
     private readonly ServerCommand? _exportKnowledgeCommand;
+    private readonly ServerCommand? _exportUndatedKnowledgeCommand;
+    private readonly ServerCommand? _exportMissingResearchKnowledgeCommand;
+    private readonly ServerCommand? _rehearseBackupCommand;
+    private readonly ServerCommand? _exportDiagnosticsCommand;
 
     public ServerSettingsViewModel(
         RadioVaultServerRuntime runtime,
@@ -122,18 +137,35 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         RemoveLibraryFolderCommand = _removeLibraryFolderCommand;
         ScanLibraryCommand = _scanLibraryCommand;
         InitializeRssFeedCommands();
+        InitializeMediaConsolidationCommands();
+        InitializeArchiveReconciliationCommands();
         _chooseKnowledgeImportCommand = new ServerCommand(() => _ = ChooseKnowledgeImportAsync(), () => !IsKnowledgeBusy);
         _applyKnowledgeImportCommand = new ServerCommand(() => _ = ApplyKnowledgeImportAsync(), () => HasKnowledgeImportPreview && !IsKnowledgeBusy);
         _cancelKnowledgeImportCommand = new ServerCommand(CancelKnowledgeImport, () => HasKnowledgeImportPreview);
-        _exportKnowledgeCommand = new ServerCommand(() => _ = ExportKnowledgeAsync(), () => !IsKnowledgeBusy);
+        _exportKnowledgeCommand = new ServerCommand(
+            () => _ = ExportKnowledgeAsync(KnowledgeExportScope.Complete),
+            () => !IsKnowledgeBusy);
+        _exportUndatedKnowledgeCommand = new ServerCommand(
+            () => _ = ExportKnowledgeAsync(KnowledgeExportScope.UndatedBroadcasts),
+            () => !IsKnowledgeBusy);
+        _exportMissingResearchKnowledgeCommand = new ServerCommand(
+            () => _ = ExportKnowledgeAsync(KnowledgeExportScope.MissingTopicsOrSummaries),
+            () => !IsKnowledgeBusy);
+        _rehearseBackupCommand = new ServerCommand(RehearseLatestBackup, () => _health?.ScheduledBackup.LastCompletedAt.HasValue == true);
+        _exportDiagnosticsCommand = new ServerCommand(() => _ = ExportDiagnosticsAsync(), () => _health is not null);
         ChooseKnowledgeImportCommand = _chooseKnowledgeImportCommand;
         ApplyKnowledgeImportCommand = _applyKnowledgeImportCommand;
         CancelKnowledgeImportCommand = _cancelKnowledgeImportCommand;
         ExportKnowledgeCommand = _exportKnowledgeCommand;
+        ExportUndatedKnowledgeCommand = _exportUndatedKnowledgeCommand;
+        ExportMissingResearchKnowledgeCommand = _exportMissingResearchKnowledgeCommand;
+        RehearseBackupCommand = _rehearseBackupCommand;
+        ExportDiagnosticsCommand = _exportDiagnosticsCommand;
         LoadPreferences();
         RefreshStatus();
         _ = LoadLibraryFoldersAsync();
         _ = LoadRssFeedsAsync();
+        _ = RefreshArchiveReconciliationAsync();
         _refreshTimer = new DispatcherTimer(TimeSpan.FromSeconds(1), DispatcherPriority.Background, (_, _) => RefreshStatus());
         _refreshTimer.Start();
     }
@@ -148,6 +180,11 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             GeneratePairingCodeCommand = CancelPairingCommand = RevokeClientCommand = RevokeAllClientsCommand = AddLibraryFolderCommand =
             ToggleLibraryFolderCommand = AssignLibraryFolderCommand = RemoveLibraryFolderCommand = ScanLibraryCommand =
             ChooseKnowledgeImportCommand = ApplyKnowledgeImportCommand = CancelKnowledgeImportCommand = ExportKnowledgeCommand =
+            ExportUndatedKnowledgeCommand = ExportMissingResearchKnowledgeCommand =
+            RehearseBackupCommand = ExportDiagnosticsCommand = ChooseManagedArchiveCommand = ChooseQuarantineCommand =
+            PrepareMediaConsolidationCommand = RehearseMediaConsolidationCommand = CommitMediaConsolidationCommand = CancelMediaConsolidationCommand =
+            RefreshArchiveReconciliationCommand = RunArchiveReconciliationCommand = CancelArchiveReconciliationCommand = ExportArchiveReconciliationReportCommand =
+            ExportArchiveDateAuthorityEvidenceCommand =
                 new ServerCommand(() => { }, () => false);
     }
 
@@ -209,6 +246,28 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         : $"{_knowledgeImportPreview.TotalRecords:N0} records · {_knowledgeImportPreview.ExactMatches:N0} matched · " +
           $"{_knowledgeImportPreview.MissingRecords:N0} missing · {_knowledgeImportPreview.AmbiguousMatches:N0} need review · " +
           $"{_knowledgeImportPreview.WikiPageCount:N0} Explore pages · {_knowledgeImportPreview.WikiImageCount:N0} images";
+    public string HealthHeadline => _health?.OverallStatus ?? "Checking archive health…";
+    public string HealthStateBrush => _health?.Healthy == true ? "#52D6A2" : "#E2A84A";
+    public string DatabaseHealthText => _health is null
+        ? "Checking the authoritative database…"
+        : $"SQLite {_health.DatabaseQuickCheck} · {FormatBytes(_health.DatabaseBytes)} · {FormatBytes(_health.FreeStorageBytes)} free";
+    public string MediaHealthText => _health is null
+        ? "Checking archive storage…"
+        : $"{_health.AvailableMediaFiles:N0} available · {_health.CloudOnlyMediaFiles:N0} cloud-only · {_health.MissingMediaFiles:N0} missing";
+    public string BackupHealthText => _health is null
+        ? "Checking scheduled backups…"
+        : !_health.ScheduledBackup.LastCompletedAt.HasValue
+            ? "No scheduled backup has completed yet"
+            : $"Last verified {_health.ScheduledBackup.LastCompletedAt.Value.LocalDateTime:g} · next {_health.ScheduledBackup.NextDueAt?.LocalDateTime:g}";
+    public string CertificateHealthText => _health is null
+        ? "Checking secure access…"
+        : !_health.SecureAccess
+            ? "Secure access is not active"
+            : $"HTTPS certificate valid until {_health.CertificateExpiresAt?.LocalDateTime:d}";
+    public string ClientHealthText => _health is null
+        ? "Checking paired clients…"
+        : $"{_health.PairedClientCount:N0} paired · {_health.DeviceSync.Count:N0} with acknowledged changes";
+    public string HealthActionText { get => _healthActionText; private set => Set(ref _healthActionText, value); }
     public LibraryFolderRecord? SelectedLibraryFolder
     {
         get => _selectedLibraryFolder;
@@ -253,6 +312,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             (StartCommand as ServerCommand)?.RaiseCanExecuteChanged();
             (StopCommand as ServerCommand)?.RaiseCanExecuteChanged();
             (RegenerateWebLinkCommand as ServerCommand)?.RaiseCanExecuteChanged();
+            RaiseMediaConsolidationCommandState();
         }
     }
     public bool IsServerStopped => !IsServerRunning;
@@ -347,6 +407,42 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     public ICommand ApplyKnowledgeImportCommand { get; }
     public ICommand CancelKnowledgeImportCommand { get; }
     public ICommand ExportKnowledgeCommand { get; }
+    public ICommand ExportUndatedKnowledgeCommand { get; }
+    public ICommand ExportMissingResearchKnowledgeCommand { get; }
+    public ICommand RehearseBackupCommand { get; }
+    public ICommand ExportDiagnosticsCommand { get; }
+
+    private void RehearseLatestBackup()
+    {
+        if (_runtime is null) return;
+        try
+        {
+            HealthActionText = "Restoring the latest backup into an isolated rehearsal area…";
+            var result = _runtime.RehearseLatestScheduledBackup();
+            HealthActionText = result.Message;
+        }
+        catch (Exception exception)
+        {
+            HealthActionText = exception.Message;
+        }
+    }
+
+    private async Task ExportDiagnosticsAsync()
+    {
+        if (_runtime is null || _knowledgeFiles is null) return;
+        var path = await _knowledgeFiles.PickDiagnosticsExportAsync(
+            $"RadioVault-Server-Diagnostics-{DateTime.Now:yyyyMMdd-HHmmss}.trvdiag.json").ConfigureAwait(true);
+        if (string.IsNullOrWhiteSpace(path)) return;
+        try
+        {
+            await _runtime.ExportRedactedDiagnosticsAsync(path).ConfigureAwait(true);
+            HealthActionText = $"Privacy-safe diagnostics exported to {path}";
+        }
+        catch (Exception exception)
+        {
+            HealthActionText = exception.Message;
+        }
+    }
 
     private async Task ChooseKnowledgeImportAsync()
     {
@@ -455,18 +551,18 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         }
     }
 
-    private async Task ExportKnowledgeAsync()
+    private async Task ExportKnowledgeAsync(KnowledgeExportScope scope)
     {
         if (_runtime is null || _knowledgeFiles is null) return;
-        var path = await _knowledgeFiles.PickExportAsync("RadioVault-Archive-Knowledge.trvknowledge").ConfigureAwait(true);
+        var path = await _knowledgeFiles.PickExportAsync(scope.SuggestedFileName()).ConfigureAwait(true);
         if (string.IsNullOrWhiteSpace(path)) return;
         IsKnowledgeBusy = true;
         KnowledgeProgressPercent = 5;
         KnowledgeProgressCountText = string.Empty;
-        KnowledgeStatusText = "Building the complete Archive Knowledge Database…";
+        KnowledgeStatusText = $"Building an export of {scope.DisplayName()}…";
         try
         {
-            var export = await _runtime.ExportKnowledgeDatabaseAsync().ConfigureAwait(true);
+            var export = await _runtime.ExportKnowledgeDatabaseAsync(scope).ConfigureAwait(true);
             KnowledgeProgressPercent = 90;
             KnowledgeStatusText = "Writing the portable Knowledge Database…";
             await File.WriteAllBytesAsync(path, export.Bytes).ConfigureAwait(true);
@@ -505,6 +601,8 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         _applyKnowledgeImportCommand?.RaiseCanExecuteChanged();
         _cancelKnowledgeImportCommand?.RaiseCanExecuteChanged();
         _exportKnowledgeCommand?.RaiseCanExecuteChanged();
+        _exportUndatedKnowledgeCommand?.RaiseCanExecuteChanged();
+        _exportMissingResearchKnowledgeCommand?.RaiseCanExecuteChanged();
     }
 
     private async Task LoadLibraryFoldersAsync()
@@ -689,7 +787,7 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
                 throw new InvalidOperationException("Secure HTTPS access is required before enabling native remote clients.");
             _runtime.Apply(preferences, Enabled);
             StartupStatusText = _startup?.SetEnabled(StartAutomatically) ?? string.Empty;
-            DetailText = "Server settings and background startup were saved.";
+            DetailText = "Server administration settings and background startup were saved.";
         }
         catch (Exception exception)
         {
@@ -768,30 +866,109 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
     private void RefreshStatus()
     {
         if (_runtime is null) return;
+        var stateChanged = IsServerRunning != _runtime.IsRunning ||
+                           IsServerSecure != (_runtime.IsRunning && _runtime.IsSecure);
         IsServerRunning = _runtime.IsRunning;
         IsServerSecure = _runtime.IsRunning && _runtime.IsSecure;
         StatusText = _runtime.IsRunning
             ? _runtime.IsSecure ? "Running securely" : "Running over HTTP"
             : "Stopped";
-        AccessUrl = _runtime.AccessUrls.FirstOrDefault() ?? string.Empty;
-        SecureSetupUrl = _runtime.SecureSetupUrls.FirstOrDefault() ?? string.Empty;
         if (!string.IsNullOrWhiteSpace(_runtime.LastError)) DetailText = _runtime.LastError!;
-        var transcription = _runtime.TranscriptionStatus;
-        if (!IsTranscriptionBusy)
-        {
-            IsTranscriptionReady = transcription.IsAvailable && transcription.DiarizationAvailable;
-            TranscriptionStatusText = transcription.IsAvailable ? "Ready" : "Setup required";
-            TranscriptionDetailText = transcription.IsAvailable
-                ? transcription.AvailabilityMessage + (transcription.DiarizationAvailable ? " Multi-speaker diarization is ready." : "")
-                : transcription.AvailabilityMessage;
-        }
         var pairing = _runtime.CurrentDesktopPairing;
         PairingCode = pairing?.Code ?? string.Empty;
         PairingExpiryText = pairing is null
             ? "Create a six-digit code when the remote client is ready."
             : $"Expires in {Math.Max(0, (int)Math.Ceiling((pairing.ExpiresAt - DateTimeOffset.UtcNow).TotalSeconds))} seconds.";
-        RefreshPairedClients();
         RaisePairingState();
+        _ = RefreshDetailsAsync(stateChanged);
+        _ = RefreshHealthAsync();
+    }
+
+    private async Task RefreshDetailsAsync(bool force = false)
+    {
+        if (_runtime is null || _disposed) return;
+        var now = DateTimeOffset.UtcNow;
+        if (!force && now - _lastDetailRefresh < DetailRefreshInterval) return;
+        if (!await _detailRefreshGate.WaitAsync(0).ConfigureAwait(true)) return;
+
+        _lastDetailRefresh = now;
+        try
+        {
+            var runtime = _runtime;
+            var cancellationToken = _refreshCancellation.Token;
+            var snapshot = await Task.Run(() => new ServerDetailSnapshot(
+                    runtime.AccessUrls.FirstOrDefault() ?? string.Empty,
+                    runtime.SecureSetupUrls.FirstOrDefault() ?? string.Empty,
+                    runtime.TranscriptionStatus,
+                    runtime.PairedDesktopClients.ToArray()),
+                cancellationToken).ConfigureAwait(true);
+            if (_disposed || cancellationToken.IsCancellationRequested) return;
+
+            AccessUrl = snapshot.AccessUrl;
+            SecureSetupUrl = snapshot.SecureSetupUrl;
+            if (!IsTranscriptionBusy)
+            {
+                var transcription = snapshot.Transcription;
+                IsTranscriptionReady = transcription.IsAvailable && transcription.DiarizationAvailable;
+                TranscriptionStatusText = transcription.IsAvailable ? "Ready" : "Setup required";
+                TranscriptionDetailText = transcription.IsAvailable
+                    ? transcription.AvailabilityMessage + (transcription.DiarizationAvailable ? " Multi-speaker diarization is ready." : "")
+                    : transcription.AvailabilityMessage;
+            }
+            RefreshPairedClients(snapshot.PairedClients);
+        }
+        catch (OperationCanceledException) when (_refreshCancellation.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write("Server settings", "The background server-status refresh failed safely.", exception);
+        }
+        finally
+        {
+            _detailRefreshGate.Release();
+        }
+    }
+
+    private async Task RefreshHealthAsync(bool force = false)
+    {
+        if (_runtime is null || _disposed) return;
+        var now = DateTimeOffset.UtcNow;
+        if (!force && now - _lastHealthRefresh < HealthRefreshInterval) return;
+        if (!await _healthRefreshGate.WaitAsync(0).ConfigureAwait(true)) return;
+
+        _lastHealthRefresh = now;
+        var stopwatch = Stopwatch.StartNew();
+        try
+        {
+            var runtime = _runtime;
+            var cancellationToken = _refreshCancellation.Token;
+            var health = await Task.Run(runtime.GetHealthSnapshot, cancellationToken).ConfigureAwait(true);
+            if (_disposed || cancellationToken.IsCancellationRequested) return;
+
+            _health = health;
+            foreach (var property in new[]
+                     {
+                         nameof(HealthHeadline), nameof(HealthStateBrush), nameof(DatabaseHealthText),
+                         nameof(MediaHealthText), nameof(BackupHealthText), nameof(CertificateHealthText),
+                         nameof(ClientHealthText)
+                     })
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(property));
+            _rehearseBackupCommand?.RaiseCanExecuteChanged();
+            _exportDiagnosticsCommand?.RaiseCanExecuteChanged();
+            if (stopwatch.Elapsed >= TimeSpan.FromSeconds(2))
+                DiagnosticLog.Write(
+                    "Server settings",
+                    $"The archive-health snapshot completed in {stopwatch.Elapsed.TotalSeconds:N1} seconds on a worker thread.");
+        }
+        catch (OperationCanceledException) when (_refreshCancellation.IsCancellationRequested) { }
+        catch (Exception exception)
+        {
+            if (!_disposed) HealthActionText = $"Health check failed: {exception.Message}";
+            DiagnosticLog.Write("Server settings", "The background archive-health refresh failed safely.", exception);
+        }
+        finally
+        {
+            _healthRefreshGate.Release();
+        }
     }
 
     private bool CanGeneratePairingCode()
@@ -840,14 +1017,15 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
             : $"Access was revoked for {count} remote client{(count == 1 ? string.Empty : "s")}.";
     }
 
-    private void RefreshPairedClients()
+    private void RefreshPairedClients(IReadOnlyList<WebPairedDesktopClient>? clients = null)
     {
         if (_runtime is null) return;
+        clients ??= _runtime.PairedDesktopClients;
         var existing = PairedClients.Select(item => item.ClientId).ToArray();
-        var incoming = _runtime.PairedDesktopClients.Select(item => item.ClientId).ToArray();
+        var incoming = clients.Select(item => item.ClientId).ToArray();
         if (existing.SequenceEqual(incoming, StringComparer.Ordinal)) return;
         PairedClients.Clear();
-        foreach (var client in _runtime.PairedDesktopClients)
+        foreach (var client in clients)
             PairedClients.Add(new PairedClientItem(client.ClientId, client.DisplayName, client.PairedAt));
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(HasPairedClients)));
         _revokeAllClientsCommand?.RaiseCanExecuteChanged();
@@ -923,12 +1101,26 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         return value;
     }
 
+    private static string FormatBytes(long bytes)
+    {
+        if (bytes < 1024) return $"{bytes:N0} B";
+        if (bytes < 1024L * 1024) return $"{bytes / 1024d:N1} KB";
+        if (bytes < 1024L * 1024 * 1024) return $"{bytes / 1024d / 1024d:N1} MB";
+        return $"{bytes / 1024d / 1024d / 1024d:N1} GB";
+    }
+
     public void Dispose()
     {
+        if (_disposed) return;
+        _disposed = true;
+        DisposeMediaConsolidation();
+        DisposeArchiveReconciliation();
         _refreshTimer?.Stop();
+        _refreshCancellation.Cancel();
         _transcriptionCancellation?.Cancel();
         _transcriptionCancellation?.Dispose();
         _transcriptionCancellation = null;
+        _refreshCancellation.Dispose();
     }
 
     private bool Set<T>(ref T field, T value, [CallerMemberName] string? propertyName = null)
@@ -949,6 +1141,12 @@ public sealed partial class ServerSettingsViewModel : INotifyPropertyChanged, ID
         public void Execute(object? parameter) => _execute();
         public void RaiseCanExecuteChanged() => CanExecuteChanged?.Invoke(this, EventArgs.Empty);
     }
+
+    private sealed record ServerDetailSnapshot(
+        string AccessUrl,
+        string SecureSetupUrl,
+        ServerTranscriptionStatus Transcription,
+        IReadOnlyList<WebPairedDesktopClient> PairedClients);
 }
 
 public sealed record PairedClientItem(string ClientId, string DisplayName, DateTimeOffset PairedAt)

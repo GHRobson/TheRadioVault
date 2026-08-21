@@ -43,6 +43,8 @@ public sealed class ResearchWorkspaceViewModel : ObservableObject
     private readonly AsyncCommand _applyImportCommand;
     private readonly AsyncCommand _cancelImportCommand;
     private readonly AsyncCommand _exportCommand;
+    private readonly AsyncCommand _exportUndatedCommand;
+    private readonly AsyncCommand _exportMissingResearchCommand;
     private readonly AsyncCommand _showRecordsCommand;
     private readonly AsyncCommand _showDashboardCommand;
     private readonly AsyncCommand _showDateReviewCommand;
@@ -170,6 +172,14 @@ public sealed class ResearchWorkspaceViewModel : ObservableObject
         _applyImportCommand = new AsyncCommand(ApplyImportAsync, () => HasPendingImport && !IsBusy, SetError);
         _cancelImportCommand = new AsyncCommand(CancelImportAsync, () => HasPendingImport && (!IsBusy || IsImportApplyBusy), SetError);
         _exportCommand = new AsyncCommand(ExportAsync, () => _transfers.IsAvailable && !IsBusy, SetError);
+        _exportUndatedCommand = new AsyncCommand(
+            () => ExportKnowledgeDatabaseAsync(KnowledgeExportScope.UndatedBroadcasts),
+            () => _transfers.IsAvailable && !IsBusy,
+            SetError);
+        _exportMissingResearchCommand = new AsyncCommand(
+            () => ExportKnowledgeDatabaseAsync(KnowledgeExportScope.MissingTopicsOrSummaries),
+            () => _transfers.IsAvailable && !IsBusy,
+            SetError);
         _showDashboardCommand = new AsyncCommand(() => SwitchModeAsync(ResearchWorkspaceMode.Dashboard), () => !IsBusy, SetError);
         _showRecordsCommand = new AsyncCommand(() => SwitchModeAsync(ResearchWorkspaceMode.Records), () => !IsBusy, SetError);
         _showDateReviewCommand = new AsyncCommand(() => SwitchModeAsync(ResearchWorkspaceMode.DateReview), () => !IsBusy, SetError);
@@ -209,6 +219,8 @@ public sealed class ResearchWorkspaceViewModel : ObservableObject
         ApplyImportCommand = _applyImportCommand;
         CancelImportCommand = _cancelImportCommand;
         ExportCommand = _exportCommand;
+        ExportUndatedCommand = _exportUndatedCommand;
+        ExportMissingResearchCommand = _exportMissingResearchCommand;
         ShowDashboardCommand = _showDashboardCommand;
         ShowRecordsCommand = _showRecordsCommand;
         ShowDateReviewCommand = _showDateReviewCommand;
@@ -254,6 +266,8 @@ public sealed class ResearchWorkspaceViewModel : ObservableObject
     public ICommand ApplyImportCommand { get; }
     public ICommand CancelImportCommand { get; }
     public ICommand ExportCommand { get; }
+    public ICommand ExportUndatedCommand { get; }
+    public ICommand ExportMissingResearchCommand { get; }
     public ICommand ShowDashboardCommand { get; }
     public ICommand ShowRecordsCommand { get; }
     public ICommand ShowDateReviewCommand { get; }
@@ -1262,15 +1276,20 @@ public sealed class ResearchWorkspaceViewModel : ObservableObject
     }
 
     private Task ExportAsync()
-        => ExportKnowledgeDatabaseAsync();
+        => ExportKnowledgeDatabaseAsync(KnowledgeExportScope.Complete);
 
-    public async Task ExportKnowledgeDatabaseAsync(CancellationToken cancellationToken = default)
+    public Task ExportKnowledgeDatabaseAsync(CancellationToken cancellationToken = default)
+        => ExportKnowledgeDatabaseAsync(KnowledgeExportScope.Complete, cancellationToken);
+
+    public async Task ExportKnowledgeDatabaseAsync(
+        KnowledgeExportScope scope,
+        CancellationToken cancellationToken = default)
     {
         IsBusy = true;
-        StatusText = "Preparing the complete archive knowledge database…";
+        StatusText = $"Preparing {scope.DisplayName()} for export…";
         try
         {
-            var export = await _transfers.ExportAsync(cancellationToken).ConfigureAwait(true);
+            var export = await _transfers.ExportAsync(scope, cancellationToken).ConfigureAwait(true);
             var path = await _files.PickSaveFileAsync(new FileSelectionRequest(
                 Title: "Export Radio Vault Archive Knowledge Database",
                 Filter: "Radio Vault Archive Knowledge Databases|*.trvknowledge",
@@ -1283,7 +1302,7 @@ public sealed class ResearchWorkspaceViewModel : ObservableObject
                 return;
             }
             await File.WriteAllBytesAsync(path, export.Bytes, cancellationToken).ConfigureAwait(true);
-            StatusText = $"Exported {export.BroadcastCount:N0} broadcasts, {export.TranscriptCount:N0} transcripts and {export.MissingCount:N0} research gaps.";
+            StatusText = $"Exported {export.BroadcastCount:N0} broadcasts, {export.TranscriptCount:N0} matching transcripts and {export.MissingCount:N0} research gaps.";
         }
         finally { IsBusy = false; }
     }
@@ -1440,6 +1459,8 @@ public sealed class ResearchWorkspaceViewModel : ObservableObject
         _applyImportCommand.RaiseCanExecuteChanged();
         _cancelImportCommand.RaiseCanExecuteChanged();
         _exportCommand.RaiseCanExecuteChanged();
+        _exportUndatedCommand.RaiseCanExecuteChanged();
+        _exportMissingResearchCommand.RaiseCanExecuteChanged();
     }
 
     private void RaiseImportFeedbackState()

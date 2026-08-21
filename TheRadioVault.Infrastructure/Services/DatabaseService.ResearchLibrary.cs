@@ -2,6 +2,7 @@ using Microsoft.Data.Sqlite;
 using System.Security.Cryptography;
 using System.Text.Json;
 using TheRadioVault.Models;
+using TheRadioVault.Services.Services;
 
 namespace TheRadioVault.Services;
 
@@ -569,6 +570,10 @@ public sealed partial class DatabaseService
             progress?.Report(new ResearchPackOperationProgress(entries.Count, entries.Count, "Committing import history…"));
             CompleteResearchImportRun(connection, transaction, importRunId, result);
             transaction.Commit();
+            ResearchDateAuthoritySynchronizer
+                .SynchronizeAsync(connection, cancellationToken)
+                .GetAwaiter()
+                .GetResult();
             return result;
         }
         catch

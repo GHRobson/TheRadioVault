@@ -118,6 +118,7 @@ internal sealed class MobileOfflineMutationSynchronizationCoordinator : IDisposa
                     mutation.EpisodeId,
                     mutation.BooleanValue == true,
                     mutation.MutationId,
+                    mutation.CapturedAt,
                     cancellationToken).ConfigureAwait(false);
                 await ReconcileBroadcastAsync(mutation.EpisodeId, cancellationToken).ConfigureAwait(false);
                 break;
@@ -126,6 +127,7 @@ internal sealed class MobileOfflineMutationSynchronizationCoordinator : IDisposa
                     mutation.EpisodeId,
                     mutation.BooleanValue == true,
                     mutation.MutationId,
+                    mutation.CapturedAt,
                     cancellationToken).ConfigureAwait(false);
                 await ReconcileBroadcastAsync(mutation.EpisodeId, cancellationToken).ConfigureAwait(false);
                 break;
@@ -204,12 +206,14 @@ internal interface IMobileOfflineMutationTransport
         long episodeId,
         bool favourite,
         string mutationId,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default);
 
     Task<WebMutationResult> SetListeningStatusAsync(
         long episodeId,
         bool played,
         string mutationId,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default);
 
     Task<WebMomentMutationResult> AddMomentAsync(
@@ -231,15 +235,17 @@ internal sealed class MobileOfflineMutationTransport(
         long episodeId,
         bool favourite,
         string mutationId,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
-        => _server.SetFavouriteAsync(episodeId, favourite, mutationId, cancellationToken);
+        => _server.SetFavouriteAsync(episodeId, favourite, mutationId, capturedAt, cancellationToken);
 
     public Task<WebMutationResult> SetListeningStatusAsync(
         long episodeId,
         bool played,
         string mutationId,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
-        => _server.SetListeningStatusAsync(episodeId, played, mutationId, cancellationToken);
+        => _server.SetListeningStatusAsync(episodeId, played, mutationId, capturedAt, cancellationToken);
 
     public Task<WebMomentMutationResult> AddMomentAsync(
         long episodeId,

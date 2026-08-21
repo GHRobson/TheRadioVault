@@ -1,4 +1,5 @@
 using System.Text.Json;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Web.Models;
 
 namespace TheRadioVault.Web.Contracts;
@@ -75,7 +76,9 @@ public interface IWebArchiveProvider
     WebResearchPackImportJob StartResearchPackImport(Guid sessionId);
     WebResearchPackImportJob GetResearchPackImportStatus(Guid sessionId);
     bool CancelResearchPackImport(Guid sessionId);
-    Task<WebResearchPackExportPayload> ExportResearchPackAsync(CancellationToken cancellationToken = default);
+    Task<WebResearchPackExportPayload> ExportResearchPackAsync(
+        KnowledgeExportScope scope = KnowledgeExportScope.Complete,
+        CancellationToken cancellationToken = default);
     Task<WebWikiPackPreview> PreviewWikiPackAsync(Stream packageStream, string sourceName, CancellationToken cancellationToken = default);
     Task<WebWikiPackImportResult> ApplyWikiPackAsync(Stream packageStream, string sourceName, string expectedSha256, CancellationToken cancellationToken = default);
     Task<WebWikiPackExportPayload> ExportWikiPackAsync(CancellationToken cancellationToken = default);

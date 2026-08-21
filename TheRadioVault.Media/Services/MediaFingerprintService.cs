@@ -10,8 +10,15 @@ public sealed class MediaFingerprintService : IMediaFingerprintService
 
     public MediaFingerprint Create(string path, bool includeFullHash = false)
     {
-        var info = new FileInfo(path);
-        using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+        var before = new FileInfo(path);
+        var beforeLength = before.Length;
+        var beforeModified = before.LastWriteTimeUtc;
+        // Identity evidence must describe one stable byte sequence. Sharing
+        // reads is harmless, but allowing another writer during sampling could
+        // persist a fingerprint assembled from two versions of the file.
+        using var stream = File.Open(path, FileMode.Open, FileAccess.Read, FileShare.Read);
+        if (stream.Length != beforeLength)
+            throw new IOException("The media file changed before fingerprinting could start.");
         using var partial = IncrementalHash.CreateHash(HashAlgorithmName.SHA256);
 
         AppendSample(stream, partial, 0);
@@ -25,7 +32,10 @@ public sealed class MediaFingerprintService : IMediaFingerprintService
             fullHash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
         }
 
-        return new MediaFingerprint(info.Length, partialHash, fullHash);
+        var after = new FileInfo(path);
+        if (stream.Length != beforeLength || after.Length != beforeLength || after.LastWriteTimeUtc != beforeModified)
+            throw new IOException("The media file changed while its identity was being calculated. Try the scan again.");
+        return new MediaFingerprint(beforeLength, partialHash, fullHash);
     }
 
     private static void AppendSample(Stream stream, IncrementalHash hash, long position)

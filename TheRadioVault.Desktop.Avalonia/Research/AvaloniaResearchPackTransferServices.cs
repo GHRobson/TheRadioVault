@@ -291,20 +291,27 @@ public sealed class LocalResearchPackTransferService : IResearchPackTransferServ
         return Task.CompletedTask;
     }
 
-    public async Task<ResearchPackExportSummary> ExportAsync(CancellationToken cancellationToken = default)
+    public async Task<ResearchPackExportSummary> ExportAsync(
+        KnowledgeExportScope scope = KnowledgeExportScope.Complete,
+        CancellationToken cancellationToken = default)
     {
         var database = new DatabaseService(_database);
         var pack = await Task.Run(
             () => database.BuildCompleteKnowledgePack(AppVersionService.Version),
             cancellationToken).ConfigureAwait(false);
-        var databaseName = Path.GetFileName(_database.DatabasePath);
-        var databaseIdentity = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(databaseName)))[..16].ToLowerInvariant();
-        pack.Wiki = await new WikiService(_database)
-            .GetAuthoringSnapshotAsync(AppVersionService.Version, databaseIdentity, cancellationToken)
-            .ConfigureAwait(false);
+        KnowledgeExportScopeFilter.Apply(pack, scope);
+        if (scope == KnowledgeExportScope.Complete)
+        {
+            var databaseName = Path.GetFileName(_database.DatabasePath);
+            var databaseIdentity = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(databaseName)))[..16].ToLowerInvariant();
+            pack.Wiki = await new WikiService(_database)
+                .GetAuthoringSnapshotAsync(AppVersionService.Version, databaseIdentity, cancellationToken)
+                .ConfigureAwait(false);
+            KnowledgeExportScopeFilter.Apply(pack, scope);
+        }
         var bytes = _packs.ExportBytes(pack);
-        return new ResearchPackExportSummary(bytes, "RadioVault-Archive-Knowledge.trvknowledge",
-            pack.Broadcasts.Count, pack.MissingBroadcasts.Count, pack.Transcripts.Count, pack.Wiki.Pages.Count);
+        return new ResearchPackExportSummary(bytes, scope.SuggestedFileName(),
+            pack.Broadcasts.Count, pack.MissingBroadcasts.Count, pack.Transcripts.Count, pack.Wiki?.Pages.Count ?? 0);
     }
 
     private async Task<ResearchPackExportSummary> ExportScopedAsync(int collectionId, string collectionName, int? year, CancellationToken cancellationToken = default)
@@ -924,27 +931,21 @@ public sealed class LocalResearchPackTransferService : IResearchPackTransferServ
         var isIgnored = decision.Equals("ignored", StringComparison.OrdinalIgnoreCase);
         var isKnownResolvedDecision = isApproved || isRecordingOnly || isReleaseOnly || isLeftUndated
             || isKeepExisting || isIgnored;
-        var isExplicitPending = decision.Equals("pending", StringComparison.OrdinalIgnoreCase)
-            || decision.Equals("reopened", StringComparison.OrdinalIgnoreCase);
-        var hasExplicitDecision = !string.IsNullOrWhiteSpace(decision);
-        var uncertainCurrentDate = !currentDate.HasValue || IsUncertainDateConfidence(currentConfidence);
-        var autoResearchDate = IsResearchAdoptedDateConfidence(currentConfidence);
+        var isExplicitPending = decision.Equals("reopened", StringComparison.OrdinalIgnoreCase);
+        var hasExplicitDecision = !string.IsNullOrWhiteSpace(decision)
+            && !decision.Equals("pending", StringComparison.OrdinalIgnoreCase);
+        var uncertainCurrentDate = !currentDate.HasValue || DateConfidencePolicy.IsUncertain(currentConfidence);
         var conflictsWithCurrentDate = DateHintConflictsWithCurrentDate(dateHint, currentDate);
         var hasRoleConflict = DateHintConflictsWithCurrentDate(releaseHint, currentDate)
             || DateHintConflictsWithCurrentDate(recordingHint, currentDate);
-        var catalogueDateNeedsConfirmation = KnownShowCatalog.SupportsUndatedCatalogueItems(item.Show)
-            && dateHint.HasValue;
-
         var isPending = isExplicitPending
             || (isApproved && !dateHint.ExactDate.HasValue)
             || (hasExplicitDecision && !isKnownResolvedDecision);
         if (!hasExplicitDecision)
         {
             isPending = uncertainCurrentDate
-                || autoResearchDate
                 || conflictsWithCurrentDate
-                || hasRoleConflict
-                || catalogueDateNeedsConfirmation;
+                || hasRoleConflict;
             if (!isPending) return;
         }
 
@@ -1366,16 +1367,6 @@ public sealed class LocalResearchPackTransferService : IResearchPackTransferServ
     private static string EffectiveSlot(TrvPackBroadcast item) => FirstNonEmpty(item.Slot, item.Research?.Broadcast?.Slot);
     private static string NormalizeKey(string? value) => Clean(value).ToLowerInvariant();
     private static string Clean(string? value) => value?.Trim() ?? string.Empty;
-    private static bool IsUncertainDateConfidence(string? value)
-    {
-        var confidence = Clean(value);
-        if (string.IsNullOrWhiteSpace(confidence)) return true;
-        if (IsResearchAdoptedDateConfidence(confidence)) return false;
-        return !confidence.Equals("High", StringComparison.OrdinalIgnoreCase)
-            && !confidence.Equals("Confirmed", StringComparison.OrdinalIgnoreCase)
-            && !confidence.Equals("Manual", StringComparison.OrdinalIgnoreCase);
-    }
-
     private static bool DateHintConflictsWithCurrentDate(CatalogueDateHint hint, DateOnly? currentDate)
     {
         if (!hint.HasValue || !currentDate.HasValue) return false;

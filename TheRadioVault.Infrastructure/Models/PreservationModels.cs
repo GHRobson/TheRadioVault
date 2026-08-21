@@ -95,6 +95,11 @@ public sealed class ArchiveManifestRoot
 public sealed class ArchiveManifestFile
 {
     public string FileKey { get; set; } = "";
+    /// <summary>
+    /// Path- and machine-independent identity when sufficient evidence exists.
+    /// FileKey remains the legacy machine-row identifier for compatibility.
+    /// </summary>
+    public string ContentKey { get; set; } = "";
     public string BroadcastUid { get; set; } = "";
     public string Show { get; set; } = "";
     public string? AirDate { get; set; }
@@ -129,6 +134,27 @@ public sealed class ArchiveManifestFile
         while (amount >= 1024 && unit < units.Length - 1) { amount /= 1024; unit++; }
         return $"{amount:0.##} {units[unit]}";
     }
+}
+
+public static class ArchiveContentIdentity
+{
+    public static string Create(
+        string? fullSha256,
+        string? partialSha256,
+        long fileSize,
+        long durationMs,
+        string legacyFileKey)
+    {
+        var full = NormalizeHash(fullSha256);
+        if (full.Length > 0) return $"sha256:{full}";
+        var partial = NormalizeHash(partialSha256);
+        if (partial.Length > 0 && fileSize > 0 && durationMs > 0)
+            return $"strong:{partial}:{fileSize}:{durationMs}";
+        return $"local:{legacyFileKey.Trim()}";
+    }
+
+    private static string NormalizeHash(string? value)
+        => (value ?? string.Empty).Trim().ToLowerInvariant();
 }
 
 public enum ArchiveComparisonKind

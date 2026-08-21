@@ -49,5 +49,18 @@
     <Style Selector="TextBox">
       <Setter Property="MinHeight" Value="38" />
     </Style>
+    <Style Selector="TabControl">
+      <Setter Property="Background" Value="#101318" />
+    </Style>
+    <Style Selector="TabItem">
+      <Setter Property="MinWidth" Value="190" />
+      <Setter Property="MinHeight" Value="48" />
+      <Setter Property="Padding" Value="16,11" />
+      <Setter Property="HorizontalContentAlignment" Value="Left" />
+      <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="TabItem:selected">
+      <Setter Property="Foreground" Value="#F2C94C" />
+    </Style>
   </Application.Styles>
 </Application>

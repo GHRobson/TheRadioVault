@@ -42,7 +42,7 @@ public sealed class CanonicalLibraryQueryService
 
         var adopted = ScalarInt(connection, "SELECT COUNT(*) FROM canonical_broadcasts");
         var truthBroadcasts = ScalarInt(connection,
-            "SELECT COUNT(*) FROM library_truth_broadcasts WHERE run_id=$run",
+            "SELECT COUNT(*) FROM library_truth_broadcasts WHERE run_id=$run AND adoption_state<>'Preserved archive item'",
             ("$run", latestTruthRunId));
         var incrementalBroadcasts = ScalarInt(connection, """
             SELECT COUNT(*)
@@ -141,8 +141,9 @@ public sealed class CanonicalLibraryQueryService
             WITH
             truth_broadcasts AS (
                 SELECT *
-                  FROM library_truth_broadcasts
+                 FROM library_truth_broadcasts
                  WHERE run_id=$run
+                   AND adoption_state<>'Preserved archive item'
                    AND ($key IS NULL OR canonical_key=$key)
             ),
             members AS (
@@ -724,7 +725,13 @@ public sealed class CanonicalLibraryQueryService
     {
         var summary = GetSummary();
         if (!summary.IsCutoverReady)
-            return new CanonicalLibraryAuditSnapshot(0,0,0,0,0,0,0,0,0,0,0,0,0,0,DateTimeOffset.UtcNow);
+            return new CanonicalLibraryAuditSnapshot(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,DateTimeOffset.UtcNow);
+
+        var duplicateIdentities = GetBroadcasts()
+            .GroupBy(value => value.RepresentativeEpisodeId)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Count())
+            .ToArray();
 
         using var connection = _database.OpenConnection();
         var run = summary.LatestTruthRunId;
@@ -755,7 +762,8 @@ public sealed class CanonicalLibraryQueryService
             run, summary.Broadcasts, summary.AdoptedBroadcasts, summary.NeedsAttentionBroadcasts,
             summary.ReviewRecommendedBroadcasts, summary.BlockedBroadcasts, summary.Recordings,
             multipart, incomplete, reviewCoverage, missing, cloudOnly, summary.NeedsAttentionBroadcasts,
-            invalidPreferred, DateTimeOffset.UtcNow);
+            invalidPreferred, duplicateIdentities.Length,
+            duplicateIdentities.Sum(count => count - 1), DateTimeOffset.UtcNow);
     }
 
     public CanonicalDownloadManifest? GetDownloadManifest(string canonicalKey, string? recordingKey = null)

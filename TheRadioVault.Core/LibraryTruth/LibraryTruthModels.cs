@@ -36,6 +36,7 @@ public sealed class LibraryTruthFileInput
     public bool IsPreferred { get; init; }
     public string CurrentCollectionName { get; init; } = string.Empty;
     public DateOnly? CurrentAirDate { get; init; }
+    public string CurrentDateConfidence { get; init; } = "Unknown";
     public string CurrentBroadcastSlot { get; init; } = string.Empty;
     public int CurrentPartNumber { get; init; } = 1;
     public int? CurrentTotalParts { get; init; }

@@ -347,6 +347,15 @@ public sealed class ExploreViewController : SessionTableViewController, IUISearc
         });
     }
 
+    protected override void ReloadSession()
+    {
+        // Explore data changes through its cache coordinator and explicit
+        // refresh path. Playback/sync notifications arrive far more often and
+        // used to recreate image and timeline cells, causing visible flashing
+        // and losing the reader's position.
+        if (_dashboard is null && !_loading && !Session.IsBusy) _ = LoadAsync();
+    }
+
     protected override void Dispose(bool disposing)
     {
         if (disposing)

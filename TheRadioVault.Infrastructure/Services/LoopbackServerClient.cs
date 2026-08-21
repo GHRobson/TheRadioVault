@@ -210,7 +210,8 @@ public sealed class LoopbackServerClient : IDisposable
         var missingCount = ReadIntHeader(response, "X-Radio-Vault-Missing-Count");
         var transcriptCount = ReadIntHeader(response, "X-Radio-Vault-Transcript-Count");
         var wikiPageCount = ReadIntHeader(response, "X-Radio-Vault-Wiki-Page-Count");
-        return new LoopbackBinaryResponse(bytes, fileName, broadcastCount, missingCount, transcriptCount, wikiPageCount);
+        var exportScope = ReadStringHeader(response, "X-Radio-Vault-Export-Scope");
+        return new LoopbackBinaryResponse(bytes, fileName, broadcastCount, missingCount, transcriptCount, wikiPageCount, exportScope);
     }
 
     public async Task<LoopbackFileResponse> PostJsonForFileAsync(
@@ -281,6 +282,9 @@ public sealed class LoopbackServerClient : IDisposable
         => response.Headers.TryGetValues(name, out var values) && int.TryParse(values.FirstOrDefault(), out var value)
             ? value
             : 0;
+
+    private static string ReadStringHeader(HttpResponseMessage response, string name)
+        => response.Headers.TryGetValues(name, out var values) ? values.FirstOrDefault()?.Trim() ?? string.Empty : string.Empty;
 
     private bool CanUseCache(HttpMethod method, CancellationToken cancellationToken, Exception exception)
         => method == HttpMethod.Get && _responseCache is not null && !cancellationToken.IsCancellationRequested &&
@@ -511,5 +515,12 @@ public sealed class LoopbackServerClient : IDisposable
     }
 }
 
-public sealed record LoopbackBinaryResponse(byte[] Bytes, string FileName, int BroadcastCount, int MissingCount, int TranscriptCount, int WikiPageCount = 0);
+public sealed record LoopbackBinaryResponse(
+    byte[] Bytes,
+    string FileName,
+    int BroadcastCount,
+    int MissingCount,
+    int TranscriptCount,
+    int WikiPageCount = 0,
+    string ExportScope = "");
 public sealed record LoopbackFileResponse(byte[] Bytes, string FileName, int PageCount = 0, int ImageCount = 0);

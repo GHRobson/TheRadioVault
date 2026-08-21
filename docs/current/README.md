@@ -9,6 +9,7 @@ Use these documents for current development:
 - [Release roadmap](../roadmap/RADIOVAULT_ROADMAP.md)
 - [Source audit and refactoring priorities](../architecture/SOURCE_AUDIT_2026-08-11.md)
 - [Architecture boundaries](../architecture/ARCHITECTURE_BOUNDARIES.md)
+- [Media consolidation safety and identity](../architecture/MEDIA_CONSOLIDATION_SAFETY.md)
 - [Development and validation workflow](../../DEVELOPMENT.md)
 - [Release checklist](../guides/RELEASE_CHECKLIST.md)
 

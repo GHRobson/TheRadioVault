@@ -70,7 +70,9 @@ public sealed record LibraryBroadcastSummary(
 {
     public string SearchContext { get; init; } = "";
     public int SearchScore { get; init; }
+    public long? SearchStartMs { get; init; }
     public bool HasSearchContext => !string.IsNullOrWhiteSpace(SearchContext);
+    public bool HasTranscriptSearchPosition => SearchStartMs.HasValue;
 
     public int ProgressPercent => Completed
         ? 100

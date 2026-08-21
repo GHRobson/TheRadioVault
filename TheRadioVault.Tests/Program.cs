@@ -79,6 +79,17 @@ var tests = new (string Name, Action Run)[]
     }),
     ("Scheduled backups are verified and report their next run", ScheduledBackupsAreVerified),
     ("RSS archive inbox baselines, encrypts and deduplicates private feeds", RssArchiveInboxIsSafeAndIncremental),
+    ("Backup restore rehearsal validates a disposable clean-server restore", BackupRestoreRehearsalValidatesCleanRestore),
+    ("Server diagnostics redact secrets paths and client identities", ServerDiagnosticsRedactPrivateState),
+    ("Media consolidation rehearses without moving and commits without deleting", MediaConsolidationIsVerifiedAndNonDestructive),
+    ("Managed archive becomes the visible RSS destination after consolidation", ManagedArchiveBecomesVisibleRssDestination),
+    ("Managed archive RSS downloads use the canonical show and date layout", ManagedArchiveRssDownloadsUseCanonicalLayout),
+    ("Media consolidation blocks changed sources and conflicting destinations", MediaConsolidationBlocksChangedFiles),
+    ("Media consolidation holds alternates whose runtime cannot be ranked", MediaConsolidationHoldsUnknownRuntimeAlternates),
+    ("Media consolidation requires a complete current inventory snapshot", MediaConsolidationRequiresCompleteInventory),
+    ("Archive reconciliation exposes a server-owned read-only facade", ArchiveReconciliationIsServerOwnedAndReadOnly),
+    ("Scanner content identity rejects weak partial-hash collisions", ScannerContentIdentityRejectsWeakCollisions),
+    ("Archive content identity is path and machine independent when verified", ArchiveContentIdentityIsStable),
     ("Moment deduplication keeps one near-identical save", () =>
     {
         True(MomentDeduplicationPolicy.IsEquivalent("BENNINGTON-2026-06-22", 4_498_945, "The old slave hanging tree", "", "BENNINGTON-2026-06-22", 4_498_000, "The old slave hanging tree", ""));
@@ -284,7 +295,8 @@ var tests = new (string Name, Action Run)[]
     ("Ambiguous research review uses a schema-valid state", AmbiguousResearchReviewUsesSchemaValidState),
     ("Knowledge exports teach AI agents the portable database", KnowledgeExportsTeachAiAgentsThePortableDatabase),
     ("Complete knowledge exports include every show and transcript", CompleteKnowledgeExportsIncludeEveryShowAndTranscript),
-    ("Knowledge export UI is always archive-wide", KnowledgeExportUiIsAlwaysArchiveWide),
+    ("Focused knowledge exports contain only outstanding research", FocusedKnowledgeExportsContainOnlyOutstandingResearch),
+    ("Knowledge export UI offers complete and focused scopes", KnowledgeExportUiOffersCompleteAndFocusedScopes),
     ("Knowledge import progress bars are determinate", KnowledgeImportProgressBarsAreDeterminate),
     ("Knowledge matching uses one archive index", KnowledgeMatchingUsesOneArchiveIndex),
     ("Installers prevent accidental downgrades", InstallersPreventAccidentalDowngrades),
@@ -301,6 +313,10 @@ var tests = new (string Name, Action Run)[]
     ("Canonical library cutover projects one broadcast per truth group", CanonicalLibraryCutoverProjectsBroadcasts),
     ("Post-cutover scans append new broadcasts to the canonical library", PostCutoverScanAppendsCanonicalBroadcasts),
     ("Research date updates the active adopted Library projection", ResearchDateUpdatesActiveAdoptedLibraryProjection),
+    ("Research dates stay durable across multipart review and scanning", ResearchDatesStayDurableAcrossMultipartReviewAndScanning),
+    ("Legacy approved Research dates reattach only unique archive matches", LegacyApprovedResearchDatesReattachUniqueArchiveMatches),
+    ("Exact identity dates become durable multipart authority", ExactIdentityDatesBecomeDurableMultipartAuthority),
+    ("Verified Unmasked O&A20 date becomes durable archive authority", VerifiedUnmaskedOa20DateBecomesDurableArchiveAuthority),
     ("Quick date-review decisions persist and reopen safely", QuickDateReviewDecisionsPersistAndReopenSafely),
     ("Research packs round-trip date-review decisions", ResearchPacksRoundTripDateReviewDecisions),
     ("Research packs tolerate harmless AI scalar variations", ResearchPacksTolerateAiScalarVariations),
@@ -311,6 +327,8 @@ var tests = new (string Name, Action Run)[]
     ("Transcription ranges have stable display text", TranscriptionRangesHaveStableDisplayText),
     ("Long-form transcription protects continuity and timestamps", LongFormTranscriptionProtectsContinuityAndTimestamps),
     ("Dedicated server foundation is UI-isolated and revision-safe", DedicatedServerFoundationIsUiIsolatedAndRevisionSafe),
+    ("Dedicated server health polling never blocks the settings UI", DedicatedServerHealthPollingNeverBlocksSettingsUi),
+    ("Dedicated server administration uses focused screens", DedicatedServerAdministrationUsesFocusedScreens),
     ("Dedicated server owns transcription workers and batch controls", DedicatedServerOwnsTranscriptionWorkers),
     ("Loopback native handoff maps server ownership", LoopbackNativeHandoffMapsServerOwnership),
     ("Transcription jobs preserve worker options", TranscriptionJobsPreserveWorkerOptions),
@@ -374,7 +392,8 @@ static void ScheduledBackupsAreVerified()
                 stream.Write([1, 2, 3, 4]);
                 return destination;
             },
-            backupDirectory: root);
+            backupDirectory: root,
+            verifyBackup: _ => true);
 
         var completed = scheduler.RunIfDueAsync(force: true).GetAwaiter().GetResult();
         True(completed.LastBackupVerified);
@@ -443,16 +462,48 @@ static void RssArchiveInboxIsSafeAndIncremental()
         var newItems = service.CheckNowAsync(feed.Id).GetAwaiter().GetResult();
         Equal(1, newItems.NewDownloads);
         Equal(1, Directory.EnumerateFiles(archive, "*.mp3").Count());
+        Equal("Bennington 2026-08-12.mp3", Path.GetFileName(Directory.EnumerateFiles(archive, "*.mp3").Single()));
         Equal(1, scanCount);
         Equal(1, handler.AudioRequests);
         True(handler.SawConditionalRequest, "The second RSS check did not use the saved ETag.");
         True(handler.SawFeedBasicAuthentication, "Private RSS Basic authentication was not sent to the feed host.");
         True(!handler.SentAuthenticationToMediaHost, "RSS credentials were forwarded to a different enclosure host.");
 
+        var cleanPath = Directory.EnumerateFiles(archive, "*.mp3").Single();
+        var legacyPath = Path.Combine(archive, "2026-08-13 - Bennington 2026-08-12.mp3");
+        File.Copy(cleanPath, legacyPath);
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                UPDATE rss_feed_items
+                   SET file_name=$name,file_path=$path
+                 WHERE feed_id=$id AND title='Bennington 2026-08-12';
+                """;
+            command.Parameters.AddWithValue("$id", feed.Id);
+            command.Parameters.AddWithValue("$name", Path.GetFileName(legacyPath));
+            command.Parameters.AddWithValue("$path", legacyPath);
+            Equal(1, command.ExecuteNonQuery());
+        }
+
         var repeated = service.CheckNowAsync(feed.Id).GetAwaiter().GetResult();
         Equal(0, repeated.NewDownloads);
         Equal(1, handler.AudioRequests);
-        Equal(1, scanCount);
+        Equal(2, scanCount);
+        True(File.Exists(cleanPath), "The existing clean archive copy was overwritten by the RSS filename migration.");
+        True(!File.Exists(legacyPath), "The old publication-date-prefixed RSS filename was not migrated.");
+        var renamedRssCopy = Path.Combine(archive, "Bennington 2026-08-12 - RSS copy.mp3");
+        True(File.Exists(renamedRssCopy), "The colliding legacy RSS file was not preserved with a safe name.");
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT file_name,file_path FROM rss_feed_items WHERE feed_id=$id AND title='Bennington 2026-08-12';";
+            command.Parameters.AddWithValue("$id", feed.Id);
+            using var reader = command.ExecuteReader();
+            True(reader.Read());
+            Equal(Path.GetFileName(renamedRssCopy), reader.GetString(0));
+            Equal(renamedRssCopy, reader.GetString(1));
+        }
 
         using (var connection = database.OpenConnection())
         using (var command = connection.CreateCommand())
@@ -462,7 +513,7 @@ static void RssArchiveInboxIsSafeAndIncremental()
             command.ExecuteNonQuery();
         }
         _ = service.RunIfDueAsync().GetAwaiter().GetResult();
-        Equal(2, scanCount);
+        Equal(3, scanCount);
         using (var connection = database.OpenConnection())
         using (var command = connection.CreateCommand())
         {
@@ -486,9 +537,9 @@ static void RssArchiveInboxIsSafeAndIncremental()
             True(!protectedSource.Contains("graham", StringComparison.OrdinalIgnoreCase));
         }
 
-        var downloadedPath = Directory.EnumerateFiles(archive, "*.mp3").Single();
+        var downloadedPaths = Directory.EnumerateFiles(archive, "*.mp3").ToArray();
         service.DeleteAsync(feed.Id).GetAwaiter().GetResult();
-        True(File.Exists(downloadedPath), "Removing an RSS subscription deleted archive audio.");
+        True(downloadedPaths.All(File.Exists), "Removing an RSS subscription deleted archive audio.");
 
         handler.IncludeNewEpisode = false;
         var backCatalogueFeed = service.CreateAsync(new RssFeedSaveRequest(
@@ -499,7 +550,7 @@ static void RssArchiveInboxIsSafeAndIncremental()
             ImportExistingOnFirstCheck: true)).GetAwaiter().GetResult();
         var importedExisting = service.CheckNowAsync(backCatalogueFeed.Id).GetAwaiter().GetResult();
         Equal(1, importedExisting.NewDownloads);
-        Equal(2, Directory.EnumerateFiles(archive, "*.mp3").Count());
+        Equal(3, Directory.EnumerateFiles(archive, "*.mp3").Count());
         service.DeleteAsync(backCatalogueFeed.Id).GetAwaiter().GetResult();
     }
     finally
@@ -507,6 +558,933 @@ static void RssArchiveInboxIsSafeAndIncremental()
         try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
     }
 }
+
+static void BackupRestoreRehearsalValidatesCleanRestore()
+{
+    var root = Path.Combine(Path.GetTempPath(), "RadioVaultRestoreRehearsalTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var databasePath = Path.Combine(root, "radio_vault.db");
+        var database = new SqliteDatabase(databasePath);
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        {
+            using var collection = connection.CreateCommand();
+            collection.CommandText = "INSERT INTO collections(name,sort_name) VALUES('Rehearsal Show','Rehearsal Show') RETURNING id";
+            var collectionId = Convert.ToInt64(collection.ExecuteScalar());
+            using var episode = connection.CreateCommand();
+            episode.CommandText = "INSERT INTO episodes(collection_id,title,status,date_added,updated_at) VALUES($collection,'Restore rehearsal','Unplayed',$now,$now)";
+            episode.Parameters.AddWithValue("$collection", collectionId);
+            episode.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            episode.ExecuteNonQuery();
+        }
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+
+        var backupPath = Path.Combine(root, "verified.trvbackup");
+        using (var archive = ZipFile.Open(backupPath, ZipArchiveMode.Create))
+        {
+            archive.CreateEntryFromFile(databasePath, "radio_vault.db");
+            var artwork = archive.CreateEntry("Artwork/rehearsal.png");
+            using var artworkStream = artwork.Open();
+            artworkStream.Write([1, 2, 3]);
+        }
+
+        var result = new BackupRestoreRehearsalService().Rehearse(backupPath);
+        True(result.CanRestore);
+        Equal("ok", result.QuickCheck);
+        Equal(0, result.ForeignKeyViolations);
+        True(result.SchemaVersion > 0);
+        True(result.TableCount > 0);
+        Equal(1L, result.BroadcastCount);
+        Equal(1, result.ArtworkFiles);
+
+        var invalidPath = Path.Combine(root, "invalid.trvbackup");
+        using (var archive = ZipFile.Open(invalidPath, ZipArchiveMode.Create))
+        {
+            var entry = archive.CreateEntry("radio_vault.db");
+            using var stream = entry.Open();
+            stream.Write([1, 2, 3, 4]);
+        }
+        True(!new BackupRestoreRehearsalService().Verify(invalidPath));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void ServerDiagnosticsRedactPrivateState()
+{
+    var profile = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+    var secret = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+    var snapshot = new ServerHealthSnapshot(
+        DateTimeOffset.UtcNow,
+        false,
+        "Archive needs attention",
+        "ok",
+        "radio_vault.db",
+        1024,
+        2048,
+        2,
+        10,
+        8,
+        1,
+        1,
+        true,
+        true,
+        DateTimeOffset.UtcNow.AddYears(1),
+        1,
+        [new WebDeviceSyncStatus("real-iphone-client-id", 12, DateTimeOffset.UtcNow,
+            $"Could not write {profile}/RadioVault?token={secret}")],
+        new WebScheduledBackupStatus(true, false, DateTimeOffset.UtcNow, DateTimeOffset.UtcNow.AddDays(1),
+            Path.Combine(profile, "Backups", "latest.trvbackup"), false, $"Bearer {secret}"),
+        $"Access token={secret} at {profile}/RadioVault");
+
+    var json = Encoding.UTF8.GetString(new ServerHealthDiagnosticsService().CreateRedactedReport(snapshot, "test"));
+    True(!json.Contains(secret, StringComparison.Ordinal));
+    True(!json.Contains("real-iphone-client-id", StringComparison.Ordinal));
+    True(string.IsNullOrWhiteSpace(profile) || !json.Contains(profile, StringComparison.OrdinalIgnoreCase));
+    True(json.Contains("clientIdsPseudonymized", StringComparison.Ordinal));
+    True(json.Contains("latest.trvbackup", StringComparison.Ordinal));
+}
+
+static void MediaConsolidationIsVerifiedAndNonDestructive()
+{
+    var root = Path.Combine(ConsolidationTestTempRoot(), "RadioVaultConsolidationTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var fixture = CreateMediaConsolidationFixture(root);
+        var managed = Path.Combine(root, "managed");
+        var quarantine = Path.Combine(root, "quarantine");
+        var service = new MediaConsolidationService(fixture.Database);
+        var plan = service.CreatePlan(managed, quarantine);
+
+        Equal(4, plan.InventoryMediaRecords);
+        Equal(4, plan.InventoryAvailableFiles);
+        Equal(0, plan.InventoryMissingFiles);
+        Equal(0, plan.HeldSourceFiles);
+        Equal(plan.InventoryAvailableFiles, plan.AccountedAvailableFiles);
+        Equal(1, plan.ManagedFiles);
+        Equal(3, plan.RejectedFiles);
+        Equal(1, plan.Items.Count(item => item.Disposition == MediaConsolidationDisposition.RejectedDuplicate));
+        var selected = plan.Items.Single(item => item.IsManagedCopy);
+        Equal(2_000L, selected.DurationMs);
+        Equal(fixture.Sources[2], selected.SourcePath);
+        True(Path.GetFileName(selected.ManagedPath).Contains("Part", StringComparison.OrdinalIgnoreCase) == false,
+            "A standalone recording must not gain a multipart suffix merely because exact duplicates exist.");
+
+        var rehearsal = service.Rehearse(plan);
+        True(rehearsal.CanCommit, string.Join(Environment.NewLine, rehearsal.Problems));
+        Throws<InvalidDataException>(() => service.Rehearse(plan with { InventoryAvailableFiles = 3 }));
+        True(fixture.Sources.All(File.Exists), "Rehearsal must not move a source file.");
+        True(plan.Items.Where(item => item.IsManagedCopy).All(item => !File.Exists(item.ManagedPath)),
+            "Rehearsal must not create managed media.");
+        True(File.Exists(rehearsal.ManifestPath));
+
+        var journalPath = Path.Combine(Path.GetDirectoryName(rehearsal.ManifestPath)!, "journal.json");
+        File.WriteAllText(journalPath, JsonSerializer.Serialize(new
+        {
+            PlanId = "another-plan",
+            PlanSignature = "another-signature",
+            StartedAt = DateTimeOffset.UtcNow,
+            Status = "copying-managed-files"
+        }));
+        Throws<InvalidDataException>(() => service.Commit(plan, rehearsal, plan.ConfirmationText));
+        True(fixture.Sources.All(File.Exists));
+        File.WriteAllText(journalPath, JsonSerializer.Serialize(new
+        {
+            plan.PlanId,
+            plan.PlanSignature,
+            StartedAt = DateTimeOffset.UtcNow,
+            Status = "copying-managed-files",
+            ManagedItemIds = Array.Empty<string>(),
+            QuarantinedItemIds = Array.Empty<string>(),
+            DatabaseRowsUpdated = 0
+        }));
+        var recovered = service.LoadLatestInterruptedPlan(quarantine);
+        True(recovered is not null);
+        Equal(plan.PlanSignature, recovered!.PlanSignature);
+        Throws<InvalidOperationException>(() => service.Commit(plan, rehearsal, "CONSOLIDATE THE WRONG PLAN"));
+        True(fixture.Sources.All(File.Exists));
+
+        var result = service.Commit(plan, rehearsal, plan.ConfirmationText);
+        True(result.Completed);
+        Equal(1, result.ManagedFiles);
+        Equal(4, result.QuarantinedFiles);
+        True(File.Exists(result.DatabaseBackupPath));
+        Equal("ok", BackupRestoreRehearsalService.InspectQuickCheck(result.DatabaseBackupPath));
+        True(File.Exists(result.JournalPath));
+        True(plan.Items.All(item => !File.Exists(item.SourcePath)));
+        True(plan.Items.All(item => File.Exists(item.QuarantinePath)),
+            "Every original—including the selected winner—must remain in quarantine.");
+        True(File.Exists(selected.ManagedPath));
+        Equal(selected.FullSha256, TestSha256(selected.ManagedPath));
+        True(plan.Items.All(item => TestSha256(item.QuarantinePath) == item.FullSha256));
+
+        using (var connection = fixture.Database.OpenConnection())
+        {
+            using var selectedRow = connection.CreateCommand();
+            selectedRow.CommandText = "SELECT path,is_missing,storage_state,is_preferred FROM media_files WHERE id=$id";
+            selectedRow.Parameters.AddWithValue("$id", selected.MediaFileId);
+            using var reader = selectedRow.ExecuteReader();
+            True(reader.Read());
+            Equal(selected.ManagedPath, reader.GetString(0));
+            Equal(0L, reader.GetInt64(1));
+            Equal("AvailableOffline", reader.GetString(2));
+            Equal(1L, reader.GetInt64(3));
+        }
+
+        // A completed journal is deliberately idempotent: rerunning the exact
+        // confirmed plan verifies existing outputs instead of overwriting them.
+        var resumedRehearsal = service.Rehearse(plan);
+        True(resumedRehearsal.CanCommit);
+        var resumed = service.Commit(plan, resumedRehearsal, plan.ConfirmationText);
+        True(resumed.Completed);
+        True(plan.Items.All(item => File.Exists(item.QuarantinePath)));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void ManagedArchiveBecomesVisibleRssDestination()
+{
+    var root = Path.Combine(ConsolidationTestTempRoot(), "RadioVaultManagedArchiveRssTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var fixture = CreateMediaConsolidationFixture(root);
+        var managed = Path.Combine(root, "managed");
+        var quarantine = Path.Combine(root, "quarantine");
+        var winnerPath = fixture.Sources[2];
+        var winnerHash = TestSha256(winnerPath);
+        long sourceFolderId;
+        long collectionId;
+        using (var connection = fixture.Database.OpenConnection())
+        using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = """
+                SELECT id FROM library_folders WHERE lower(path)=lower($source);
+                """;
+            setup.Parameters.AddWithValue("$source", Path.GetDirectoryName(winnerPath)!);
+            sourceFolderId = Convert.ToInt64(setup.ExecuteScalar());
+            setup.Parameters.Clear();
+            setup.CommandText = "SELECT id FROM collections WHERE name='Bennington';";
+            collectionId = Convert.ToInt64(setup.ExecuteScalar());
+            setup.CommandText = """
+                INSERT INTO rss_feed_subscriptions(
+                    id,name,display_url,protected_source,library_folder_id,check_interval_minutes,
+                    enabled,import_existing_on_first_check,initialized,created_at,updated_at)
+                VALUES(9801,'Managed archive test','https://feeds.example/private.xml','test-protected-source',
+                       $folder,30,0,0,1,$now,$now);
+                INSERT INTO rss_feed_items(
+                    id,feed_id,stable_key,title,published_at,enclosure_hash,file_name,file_path,
+                    content_hash,status,first_seen_at,downloaded_at)
+                VALUES(9802,9801,'existing-winner','Bennington 2026-08-14',$now,'enclosure-winner',
+                       $name,$path,$hash,'Downloaded',$now,$now);
+                """;
+            setup.Parameters.AddWithValue("$folder", sourceFolderId);
+            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.UtcDateTime.ToString("O"));
+            setup.Parameters.AddWithValue("$name", Path.GetFileName(winnerPath));
+            setup.Parameters.AddWithValue("$path", winnerPath);
+            setup.Parameters.AddWithValue("$hash", winnerHash);
+            setup.ExecuteNonQuery();
+        }
+
+        var consolidation = new MediaConsolidationService(fixture.Database);
+        var plan = consolidation.CreatePlan(managed, quarantine);
+        var rehearsal = consolidation.Rehearse(plan);
+        True(rehearsal.CanCommit, string.Join(Environment.NewLine, rehearsal.Problems));
+        var committed = consolidation.Commit(plan, rehearsal, plan.ConfirmationText);
+        True(committed.Completed);
+        var selected = plan.Items.Single(item => item.IsManagedCopy);
+
+        using (var connection = fixture.Database.OpenConnection())
+        using (var check = connection.CreateCommand())
+        {
+            check.CommandText = """
+                SELECT COUNT(*) FROM library_folders
+                 WHERE lower(path)=lower($managed) AND enabled=1 AND recursive=1 AND is_managed_archive=1;
+                """;
+            check.Parameters.AddWithValue("$managed", managed);
+            Equal(1L, Convert.ToInt64(check.ExecuteScalar()));
+            check.Parameters.Clear();
+            check.CommandText = """
+                SELECT COUNT(*)
+                  FROM rss_feed_subscriptions f
+                  JOIN library_folders lf ON lf.id=f.library_folder_id
+                 WHERE f.id=9801 AND lower(lf.path)=lower($managed)
+                   AND f.collection_id=$collection AND lf.is_managed_archive=1;
+                """;
+            check.Parameters.AddWithValue("$managed", managed);
+            check.Parameters.AddWithValue("$collection", collectionId);
+            Equal(1L, Convert.ToInt64(check.ExecuteScalar()));
+            check.Parameters.Clear();
+            check.CommandText = "SELECT file_path FROM rss_feed_items WHERE id=9802;";
+            Equal(selected.ManagedPath, Convert.ToString(check.ExecuteScalar()));
+        }
+
+        // Recreate the state left by the previous server build: consolidation
+        // completed, but the managed marker/state and RSS destination were not
+        // made durable. Also add one RSS download that arrived afterwards.
+        var latePath = Path.Combine(Path.GetDirectoryName(winnerPath)!, "Bennington 2026-08-15.mp3");
+        File.WriteAllBytes(latePath, Encoding.UTF8.GetBytes("post-consolidation-rss-audio"));
+        var lateHash = TestSha256(latePath);
+        using (var connection = fixture.Database.OpenConnection())
+        using (var reset = connection.CreateCommand())
+        {
+            reset.CommandText = """
+                UPDATE library_folders SET is_managed_archive=0;
+                DELETE FROM managed_archive_state;
+                UPDATE rss_feed_subscriptions SET library_folder_id=$source,collection_id=NULL WHERE id=9801;
+                UPDATE rss_feed_items SET file_name=$winner_name,file_path=$winner_path WHERE id=9802;
+                INSERT INTO episodes(
+                    id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,part_number)
+                VALUES(9810,$collection,'2026-08-15','High','Post-consolidation RSS','Unplayed',$now,$now,
+                       'BENNINGTON-2026-08-15',1);
+                INSERT INTO media_files(
+                    id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,
+                    duration_ms,partial_hash,full_hash,storage_state,is_preferred)
+                VALUES(9811,9810,$late_path,$late_name,$late_bytes,$now,0,$now,1000,'late-rss-partial',$late_hash,
+                       'AvailableOffline',1);
+                INSERT INTO rss_feed_items(
+                    id,feed_id,stable_key,title,published_at,enclosure_hash,file_name,file_path,
+                    content_hash,status,first_seen_at,downloaded_at)
+                VALUES(9812,9801,'post-consolidation','Bennington 2026-08-15',$now,'enclosure-late',
+                       $late_name,$late_path,$late_hash,'Downloaded',$now,$now);
+                """;
+            reset.Parameters.AddWithValue("$source", sourceFolderId);
+            reset.Parameters.AddWithValue("$collection", collectionId);
+            reset.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.UtcDateTime.ToString("O"));
+            reset.Parameters.AddWithValue("$winner_name", Path.GetFileName(winnerPath));
+            reset.Parameters.AddWithValue("$winner_path", winnerPath);
+            reset.Parameters.AddWithValue("$late_path", latePath);
+            reset.Parameters.AddWithValue("$late_name", Path.GetFileName(latePath));
+            reset.Parameters.AddWithValue("$late_bytes", new FileInfo(latePath).Length);
+            reset.Parameters.AddWithValue("$late_hash", lateHash);
+            reset.ExecuteNonQuery();
+        }
+
+        var preferences = new WebServerPreferences
+        {
+            Enabled = false,
+            StartAutomatically = false,
+            SecureAccessEnabled = false,
+            Port = 18775,
+            SecurePort = 18776,
+            LanFederationEnabled = false
+        };
+        using (var runtime = new RadioVaultServerRuntime(fixture.Database.DatabasePath, preferences, honorAutomaticStart: false))
+        {
+            var folders = runtime.GetLibraryFoldersAsync().GetAwaiter().GetResult();
+            var managedFolder = folders.Single(folder => folder.IsManagedArchive);
+            Equal(Path.GetFullPath(managed), managedFolder.Path);
+            True(managedFolder.Enabled);
+            True(managedFolder.Recursive);
+            Equal("Managed archive · auto-detect shows", managedFolder.AssignmentDisplayName);
+
+            var feed = runtime.GetRssFeedsAsync().GetAwaiter().GetResult().Single(value => value.Id == 9801);
+            Equal(managedFolder.Id, feed.LibraryFolderId);
+            Equal(Path.GetFullPath(managed), feed.DestinationPath);
+            Equal("Bennington", feed.CollectionName);
+            True(feed.DestinationIsManagedArchive);
+        }
+
+        using (var connection = fixture.Database.OpenConnection())
+        using (var check = connection.CreateCommand())
+        {
+            check.CommandText = "SELECT file_path FROM rss_feed_items WHERE id=9802;";
+            Equal(selected.ManagedPath, Convert.ToString(check.ExecuteScalar()));
+            check.CommandText = "SELECT file_path FROM rss_feed_items WHERE id=9812;";
+            var migratedLatePath = Convert.ToString(check.ExecuteScalar())!;
+            True(migratedLatePath.StartsWith(Path.GetFullPath(managed) + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase));
+            True(File.Exists(migratedLatePath));
+            True(!File.Exists(latePath), "The post-consolidation RSS original was not moved out of the old folder.");
+            True(Directory.EnumerateFiles(quarantine, "*", SearchOption.AllDirectories)
+                    .Any(path => Path.GetFileName(path).EndsWith(Path.GetFileName(latePath), StringComparison.OrdinalIgnoreCase)),
+                "The migrated RSS original was not retained in quarantine for review.");
+        }
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void ManagedArchiveRssDownloadsUseCanonicalLayout()
+{
+    var root = Path.Combine(Path.GetTempPath(), "RadioVaultManagedRssLayoutTests", Guid.NewGuid().ToString("N"));
+    var managed = Path.Combine(root, "managed");
+    Directory.CreateDirectory(managed);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(root, "managed-rss.sqlite"));
+        database.Initialize();
+        long folderId;
+        int collectionId;
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT id FROM collections WHERE name='Bennington';";
+            collectionId = Convert.ToInt32(command.ExecuteScalar());
+            command.CommandText = """
+                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled,is_managed_archive)
+                VALUES($path,$collection,1,1,1) RETURNING id;
+                """;
+            command.Parameters.AddWithValue("$path", managed);
+            command.Parameters.AddWithValue("$collection", collectionId);
+            folderId = Convert.ToInt64(command.ExecuteScalar());
+        }
+
+        var handler = new RssScenarioHandler { IncludeNewEpisode = true };
+        using var http = new HttpClient(handler);
+        var preferences = new WebServerPreferences
+        {
+            ServerInstanceId = Guid.NewGuid().ToString("D"),
+            CertificatePassword = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)).ToLowerInvariant()
+        };
+        var scans = 0;
+        using var service = new RssFeedIngestionService(
+            database,
+            preferences,
+            _ => { scans++; return Task.FromResult(true); },
+            http);
+        var feed = service.CreateAsync(new RssFeedSaveRequest(
+            "Managed Bennington feed",
+            new RssFeedSource("https://feeds.example/private.xml"),
+            folderId,
+            ImportExistingOnFirstCheck: true,
+            CollectionId: collectionId)).GetAwaiter().GetResult();
+        True(feed.DestinationIsManagedArchive);
+        Equal("Bennington", feed.CollectionName);
+
+        var result = service.CheckNowAsync(feed.Id).GetAwaiter().GetResult();
+        Equal(2, result.NewDownloads);
+        Equal(1, scans);
+        var downloaded = Directory.EnumerateFiles(managed, "*.mp3", SearchOption.AllDirectories).ToArray();
+        Equal(2, downloaded.Length);
+        True(downloaded.All(path => Path.GetRelativePath(managed, path).Split(Path.DirectorySeparatorChar) is
+            ["Bennington", "2026", "2026-08", _]));
+        True(!Directory.EnumerateFiles(managed, "*.mp3", SearchOption.TopDirectoryOnly).Any(),
+            "Managed RSS audio was left loose at the archive root.");
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void MediaConsolidationBlocksChangedFiles()
+{
+    var root = Path.Combine(ConsolidationTestTempRoot(), "RadioVaultConsolidationSafetyTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var fixture = CreateMediaConsolidationFixture(root);
+        var service = new MediaConsolidationService(fixture.Database);
+        var plan = service.CreatePlan(Path.Combine(root, "managed"), Path.Combine(root, "quarantine"));
+        Throws<InvalidDataException>(() => service.Rehearse(plan with { ManagedRoot = Path.Combine(root, "changed-root") }));
+        var changed = plan.Items[0];
+        var original = File.ReadAllBytes(changed.SourcePath);
+        File.WriteAllBytes(changed.SourcePath, Enumerable.Repeat((byte)0xEE, original.Length).ToArray());
+
+        var changedRehearsal = service.Rehearse(plan);
+        True(!changedRehearsal.CanCommit);
+        True(changedRehearsal.Problems.Any(problem => problem.Contains("changed", StringComparison.OrdinalIgnoreCase)));
+        True(plan.Items.All(item => File.Exists(item.SourcePath)));
+        True(plan.Items.All(item => !File.Exists(item.QuarantinePath)));
+
+        File.WriteAllBytes(changed.SourcePath, original);
+        var selected = plan.Items.Single(item => item.IsManagedCopy);
+        Directory.CreateDirectory(Path.GetDirectoryName(selected.ManagedPath)!);
+        var conflicting = Encoding.UTF8.GetBytes("pre-existing unrelated media");
+        File.WriteAllBytes(selected.ManagedPath, conflicting);
+        var destinationRehearsal = service.Rehearse(plan);
+        True(!destinationRehearsal.CanCommit);
+        True(destinationRehearsal.Problems.Any(problem => problem.Contains("different data", StringComparison.OrdinalIgnoreCase)));
+        True(File.ReadAllBytes(selected.ManagedPath).SequenceEqual(conflicting),
+            "A conflicting destination must never be overwritten.");
+        True(plan.Items.All(item => File.Exists(item.SourcePath)));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void MediaConsolidationHoldsUnknownRuntimeAlternates()
+{
+    var root = Path.Combine(ConsolidationTestTempRoot(), "RadioVaultConsolidationDurationTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var fixture = CreateMediaConsolidationFixture(root);
+        using (var connection = fixture.Database.OpenConnection())
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE media_files SET duration_ms=0 WHERE path=$path;
+                UPDATE library_truth_recordings SET duration_ms=0
+                 WHERE run_id=9200 AND recording_key='recording-short';
+                """;
+            command.Parameters.AddWithValue("$path", fixture.Sources[0]);
+            command.ExecuteNonQuery();
+        }
+        var service = new MediaConsolidationService(fixture.Database);
+        Throws<InvalidOperationException>(() => service.CreatePlan(
+            Path.Combine(root, "managed"),
+            Path.Combine(root, "quarantine")));
+        True(fixture.Sources.All(File.Exists));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void MediaConsolidationRequiresCompleteInventory()
+{
+    var root = Path.Combine(ConsolidationTestTempRoot(), "RadioVaultConsolidationInventoryTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var fixture = CreateMediaConsolidationFixture(root);
+        var service = new MediaConsolidationService(fixture.Database);
+        var originalPlan = service.CreatePlan(Path.Combine(root, "managed"), Path.Combine(root, "quarantine"));
+        Equal(4, originalPlan.AccountedAvailableFiles);
+
+        var latePath = Path.Combine(root, "source", "arrived-after-library-truth.mp3");
+        File.WriteAllBytes(latePath, Enumerable.Repeat((byte)0xA5, 128).ToArray());
+        using (var connection = fixture.Database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO episodes(
+                    id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,part_number)
+                VALUES(9401,(SELECT id FROM collections WHERE name='Bennington'),'2026-08-15','High',
+                       'Late inventory','Unplayed',$now,$now,'CONSOLIDATION-LATE',1);
+                INSERT INTO media_files(
+                    id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,
+                    duration_ms,partial_hash,full_hash,storage_state,is_preferred)
+                VALUES(9402,9401,$path,$filename,$bytes,$now,0,$now,3000,'late-partial',$full,'AvailableOffline',1);
+                """;
+            command.Parameters.AddWithValue("$path", latePath);
+            command.Parameters.AddWithValue("$filename", Path.GetFileName(latePath));
+            command.Parameters.AddWithValue("$bytes", new FileInfo(latePath).Length);
+            command.Parameters.AddWithValue("$full", TestSha256(latePath));
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        try
+        {
+            service.CreatePlan(Path.Combine(root, "managed-new"), Path.Combine(root, "quarantine-new"));
+        }
+        catch (InvalidOperationException exception) when (exception.Message.Contains(
+                   "safely consolidatable", StringComparison.OrdinalIgnoreCase))
+        {
+            // The deliberately artificial filenames in this duplicate-ranking
+            // fixture may be held by the real parser. The refresh itself is the
+            // contract under test here; production files remain safely held.
+        }
+        using (var connection = fixture.Database.OpenConnection())
+        using (var refreshed = connection.CreateCommand())
+        {
+            refreshed.CommandText = "SELECT id,source_file_count FROM library_truth_runs WHERE status='completed' ORDER BY id DESC LIMIT 1";
+            using var reader = refreshed.ExecuteReader();
+            True(reader.Read());
+            True(reader.GetInt64(0) > 9200,
+                "Planning must automatically build a fresh non-destructive reconciliation when the inventory grew.");
+            Equal(5L, reader.GetInt64(1));
+        }
+
+        var staleRehearsal = service.Rehearse(originalPlan);
+        True(!staleRehearsal.CanCommit);
+        True(staleRehearsal.Problems.Any(problem =>
+            problem.Contains("inventory changed", StringComparison.OrdinalIgnoreCase)));
+        True(File.Exists(latePath), "Inventory reconciliation must never move or delete a newly discovered file.");
+        True(fixture.Sources.All(File.Exists));
+
+        var hiddenPath = Path.Combine(root, "source", "hidden-unreconciled.mp3");
+        File.WriteAllBytes(hiddenPath, Enumerable.Repeat((byte)0x5A, 96).ToArray());
+        using (var connection = fixture.Database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO episodes(
+                    id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,part_number,hidden)
+                VALUES(9403,(SELECT id FROM collections WHERE name='Bennington'),'2026-08-16','High',
+                       'Hidden inventory','Unplayed',$now,$now,'CONSOLIDATION-HIDDEN',1,1);
+                INSERT INTO media_files(
+                    id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,
+                    duration_ms,partial_hash,full_hash,storage_state,is_preferred)
+                VALUES(9404,9403,$path,$filename,$bytes,$now,0,$now,3000,'hidden-partial',$full,'AvailableOffline',1);
+                """;
+            command.Parameters.AddWithValue("$path", hiddenPath);
+            command.Parameters.AddWithValue("$filename", Path.GetFileName(hiddenPath));
+            command.Parameters.AddWithValue("$bytes", new FileInfo(hiddenPath).Length);
+            command.Parameters.AddWithValue("$full", TestSha256(hiddenPath));
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        string stoppedMessage;
+        try
+        {
+            service.CreatePlan(Path.Combine(root, "managed-hidden"), Path.Combine(root, "quarantine-hidden"));
+            throw new InvalidOperationException("Expected hidden physical media outside Library Truth to stop plan creation.");
+        }
+        catch (InvalidOperationException exception)
+        {
+            stoppedMessage = exception.Message;
+        }
+        True(stoppedMessage.Contains("1 hidden", StringComparison.OrdinalIgnoreCase), stoppedMessage);
+        True(stoppedMessage.Contains("No plan was created", StringComparison.OrdinalIgnoreCase) ||
+             stoppedMessage.Contains("Run a fresh archive reconciliation", StringComparison.OrdinalIgnoreCase), stoppedMessage);
+        True(File.Exists(hiddenPath));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void ScannerContentIdentityRejectsWeakCollisions()
+{
+    var root = Path.Combine(Path.GetTempPath(), "RadioVaultIdentityTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(root, "identity.sqlite"));
+        database.Initialize();
+        int collectionId;
+        using (var connection = database.OpenConnection())
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "INSERT INTO collections(name,sort_name) VALUES('Identity Audit','Identity Audit'); SELECT last_insert_rowid();";
+            collectionId = Convert.ToInt32(command.ExecuteScalar());
+        }
+        var service = new DatabaseService(database);
+        var parsed = new TheRadioVault.Core.Models.ParsedFilename
+        {
+            CollectionName = "Identity Audit",
+            DateConfidence = "Unknown",
+            PartNumber = 1
+        };
+        var first = service.UpsertScannedFile(
+            Path.Combine(root, "partial-a.mp3"), 1000, DateTime.UtcNow, collectionId, parsed,
+            partialHash: "same-outer-blocks", durationMs: 60_000);
+        var collision = service.UpsertScannedFile(
+            Path.Combine(root, "partial-b.mp3"), 1000, DateTime.UtcNow, collectionId, parsed,
+            partialHash: "same-outer-blocks", durationMs: 90_000);
+        True(first.EpisodeId != collision.EpisodeId,
+            "Partial hash and byte size without matching duration must not merge recordings.");
+
+        var exactOriginal = service.UpsertScannedFile(
+            Path.Combine(root, "exact-old.mp3"), 1234, DateTime.UtcNow, collectionId, parsed,
+            partialHash: "old-partial", fullHash: "abcdef0123456789", durationMs: 120_000);
+        using (var connection = database.OpenConnection())
+        {
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE media_files SET is_missing=1,is_preferred=0 WHERE episode_id=$episode";
+            command.Parameters.AddWithValue("$episode", exactOriginal.EpisodeId);
+            command.ExecuteNonQuery();
+        }
+        var exactReturn = service.UpsertScannedFile(
+            Path.Combine(root, "exact-new-name.mp3"), 1234, DateTime.UtcNow, collectionId, parsed,
+            partialHash: "different-partial", fullHash: "ABCDEF0123456789", durationMs: 120_000);
+        Equal(exactOriginal.EpisodeId, exactReturn.EpisodeId);
+
+        var datedA = new TheRadioVault.Core.Models.ParsedFilename
+        {
+            CollectionName = "Identity Audit",
+            AirDate = new DateTime(2026, 1, 1),
+            DateConfidence = "High",
+            PartNumber = 1
+        };
+        var datedB = new TheRadioVault.Core.Models.ParsedFilename
+        {
+            CollectionName = "Identity Audit",
+            AirDate = new DateTime(2026, 1, 2),
+            DateConfidence = "High",
+            PartNumber = 1
+        };
+        var conflictingClaimA = service.UpsertScannedFile(
+            Path.Combine(root, "claim-a.mp3"), 2222, DateTime.UtcNow, collectionId, datedA,
+            fullHash: "same-bytes-different-claim", durationMs: 180_000);
+        var conflictingClaimB = service.UpsertScannedFile(
+            Path.Combine(root, "claim-b.mp3"), 2222, DateTime.UtcNow, collectionId, datedB,
+            fullHash: "same-bytes-different-claim", durationMs: 180_000);
+        True(conflictingClaimA.EpisodeId != conflictingClaimB.EpisodeId,
+            "Exact bytes with conflicting explicit dates must remain separate for Library Truth review.");
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void ArchiveReconciliationIsServerOwnedAndReadOnly()
+{
+    var root = Path.Combine(Path.GetTempPath(), "RadioVaultReconciliationTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(root, "reconciliation.sqlite"));
+        database.Initialize();
+        var service = new ArchiveReconciliationService(database);
+        var initial = service.GetSnapshot();
+        True(!initial.HasCompletedAnalysis);
+        Equal("Not analysed", initial.AnalysisState);
+        True(!service.GetAudit().Snapshot.HasCompletedAnalysis);
+
+        var progressWasReported = false;
+        var reconciled = service.Reconcile(new InlineProgress<(double Percent, string Message)>(_ => progressWasReported = true));
+        True(reconciled.HasCompletedAnalysis);
+        True(reconciled.AnalysisId > 0);
+        Equal(0, reconciled.PhysicalFiles);
+        Equal(reconciled.AnalysisId, service.GetSnapshot().AnalysisId);
+        True(progressWasReported);
+        var audit = service.GetAudit();
+        True(audit.Snapshot.HasCompletedAnalysis);
+        Equal(0, audit.ChangeBreakdown.InterpretedDifferentlyFiles);
+        Equal(0, audit.YearDifferences.Count);
+        Equal(0, audit.SplitCandidates.Count);
+        Equal(0, audit.ReviewRecommended.Count);
+        Equal(0, audit.Blocked.Count);
+        Equal(0, audit.PreservedArchiveItems.Count);
+        var reportPath = Path.Combine(root, "reconciliation.trvreconcile.json");
+        service.ExportReport(reportPath, "test-version");
+        True(File.Exists(reportPath));
+        var reportJson = File.ReadAllText(reportPath);
+        True(reportJson.Contains("\"schemaVersion\": 7", StringComparison.Ordinal));
+        True(reportJson.Contains("\"appVersion\": \"test-version\"", StringComparison.Ordinal));
+
+        using (var connection = database.OpenConnection())
+        using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = """
+                INSERT INTO episodes(collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid)
+                VALUES((SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown','Tribute to Patrice Part 1','Unplayed',$now,$now,'DATE-EVIDENCE-EPISODE');
+                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
+                VALUES('/Radio',(SELECT id FROM collections WHERE name='Opie & Anthony'),1,1);
+                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
+                VALUES((SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'/Radio/Tribute to Patrice - Part 01.mp3','Tribute to Patrice - Part 01.mp3',1000,$now,0,$now,3600000,'DATE-EVIDENCE-HASH','AvailableOffline',1);
+                INSERT INTO research_import_runs(package_name,package_sha256,schema_version,app_version,imported_at,status)
+                VALUES('legacy-date-pack.trvknowledge','DATE-EVIDENCE-PACK',1,'test-version',$now,'completed');
+                INSERT INTO research_broadcasts(identity_key,collection_id,episode_id,source_broadcast_id,air_date,headline,research_json,research_state,existence_status,confidence,import_run_id,created_at,updated_at)
+                VALUES('DATE-EVIDENCE-LINKED',(SELECT id FROM collections WHERE name='Opie & Anthony'),
+                       (SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'DATE-EVIDENCE-EPISODE',NULL,
+                       'Tribute to Patrice Part 1','{"research":{"catalogue":{"date_review_status":"pending","date_review_date":"2011-11-30"}}}',
+                       'conflicting_information','in_library',80,(SELECT id FROM research_import_runs WHERE package_sha256='DATE-EVIDENCE-PACK'),$now,$now);
+                INSERT INTO research_broadcasts(identity_key,collection_id,episode_id,source_broadcast_id,air_date,headline,research_json,research_state,existence_status,confidence,created_at,updated_at)
+                VALUES('DATE-EVIDENCE-ORPHAN',(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'DATE-EVIDENCE-ORPHAN','2011-11-30',
+                       'Tribute to Patrice Part 1','{}','fully_researched','confirmed_missing',95,$now,$now);
+                INSERT INTO research_field_provenance(research_broadcast_id,episode_id,field_name,value_text,source_kind,source_label,import_run_id,confidence,evidence_count,protected,active,created_at)
+                VALUES((SELECT id FROM research_broadcasts WHERE identity_key='DATE-EVIDENCE-LINKED'),
+                       (SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'broadcast_date','2011-11-30','research_pack','legacy-date-pack.trvknowledge',
+                       (SELECT id FROM research_import_runs WHERE package_sha256='DATE-EVIDENCE-PACK'),95,1,1,1,$now);
+                INSERT INTO research_import_changes(import_run_id,research_broadcast_id,episode_id,record_identity,field_name,before_value,after_value,decision,reason,created_at)
+                VALUES((SELECT id FROM research_import_runs WHERE package_sha256='DATE-EVIDENCE-PACK'),
+                       (SELECT id FROM research_broadcasts WHERE identity_key='DATE-EVIDENCE-LINKED'),
+                       (SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'DATE-EVIDENCE-EPISODE','broadcast_date','',
+                       '2011-11-30','applied','Imported authoritative date',$now);
+                INSERT INTO missing_broadcast_research(stable_key,broadcast_uid,show_name,normalized_show_name,broadcast_date,slot,part_number,headline,confidence,research_json,status,matched_episode_id,match_notes,created_at,updated_at)
+                VALUES('DATE-EVIDENCE-MISSING','DATE-EVIDENCE-EPISODE','Opie & Anthony','opie-anthony','2011-11-30','Standard',1,
+                       'Tribute to Patrice Part 1',95,'{"broadcast_date":"2011-11-30"}','resolved',
+                       (SELECT id FROM episodes WHERE broadcast_uid='DATE-EVIDENCE-EPISODE'),'Original match',$now,$now);
+                UPDATE missing_broadcast_research SET match_notes='Revised match' WHERE stable_key='DATE-EVIDENCE-MISSING';
+                """;
+            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            setup.ExecuteNonQuery();
+        }
+
+        var datedEvidenceRun = service.Reconcile();
+        True(datedEvidenceRun.UnknownDates == 1,
+            $"Expected one unresolved date in the diagnostic fixture, got {datedEvidenceRun.UnknownDates}.");
+        var dateEvidencePath = Path.Combine(root, "date-authority.trvdateevidence.json");
+        service.ExportDateAuthorityEvidence(dateEvidencePath, "test-version");
+        using (var evidenceDocument = JsonDocument.Parse(File.ReadAllText(dateEvidencePath)))
+        {
+            var evidenceRoot = evidenceDocument.RootElement;
+            True(evidenceRoot.GetProperty("schemaVersion").GetInt32() == 1, "Date-evidence schema was not version 1.");
+            var diagnosticCollection = evidenceRoot.GetProperty("unresolvedBroadcasts")[0].GetProperty("collectionName").GetString();
+            True(diagnosticCollection == "Opie & Anthony",
+                $"Expected the diagnostic fixture to resolve to Opie & Anthony, got '{diagnosticCollection}'.");
+            foreach (var metric in new[]
+                     {
+                         "unresolvedBroadcasts", "linkedResearchRecords", "orphanResearchRecords",
+                         "provenanceEntries", "importHistoryEntries", "legacyMissingRecords", "legacyRevisionRecords"
+                     })
+            {
+                var actual = evidenceRoot.GetProperty("summary").GetProperty(metric).GetInt32();
+                True(actual == 1, $"Expected date-evidence metric '{metric}' to be 1, got {actual}.");
+            }
+            True(!File.ReadAllText(dateEvidencePath).Contains("rss_feed", StringComparison.OrdinalIgnoreCase));
+        }
+
+        var serverRuntime = File.ReadAllText(Path.Combine(
+            SourceRoot(), "TheRadioVault.Infrastructure", "Services", "RadioVaultServerRuntime.cs"));
+        True(serverRuntime.Contains("GetArchiveReconciliationSnapshot", StringComparison.Ordinal));
+        True(serverRuntime.Contains("GetArchiveReconciliationAudit", StringComparison.Ordinal));
+        True(serverRuntime.Contains("ReconcileArchive", StringComparison.Ordinal));
+        True(serverRuntime.Contains("ExportArchiveReconciliationReport", StringComparison.Ordinal));
+        True(serverRuntime.Contains("ExportArchiveDateAuthorityEvidence", StringComparison.Ordinal));
+        var desktopViews = Directory.GetFiles(
+                Path.Combine(SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views"), "*.axaml")
+            .Select(File.ReadAllText);
+        True(desktopViews.All(source => !source.Contains("RunArchiveReconciliationCommand", StringComparison.Ordinal)));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void ArchiveContentIdentityIsStable()
+{
+    var exactA = ArchiveContentIdentity.Create("AABBCC", "partial-one", 100, 1_000, "machine-a:1");
+    var exactB = ArchiveContentIdentity.Create("aabbcc", "partial-two", 200, 2_000, "machine-b:9");
+    Equal("sha256:aabbcc", exactA);
+    Equal(exactA, exactB);
+
+    var strongA = ArchiveContentIdentity.Create(null, "OUTER", 1000, 60_000, "machine-a:1");
+    var strongB = ArchiveContentIdentity.Create(null, "outer", 1000, 60_000, "machine-b:9");
+    Equal(strongA, strongB);
+    True(strongA != ArchiveContentIdentity.Create(null, "outer", 1000, 90_000, "machine-b:9"));
+    Equal("local:machine-a:1", ArchiveContentIdentity.Create(null, null, 1000, 0, "machine-a:1"));
+}
+
+static (SqliteDatabase Database, string[] Sources) CreateMediaConsolidationFixture(string root)
+{
+    var sourceRoot = Path.Combine(root, "source");
+    Directory.CreateDirectory(sourceRoot);
+    var sources = new[]
+    {
+        Path.Combine(sourceRoot, "short.mp3"),
+        Path.Combine(sourceRoot, "long-low-bitrate.mp3"),
+        Path.Combine(sourceRoot, "long-high-bitrate.mp3"),
+        Path.Combine(sourceRoot, "long-high-bitrate-copy.mp3")
+    };
+    File.WriteAllBytes(sources[0], Enumerable.Repeat((byte)0x11, 80).ToArray());
+    File.WriteAllBytes(sources[1], Enumerable.Repeat((byte)0x22, 100).ToArray());
+    var winnerBytes = Enumerable.Range(0, 200).Select(value => (byte)value).ToArray();
+    File.WriteAllBytes(sources[2], winnerBytes);
+    File.WriteAllBytes(sources[3], winnerBytes);
+    var durations = new long[] { 1_000, 2_000, 2_000, 2_000 };
+    var recordingKeys = new[] { "recording-short", "recording-long-low", "recording-winner", "recording-winner" };
+
+    var database = new SqliteDatabase(Path.Combine(root, "consolidation.sqlite"));
+    database.Initialize();
+    using var connection = database.OpenConnection();
+    using var transaction = connection.BeginTransaction();
+    var now = DateTimeOffset.UtcNow.ToString("O");
+    long collectionId;
+    using (var collection = connection.CreateCommand())
+    {
+        collection.Transaction = transaction;
+        collection.CommandText = "SELECT id FROM collections WHERE name='Bennington'";
+        collectionId = Convert.ToInt64(collection.ExecuteScalar());
+    }
+    using (var setup = connection.CreateCommand())
+    {
+        setup.Transaction = transaction;
+        setup.CommandText = """
+            INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled) VALUES($root,$collection,1,1);
+            INSERT INTO library_truth_runs(id,started_at,completed_at,status,parser_version,source_file_count,current_broadcast_count,proposed_broadcast_count)
+            VALUES(9200,$now,$now,'completed','consolidation-test',4,4,1);
+            INSERT INTO library_truth_broadcasts(
+                run_id,canonical_key,collection_name,air_date,broadcast_slot,file_count,segment_count,
+                recording_count,status,confidence_score,adoption_state,preferred_recording_key)
+            VALUES(9200,'BENNINGTON-2026-08-14','Bennington','2026-08-14','',4,1,3,'Proposed changes',100,
+                   'Ready with recording choice','recording-winner');
+            """;
+        setup.Parameters.AddWithValue("$root", sourceRoot);
+        setup.Parameters.AddWithValue("$collection", collectionId);
+        setup.Parameters.AddWithValue("$now", now);
+        setup.ExecuteNonQuery();
+    }
+
+    for (var index = 0; index < sources.Length; index++)
+    {
+        var episodeId = 9101 + index;
+        var mediaId = 9301 + index;
+        using var row = connection.CreateCommand();
+        row.Transaction = transaction;
+        row.CommandText = """
+            INSERT INTO episodes(
+                id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,part_number)
+            VALUES($episode,$collection,'2026-08-14','High','Test broadcast','Unplayed',$now,$now,$uid,1);
+            INSERT INTO media_files(
+                id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,
+                duration_ms,partial_hash,full_hash,storage_state,is_preferred)
+            VALUES($media,$episode,$path,$filename,$bytes,$now,0,$now,$duration,$partial,$full,'AvailableOffline',1);
+            INSERT INTO library_truth_files(
+                run_id,media_file_id,current_episode_id,path,original_filename,current_collection,current_air_date,
+                current_part,proposed_collection,proposed_air_date,proposed_part,proposed_headline,
+                canonical_broadcast_key,recording_key,confidence_score,confidence,disposition)
+            VALUES(9200,$media,$episode,$path,$filename,'Bennington','2026-08-14',1,'Bennington','2026-08-14',1,
+                   'Test broadcast','BENNINGTON-2026-08-14',$recording,100,'High','Broadcast merge');
+            """;
+        row.Parameters.AddWithValue("$episode", episodeId);
+        row.Parameters.AddWithValue("$collection", collectionId);
+        row.Parameters.AddWithValue("$media", mediaId);
+        row.Parameters.AddWithValue("$path", sources[index]);
+        row.Parameters.AddWithValue("$filename", Path.GetFileName(sources[index]));
+        row.Parameters.AddWithValue("$bytes", new FileInfo(sources[index]).Length);
+        row.Parameters.AddWithValue("$duration", durations[index]);
+        row.Parameters.AddWithValue("$partial", $"partial-{index}");
+        row.Parameters.AddWithValue("$full", TestSha256(sources[index]));
+        row.Parameters.AddWithValue("$recording", recordingKeys[index]);
+        row.Parameters.AddWithValue("$uid", $"CONSOLIDATION-{index}");
+        row.Parameters.AddWithValue("$now", now);
+        row.ExecuteNonQuery();
+    }
+
+    foreach (var recording in recordingKeys.Distinct(StringComparer.Ordinal))
+    {
+        var memberIndexes = Enumerable.Range(0, recordingKeys.Length).Where(index => recordingKeys[index] == recording).ToArray();
+        using var row = connection.CreateCommand();
+        row.Transaction = transaction;
+        row.CommandText = """
+            INSERT INTO library_truth_recordings(
+                run_id,canonical_broadcast_key,recording_key,label,file_count,segment_count,duration_ms,
+                relationship,confidence_score,role,completeness_score,preferred_score,duration_ratio,is_preferred_candidate)
+            VALUES(9200,'BENNINGTON-2026-08-14',$recording,$recording,$files,1,$duration,
+                   'Alternate recording',100,'Complete alternate recording',100,$preferred,1.0,$winner);
+            """;
+        row.Parameters.AddWithValue("$recording", recording);
+        row.Parameters.AddWithValue("$files", memberIndexes.Length);
+        row.Parameters.AddWithValue("$duration", memberIndexes.Max(index => durations[index]));
+        row.Parameters.AddWithValue("$preferred", recording == "recording-winner" ? 100 : 50);
+        row.Parameters.AddWithValue("$winner", recording == "recording-winner" ? 1 : 0);
+        row.ExecuteNonQuery();
+    }
+    transaction.Commit();
+    return (database, sources);
+}
+
+static string TestSha256(string path)
+{
+    using var stream = File.OpenRead(path);
+    return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(stream)).ToLowerInvariant();
+}
+
+static string ConsolidationTestTempRoot()
+    => OperatingSystem.IsMacOS() && Directory.Exists("/private/tmp") ? "/private/tmp" : Path.GetTempPath();
 
 static void ArchiveEntityLinksPreserveIdentity()
 {
@@ -525,6 +1503,30 @@ static void ArchiveEntityLinksPreserveIdentity()
     Equal("BENNINGTON-2016-05-17", broadcastId);
     Equal("42", episodeId);
     Equal("broadcast:BENNINGTON-2016-05-17", broadcast.EntityKey);
+
+    var show = ArchiveEntityLinkFactory.ForShow(7, "Bennington");
+    var showTarget = ArchiveEntityNavigation.Resolve(show);
+    Equal(ArchiveEntityDestination.LibraryShow, showTarget.Destination);
+    Equal("7", showTarget.TargetId);
+    Equal("Bennington", showTarget.Label);
+
+    var broadcastTarget = ArchiveEntityNavigation.Resolve(broadcast);
+    Equal(ArchiveEntityDestination.Broadcast, broadcastTarget.Destination);
+    Equal("42", broadcastTarget.TargetId);
+
+    var personNavigation = ArchiveEntityNavigation.Resolve(person);
+    Equal(ArchiveEntityDestination.Explore, personNavigation.Destination);
+    Equal(ArchiveEntityDestination.LibraryShow, ArchiveEntityNavigation.Resolve(show).Destination);
+
+    var showArticle = ArchiveEntityLinkFactory.ForWikiPage(
+        Guid.Parse("b8dd3ea4-f5f1-4ddd-bfb5-1fd29619757d"), "Show", "Bennington history") with
+    {
+        Relationship = "inline"
+    };
+    var showArticleNavigation = ArchiveEntityNavigation.Resolve(showArticle);
+    Equal(ArchiveEntityDestination.Explore, showArticleNavigation.Destination);
+    Equal("b8dd3ea4-f5f1-4ddd-bfb5-1fd29619757d", showArticleNavigation.TargetId);
+    Equal("Ron Bennington", personNavigation.Label);
 }
 
 static void CanonicalPersonalStateWritesRollBackAtomically()
@@ -778,14 +1780,15 @@ static void LibrarySearchFindsTranscriptSpeech()
         {
             EpisodeId = episodeId,
             FullText = "A discussion about phosphorescent penguins in radio.",
-            Segments = new[] { new TranscriptSegment(0, 0, 4000, "A discussion about phosphorescent penguins in radio.") }
+            Segments = new[] { new TranscriptSegment(0, 90_000, 94_000, "A discussion about phosphorescent penguins in radio.") }
         }).GetAwaiter().GetResult();
 
         var result = new LibraryBrowseService(database).BrowseAsync(new TheRadioVault.Services.Models.LibraryBrowseRequest(
             SearchText: "phosphorescent penguins",
             SearchScope: TheRadioVault.Services.Models.LibrarySearchScope.Transcripts)).GetAwaiter().GetResult();
         Equal(1, result.TotalMatching);
-        True(result.Broadcasts.Single().SearchContext.StartsWith("Transcript:", StringComparison.Ordinal));
+        True(result.Broadcasts.Single().SearchContext.StartsWith("Transcript · 1:30:", StringComparison.Ordinal));
+        Equal(90_000L, result.Broadcasts.Single().SearchStartMs);
         var titlesOnly = new LibraryBrowseService(database).BrowseAsync(new TheRadioVault.Services.Models.LibraryBrowseRequest(
             SearchText: "phosphorescent penguins",
             SearchScope: TheRadioVault.Services.Models.LibrarySearchScope.TitlesAndSummaries)).GetAwaiter().GetResult();
@@ -1048,8 +2051,7 @@ static void Alpha12CompletesServerOwnershipAndStatusUx()
     True(transcriptionServices.Contains("ServerOwnedTranscriptionEngine", StringComparison.Ordinal));
     True(transcriptionServices.Contains("install-recommended", StringComparison.Ordinal));
 
-    var serverView = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverView = ReadServerAdministrationViews();
     True(serverView.Contains("IsVisible=\"{Binding IsServerStopped}\"", StringComparison.Ordinal));
     True(serverView.Contains("IsVisible=\"{Binding IsServerRunning}\"", StringComparison.Ordinal));
     True(serverView.Contains("TranscriptionStateBrush", StringComparison.Ordinal));
@@ -1099,8 +2101,7 @@ static void Alpha13Buildfix1RestoresFoldersListeningActionsAndDualInstallers()
     True(serverRuntime.Contains("RemoveLibraryFolderAsync", StringComparison.Ordinal));
     True(serverRuntime.Contains("ScanLibraryAsync", StringComparison.Ordinal));
 
-    var serverView = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverView = ReadServerAdministrationViews();
     True(serverView.Contains("LIBRARY FOLDERS", StringComparison.Ordinal));
     True(serverView.Contains("AddLibraryFolderCommand", StringComparison.Ordinal));
     True(serverView.Contains("RemoveLibraryFolderCommand", StringComparison.Ordinal));
@@ -1153,8 +2154,7 @@ static void Alpha14RenamesWebAndRestoresPhoneConnectionControls()
     True(clientSettings.Contains("AnywhereQrCode.Rows", StringComparison.Ordinal));
     True(clientSettings.Contains("AnywhereSetupQrCode.Rows", StringComparison.Ordinal));
 
-    var serverSettings = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverSettings = ReadServerAdministrationViews();
     True(serverSettings.Contains("RADIO VAULT WEB", StringComparison.Ordinal));
     True(serverSettings.Contains("CopyWebLinkCommand", StringComparison.Ordinal));
     True(serverSettings.Contains("RegenerateWebLinkCommand", StringComparison.Ordinal));
@@ -1172,8 +2172,7 @@ static void Alpha15RestoresServerFolderAssignmentAndNativeAudioQuality()
     True(serverViewModel.Contains("SetLibraryFolderCollectionAsync", StringComparison.Ordinal));
     True(serverViewModel.Contains("ScanLibraryAsync", StringComparison.Ordinal));
 
-    var serverView = File.ReadAllText(Path.Combine(
-        SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverView = ReadServerAdministrationViews();
     True(serverView.Contains("Change selected show", StringComparison.Ordinal));
     True(serverView.Contains("AssignLibraryFolderCommand", StringComparison.Ordinal));
 
@@ -1632,6 +2631,7 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
         SourceRoot(), "TheRadioVault.Client.iOS", "RadioVaultArtwork.cs"));
     True(iosArtwork.Contains("session.LoadArtworkAsync", StringComparison.Ordinal));
     True(iosArtwork.Contains("UIViewContentMode.ScaleAspectFill", StringComparison.Ordinal));
+    True(!iosArtwork.Contains("broadcast.Source.ArtworkPath", StringComparison.Ordinal));
 
     var iosTableBase = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "SessionTableViewController.cs"));
@@ -1685,6 +2685,14 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(exploreArticle.Contains("LoadExploreImagesAsync", StringComparison.Ordinal));
     True(exploreArticle.Contains("InlineLinkTargets", StringComparison.Ordinal));
     True(exploreArticle.Contains("ShowLibraryViewController", StringComparison.Ordinal));
+    True(exploreArticle.Contains("ArchiveEntityNavigation.Resolve", StringComparison.Ordinal));
+    True(exploreArticle.Contains("LoadBroadcastAsync", StringComparison.Ordinal));
+
+    var desktopExplore = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Presentation", "ViewModels", "WikiViewModel.cs"));
+    True(desktopExplore.Contains("SetOpenEntityLinkHandler", StringComparison.Ordinal));
+    True(desktopExplore.Contains("ArchiveEntityNavigation.Resolve", StringComparison.Ordinal));
+    True(desktopExplore.Contains("TryOpenEntityLinkAsync", StringComparison.Ordinal));
 
     var exploreCells = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "ExploreCells.cs"));
@@ -1778,6 +2786,9 @@ static void IosClientPreservesNativePlatformAndServerBoundaries()
     True(knowledgeView.Contains("LoadKnowledgeCoverageAsync", StringComparison.Ordinal));
     True(knowledgeView.Contains("KnowledgeStatusText", StringComparison.Ordinal));
     True(knowledgeView.Contains("IsLibraryFallback", StringComparison.Ordinal));
+    True(knowledgeView.Contains("KnowledgeCoverageMonthViewController", StringComparison.Ordinal));
+    True(knowledgeView.Contains("RepresentativeEpisodeId", StringComparison.Ordinal));
+    True(knowledgeView.Contains("Missing weekday", StringComparison.Ordinal));
 
     var metadataPills = File.ReadAllText(Path.Combine(
         SourceRoot(), "TheRadioVault.Client.iOS", "MetadataPillsCell.cs"));
@@ -2245,8 +3256,8 @@ static void Rc1Buildfix4UnifiesClientUiAndNativeDownloads()
     True(web.Contains("height:calc(100dvh - (max(14px, env(safe-area-inset-top)) + 76px))", StringComparison.Ordinal));
     True(web.Contains("class=\"libraryPrimaryAction\"", StringComparison.Ordinal));
     True(web.Contains("/app-icon-180.png?token=__TOKEN__&v=__APP_VERSION__", StringComparison.Ordinal));
-    True(web.Contains("if ((isGet || isHead) && TryGetWebAppIcon", StringComparison.Ordinal));
-    True(!web.Contains("if (secure && (isGet || isHead) && TryGetWebAppIcon", StringComparison.Ordinal));
+    True(web.Contains("WebRequestLifecycleKind.AppIcon", StringComparison.Ordinal));
+    True(web.Contains("TryGetWebAppIcon(context.Path", StringComparison.Ordinal));
 
     var generator = File.ReadAllText(Path.Combine(
         SourceRoot(), "design", "logo", "generate-brand-assets.py"));
@@ -2320,7 +3331,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 
     var foundation = File.ReadAllText(Path.Combine(SourceRoot(), "tools", "Test-AvaloniaFoundation.ps1"));
     True(foundation.Contains("foundationVersion = '0.35-alpha9-knowledge-portability'", StringComparison.Ordinal));
-    True(foundation.Contains("databaseSchema = 51", StringComparison.Ordinal));
+    True(foundation.Contains("databaseSchema = 52", StringComparison.Ordinal));
     True(foundation.Contains("lanCapabilityGeneration = 41", StringComparison.Ordinal));
     foreach (var marker in new[]
              {
@@ -2674,12 +3685,12 @@ static void DateReviewAppliesToEveryFirstClassShow()
     True(workspace.Contains("SupportsDateReview(show)", StringComparison.Ordinal));
     True(workspace.Contains("SupportsDateReview(row.ShowName)", StringComparison.Ordinal));
     True(workspace.Contains("Missing or uncertain broadcast date", StringComparison.Ordinal));
-    True(workspace.Contains("IsUncertainDateConfidence", StringComparison.Ordinal));
+    True(workspace.Contains("DateConfidencePolicy.IsUncertain", StringComparison.Ordinal));
 
     var transfer = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Research", "AvaloniaResearchPackTransferServices.cs"));
     True(transfer.Contains("SupportsDateReview(item.Show)", StringComparison.Ordinal));
-    True(transfer.Contains("catalogueDateNeedsConfirmation", StringComparison.Ordinal));
-    True(transfer.Contains("autoResearchDate", StringComparison.Ordinal));
+    True(transfer.Contains("DateConfidencePolicy.IsUncertain", StringComparison.Ordinal));
+    True(!transfer.Contains("autoResearchDate", StringComparison.Ordinal));
 
     var view = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Desktop.Avalonia", "Views", "ResearchWorkspaceView.axaml"));
     True(view.Contains("Missing, uncertain or conflicting dates from every show", StringComparison.Ordinal));
@@ -3028,7 +4039,7 @@ static void OfflineProgressOrderingPreservesNewerManualChanges()
     True(mobileTimeline.Contains("public bool Completed", StringComparison.Ordinal));
     True(mobileSession.Contains("_playbackTimeline.IsCompleted()", StringComparison.Ordinal));
     True(mobileSession.Contains("changed || snapshot.IncrementPlayCount", StringComparison.Ordinal));
-    var playAsync = mobileSession.IndexOf("public async Task PlayAsync", StringComparison.Ordinal);
+    var playAsync = mobileSession.IndexOf("private async Task PlayCoreAsync", StringComparison.Ordinal);
     var flushPrevious = mobileSession.IndexOf(
         "await FlushPlaybackAsync().WaitAsync(cancellationToken).ConfigureAwait(false);",
         playAsync,
@@ -3355,24 +4366,78 @@ static void CompleteKnowledgeExportsIncludeEveryShowAndTranscript()
     finally { try { Directory.Delete(directory, true); } catch { } }
 }
 
-static void KnowledgeExportUiIsAlwaysArchiveWide()
+static void FocusedKnowledgeExportsContainOnlyOutstandingResearch()
+{
+    TrvKnowledgePack CreatePack()
+    {
+        var pageId = Guid.NewGuid();
+        return new TrvKnowledgePack
+        {
+            Manifest = new TrvPackManifest { AppVersion = "test", Show = "Whole archive" },
+            Broadcasts = new List<TrvPackBroadcast>
+            {
+                new() { BroadcastId = "UNDATED", Show = "Test", Research = new TrvPackResearch { Summary = "Already summarised.", Topics = new List<string> { "Date research" } } },
+                new() { BroadcastId = "NO-TOPICS", Show = "Test", BroadcastDate = "2020-01-02", Research = new TrvPackResearch { Summary = "A summary without topics." } },
+                new() { BroadcastId = "NO-SUMMARY", Show = "Test", BroadcastDate = "2020-01-03", Research = new TrvPackResearch { Topics = new List<string> { "Archive" } } },
+                new() { BroadcastId = "COMPLETE", Show = "Test", BroadcastDate = "2020-01-04", Research = new TrvPackResearch { Summary = "Complete research.", Topics = new List<string> { "Archive" } } }
+            },
+            Transcripts = new[] { "UNDATED", "NO-TOPICS", "NO-SUMMARY", "COMPLETE" }
+                .Select(id => new TrvPackTranscript { BroadcastId = id, Show = "Test", FullText = $"Transcript for {id}." })
+                .ToList(),
+            Wiki = new WikiAuthoringSnapshot(
+                new WikiAuthoringPackManifest(1, "test", Guid.NewGuid(), DateTimeOffset.UtcNow, "test", 1, 0, 0, 0, 0,
+                    new Dictionary<string, string>()),
+                new[] { new WikiAuthoringPageRecord(pageId, 1, "test", "Test", "Show", "Test page", "Published", "test", "test", Array.Empty<string>()) },
+                new Dictionary<Guid, string> { [pageId] = "# Test" },
+                Array.Empty<WikiRelationshipRecord>(), Array.Empty<WikiSourceRecord>(), Array.Empty<WikiCitationRecord>(),
+                Array.Empty<WikiAuthoringImageRecord>(), new Dictionary<Guid, byte[]>(), Array.Empty<WikiPageImageLink>(),
+                Array.Empty<WikiTimelineEventRecord>())
+        };
+    }
+
+    var undated = KnowledgeExportScopeFilter.Apply(CreatePack(), KnowledgeExportScope.UndatedBroadcasts);
+    Equal("undated", undated.Manifest.ExportScope);
+    Equal(1, undated.Broadcasts.Count);
+    Equal("UNDATED", undated.Broadcasts.Single().BroadcastId);
+    Equal("UNDATED", undated.Transcripts.Single().BroadcastId);
+    True(undated.Wiki is null);
+
+    var incomplete = KnowledgeExportScopeFilter.Apply(CreatePack(), KnowledgeExportScope.MissingTopicsOrSummaries);
+    Equal("missing-topics-or-summaries", incomplete.Manifest.ExportScope);
+    Equal(2, incomplete.Broadcasts.Count);
+    True(incomplete.Broadcasts.Any(item => item.BroadcastId == "NO-TOPICS"));
+    True(incomplete.Broadcasts.Any(item => item.BroadcastId == "NO-SUMMARY"));
+    Equal(2, incomplete.Transcripts.Count);
+    True(incomplete.Transcripts.All(item => item.BroadcastId is "NO-TOPICS" or "NO-SUMMARY"));
+    True(incomplete.Wiki is null);
+
+    var bytes = new KnowledgePackService().ExportBytes(incomplete);
+    var imported = new KnowledgePackService().Import(bytes);
+    Equal("missing-topics-or-summaries", imported.Manifest.ExportScope);
+    Equal(2, imported.Manifest.BroadcastCount);
+}
+
+static void KnowledgeExportUiOffersCompleteAndFocusedScopes()
 {
     var root = SourceRoot();
     var desktopView = File.ReadAllText(Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "Views", "ResearchWorkspaceView.axaml"));
-    True(desktopView.Contains("Export full Knowledge Database", StringComparison.Ordinal));
+    True(desktopView.Contains("Export Knowledge Database", StringComparison.Ordinal));
     True(desktopView.Contains("Command=\"{Binding ExportCommand}\"", StringComparison.Ordinal));
+    True(desktopView.Contains("Broadcasts without dates", StringComparison.Ordinal));
+    True(desktopView.Contains("Broadcasts missing topics or summaries", StringComparison.Ordinal));
     True(!desktopView.Contains("ExportPackButton_OnClick", StringComparison.Ordinal));
     True(!File.Exists(Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "Views", "ResearchPackExportDialog.axaml")));
     True(!File.Exists(Path.Combine(root, "TheRadioVault.Desktop.Avalonia", "Views", "ResearchPackExportDialog.axaml.cs")));
 
     var contract = File.ReadAllText(Path.Combine(root, "TheRadioVault.Services", "Contracts", "IResearchPackTransferService.cs"));
-    True(contract.Contains("ExportAsync(CancellationToken cancellationToken = default)", StringComparison.Ordinal));
+    True(contract.Contains("KnowledgeExportScope scope", StringComparison.Ordinal));
     True(!contract.Contains("collectionName", StringComparison.Ordinal));
     True(!contract.Contains("int? year", StringComparison.Ordinal));
 
     var web = ReadWebServerSourceBundle();
-    True(web.Contains("async function exportResearchPack()", StringComparison.Ordinal));
-    True(web.Contains("await exportResearchPack();", StringComparison.Ordinal));
+    True(web.Contains("async function exportResearchPack(scope", StringComparison.Ordinal));
+    True(web.Contains("data-research-export=\"undated\"", StringComparison.Ordinal));
+    True(web.Contains("data-research-export=\"missing-topics-or-summaries\"", StringComparison.Ordinal));
     True(!web.Contains("Choose a show to export.", StringComparison.Ordinal));
 }
 
@@ -3383,7 +4448,7 @@ static void KnowledgeImportProgressBarsAreDeterminate()
     True(research.Contains("Value=\"{Binding ImportProgressPercent}\"", StringComparison.Ordinal));
     True(!research.Contains("IsIndeterminate=\"True\"", StringComparison.Ordinal));
 
-    var server = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var server = ReadServerAdministrationViews();
     True(server.Contains("Value=\"{Binding KnowledgeProgressPercent}\"", StringComparison.Ordinal));
     True(server.Contains("KnowledgeProgressCountText", StringComparison.Ordinal));
 
@@ -3551,7 +4616,7 @@ static void Alpha9HardensDocumentedKnowledgePortability()
     var provider = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Infrastructure", "Services", "WebArchiveProvider.RemoteAdministration.cs"));
     True(database.Contains("BuildCompleteKnowledgePack", StringComparison.Ordinal));
     True(provider.Contains("BuildCompleteKnowledgePack(AppVersionService.Version)", StringComparison.Ordinal));
-    True(provider.Contains("RadioVault-Archive-Knowledge.trvknowledge", StringComparison.Ordinal));
+    True(provider.Contains("scope.SuggestedFileName()", StringComparison.Ordinal));
 
     var wikiService = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Services", "Services", "WikiService.cs"));
     True(wikiService.Contains("ResolveImportedSourceTitle", StringComparison.Ordinal));
@@ -3951,6 +5016,44 @@ static void CanonicalLibraryCutoverProjectsBroadcasts()
         Equal(1, audit.HeldBroadcasts);
         Equal(0, audit.InvalidPreferredRecordingBroadcasts);
 
+        var guardedPromotion = new CanonicalScanPromotionService(database).PromoteUnmappedEpisodes();
+        Equal(0, guardedPromotion.BroadcastsAdded);
+        Equal(0, guardedPromotion.EpisodesMapped);
+
+        // Older servers could append a second canonical key for an episode that
+        // was already represented by the sealed, held Library Truth baseline.
+        // Preserve that historical anomaly in this fixture to prove the public
+        // Library still projects one playable broadcast identity.
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES(2005,1001,'/archive/a-alias.mp3','a-alias.mp3',100,$now,0,$now,2200,'AvailableOffline',0);
+                INSERT INTO library_truth_broadcasts(run_id,canonical_key,collection_name,air_date,broadcast_slot,file_count,segment_count,recording_count,current_episode_count,status,confidence_score,adoption_state,adoption_reason,preferred_recording_key)
+                VALUES(3001,'CANONICAL-ALIAS','Canonical Test','2001-01-01','PM',1,1,1,1,'Needs attention',60,'Review recommended','Duplicate playable identity','REC-ALIAS');
+                INSERT INTO library_truth_files(run_id,media_file_id,current_episode_id,path,original_filename,canonical_broadcast_key,recording_key,proposed_part)
+                VALUES(3001,2005,1001,'/archive/a-alias.mp3','a-alias.mp3','CANONICAL-ALIAS','REC-ALIAS',1);
+                INSERT INTO library_truth_recordings(run_id,canonical_broadcast_key,recording_key,label,file_count,segment_count,duration_ms,role,is_preferred_candidate)
+                VALUES(3001,'CANONICAL-ALIAS','REC-ALIAS','Alias',1,1,2200,'Full capture',1);
+                """;
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.ExecuteNonQuery();
+        }
+
+        Equal(3, service.GetBroadcasts().Count);
+        var conflictedAudit = service.GetAuditSnapshot();
+        Equal(1, conflictedAudit.DuplicatePlayableIdentityGroups);
+        Equal(1, conflictedAudit.DuplicateCanonicalAliases);
+        True(!conflictedAudit.IsClean);
+
+        var browse = new LibraryBrowseService(database);
+        var overview = browse.GetOverviewAsync().GetAwaiter().GetResult();
+        Equal(2, overview.TotalBroadcasts);
+        var browseResult = browse.BrowseAsync(new LibraryBrowseRequest(Limit: 100)).GetAwaiter().GetResult();
+        Equal(2, browseResult.TotalMatching);
+        Equal(2, browseResult.Broadcasts.Select(value => value.RepresentativeEpisodeId).Distinct().Count());
+
     }
     finally
     {
@@ -4136,6 +5239,371 @@ static void ResearchDateUpdatesActiveAdoptedLibraryProjection()
     }
     finally
     {
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void ResearchDatesStayDurableAcrossMultipartReviewAndScanning()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "rv-durable-research-date-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(directory, "durable-date.db"));
+        database.Initialize();
+        var now = DateTimeOffset.UtcNow.ToString("O");
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name)
+                VALUES('Opie & Anthony','Opie & Anthony');
+
+                INSERT INTO episodes(id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,hidden,part_number,total_parts)
+                VALUES
+                  (6101,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown','Patrice O''Neal Tribute Part 1','Unplayed',$now,$now,'PATRICE-TRIBUTE-1',0,1,18),
+                  (6102,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown','Patrice O''Neal Tribute Part 2','Unplayed',$now,$now,'PATRICE-TRIBUTE-2',0,2,18);
+
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES
+                  (7101,6101,$path1,'Patrice O''Neal Tribute Part 1.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7102,6102,$path2,'Patrice O''Neal Tribute Part 2.mp3',100,$now,0,$now,1000,'AvailableOffline',1);
+
+                INSERT INTO research_broadcasts(id,identity_key,collection_id,episode_id,source_broadcast_id,air_date,headline,research_json,research_state,existence_status,confidence,needs_review,created_at,updated_at)
+                VALUES
+                  (8101,'PATRICE-TRIBUTE-1',(SELECT id FROM collections WHERE name='Opie & Anthony'),6101,'PATRICE-TRIBUTE-1',NULL,'Patrice O''Neal Tribute Part 1',$json1,'in_library','in_library',100,0,$now,$now),
+                  (8102,'PATRICE-TRIBUTE-2',(SELECT id FROM collections WHERE name='Opie & Anthony'),6102,'PATRICE-TRIBUTE-2',NULL,'Patrice O''Neal Tribute Part 2',$json2,'in_library','in_library',100,1,$now,$now);
+                """;
+            command.Parameters.AddWithValue("$now", now);
+            command.Parameters.AddWithValue("$path1", Path.Combine(directory, "patrice-part-1.mp3"));
+            command.Parameters.AddWithValue("$path2", Path.Combine(directory, "patrice-part-2.mp3"));
+            command.Parameters.AddWithValue("$json1", """
+                {"broadcast_date":"2011-11-01","research":{"catalogue":{"date_review_status":"approved_library_date","date_review_date":"2011-11-01","original_filename":"Patrice O'Neal Tribute Part 1.mp3"}}}
+                """);
+            command.Parameters.AddWithValue("$json2", """
+                {"research":{"catalogue":{"date_review_status":"pending","date_review_date":"2011-11-01","original_filename":"Patrice O'Neal Tribute Part 2.mp3"}}}
+                """);
+            command.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var migrated = ResearchDateAuthoritySynchronizer
+                .SynchronizeAsync(connection)
+                .GetAwaiter()
+                .GetResult();
+            Equal(2, migrated);
+        }
+
+        var reconciliation = new LibraryTruthEngine(database).BuildShadowIndex().Summary;
+        Equal(0, reconciliation.UnknownDates);
+
+        var reviews = new ResearchWorkspaceService(database)
+            .GetCatalogueDateReviewsAsync()
+            .GetAwaiter()
+            .GetResult();
+        Equal(0, reviews.Count);
+
+        var scanner = new DatabaseService(database);
+        var conflictingFilenameDate = new TheRadioVault.Core.Models.ParsedFilename
+        {
+            CollectionName = "Opie & Anthony",
+            AirDate = new DateTime(2012, 1, 2),
+            DateConfidence = "High",
+            PartNumber = 1,
+            TotalParts = 18
+        };
+        scanner.UpsertScannedFile(
+            Path.Combine(directory, "patrice-part-1.mp3"),
+            100,
+            DateTime.UtcNow,
+            scanner.GetCollectionLookup()["Opie & Anthony"],
+            conflictingFilenameDate,
+            durationMs: 1000);
+
+        using var verification = database.OpenConnection();
+        using var verify = verification.CreateCommand();
+        verify.CommandText = """
+            SELECT e.air_date,e.date_confidence,
+                   (SELECT rb.air_date FROM research_broadcasts rb WHERE rb.episode_id=e.id ORDER BY rb.id LIMIT 1)
+              FROM episodes e WHERE e.id IN (6101,6102) ORDER BY e.id;
+            """;
+        using var reader = verify.ExecuteReader();
+        var count = 0;
+        while (reader.Read())
+        {
+            count++;
+            Equal("2011-11-01", reader.GetString(0));
+            Equal("Research authoritative", reader.GetString(1));
+            Equal("2011-11-01", reader.GetString(2));
+        }
+        Equal(2, count);
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void LegacyApprovedResearchDatesReattachUniqueArchiveMatches()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "rv-legacy-research-reattach-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(directory, "legacy-date.db"));
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name)
+                VALUES('Ron Bennington Interviews','Ron Bennington Interviews');
+
+                INSERT INTO episodes(id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,hidden)
+                VALUES
+                  (6201,(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'Unknown','Aaron Schneider','Unplayed',$now,$now,0),
+                  (6202,(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'Unknown','Repeated Guest','Unplayed',$now,$now,0),
+                  (6203,(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'Unknown','Repeated Guest','Unplayed',$now,$now,0);
+
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES
+                  (7201,6201,$path1,'rbi_aaron_schneider.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7202,6202,$path2,'rbi_repeated_guest_a.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7203,6203,$path3,'rbi_repeated_guest_b.mp3',100,$now,0,$now,1000,'AvailableOffline',1);
+
+                INSERT INTO research_broadcasts(id,identity_key,collection_id,episode_id,source_broadcast_id,air_date,headline,research_json,research_state,existence_status,confidence,needs_review,created_at,updated_at)
+                VALUES
+                  (8201,'LEGACY-AARON',(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'',NULL,'Aaron Schneider',$uniqueJson,'partially_researched','unknown_gap',100,0,$now,$now),
+                  (8202,'LEGACY-REPEATED',(SELECT id FROM collections WHERE name='Ron Bennington Interviews'),NULL,'',NULL,'Repeated Guest',$ambiguousJson,'partially_researched','unknown_gap',100,0,$now,$now);
+                """;
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.Parameters.AddWithValue("$path1", Path.Combine(directory, "rbi_aaron_schneider.mp3"));
+            command.Parameters.AddWithValue("$path2", Path.Combine(directory, "one", "rbi_repeated_guest_a.mp3"));
+            command.Parameters.AddWithValue("$path3", Path.Combine(directory, "two", "rbi_repeated_guest_b.mp3"));
+            command.Parameters.AddWithValue("$uniqueJson", """
+                {"broadcast_date":"2016-06-07","research":{"catalogue":{"date_review_status":"approved_library_date","date_review_date":"2016-06-07","original_filename":"rbi_aaron_schneider.mp3"}}}
+                """);
+            command.Parameters.AddWithValue("$ambiguousJson", """
+                {"broadcast_date":"2017-07-08","research":{"catalogue":{"date_review_status":"approved_library_date","date_review_date":"2017-07-08"}}}
+                """);
+            command.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var migrated = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(1, migrated);
+        }
+
+        using var verification = database.OpenConnection();
+        using var verify = verification.CreateCommand();
+        verify.CommandText = """
+            SELECT
+              (SELECT episode_id FROM research_broadcasts WHERE id=8201),
+              (SELECT air_date FROM episodes WHERE id=6201),
+              (SELECT date_confidence FROM episodes WHERE id=6201),
+              (SELECT episode_id FROM research_broadcasts WHERE id=8202),
+              (SELECT COUNT(*) FROM episodes WHERE id IN (6202,6203) AND air_date IS NOT NULL);
+            """;
+        using var reader = verify.ExecuteReader();
+        True(reader.Read());
+        Equal(6201L, reader.GetInt64(0));
+        Equal("2016-06-07", reader.GetString(1));
+        Equal("Research authoritative", reader.GetString(2));
+        True(reader.IsDBNull(3), "An ambiguous Research record was attached automatically.");
+        Equal(0L, reader.GetInt64(4));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void ExactIdentityDatesBecomeDurableMultipartAuthority()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "rv-identity-date-authority-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(directory, "identity-date.db"));
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name)
+                VALUES('Opie & Anthony','Opie & Anthony');
+
+                INSERT INTO episodes(id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,part_number,hidden)
+                VALUES
+                  (6301,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   'Tribute to Patrice O''Neal - 2011-12-03 Sat (part 1)','Unplayed',$now,$now,1,0),
+                  (6302,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   'Tribute to Patrice','Unplayed',$now,$now,11,0),
+                  (6303,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   'Memories of 2011-12-04','Unplayed',$now,$now,1,0),
+                  (6304,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   '2010-09-10 - O&A Worst Of AFRO','Unplayed',$now,$now,1,0);
+
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES
+                  (7301,6301,$path1,'Tribute to Patrice - Part 01.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7302,6302,$path2,'Tribute to Patrice - Part 11.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7303,6303,$path3,'retrospective.mp3',100,$now,0,$now,1000,'AvailableOffline',1),
+                  (7304,6304,$path4,'worst-of-afro.mp3',100,$now,0,$now,1000,'AvailableOffline',1);
+                """;
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.Parameters.AddWithValue("$path1", Path.Combine(directory, "Tribute to Patrice - Part 01.mp3"));
+            command.Parameters.AddWithValue("$path2", Path.Combine(directory, "Tribute to Patrice - Part 11.mp3"));
+            command.Parameters.AddWithValue("$path3", Path.Combine(directory, "retrospective.mp3"));
+            command.Parameters.AddWithValue("$path4", Path.Combine(directory, "worst-of-afro.mp3"));
+            command.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var migrated = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(3, migrated);
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = """
+                SELECT
+                  (SELECT COUNT(*) FROM episodes WHERE id IN (6301,6302) AND air_date='2011-12-03' AND date_confidence='Research authoritative'),
+                  (SELECT COUNT(*) FROM research_field_provenance WHERE episode_id IN (6301,6302)
+                    AND field_name='air_date' AND value_text='2011-12-03' AND protected=1 AND active=1),
+                  (SELECT COUNT(*) FROM episodes WHERE id=6303 AND air_date IS NULL),
+                  (SELECT air_date FROM episodes WHERE id=6304);
+                """;
+            using var reader = verify.ExecuteReader();
+            True(reader.Read());
+            Equal(2L, reader.GetInt64(0));
+            Equal(2L, reader.GetInt64(1));
+            Equal(1L, reader.GetInt64(2));
+            Equal("2010-09-10", reader.GetString(3));
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var clearProjection = connection.CreateCommand())
+        {
+            clearProjection.CommandText = """
+                UPDATE episodes SET air_date=NULL,date_confidence='Unknown',title='Tribute to Patrice'
+                 WHERE id IN (6301,6302);
+                """;
+            clearProjection.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var restored = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(2, restored);
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = "SELECT COUNT(*) FROM episodes WHERE id IN (6301,6302) AND air_date='2011-12-03'";
+            Equal(2L, Convert.ToInt64(verify.ExecuteScalar(), CultureInfo.InvariantCulture));
+        }
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void VerifiedUnmaskedOa20DateBecomesDurableArchiveAuthority()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "rv-unmasked-oa20-date-" + Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(directory, "unmasked-oa20.db"));
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name)
+                VALUES('Unmasked','Unmasked'),('Opie & Anthony','Opie & Anthony');
+
+                INSERT INTO episodes(id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,hidden)
+                VALUES
+                  (6401,(SELECT id FROM collections WHERE name='Unmasked'),NULL,'Unknown',
+                   'Opie and Anthony','Unplayed',$now,$now,0),
+                  (6402,(SELECT id FROM collections WHERE name='Opie & Anthony'),NULL,'Unknown',
+                   'Unrelated O&A archive item','Unplayed',$now,$now,0);
+
+                INSERT INTO media_files(id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,storage_state,is_preferred)
+                VALUES
+                  (7401,6401,$unmaskedPath,'Unmasked Opie and Anthony.mp3',100,$now,0,$now,3600000,'AvailableOffline',1),
+                  (7402,6402,$oaPath,'unmasked_opie_and_anthony.mp3',100,$now,0,$now,1000,'AvailableOffline',1);
+                """;
+            command.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            command.Parameters.AddWithValue("$unmaskedPath", Path.Combine(directory, "Unmasked Opie and Anthony.mp3"));
+            command.Parameters.AddWithValue("$oaPath", Path.Combine(directory, "oa", "unmasked_opie_and_anthony.mp3"));
+            command.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var migrated = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(1, migrated);
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = """
+                SELECT
+                  (SELECT air_date FROM episodes WHERE id=6401),
+                  (SELECT date_confidence FROM episodes WHERE id=6401),
+                  (SELECT air_date FROM episodes WHERE id=6402),
+                  (SELECT COUNT(*) FROM research_field_provenance
+                    WHERE episode_id=6401 AND field_name='air_date' AND value_text='2014-04-17'
+                      AND source_kind='system' AND protected=1 AND active=1),
+                  (SELECT source_label FROM research_field_provenance
+                    WHERE episode_id=6401 AND field_name='air_date' AND value_text='2014-04-17'
+                    ORDER BY id DESC LIMIT 1);
+                """;
+            using var reader = verify.ExecuteReader();
+            True(reader.Read());
+            Equal("2014-04-17", reader.GetString(0));
+            Equal("Research authoritative", reader.GetString(1));
+            True(reader.IsDBNull(2), "The same filename outside Unmasked received the verified date.");
+            Equal(1L, reader.GetInt64(3));
+            True(reader.GetString(4).Contains("SiriusXM O&A20", StringComparison.Ordinal));
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var clearProjection = connection.CreateCommand())
+        {
+            clearProjection.CommandText = "UPDATE episodes SET air_date=NULL,date_confidence='Unknown' WHERE id=6401;";
+            clearProjection.ExecuteNonQuery();
+        }
+
+        using (var connection = database.OpenConnection())
+        {
+            var restored = ResearchDateAuthoritySynchronizer.SynchronizeAsync(connection).GetAwaiter().GetResult();
+            Equal(1, restored);
+        }
+
+        using (var connection = database.OpenConnection())
+        using (var verify = connection.CreateCommand())
+        {
+            verify.CommandText = "SELECT air_date FROM episodes WHERE id=6401;";
+            Equal("2014-04-17", Convert.ToString(verify.ExecuteScalar(), CultureInfo.InvariantCulture));
+        }
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         try { Directory.Delete(directory, true); } catch { }
     }
 }
@@ -4467,10 +5935,10 @@ static void DedicatedServerFoundationIsUiIsolatedAndRevisionSafe()
     True(serverProject.Contains("RadioVault.Server", StringComparison.Ordinal));
     True(serverProject.Contains("TheRadioVault.Infrastructure", StringComparison.Ordinal));
     True(!serverProject.Contains("TheRadioVault.Presentation", StringComparison.Ordinal));
-    var serverView = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
-    True(serverView.Contains("Background archive service", StringComparison.Ordinal));
-    True(serverView.Contains("It contains settings only", StringComparison.Ordinal));
-    True(!serverView.Contains("Dashboard", StringComparison.Ordinal));
+    var serverView = ReadServerAdministrationViews();
+    True(serverView.Contains("Archive administration", StringComparison.Ordinal));
+    True(serverView.Contains("ServerDashboardView", StringComparison.Ordinal));
+    True(serverView.Contains("Your archive at a glance", StringComparison.Ordinal));
     True(!serverView.Contains("Now Playing", StringComparison.Ordinal));
     var webServer = ReadWebServerSourceBundle();
     True(webServer.Contains("Re-resolve once before returning a 404", StringComparison.Ordinal));
@@ -4505,6 +5973,49 @@ static void DedicatedServerFoundationIsUiIsolatedAndRevisionSafe()
         Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
         Directory.Delete(directory, recursive: true);
     }
+}
+
+static void DedicatedServerHealthPollingNeverBlocksSettingsUi()
+{
+    var viewModel = File.ReadAllText(Path.Combine(
+        SourceRoot(), "TheRadioVault.Server", "ViewModels", "ServerSettingsViewModel.cs"));
+    True(viewModel.Contains("HealthRefreshInterval = TimeSpan.FromMinutes(5)", StringComparison.Ordinal));
+    True(viewModel.Contains("_healthRefreshGate.WaitAsync(0)", StringComparison.Ordinal));
+    True(viewModel.Contains("Task.Run(runtime.GetHealthSnapshot", StringComparison.Ordinal));
+    True(viewModel.Contains("Task.Run(() => new ServerDetailSnapshot", StringComparison.Ordinal));
+    True(!viewModel.Contains("if (DateTimeOffset.UtcNow - _lastHealthRefresh >= TimeSpan.FromSeconds(5)) RefreshHealth();", StringComparison.Ordinal));
+}
+
+static void DedicatedServerAdministrationUsesFocusedScreens()
+{
+    var root = SourceRoot();
+    var shell = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    True(shell.Contains("TabStripPlacement=\"Left\"", StringComparison.Ordinal));
+    True(shell.Contains("SelectedIndex=\"0\"", StringComparison.Ordinal));
+    foreach (var section in new[]
+             {
+                 "ServerDashboardView", "ServerLibraryView", "ServerReconciliationView", "ServerAutomationView",
+                 "ServerKnowledgeView", "ServerTranscriptionView", "ServerAccessView", "ServerRecoveryView"
+             })
+        True(shell.Contains(section, StringComparison.Ordinal));
+
+    var dashboard = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerDashboardView.axaml"));
+    True(dashboard.Contains("Your archive at a glance", StringComparison.Ordinal));
+    True(dashboard.Contains("ArchiveReconciliationDashboardText", StringComparison.Ordinal));
+    True(dashboard.Contains("DatabaseHealthText", StringComparison.Ordinal));
+
+    var reconciliation = File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "Views", "ServerReconciliationView.axaml"));
+    True(reconciliation.Contains("RunArchiveReconciliationCommand", StringComparison.Ordinal));
+    True(reconciliation.Contains("ExportArchiveReconciliationReportCommand", StringComparison.Ordinal));
+    True(reconciliation.Contains("ExportArchiveDateAuthorityEvidenceCommand", StringComparison.Ordinal));
+    True(reconciliation.Contains("ArchiveReconciliationBroadcastComparisonText", StringComparison.Ordinal));
+    True(reconciliation.Contains("ArchiveReconciliationYearDifferences", StringComparison.Ordinal));
+    True(reconciliation.Contains("ArchiveReconciliationSplitCandidates", StringComparison.Ordinal));
+    True(reconciliation.Contains("files interpreted differently", StringComparison.OrdinalIgnoreCase) ||
+         File.ReadAllText(Path.Combine(root, "TheRadioVault.Server", "ViewModels", "ServerSettingsViewModel.ArchiveReconciliation.cs"))
+             .Contains("files interpreted differently", StringComparison.OrdinalIgnoreCase));
+    True(reconciliation.Contains("PrepareMediaConsolidationCommand", StringComparison.Ordinal));
+    True(reconciliation.Contains("does not rename, move, merge or delete media", StringComparison.Ordinal));
 }
 
 static void LoopbackNativeHandoffMapsServerOwnership()
@@ -4574,7 +6085,7 @@ static void DedicatedServerOwnsTranscriptionWorkers()
     True(host.Contains("LoopbackVoiceLearningCoordinator", StringComparison.Ordinal));
     True(!host.Contains("RegisterSingleton<TranscriptionCoordinator>", StringComparison.Ordinal));
 
-    var serverView = File.ReadAllText(Path.Combine(SourceRoot(), "TheRadioVault.Server", "Views", "ServerSettingsWindow.axaml"));
+    var serverView = ReadServerAdministrationViews();
     True(serverView.Contains("TRANSCRIPTION SERVICE", StringComparison.Ordinal));
     True(serverView.Contains("Install recommended transcription setup", StringComparison.Ordinal));
 }
@@ -5449,6 +6960,16 @@ static string ReadWebServerSourceBundle()
     return string.Join(Environment.NewLine, sources.Select(File.ReadAllText));
 }
 
+static string ReadServerAdministrationViews()
+{
+    var views = Path.Combine(SourceRoot(), "TheRadioVault.Server", "Views");
+    return string.Join(
+        Environment.NewLine,
+        Directory.GetFiles(views, "Server*.axaml")
+            .OrderBy(path => path, StringComparer.Ordinal)
+            .Select(File.ReadAllText));
+}
+
 static void Equal<T>(T expected, T actual)
 {
     if (!EqualityComparer<T>.Default.Equals(expected, actual))
@@ -5920,7 +7441,7 @@ sealed class RssScenarioHandler : HttpMessageHandler
             var newer = IncludeNewEpisode
                 ? """
                   <item>
-                    <title>Bennington - New episode</title>
+                    <title>Bennington 2026-08-12</title>
                     <guid>bennington-new</guid>
                     <pubDate>Thu, 13 Aug 2026 12:00:00 GMT</pubDate>
                     <enclosure url="https://media.example/bennington-new.mp3?token=private-audio" type="audio/mpeg" />
@@ -5931,7 +7452,7 @@ sealed class RssScenarioHandler : HttpMessageHandler
                 <?xml version="1.0" encoding="utf-8"?>
                 <rss version="2.0"><channel><title>Private Bennington</title>
                   <item>
-                    <title>Bennington - Existing episode</title>
+                    <title>Bennington 2026-08-11</title>
                     <guid>bennington-existing</guid>
                     <pubDate>Wed, 12 Aug 2026 12:00:00 GMT</pubDate>
                     <enclosure url="https://media.example/bennington-existing.mp3?token=private-audio" type="audio/mpeg" />
@@ -5968,6 +7489,11 @@ sealed class CompositionCycleA
 {
     public CompositionCycleA(CompositionCycleB dependency) => Dependency = dependency;
     public CompositionCycleB Dependency { get; }
+}
+
+sealed class InlineProgress<T>(Action<T> report) : IProgress<T>
+{
+    public void Report(T value) => report(value);
 }
 
 sealed class CompositionCycleB

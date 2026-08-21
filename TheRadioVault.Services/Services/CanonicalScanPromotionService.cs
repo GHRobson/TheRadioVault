@@ -29,7 +29,7 @@ public sealed class CanonicalScanPromotionService
             !TableExists(connection, "episode_canonical_map"))
             return CanonicalScanPromotionResult.Empty;
 
-        var candidates = ReadUnmappedCandidates(connection);
+        var candidates = ReadUnmappedCandidates(connection, truthRunId);
         if (candidates.Count == 0) return CanonicalScanPromotionResult.Empty;
 
         var broadcastsAdded = 0;
@@ -119,7 +119,9 @@ public sealed class CanonicalScanPromotionService
             needsReview);
     }
 
-    private static IReadOnlyList<ScannedEpisodeCandidate> ReadUnmappedCandidates(SqliteConnection connection)
+    private static IReadOnlyList<ScannedEpisodeCandidate> ReadUnmappedCandidates(
+        SqliteConnection connection,
+        long truthRunId)
     {
         var builders = new Dictionary<long, CandidateBuilder>();
         using var command = connection.CreateCommand();
@@ -140,8 +142,15 @@ public sealed class CanonicalScanPromotionService
                AND NOT EXISTS(
                    SELECT 1 FROM episode_canonical_map map WHERE map.episode_id=e.id
                )
+               AND NOT EXISTS(
+                   SELECT 1
+                     FROM library_truth_files truth_file
+                    WHERE truth_file.run_id=$truthRun
+                      AND truth_file.current_episode_id=e.id
+               )
              ORDER BY e.id,COALESCE(mf.is_preferred,0) DESC,mf.id
             """;
+        command.Parameters.AddWithValue("$truthRun", truthRunId);
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {

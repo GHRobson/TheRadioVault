@@ -117,7 +117,7 @@ static void LatestSchemaContainsRequiredPersistenceBoundaries()
             "recording_coverages", "episode_canonical_map", "library_truth_adoption_runs",
             "library_truth_adoption_items", "library_truth_adoption_conflicts",
             "saved_collections", "saved_collection_items", "rss_feed_subscriptions", "rss_feed_items",
-            "live_radio_schedule_entries", "live_radio_show_rules"
+            "live_radio_schedule_entries", "live_radio_show_rules", "managed_archive_state"
         ]);
         AssertObjectsExist(connection, "index",
         [
@@ -125,7 +125,8 @@ static void LatestSchemaContainsRequiredPersistenceBoundaries()
             "ix_transcription_jobs_state_requested", "ux_library_truth_adoption_completed_truth",
             "ux_saved_collections_name", "ix_saved_collection_items_order",
             "ix_rss_feed_subscriptions_due", "ix_rss_feed_items_feed_status",
-            "ix_live_radio_schedule_current", "ix_live_radio_schedule_episode", "ix_live_radio_show_rules_active"
+            "ix_live_radio_schedule_current", "ix_live_radio_schedule_episode", "ix_live_radio_show_rules_active",
+            "ix_library_folders_managed_archive"
         ]);
 
         AssertColumnsExist(connection, "transcript_segments", ["speaker_key", "content_kind", "is_reviewed"]);
@@ -156,7 +157,8 @@ static void LatestSchemaContainsRequiredPersistenceBoundaries()
         AssertColumnsExist(connection, "saved_collection_items",
             ["collection_id", "episode_id", "item_position", "added_at"]);
         AssertColumnsExist(connection, "rss_feed_subscriptions",
-            ["display_url", "protected_source", "library_folder_id", "check_interval_minutes", "initialized", "etag", "next_check_at"]);
+            ["display_url", "protected_source", "library_folder_id", "collection_id", "check_interval_minutes", "initialized", "etag", "next_check_at"]);
+        AssertColumnsExist(connection, "library_folders", ["is_managed_archive"]);
         AssertColumnsExist(connection, "rss_feed_items",
             ["feed_id", "stable_key", "enclosure_hash", "file_path", "content_hash", "status"]);
         AssertColumnsExist(connection, "live_radio_schedule_entries",
@@ -176,8 +178,8 @@ static void SchemaInitializationRecordsMigrationOnce()
         new SqliteDatabase(path).Initialize();
 
         using var connection = OpenRawConnection(path);
-        Equal(51L, ScalarLong(connection, "PRAGMA user_version"), "schema version after repeated initialization");
-        Equal(4L, ScalarLong(connection, "SELECT COUNT(*) FROM schema_migrations"), "migration history row count");
+        Equal(52L, ScalarLong(connection, "PRAGMA user_version"), "schema version after repeated initialization");
+        Equal(5L, ScalarLong(connection, "SELECT COUNT(*) FROM schema_migrations"), "migration history row count");
         Equal("Create migration history", ScalarString(
             connection,
             "SELECT name FROM schema_migrations WHERE version=48"), "migration 48 name");
@@ -190,6 +192,9 @@ static void SchemaInitializationRecordsMigrationOnce()
         Equal("Create Radio Vault Live schedule", ScalarString(
             connection,
             "SELECT name FROM schema_migrations WHERE version=51"), "migration 51 name");
+        Equal("Create managed archive ownership", ScalarString(
+            connection,
+            "SELECT name FROM schema_migrations WHERE version=52"), "migration 52 name");
     }
     finally
     {
@@ -277,7 +282,7 @@ static void Schema43UpgradesSafely()
             "library_truth_adoption_items", "library_truth_adoption_conflicts"
         ]);
 
-        var backups = Directory.GetFiles(directory, "schema43.pre-schema-51-*.sqlite");
+        var backups = Directory.GetFiles(directory, "schema43.pre-schema-52-*.sqlite");
         Equal(1, backups.Length, "pre-migration backup count");
         using var backup = OpenRawConnection(backups[0]);
         Equal(43L, ScalarLong(backup, "PRAGMA user_version"), "backup schema version");
@@ -355,14 +360,14 @@ static void MigrationCatalogRejectsInvalidVersions()
         var path = Path.Combine(directory, "newer.sqlite");
         using (var connection = OpenRawConnection(path))
         {
-            Execute(connection, "PRAGMA user_version=52; CREATE TABLE future_marker(id INTEGER PRIMARY KEY);");
+            Execute(connection, "PRAGMA user_version=53; CREATE TABLE future_marker(id INTEGER PRIMARY KEY);");
             Throws<InvalidOperationException>(() => CreateTestMigrationRunner().EnsureCompatible(connection));
-            Equal(52L, ScalarLong(connection, "PRAGMA user_version"), "newer schema version after runner rejection");
+            Equal(53L, ScalarLong(connection, "PRAGMA user_version"), "newer schema version after runner rejection");
         }
 
         Throws<InvalidOperationException>(() => new SqliteDatabase(path).Initialize());
         using var unchanged = OpenRawConnection(path);
-        Equal(52L, ScalarLong(unchanged, "PRAGMA user_version"), "newer schema version after initialization rejection");
+        Equal(53L, ScalarLong(unchanged, "PRAGMA user_version"), "newer schema version after initialization rejection");
         Equal(0L, ScalarLong(unchanged, "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='collections'"), "legacy writes after newer-schema rejection");
     }
     finally

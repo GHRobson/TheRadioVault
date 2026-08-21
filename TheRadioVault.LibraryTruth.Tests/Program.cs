@@ -1,6 +1,8 @@
+using System.Text.Json;
 using TheRadioVault.Core.LibraryTruth;
 using TheRadioVault.Core.Services;
 using TheRadioVault.Data.Database;
+using TheRadioVault.Services.Models;
 using TheRadioVault.Services.Services;
 
 var tests = new (string Name, Action Run)[]
@@ -24,6 +26,9 @@ var tests = new (string Name, Action Run)[]
     ("Library Truth reassembles annotated multipart families", LibraryTruthReassemblesAnnotatedMultipartFamilies),
     ("Library Truth assembles Roman multipart files into one broadcast", LibraryTruthGroupsRomanMultipart),
     ("Library Truth preserves genuinely unknown dates", LibraryTruthPreservesUnknownDate),
+    ("Library Truth preserves established archive clips without inventing dates", LibraryTruthPreservesEstablishedArchiveClips),
+    ("Library Truth exports only rehearsals from the current reconciliation", LibraryTruthOmitsStaleRehearsalEvidence),
+    ("Library Truth preserves durable Research dates for undated multipart files", LibraryTruthPreservesDurableResearchDate),
     ("Library Truth shadow index separates broadcasts recordings and files", LibraryTruthShadowIndexSeparatesLayers),
     ("Library Truth treats alternate recordings as normal structure", LibraryTruthTreatsAlternateRecordingsAsNormal),
     ("Library Truth keeps identical audio with conflicting dates separate", LibraryTruthKeepsConflictingDatesSeparate),
@@ -43,6 +48,7 @@ var tests = new (string Name, Action Run)[]
     ("Library Truth prepares guarded adoption plans without live writes", LibraryTruthPreparesGuardedAdoptionPreview),
     ("Library Truth rehearses adoption on a disposable clone and verifies rollback", LibraryTruthRehearsalRollsBackDisposableClone),
     ("Library Truth guarded adoption commits only the verified plan", LibraryTruthGuardedAdoptionCommitsVerifiedPlan),
+    ("Library Truth retention preserves historically adopted runs", LibraryTruthRetentionPreservesHistoricallyAdoptedRun),
     ("Library Truth classifies metadata conflicts and preserves alternates", LibraryTruthClassifiesMetadataConflicts),
     ("Library Truth refines generated metadata policies", LibraryTruthRefinesGeneratedMetadataPolicies),
 };
@@ -189,6 +195,37 @@ static void LibraryTruthRecoversCompactRafMonthDay()
     Equal(new DateOnly(2003, 11, 24), parsed.AirDate);
     Equal("Midday", parsed.BroadcastSlot);
     Equal(1, parsed.PartNumber);
+}
+
+static void LibraryTruthPreservesDurableResearchDate()
+{
+    var date = new DateOnly(2011, 11, 1);
+    var input = new LibraryTruthFileInput
+    {
+        MediaFileId = 811,
+        CurrentEpisodeId = 811,
+        Path = @"D:\Radio\Opie and Anthony\Patrice O'Neal Tribute Part 7.mp3",
+        OriginalFilename = "Patrice O'Neal Tribute Part 7.mp3",
+        CurrentCollectionName = "Opie & Anthony",
+        CurrentAirDate = date,
+        CurrentDateConfidence = "Research authoritative",
+        CurrentPartNumber = 7,
+        CurrentTotalParts = 18,
+        AssignedCollectionName = "Opie & Anthony"
+    };
+
+    var parsed = new LibraryTruthParser().Parse(input, new LibraryTruthFolderContext
+    {
+        ContextKey = input.DirectoryPath,
+        AssignedCollectionName = "Opie & Anthony",
+        DominantCollectionName = "Opie & Anthony",
+        FileCount = 18
+    });
+
+    Equal(date, parsed.AirDate);
+    Equal(7, parsed.PartNumber);
+    True(!parsed.Warnings.Any(warning => warning.Code == "unknown-date"));
+    True(parsed.Evidence.Any(evidence => evidence.Source == "durable Library metadata"));
 }
 
 
@@ -402,6 +439,162 @@ static void LibraryTruthPreservesUnknownDate()
     });
     True(parsed.AirDate is null);
     True(parsed.Warnings.Any(x => x.Code == "unknown-date"));
+}
+
+static void LibraryTruthPreservesEstablishedArchiveClips()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var databasePath = Path.Combine(directory, "truth-archive-items.sqlite");
+    try
+    {
+        var database = new SqliteDatabase(databasePath);
+        database.Initialize();
+        var opieRoot = Path.Combine(directory, "Opie & Anthony");
+        var ronRoot = Path.Combine(directory, "The Ron & Ron Show");
+        var unmaskedRoot = Path.Combine(directory, "Unmasked");
+        using (var connection = database.OpenConnection())
+        {
+            using (var setup = connection.CreateCommand())
+            {
+                setup.CommandText = """
+                    INSERT OR IGNORE INTO collections(name,sort_name) VALUES('Opie & Anthony','Opie & Anthony');
+                    INSERT OR IGNORE INTO collections(name,sort_name) VALUES('The Ron & Ron Show','The Ron & Ron Show');
+                    INSERT OR IGNORE INTO collections(name,sort_name) VALUES('Unmasked','Unmasked');
+                    INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
+                    VALUES($opie,(SELECT id FROM collections WHERE name='Opie & Anthony'),1,1);
+                    INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
+                    VALUES($ron,(SELECT id FROM collections WHERE name='The Ron & Ron Show'),1,1);
+                    INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
+                    VALUES($unmasked,(SELECT id FROM collections WHERE name='Unmasked'),1,1);
+                    """;
+                setup.Parameters.AddWithValue("$opie", opieRoot);
+                setup.Parameters.AddWithValue("$ron", ronRoot);
+                setup.Parameters.AddWithValue("$unmasked", unmaskedRoot);
+                setup.ExecuteNonQuery();
+            }
+
+            var rows = new[]
+            {
+                ("Opie & Anthony", Path.Combine(opieRoot, "oadementedworldcd", "01 The Virus.mp3"), "ARCHIVE-CLIP-1"),
+                ("Opie & Anthony", Path.Combine(opieRoot, "earlychipchipperson", "02 Origin Story.mp3"), "ARCHIVE-CLIP-2"),
+                ("Opie & Anthony", Path.Combine(opieRoot, "AFRO Shows", "Opie & Anthony - AFRO - Cake Horn.mp3"), "ARCHIVE-CLIP-3"),
+                ("The Ron & Ron Show", Path.Combine(ronRoot, "1997 Ron & Ron The Coach.mp3"), "ARCHIVE-CLIP-4"),
+                ("Unmasked", Path.Combine(unmaskedRoot, "Unmasked Mystery Guest.mp3"), "REAL-UNKNOWN-1")
+            };
+            foreach (var (collection, path, uid) in rows)
+            {
+                using var insert = connection.CreateCommand();
+                insert.CommandText = """
+                    INSERT INTO episodes(collection_id,date_confidence,title,status,date_added,updated_at,broadcast_uid)
+                    VALUES((SELECT id FROM collections WHERE name=$collection),'Unknown',$title,'Unplayed',$now,$now,$uid);
+                    INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
+                    VALUES((SELECT id FROM episodes WHERE broadcast_uid=$uid),$path,$filename,1000,$now,0,$now,900000,$hash,'AvailableOffline',1);
+                    INSERT INTO research_broadcasts(identity_key,collection_id,episode_id,source_broadcast_id,headline,research_json,research_state,existence_status,confidence,created_at,updated_at)
+                    VALUES($uid,(SELECT id FROM collections WHERE name=$collection),(SELECT id FROM episodes WHERE broadcast_uid=$uid),$uid,$title,
+                           '{"research":{"catalogue":{"date_review_status":"pending"}}}','conflicting_information','in_library',50,$now,$now);
+                    """;
+                insert.Parameters.AddWithValue("$collection", collection);
+                insert.Parameters.AddWithValue("$title", Path.GetFileNameWithoutExtension(path));
+                insert.Parameters.AddWithValue("$uid", uid);
+                insert.Parameters.AddWithValue("$path", path);
+                insert.Parameters.AddWithValue("$filename", Path.GetFileName(path));
+                insert.Parameters.AddWithValue("$hash", uid);
+                insert.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+                insert.ExecuteNonQuery();
+            }
+        }
+
+        var engine = new LibraryTruthEngine(database);
+        var summary = engine.BuildShadowIndex().Summary;
+        var adoption = engine.GetAdoptionSummary();
+        Equal(4, adoption.PreservedArchiveItems);
+        Equal(1, adoption.BlockedBroadcasts);
+        Equal(1, summary.ProposedBroadcasts);
+        Equal(1, summary.UnknownDates);
+        Equal(4, engine.GetBroadcasts("preserved-archive-items").Count);
+        Equal(4, engine.GetFiles().Count(file => file.Disposition == "Archive item"));
+        True(engine.GetFiles().Where(file => file.Disposition == "Archive item").All(file => file.Warnings == "No warnings."));
+        var preservedPreviews = engine.GetAdoptionPreviews("preserved-archive-items");
+        True(preservedPreviews.All(preview => !preview.EligibleForGuardedAdoption && preview.PlannedWriteCount == 0));
+
+        var dateEvidencePath = Path.Combine(directory, "unresolved.trvdateevidence.json");
+        new ResearchDateAuthorityEvidenceService(database).ExportLatest(dateEvidencePath, "test");
+        var dateEvidence = JsonSerializer.Deserialize<ResearchDateAuthorityEvidenceReport>(
+            File.ReadAllText(dateEvidencePath), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Equal(1, dateEvidence.Summary.UnresolvedBroadcasts);
+        Equal("Unmasked", dateEvidence.UnresolvedBroadcasts.Single().CollectionName);
+
+        var dateReviews = new ResearchWorkspaceService(database)
+            .GetCatalogueDateReviewsAsync()
+            .GetAwaiter()
+            .GetResult();
+        Equal(1, dateReviews.Count);
+        Equal("Unmasked", dateReviews.Single().ShowName);
+    }
+    finally
+    {
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void LibraryTruthOmitsStaleRehearsalEvidence()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var databasePath = Path.Combine(directory, "truth-stale-rehearsal.sqlite");
+    try
+    {
+        var database = new SqliteDatabase(databasePath);
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name) VALUES('Bennington','Bennington');
+                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
+                VALUES($root,(SELECT id FROM collections WHERE name='Bennington'),1,1);
+                INSERT INTO episodes(collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid)
+                VALUES((SELECT id FROM collections WHERE name='Bennington'),'2016-05-17','High','Show','Unplayed',$now,$now,'STALE-REHEARSAL');
+                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
+                VALUES((SELECT id FROM episodes WHERE broadcast_uid='STALE-REHEARSAL'),$path,'Bennington 2016-05-17.mp3',1000,$now,0,$now,10800000,'STALE-PARTIAL','AvailableOffline',1);
+                """;
+            setup.Parameters.AddWithValue("$root", directory);
+            setup.Parameters.AddWithValue("$path", Path.Combine(directory, "Bennington 2016-05-17.mp3"));
+            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            setup.ExecuteNonQuery();
+        }
+
+        var engine = new LibraryTruthEngine(database);
+        var oldRun = engine.BuildShadowIndex().Summary.RunId;
+        using (var connection = database.OpenConnection())
+        using (var rehearsal = connection.CreateCommand())
+        {
+            rehearsal.CommandText = """
+                INSERT INTO library_truth_rehearsal_runs(truth_run_id,started_at,completed_at,status,rollback_verified,message)
+                VALUES($run,$now,$now,'completed',1,'Older rehearsal');
+                """;
+            rehearsal.Parameters.AddWithValue("$run", oldRun);
+            rehearsal.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.AddMonths(-1).ToString("O"));
+            rehearsal.ExecuteNonQuery();
+        }
+
+        var currentRun = engine.BuildShadowIndex().Summary.RunId;
+        var exportPath = Path.Combine(directory, "reconciliation.json");
+        engine.ExportLatest(exportPath, "test");
+        var report = JsonSerializer.Deserialize<LibraryTruthExportReport>(
+            File.ReadAllText(exportPath), new JsonSerializerOptions(JsonSerializerDefaults.Web))!;
+        Equal(currentRun, report.Summary.RunId);
+        True(!report.RehearsalMatchesAnalysis);
+        Equal(0L, report.Rehearsal.Id);
+        Equal(0, report.RehearsalItems.Count);
+        True(report.RehearsalNotice.Contains(oldRun.ToString(), StringComparison.Ordinal));
+        True(report.RehearsalNotice.Contains(currentRun.ToString(), StringComparison.Ordinal));
+    }
+    finally
+    {
+        try { Directory.Delete(directory, true); } catch { }
+    }
 }
 
 static LibraryTruthFileInput TruthInput(string path, string assignedCollection, long id = 1)
@@ -1328,6 +1521,91 @@ static void LibraryTruthGuardedAdoptionCommitsVerifiedPlan()
         liveReader.Close();
 
         True(!adoption.GetAdoptionEligibility().CanAdopt);
+    }
+    finally
+    {
+        try { Directory.Delete(directory, true); } catch { }
+    }
+}
+
+static void LibraryTruthRetentionPreservesHistoricallyAdoptedRun()
+{
+    var directory = Path.Combine(Path.GetTempPath(), "RadioVaultTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(directory);
+    var databasePath = Path.Combine(directory, "truth-retention.sqlite");
+    try
+    {
+        var database = new SqliteDatabase(databasePath);
+        database.Initialize();
+        using (var connection = database.OpenConnection())
+        using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = """
+                INSERT OR IGNORE INTO collections(name,sort_name) VALUES('Ron & Fez','Ron & Fez');
+                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
+                VALUES('D:\Radio\Retention',(SELECT id FROM collections WHERE name='Ron & Fez'),1,1);
+                INSERT INTO episodes(collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid)
+                VALUES((SELECT id FROM collections WHERE name='Ron & Fez'),'2005-05-12','High','Retention test','Unplayed',$now,$now,'RETENTION-A');
+                INSERT INTO media_files(episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,duration_ms,partial_hash,storage_state,is_preferred)
+                VALUES((SELECT id FROM episodes WHERE broadcast_uid='RETENTION-A'),'D:\Radio\Retention\a.mp3','R&F 05-12-2005.mp3',1000,$now,0,$now,10800000,'RETENTION-ONE','AvailableOffline',1);
+                """;
+            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+            setup.ExecuteNonQuery();
+        }
+
+        var engine = new LibraryTruthEngine(database);
+        var adoptedTruthRunId = engine.BuildShadowIndex().Summary.RunId;
+        using (var connection = database.OpenConnection())
+        using (var transaction = connection.BeginTransaction())
+        {
+            long rehearsalRunId;
+            using (var rehearsal = connection.CreateCommand())
+            {
+                rehearsal.Transaction = transaction;
+                rehearsal.CommandText = """
+                    INSERT INTO library_truth_rehearsal_runs(
+                        truth_run_id,started_at,completed_at,status,rollback_verified,message)
+                    VALUES($truth,$now,$now,'completed',1,'Historical rehearsal')
+                    RETURNING id;
+                    """;
+                rehearsal.Parameters.AddWithValue("$truth", adoptedTruthRunId);
+                rehearsal.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+                rehearsalRunId = Convert.ToInt64(rehearsal.ExecuteScalar());
+            }
+            using (var adoption = connection.CreateCommand())
+            {
+                adoption.Transaction = transaction;
+                adoption.CommandText = """
+                    INSERT INTO library_truth_adoption_runs(
+                        truth_run_id,rehearsal_run_id,app_version,started_at,completed_at,status,
+                        commit_verified,message)
+                    VALUES($truth,$rehearsal,'retention-test',$now,$now,'completed',1,'Historical adoption');
+                    """;
+                adoption.Parameters.AddWithValue("$truth", adoptedTruthRunId);
+                adoption.Parameters.AddWithValue("$rehearsal", rehearsalRunId);
+                adoption.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToString("O"));
+                adoption.ExecuteNonQuery();
+            }
+            transaction.Commit();
+        }
+
+        for (var index = 0; index < 5; index++)
+            engine.BuildShadowIndex();
+
+        using var verify = database.OpenConnection();
+        using var command = verify.CreateCommand();
+        command.CommandText = """
+            SELECT
+                EXISTS(SELECT 1 FROM library_truth_runs WHERE id=$truth),
+                (SELECT COUNT(*) FROM library_truth_adoption_runs WHERE truth_run_id=$truth),
+                (SELECT COUNT(*) FROM library_truth_runs WHERE status='completed');
+            """;
+        command.Parameters.AddWithValue("$truth", adoptedTruthRunId);
+        using var reader = command.ExecuteReader();
+        True(reader.Read());
+        Equal(1L, reader.GetInt64(0));
+        Equal(1L, reader.GetInt64(1));
+        Equal(6L, reader.GetInt64(2));
     }
     finally
     {

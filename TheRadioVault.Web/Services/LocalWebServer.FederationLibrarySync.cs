@@ -181,20 +181,18 @@ public sealed partial class LocalWebServer
         IReadOnlyList<WebQueueItem> queue,
         int limit)
     {
-        limit = Math.Clamp(limit, 1, 50);
-        var shows = WebEpisodeQuery.GetShows(episodes)
-            .Select(x => new WebShowSummary(x.Show, x.Count))
-            .ToArray();
+        var discovery = WebArchiveDiscoveryProjection.Build(episodes, limit, DateTime.Today);
         return new WebAnywhereBootstrap
         {
             Server = BuildServerInfo(),
-            Library = BuildLibrarySummary(episodes, shows.Length),
-            Shows = shows,
-            Years = WebEpisodeQuery.GetYears(episodes),
-            ContinueListening = WebEpisodeQuery.Apply(episodes, "continue", string.Empty, string.Empty, limit, DateTime.Today),
-            Recent = WebEpisodeQuery.Apply(episodes, "recent", string.Empty, string.Empty, limit, DateTime.Today),
-            Favourites = WebEpisodeQuery.Apply(episodes, "favorites", string.Empty, string.Empty, limit, DateTime.Today),
-            OnThisDay = WebEpisodeQuery.Apply(episodes, "onthisday", string.Empty, string.Empty, limit, DateTime.Today),
+            Library = discovery.Library,
+            Shows = discovery.Shows,
+            Years = discovery.Years,
+            ContinueListening = discovery.ContinueListening,
+            Recent = discovery.Recent,
+            Favourites = discovery.Favourites,
+            OnThisDay = discovery.OnThisDay,
+            Unheard = discovery.Unheard,
             Playback = _archive.GetPlaybackSession(),
             Queue = queue,
             GeneratedAt = DateTimeOffset.UtcNow

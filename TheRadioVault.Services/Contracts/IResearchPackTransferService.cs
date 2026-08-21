@@ -1,3 +1,4 @@
+using TheRadioVault.Core.Services;
 using TheRadioVault.Services.Models;
 
 namespace TheRadioVault.Services.Contracts;
@@ -14,5 +15,7 @@ public interface IResearchPackTransferService
         IProgress<ResearchPackTransferProgress>? progress = null,
         CancellationToken cancellationToken = default);
     Task CancelImportAsync(CancellationToken cancellationToken = default);
-    Task<ResearchPackExportSummary> ExportAsync(CancellationToken cancellationToken = default);
+    Task<ResearchPackExportSummary> ExportAsync(
+        KnowledgeExportScope scope = KnowledgeExportScope.Complete,
+        CancellationToken cancellationToken = default);
 }

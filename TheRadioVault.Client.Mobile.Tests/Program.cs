@@ -1,6 +1,7 @@
 using System.Text.Json;
 using TheRadioVault.Client.Mobile;
 using TheRadioVault.Client.Mobile.Downloads;
+using TheRadioVault.Client.Mobile.Artwork;
 using TheRadioVault.Client.Mobile.Explore;
 using TheRadioVault.Client.Mobile.Knowledge;
 using TheRadioVault.Client.Mobile.Library;
@@ -41,17 +42,20 @@ var tests = new (string Name, Func<Task> Run)[]
     ("Downloaded progress synchronization preserves conflicts and newer offline state", DownloadedProgressSynchronizationPreservesAuthorityAsync),
     ("Explore coordinator warms pages and images into the offline cache", ExploreCoordinatorWarmsOfflineCacheAsync),
     ("Explore coordinator serializes concurrent cache refreshes", ExploreCoordinatorSerializesRefreshesAsync),
+    ("Artwork coordinator caches and coalesces image requests", ArtworkCoordinatorCachesAndCoalescesAsync),
     ("Knowledge coordinator builds offline Library coverage", KnowledgeCoordinatorBuildsOfflineCoverageAsync),
     ("Knowledge coordinator persists live snapshots", KnowledgeCoordinatorPersistsLiveSnapshotAsync),
     ("Knowledge coordinator sends explicit date-review decisions", KnowledgeCoordinatorSendsDateReviewDecisionAsync),
     ("Pairing coordinator preserves discovery state across failures", PairingCoordinatorPreservesDiscoveryStateAsync),
     ("Pairing coordinator owns pair and forget transitions", PairingCoordinatorOwnsPairAndForgetAsync),
     ("Library coordinator projects and filters the cached catalogue", LibraryCoordinatorProjectsCachedCatalogueAsync),
+    ("Library coordinator loads a direct broadcast cache-first", LibraryCoordinatorLoadsDirectBroadcastCacheFirstAsync),
     ("Library coordinator combines duplicate live show identities", LibraryCoordinatorCombinesLiveShowIdentitiesAsync),
     ("Library coordinator keeps archive search queries explicit", LibraryCoordinatorKeepsArchiveSearchExplicitAsync),
     ("Playback timeline maps multipart recordings", PlaybackTimelineMapsMultipartRecordingsAsync),
     ("Playback timeline protects decoder settling", PlaybackTimelineProtectsDecoderSettlingAsync),
     ("Playback timeline preserves completion until a real rewind", PlaybackTimelinePreservesCompletionAsync),
+    ("Explicit transcript playback survives summary refresh", ExplicitPlaybackStartSurvivesSummaryRefreshAsync),
     ("Live Radio stays outside personal playback state", LiveRadioStaysOutsidePersonalPlaybackStateAsync)
 };
 
@@ -77,6 +81,46 @@ if (failures.Count > 0)
     return 1;
 }
 return 0;
+
+static Task ExplicitPlaybackStartSurvivesSummaryRefreshAsync()
+{
+    var refreshed = new WebClientLibraryBroadcastSummary(
+        "broadcast:101",
+        101,
+        "BROADCAST-101",
+        1,
+        "Bennington",
+        new DateOnly(2018, 8, 14),
+        DateTimeOffset.UtcNow,
+        string.Empty,
+        "A broadcast",
+        string.Empty,
+        false,
+        true,
+        false,
+        3_600_000,
+        3_600_000,
+        DateTimeOffset.UtcNow,
+        null,
+        1,
+        1,
+        1,
+        false,
+        string.Empty,
+        "Transcript · 12:34: matching words",
+        100,
+        754_000);
+
+    var explicitStart = MobilePlaybackStartPosition.Apply(refreshed, 754_000);
+    Equal(754_000L, explicitStart.PositionMs, "Explicit transcript start");
+    Ensure(!explicitStart.Completed, "Explicit transcript playback remained completed.");
+    Ensure(explicitStart.InProgress, "Explicit transcript playback was not marked in progress.");
+
+    var normalResume = MobilePlaybackStartPosition.Apply(refreshed, null);
+    Equal(3_600_000L, normalResume.PositionMs, "Normal refreshed progress");
+    Ensure(normalResume.Completed, "Normal resume discarded refreshed completion.");
+    return Task.CompletedTask;
+}
 
 static async Task DownloadedProgressStaysIsolatedAsync()
 {
@@ -1080,6 +1124,32 @@ static async Task ExploreCoordinatorSerializesRefreshesAsync()
     finally { DeleteTemporaryDirectory(root); }
 }
 
+static async Task ArtworkCoordinatorCachesAndCoalescesAsync()
+{
+    var store = new FakeArtworkStore();
+    store.Images[101] = [1, 0, 1];
+    var transport = new FakeArtworkTransport();
+    transport.Images[202] = [2, 0, 2];
+    var coordinator = new MobileArtworkCoordinator(transport, store);
+
+    Ensure((await coordinator.LoadAsync(101, false))!.SequenceEqual(new byte[] { 1, 0, 1 }),
+        "Cached artwork was not available offline.");
+    Equal(0, transport.Requests, "Cached artwork network requests");
+
+    var requests = await Task.WhenAll(
+        coordinator.LoadAsync(202, true),
+        coordinator.LoadAsync(202, true));
+    Ensure(requests.All(value => value!.SequenceEqual(new byte[] { 2, 0, 2 })),
+        "Live artwork content");
+    Equal(1, transport.Requests, "Coalesced artwork network requests");
+    Ensure(store.Images[202].SequenceEqual(new byte[] { 2, 0, 2 }),
+        "Fetched artwork was not persisted.");
+
+    Ensure(await coordinator.LoadAsync(303, false) is null,
+        "Missing offline artwork unexpectedly used the network.");
+    Equal(1, transport.Requests, "Offline missing artwork network requests");
+}
+
 static async Task KnowledgeCoordinatorBuildsOfflineCoverageAsync()
 {
     var root = CreateTemporaryDirectory();
@@ -1304,6 +1374,33 @@ static async Task LibraryCoordinatorCombinesLiveShowIdentitiesAsync()
         var periods = await coordinator.LoadArchivePeriodsAsync(1, null, false, "the show", collections);
         Equal(3, periods.Periods.Single().BroadcastCount, "Combined live archive broadcasts");
         Equal(50, periods.Periods.Single().ProgressPercent, "Weighted live archive progress");
+    }
+    finally { DeleteTemporaryDirectory(root); }
+}
+
+static async Task LibraryCoordinatorLoadsDirectBroadcastCacheFirstAsync()
+{
+    var root = CreateTemporaryDirectory();
+    try
+    {
+        var cached = Summary(101, "Cached Broadcast", 0, false, null);
+        var remote = Summary(202, "Remote Broadcast", 0, false, null);
+        var cache = new MobileMetadataCache(root, "server-a");
+        cache.ReplaceCompleteLibrary("server-a", [cached], Overview(cached));
+        var transport = new FakeLibraryQueryTransport();
+        transport.DirectBroadcasts[202] = remote;
+        var coordinator = new MobileLibraryQueryCoordinator(transport, cache);
+
+        Equal(101L, (await coordinator.LoadBroadcastAsync(101, true))!.EpisodeId,
+            "Cached direct broadcast");
+        Equal(0, transport.DirectBroadcastRequests, "Cached direct lookup requests");
+        Equal(202L, (await coordinator.LoadBroadcastAsync(202, true))!.EpisodeId,
+            "Remote direct broadcast");
+        Equal(1, transport.DirectBroadcastRequests, "Remote direct lookup requests");
+        Equal(202L, coordinator.FindBroadcast(202)!.EpisodeId, "Persisted direct broadcast");
+        Ensure(await coordinator.LoadBroadcastAsync(303, false) is null,
+            "Offline direct lookup unexpectedly used the network.");
+        Equal(1, transport.DirectBroadcastRequests, "Offline direct lookup requests");
     }
     finally { DeleteTemporaryDirectory(root); }
 }
@@ -1653,6 +1750,7 @@ file sealed class FakePairingTransport : IMobilePairingTransport
 
 file sealed class FakeLibraryQueryTransport : IMobileLibraryQueryTransport
 {
+    public Dictionary<long, WebClientLibraryBroadcastSummary> DirectBroadcasts { get; } = [];
     public Dictionary<int, IReadOnlyList<WebClientLibraryBroadcastSummary>> BroadcastsByCollection { get; } = [];
     public Dictionary<int, IReadOnlyList<WebClientLibraryArchivePeriodSummary>> PeriodsByCollection { get; } = [];
     public IReadOnlyList<WebClientLibraryBroadcastSummary> DefaultBroadcasts { get; set; } = [];
@@ -1660,6 +1758,15 @@ file sealed class FakeLibraryQueryTransport : IMobileLibraryQueryTransport
     public IReadOnlyList<WebClientLibrarySearchSuggestion> SearchSuggestions { get; init; } = [];
     public List<FakeLibraryBrowseRequest> BrowseRequests { get; } = [];
     public int SuggestionRequests { get; private set; }
+    public int DirectBroadcastRequests { get; private set; }
+
+    public Task<WebClientLibraryBroadcastSummary> GetBroadcastSummaryAsync(
+        long episodeId,
+        CancellationToken cancellationToken = default)
+    {
+        DirectBroadcastRequests++;
+        return Task.FromResult(DirectBroadcasts[episodeId]);
+    }
 
     public Task<WebClientLibraryBrowseResult> BrowseAsync(
         string? searchText,
@@ -1712,6 +1819,29 @@ file sealed class FakeLibraryQueryTransport : IMobileLibraryQueryTransport
     {
         SuggestionRequests++;
         return Task.FromResult(SearchSuggestions);
+    }
+}
+
+file sealed class FakeArtworkStore : IMobileArtworkStore
+{
+    public Dictionary<long, byte[]> Images { get; } = [];
+    public byte[]? Read(long episodeId) => Images.GetValueOrDefault(episodeId);
+    public Task SaveAsync(long episodeId, byte[] content)
+    {
+        Images[episodeId] = content;
+        return Task.CompletedTask;
+    }
+}
+
+file sealed class FakeArtworkTransport : IMobileArtworkTransport
+{
+    public Dictionary<long, byte[]> Images { get; } = [];
+    public int Requests { get; private set; }
+    public async Task<byte[]> GetAsync(long episodeId)
+    {
+        Requests++;
+        await Task.Delay(10);
+        return Images[episodeId];
     }
 }
 
@@ -2051,6 +2181,7 @@ file sealed class FakeOfflineMutationTransport(
         long episodeId,
         bool favourite,
         string mutationId,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
     {
         MutationCalls.Add($"Favourite:{episodeId}");
@@ -2066,6 +2197,7 @@ file sealed class FakeOfflineMutationTransport(
         long episodeId,
         bool played,
         string mutationId,
+        DateTimeOffset capturedAt,
         CancellationToken cancellationToken = default)
     {
         MutationCalls.Add($"Listening:{episodeId}");

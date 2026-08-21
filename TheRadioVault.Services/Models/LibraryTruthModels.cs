@@ -32,6 +32,23 @@ public sealed record LibraryTruthRunSummary(
 
 public sealed record LibraryTruthRunResult(LibraryTruthRunSummary Summary);
 
+public sealed record LibraryTruthDispositionSummary(
+    int UnchangedFiles,
+    int MetadataCorrectionFiles,
+    int MultipartCorrectionFiles,
+    int BroadcastSplitFiles,
+    int BroadcastMergeFiles,
+    int RecoveredDateFiles,
+    int NeedsAttentionFiles,
+    int ArchiveItemFiles,
+    int OtherChangedFiles)
+{
+    public static LibraryTruthDispositionSummary Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public int InterpretedDifferentlyFiles => MetadataCorrectionFiles + MultipartCorrectionFiles +
+                                              BroadcastSplitFiles + BroadcastMergeFiles + RecoveredDateFiles +
+                                              NeedsAttentionFiles + ArchiveItemFiles + OtherChangedFiles;
+}
+
 public sealed record LibraryTruthFileView(
     long Id,
     long MediaFileId,
@@ -60,6 +77,7 @@ public sealed record LibraryTruthFileView(
     public string ProposedIdentityDisplay => $"{ProposedCollection} · {ProposedDate} · {ProposedSlot} · {ProposedPart}";
     public string ConfidenceDisplay => $"{Confidence} · {ConfidenceScore}%";
     public string RecordingDisplay => string.IsNullOrWhiteSpace(RecordingKey) ? "Unassigned recording" : RecordingKey.Split('|').Last();
+    public string ContentKind => Disposition == "Archive item" ? "Archive clip or compilation track" : "Broadcast";
 }
 
 public sealed record LibraryTruthBroadcastView(
@@ -88,6 +106,7 @@ public sealed record LibraryTruthBroadcastView(
     public string StructureDisplay => $"{FileCount:N0} files · {SegmentCount:N0} segments · {RecordingCount:N0} recording variants";
     public string AdoptionDisplay => string.IsNullOrWhiteSpace(AdoptionReason) ? AdoptionState : $"{AdoptionState} · {AdoptionReason}";
     public string DurationSpreadDisplay => DurationSpreadRatio <= 1.01 ? "Aligned durations" : $"{DurationSpreadRatio:0.00}× duration spread";
+    public string ContentKind => AdoptionState == "Preserved archive item" ? "Archive clip or compilation track" : "Broadcast";
 }
 
 public sealed record LibraryTruthRecordingView(
@@ -176,6 +195,7 @@ public sealed record LibraryTruthAdoptionPlanSummary(
     int EligibleBroadcasts,
     int ReviewBroadcasts,
     int BlockedBroadcasts,
+    int PreservedArchiveItems,
     int CanonicalBroadcastWrites,
     int RecordingWrites,
     int CoverageWrites,
@@ -183,8 +203,8 @@ public sealed record LibraryTruthAdoptionPlanSummary(
     int LiveEpisodeRowsToConsolidate,
     int ProvisionalSurvivorSelections)
 {
-    public static LibraryTruthAdoptionPlanSummary Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-    public string SummaryDisplay => $"{EligibleBroadcasts:N0} prepared · {ReviewBroadcasts:N0} review held · {BlockedBroadcasts:N0} blocked";
+    public static LibraryTruthAdoptionPlanSummary Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public string SummaryDisplay => $"{EligibleBroadcasts:N0} prepared · {PreservedArchiveItems:N0} clips preserved · {ReviewBroadcasts:N0} review held · {BlockedBroadcasts:N0} blocked";
 }
 
 public sealed record LibraryTruthAdoptionSummary(
@@ -192,6 +212,7 @@ public sealed record LibraryTruthAdoptionSummary(
     int ReadyWithRecordingChoice,
     int ReviewRecommendedBroadcasts,
     int BlockedBroadcasts,
+    int PreservedArchiveItems,
     int PreferredRecordingCandidates,
     int PartialRecordings,
     int FragmentRecordings,
@@ -199,9 +220,9 @@ public sealed record LibraryTruthAdoptionSummary(
     int SuspiciousMergeGroups,
     int CrossIdentityConflicts)
 {
-    public static LibraryTruthAdoptionSummary Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+    public static LibraryTruthAdoptionSummary Empty { get; } = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
     public int AdoptionReadyTotal => ReadyBroadcasts + ReadyWithRecordingChoice;
-    public string SummaryDisplay => $"{AdoptionReadyTotal:N0} ready · {ReviewRecommendedBroadcasts:N0} review recommended · {BlockedBroadcasts:N0} blocked";
+    public string SummaryDisplay => $"{AdoptionReadyTotal:N0} ready · {PreservedArchiveItems:N0} clips preserved · {ReviewRecommendedBroadcasts:N0} review recommended · {BlockedBroadcasts:N0} blocked";
 }
 
 public sealed record LibraryTruthYearView(
@@ -238,7 +259,7 @@ public sealed record LibraryTruthConflictView(
 
 public sealed class LibraryTruthExportReport
 {
-    public int SchemaVersion { get; set; } = 6;
+    public int SchemaVersion { get; set; } = 7;
     public string AppVersion { get; set; } = string.Empty;
     public DateTimeOffset ExportedAt { get; set; } = DateTimeOffset.UtcNow;
     public LibraryTruthRunSummary Summary { get; set; } = LibraryTruthRunSummary.Empty;
@@ -252,6 +273,8 @@ public sealed class LibraryTruthExportReport
     public IReadOnlyList<LibraryTruthCoverageView> Coverages { get; set; } = Array.Empty<LibraryTruthCoverageView>();
     public IReadOnlyList<LibraryTruthAdoptionPreviewView> AdoptionPreviews { get; set; } = Array.Empty<LibraryTruthAdoptionPreviewView>();
     public LibraryTruthRehearsalSummary Rehearsal { get; set; } = LibraryTruthRehearsalSummary.Empty;
+    public bool RehearsalMatchesAnalysis { get; set; }
+    public string RehearsalNotice { get; set; } = string.Empty;
     public IReadOnlyList<LibraryTruthRehearsalItem> RehearsalItems { get; set; } = Array.Empty<LibraryTruthRehearsalItem>();
     public IReadOnlyList<LibraryTruthConflictForensic> ConflictForensics { get; set; } = Array.Empty<LibraryTruthConflictForensic>();
 }

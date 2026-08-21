@@ -35,10 +35,11 @@ public sealed record LibraryFolderRecord(
     string? AssignedCollectionName,
     bool Recursive,
     bool Enabled,
-    DateTimeOffset? LastScanAt)
+    DateTimeOffset? LastScanAt,
+    bool IsManagedArchive = false)
 {
     public string AssignmentDisplayName => string.IsNullOrWhiteSpace(AssignedCollectionName)
-        ? "Auto-detect / mixed-show folder"
+        ? IsManagedArchive ? "Managed archive · auto-detect shows" : "Auto-detect / mixed-show folder"
         : AssignedCollectionName;
 }
 

@@ -70,7 +70,7 @@ public partial class App : Avalonia.Application
     private void CreateTrayIcon(IClassicDesktopStyleApplicationLifetime desktop)
     {
         var menu = new NativeMenu();
-        var show = new NativeMenuItem("Open server settings");
+        var show = new NativeMenuItem("Open server administration");
         show.Click += (_, _) => ShowSettings();
         var openAnywhere = new NativeMenuItem("Open Radio Vault Web");
         openAnywhere.Click += (_, _) => _viewModel?.OpenAnywhereCommand.Execute(null);

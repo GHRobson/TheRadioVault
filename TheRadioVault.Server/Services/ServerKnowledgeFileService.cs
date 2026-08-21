@@ -10,6 +10,21 @@ public sealed class ServerKnowledgeFileService
         Patterns = ["*.trvknowledge"],
         MimeTypes = ["application/vnd.radiovault.knowledge+sqlite3"]
     };
+    private static readonly FilePickerFileType DiagnosticsType = new("Radio Vault diagnostics")
+    {
+        Patterns = ["*.trvdiag.json"],
+        MimeTypes = ["application/json"]
+    };
+    private static readonly FilePickerFileType ReconciliationReportType = new("Radio Vault reconciliation report")
+    {
+        Patterns = ["*.trvreconcile.json"],
+        MimeTypes = ["application/json"]
+    };
+    private static readonly FilePickerFileType DateAuthorityEvidenceType = new("Radio Vault date-authority evidence")
+    {
+        Patterns = ["*.trvdateevidence.json"],
+        MimeTypes = ["application/json"]
+    };
 
     private readonly Window _owner;
 
@@ -37,6 +52,51 @@ public sealed class ServerKnowledgeFileService
             SuggestedFileName = suggestedFileName,
             DefaultExtension = "trvknowledge",
             FileTypeChoices = [KnowledgeDatabaseType],
+            ShowOverwritePrompt = true
+        }).WaitAsync(cancellationToken).ConfigureAwait(true);
+        return file?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickDiagnosticsExportAsync(
+        string suggestedFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export privacy-safe Radio Vault diagnostics",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "json",
+            FileTypeChoices = [DiagnosticsType],
+            ShowOverwritePrompt = true
+        }).WaitAsync(cancellationToken).ConfigureAwait(true);
+        return file?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickReconciliationReportExportAsync(
+        string suggestedFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export a Radio Vault archive reconciliation report",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "trvreconcile.json",
+            FileTypeChoices = [ReconciliationReportType],
+            ShowOverwritePrompt = true
+        }).WaitAsync(cancellationToken).ConfigureAwait(true);
+        return file?.TryGetLocalPath();
+    }
+
+    public async Task<string?> PickDateAuthorityEvidenceExportAsync(
+        string suggestedFileName,
+        CancellationToken cancellationToken = default)
+    {
+        var file = await _owner.StorageProvider.SaveFilePickerAsync(new FilePickerSaveOptions
+        {
+            Title = "Export unresolved-date authority evidence",
+            SuggestedFileName = suggestedFileName,
+            DefaultExtension = "trvdateevidence.json",
+            FileTypeChoices = [DateAuthorityEvidenceType],
             ShowOverwritePrompt = true
         }).WaitAsync(cancellationToken).ConfigureAwait(true);
         return file?.TryGetLocalPath();

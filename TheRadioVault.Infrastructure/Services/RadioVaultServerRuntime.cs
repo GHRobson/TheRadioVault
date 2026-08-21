@@ -1,5 +1,6 @@
 using TheRadioVault.Core.Events;
 using TheRadioVault.Core.Playback;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Data.Database;
 using TheRadioVault.Services.Jobs;
 using TheRadioVault.Services.Contracts;
@@ -25,6 +26,9 @@ public sealed class RadioVaultServerRuntime : IDisposable
     private readonly LocalWebServerService _server;
     private readonly ILibraryFolderService _libraryFolders;
     private readonly RssFeedIngestionService _rssFeeds;
+    private readonly MediaConsolidationService _mediaConsolidation;
+    private readonly ManagedArchiveRssCoordinator _managedArchiveRss;
+    private readonly ArchiveReconciliationService _archiveReconciliation;
     private bool _disposed;
 
     public RadioVaultServerRuntime(
@@ -37,6 +41,18 @@ public sealed class RadioVaultServerRuntime : IDisposable
         _platformDatabase = new SqliteDatabase(DatabasePath);
         _database = new DatabaseService(_platformDatabase);
         _database.Initialize();
+        try
+        {
+            using var migrationConnection = _platformDatabase.OpenConnection();
+            ResearchDateAuthoritySynchronizer.SynchronizeAsync(migrationConnection).GetAwaiter().GetResult();
+        }
+        catch (Exception exception)
+        {
+            // The repair is idempotent and will be retried on the next launch.
+            // A locked or partially restored Research ledger must not prevent
+            // the server UI and playback service from starting.
+            DiagnosticLog.Write("Research dates", "The legacy approved-date repair was deferred safely.", exception);
+        }
         _events = new ApplicationEventBus();
         _livePlayback = new LivePlaybackStateStore();
         _jobs = new BackgroundJobQueue(2, _events);
@@ -54,6 +70,18 @@ public sealed class RadioVaultServerRuntime : IDisposable
                 var result = await _server.RunLibraryScanAsync("rss-feed-download", cancellationToken).ConfigureAwait(false);
                 return result.Started && !result.IsRunning;
             });
+        _mediaConsolidation = new MediaConsolidationService(_platformDatabase);
+        _managedArchiveRss = new ManagedArchiveRssCoordinator(_platformDatabase);
+        _archiveReconciliation = new ArchiveReconciliationService(_platformDatabase);
+        try
+        {
+            var repair = _managedArchiveRss.Repair();
+            if (repair.Configured) DiagnosticLog.Write("Managed archive", repair.Message);
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write("Managed archive", "The post-consolidation RSS repair was deferred safely.", exception);
+        }
         _rssFeeds.Start();
 
         if (honorAutomaticStart && Preferences.Enabled && Preferences.StartAutomatically)
@@ -103,8 +131,10 @@ public sealed class RadioVaultServerRuntime : IDisposable
         => _server.GetResearchPackImportStatus(sessionId);
     public bool CancelKnowledgeDatabaseImport(Guid sessionId)
         => _server.CancelResearchPackImport(sessionId);
-    public Task<WebResearchPackExportPayload> ExportKnowledgeDatabaseAsync(CancellationToken cancellationToken = default)
-        => _server.ExportResearchPackAsync(cancellationToken);
+    public Task<WebResearchPackExportPayload> ExportKnowledgeDatabaseAsync(
+        KnowledgeExportScope scope = KnowledgeExportScope.Complete,
+        CancellationToken cancellationToken = default)
+        => _server.ExportResearchPackAsync(scope, cancellationToken);
     public Task<IReadOnlyList<RssFeedSubscription>> GetRssFeedsAsync(CancellationToken cancellationToken = default)
         => _rssFeeds.GetAllAsync(cancellationToken);
     public Task<RssFeedSubscription> AddRssFeedAsync(RssFeedSaveRequest request, CancellationToken cancellationToken = default)
@@ -115,6 +145,62 @@ public sealed class RadioVaultServerRuntime : IDisposable
         => _rssFeeds.DeleteAsync(feedId, cancellationToken);
     public Task<RssFeedCheckResult> CheckRssFeedsNowAsync(long? feedId = null, CancellationToken cancellationToken = default)
         => _rssFeeds.CheckNowAsync(feedId, cancellationToken);
+    public ServerHealthSnapshot GetHealthSnapshot() => _server.GetHealthSnapshot();
+    public BackupRestoreRehearsalResult RehearseLatestScheduledBackup()
+        => _server.RehearseLatestScheduledBackup();
+    public Task ExportRedactedDiagnosticsAsync(string destinationPath, CancellationToken cancellationToken = default)
+        => new ServerHealthDiagnosticsService().ExportAsync(
+            GetHealthSnapshot(), AppVersionService.Version, destinationPath, cancellationToken);
+    public ArchiveReconciliationSnapshot GetArchiveReconciliationSnapshot()
+        => _archiveReconciliation.GetSnapshot();
+    public ArchiveReconciliationAudit GetArchiveReconciliationAudit(int detailLimit = 250)
+        => _archiveReconciliation.GetAudit(detailLimit);
+    public ArchiveReconciliationSnapshot ReconcileArchive(
+        IProgress<(double Percent, string Message)>? progress = null,
+        CancellationToken cancellationToken = default)
+        => _archiveReconciliation.Reconcile(progress, cancellationToken);
+    public void ExportArchiveReconciliationReport(string destinationPath)
+        => _archiveReconciliation.ExportReport(destinationPath, AppVersionService.Version);
+    public void ExportArchiveDateAuthorityEvidence(string destinationPath)
+        => _archiveReconciliation.ExportDateAuthorityEvidence(destinationPath, AppVersionService.Version);
+    public MediaConsolidationPlan PrepareMediaConsolidation(
+        string managedRoot,
+        string quarantineRoot,
+        IProgress<MediaConsolidationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+        => _mediaConsolidation.CreatePlan(managedRoot, quarantineRoot, progress, cancellationToken);
+    public MediaConsolidationPlan? LoadInterruptedMediaConsolidation(string quarantineRoot)
+        => _mediaConsolidation.LoadLatestInterruptedPlan(quarantineRoot);
+    public MediaConsolidationRehearsalResult RehearseMediaConsolidation(
+        MediaConsolidationPlan plan,
+        IProgress<MediaConsolidationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+        => _mediaConsolidation.Rehearse(plan, progress, cancellationToken);
+    public MediaConsolidationCommitResult CommitMediaConsolidation(
+        MediaConsolidationPlan plan,
+        MediaConsolidationRehearsalResult rehearsal,
+        string confirmationText,
+        IProgress<MediaConsolidationProgress>? progress = null,
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        if (_server.IsRunning)
+            throw new InvalidOperationException("Stop Radio Vault Server before committing media consolidation.");
+        var result = _mediaConsolidation.Commit(plan, rehearsal, confirmationText, progress, cancellationToken);
+        try
+        {
+            var repair = _managedArchiveRss.Repair(cancellationToken);
+            return result with { Message = result.Message + " " + repair.Message };
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write("Managed archive", "Consolidation completed, but RSS destination repair was deferred until the next server launch.", exception);
+            return result with
+            {
+                Message = result.Message + " RSS destination repair will retry automatically the next time Radio Vault Server starts."
+            };
+        }
+    }
 
     public WebDesktopPairingSession BeginDesktopPairing()
     {

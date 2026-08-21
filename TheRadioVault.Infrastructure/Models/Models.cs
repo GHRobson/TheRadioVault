@@ -682,6 +682,7 @@ public sealed class TrvPackManifest
     public string AppVersion { get; set; } = "";
     public DateTime CreatedUtc { get; set; } = DateTime.UtcNow;
     public string Show { get; set; } = "";
+    public string ExportScope { get; set; } = "complete";
     public int? Year { get; set; }
     public int BroadcastCount { get; set; }
     public int MissingBroadcastCount { get; set; }

@@ -20,7 +20,6 @@ internal static class RadioVaultArtwork
         UIImage? placeholder = null)
     {
         Prepare(target, broadcast.EpisodeId, placeholder);
-        if (string.IsNullOrWhiteSpace(broadcast.Source.ArtworkPath)) return;
         _ = LoadAsync(target, broadcast.EpisodeId, () => session.LoadArtworkAsync(broadcast));
     }
 

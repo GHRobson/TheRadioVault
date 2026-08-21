@@ -17,7 +17,9 @@ public sealed record RssFeedSubscription(
     DateTimeOffset? NextCheckAt,
     string LastError,
     int DownloadedCount,
-    int SeenCount)
+    int SeenCount,
+    int? CollectionId = null,
+    bool DestinationIsManagedArchive = false)
 {
     public string IntervalText => CheckIntervalMinutes < 60
         ? $"Every {CheckIntervalMinutes} minutes"
@@ -48,7 +50,8 @@ public sealed record RssFeedSaveRequest(
     long LibraryFolderId,
     int CheckIntervalMinutes = 30,
     bool Enabled = true,
-    bool ImportExistingOnFirstCheck = false);
+    bool ImportExistingOnFirstCheck = false,
+    int? CollectionId = null);
 
 public sealed record RssFeedCheckResult(
     int FeedsChecked,
