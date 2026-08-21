@@ -10,6 +10,7 @@ internal static class SqliteMigrationCatalog
             new Migration048CreateMigrationHistory(),
             new Migration049CreateSavedCollections(),
             new Migration050CreateRssFeedSubscriptions(),
-            new Migration051CreateLiveRadioSchedule()
+            new Migration051CreateLiveRadioSchedule(),
+            new Migration052CreateManagedArchiveOwnership()
         ]);
 }

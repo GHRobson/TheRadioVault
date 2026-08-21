@@ -223,6 +223,8 @@ public sealed partial class ServerSettingsViewModel
                 cancellationToken).Message).ConfigureAwait(true);
         ConsolidationConfirmationText = string.Empty;
         RaiseMediaConsolidationPlanState();
+        await LoadLibraryFoldersAsync().ConfigureAwait(true);
+        await LoadRssFeedsAsync().ConfigureAwait(true);
     }
 
     private async Task RunMediaConsolidationOperationAsync(

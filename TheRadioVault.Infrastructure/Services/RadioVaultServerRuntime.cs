@@ -27,6 +27,7 @@ public sealed class RadioVaultServerRuntime : IDisposable
     private readonly ILibraryFolderService _libraryFolders;
     private readonly RssFeedIngestionService _rssFeeds;
     private readonly MediaConsolidationService _mediaConsolidation;
+    private readonly ManagedArchiveRssCoordinator _managedArchiveRss;
     private readonly ArchiveReconciliationService _archiveReconciliation;
     private bool _disposed;
 
@@ -70,7 +71,17 @@ public sealed class RadioVaultServerRuntime : IDisposable
                 return result.Started && !result.IsRunning;
             });
         _mediaConsolidation = new MediaConsolidationService(_platformDatabase);
+        _managedArchiveRss = new ManagedArchiveRssCoordinator(_platformDatabase);
         _archiveReconciliation = new ArchiveReconciliationService(_platformDatabase);
+        try
+        {
+            var repair = _managedArchiveRss.Repair();
+            if (repair.Configured) DiagnosticLog.Write("Managed archive", repair.Message);
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write("Managed archive", "The post-consolidation RSS repair was deferred safely.", exception);
+        }
         _rssFeeds.Start();
 
         if (honorAutomaticStart && Preferences.Enabled && Preferences.StartAutomatically)
@@ -175,7 +186,20 @@ public sealed class RadioVaultServerRuntime : IDisposable
         ThrowIfDisposed();
         if (_server.IsRunning)
             throw new InvalidOperationException("Stop Radio Vault Server before committing media consolidation.");
-        return _mediaConsolidation.Commit(plan, rehearsal, confirmationText, progress, cancellationToken);
+        var result = _mediaConsolidation.Commit(plan, rehearsal, confirmationText, progress, cancellationToken);
+        try
+        {
+            var repair = _managedArchiveRss.Repair(cancellationToken);
+            return result with { Message = result.Message + " " + repair.Message };
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write("Managed archive", "Consolidation completed, but RSS destination repair was deferred until the next server launch.", exception);
+            return result with
+            {
+                Message = result.Message + " RSS destination repair will retry automatically the next time Radio Vault Server starts."
+            };
+        }
     }
 
     public WebDesktopPairingSession BeginDesktopPairing()

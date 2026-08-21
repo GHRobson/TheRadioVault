@@ -3,6 +3,8 @@ using System.Net.Http.Headers;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using TheRadioVault.Core.Models;
+using TheRadioVault.Core.Services;
 using TheRadioVault.Data.Database;
 using TheRadioVault.Services.Models;
 using TheRadioVault.Services.Services;
@@ -28,6 +30,7 @@ public sealed class RssFeedIngestionService : IDisposable
 
     private readonly RssFeedSubscriptionStore _store;
     private readonly RssFeedSecretProtector _protector;
+    private readonly FilenameParserService _filenameParser = new();
     private readonly Func<CancellationToken, Task<bool>> _scanLibrary;
     private readonly HttpClient _http;
     private readonly bool _ownsHttpClient;
@@ -289,6 +292,28 @@ public sealed class RssFeedIngestionService : IDisposable
             var effectiveUri = response.RequestMessage?.RequestUri ?? item.EnclosureUri;
             var extension = ExtensionFor(effectiveUri, mediaType);
             var fileName = BuildFileName(item.Title, extension);
+            var destination = subscription.DestinationPath;
+            if (subscription.DestinationIsManagedArchive)
+            {
+                var parsed = _filenameParser.Parse(fileName,
+                    new FilenameParseContext(false, "RSS feed collection", subscription.CollectionName));
+                var show = parsed.CollectionName ?? subscription.CollectionName ?? subscription.Name;
+                var desired = parsed.AirDate.HasValue
+                    ? ManagedArchivePathBuilder.Build(
+                        subscription.DestinationPath,
+                        show,
+                        DateOnly.FromDateTime(parsed.AirDate.Value),
+                        parsed.BroadcastSlot,
+                        parsed.HeadlineCandidate,
+                        parsed.PartNumber,
+                        parsed.TotalParts,
+                        parsed.TotalParts ?? 1,
+                        extension)
+                    : ManagedArchivePathBuilder.BuildUndated(subscription.DestinationPath, show, fileName);
+                destination = Path.GetDirectoryName(desired)!;
+                fileName = Path.GetFileName(desired);
+                Directory.CreateDirectory(destination);
+            }
             var incoming = Path.Combine(subscription.DestinationPath, ".radiovault-incoming");
             Directory.CreateDirectory(incoming);
             var temporary = Path.Combine(incoming, item.StableKey.Replace(':', '-') + ".part");
@@ -304,7 +329,7 @@ public sealed class RssFeedIngestionService : IDisposable
                     return new DownloadOutcome(false);
                 }
 
-                var target = await ChooseTargetAsync(subscription.DestinationPath, fileName, contentHash, cancellationToken).ConfigureAwait(false);
+                var target = await ChooseTargetAsync(destination, fileName, contentHash, cancellationToken).ConfigureAwait(false);
                 if (File.Exists(target))
                 {
                     File.Delete(temporary);

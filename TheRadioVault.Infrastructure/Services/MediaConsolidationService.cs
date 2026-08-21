@@ -738,19 +738,16 @@ public sealed class MediaConsolidationService
 
     private static string BuildManagedPath(string root, Candidate candidate, int recordingFileCount)
     {
-        var date = candidate.AirDate!.Value;
-        var show = SafeComponent(candidate.ShowName, "Unknown Show", 60);
-        var year = date.Year.ToString("0000");
-        var month = date.ToString("yyyy-MM");
-        var title = SafeComponent(candidate.Title, string.Empty, 64);
-        var slot = SafeComponent(candidate.BroadcastSlot, string.Empty, 32);
-        var name = $"{date:yyyy-MM-dd} - {show}";
-        if (!string.IsNullOrWhiteSpace(slot)) name += $" - {slot}";
-        if (!string.IsNullOrWhiteSpace(title) && !title.Equals(show, StringComparison.OrdinalIgnoreCase)) name += $" - {title}";
-        if (candidate.ProposedTotalParts is > 1 || recordingFileCount > 1)
-            name += $" - Part {Math.Max(1, candidate.ProposedPart):00}";
-        name = SafeComponent(name, candidate.CanonicalKey, 150);
-        return Path.Combine(root, show, year, month, name + Path.GetExtension(candidate.SourcePath).ToLowerInvariant());
+        return ManagedArchivePathBuilder.Build(
+            root,
+            candidate.ShowName,
+            candidate.AirDate!.Value,
+            candidate.BroadcastSlot,
+            candidate.Title,
+            candidate.ProposedPart,
+            candidate.ProposedTotalParts,
+            recordingFileCount,
+            Path.GetExtension(candidate.SourcePath));
     }
 
     private static string BuildQuarantinePath(string root, string planId, Candidate candidate, string disposition)
@@ -758,9 +755,9 @@ public sealed class MediaConsolidationService
         var category = disposition == MediaConsolidationDisposition.ManagedCopy
             ? "Selected Originals"
             : disposition == MediaConsolidationDisposition.RejectedDuplicate ? "Exact Duplicates" : "Alternate Recordings";
-        var show = SafeComponent(candidate.ShowName, "Unknown Show", 60);
-        var canonical = SafeComponent(candidate.CanonicalKey, $"broadcast-{candidate.EpisodeId}", 100);
-        var original = SafeComponent(Path.GetFileName(candidate.SourcePath), $"media-{candidate.MediaFileId}", 120);
+        var show = ManagedArchivePathBuilder.SafeComponent(candidate.ShowName, "Unknown Show", 60);
+        var canonical = ManagedArchivePathBuilder.SafeComponent(candidate.CanonicalKey, $"broadcast-{candidate.EpisodeId}", 100);
+        var original = ManagedArchivePathBuilder.SafeComponent(Path.GetFileName(candidate.SourcePath), $"media-{candidate.MediaFileId}", 120);
         return Path.Combine(root, "RadioVault-Consolidation", planId, category, show, canonical,
             $"{candidate.MediaFileId}-{original}");
     }
@@ -869,18 +866,118 @@ public sealed class MediaConsolidationService
             if (command.ExecuteNonQuery() != 1)
                 throw new InvalidOperationException($"Media row {item.MediaFileId} changed after rehearsal. The database transaction was rolled back.");
             updated++;
+
+            using var rssItem = connection.CreateCommand();
+            rssItem.Transaction = transaction;
+            rssItem.CommandText = """
+                UPDATE rss_feed_items
+                   SET file_path=$path,file_name=$filename
+                 WHERE file_path=$old_path;
+                """;
+            rssItem.Parameters.AddWithValue("$old_path", item.SourcePath);
+            rssItem.Parameters.AddWithValue("$path", path);
+            rssItem.Parameters.AddWithValue("$filename", Path.GetFileName(path));
+            rssItem.ExecuteNonQuery();
         }
 
-        using (var folder = connection.CreateCommand())
+        long managedFolderId;
+        using (var clearManaged = connection.CreateCommand())
         {
-            folder.Transaction = transaction;
-            folder.CommandText = """
-                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled)
-                SELECT $path,NULL,1,1
-                 WHERE NOT EXISTS(SELECT 1 FROM library_folders WHERE lower(path)=lower($path))
+            clearManaged.Transaction = transaction;
+            clearManaged.CommandText = "UPDATE library_folders SET is_managed_archive=0 WHERE is_managed_archive<>0;";
+            clearManaged.ExecuteNonQuery();
+        }
+        using (var findFolder = connection.CreateCommand())
+        {
+            findFolder.Transaction = transaction;
+            findFolder.CommandText = "SELECT id FROM library_folders WHERE lower(path)=lower($path) LIMIT 1;";
+            findFolder.Parameters.AddWithValue("$path", plan.ManagedRoot);
+            var existing = findFolder.ExecuteScalar();
+            if (existing is not null && existing != DBNull.Value)
+            {
+                managedFolderId = Convert.ToInt64(existing);
+                using var updateFolder = connection.CreateCommand();
+                updateFolder.Transaction = transaction;
+                updateFolder.CommandText = """
+                    UPDATE library_folders
+                       SET path=$path,assigned_collection_id=NULL,recursive=1,enabled=1,is_managed_archive=1
+                     WHERE id=$id;
+                    """;
+                updateFolder.Parameters.AddWithValue("$id", managedFolderId);
+                updateFolder.Parameters.AddWithValue("$path", plan.ManagedRoot);
+                updateFolder.ExecuteNonQuery();
+            }
+            else
+            {
+                using var insertFolder = connection.CreateCommand();
+                insertFolder.Transaction = transaction;
+                insertFolder.CommandText = """
+                    INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled,is_managed_archive)
+                    VALUES($path,NULL,1,1,1)
+                    RETURNING id;
+                    """;
+                insertFolder.Parameters.AddWithValue("$path", plan.ManagedRoot);
+                managedFolderId = Convert.ToInt64(insertFolder.ExecuteScalar());
+            }
+        }
+
+        using (var state = connection.CreateCommand())
+        {
+            state.Transaction = transaction;
+            state.CommandText = """
+                INSERT INTO managed_archive_state(id,library_folder_id,managed_root,quarantine_root,consolidated_at)
+                VALUES(1,$folder,$managed,$quarantine,$now)
+                ON CONFLICT(id) DO UPDATE SET
+                    library_folder_id=excluded.library_folder_id,
+                    managed_root=excluded.managed_root,
+                    quarantine_root=excluded.quarantine_root,
+                    consolidated_at=excluded.consolidated_at;
                 """;
-            folder.Parameters.AddWithValue("$path", plan.ManagedRoot);
-            folder.ExecuteNonQuery();
+            state.Parameters.AddWithValue("$folder", managedFolderId);
+            state.Parameters.AddWithValue("$managed", plan.ManagedRoot);
+            state.Parameters.AddWithValue("$quarantine", plan.QuarantineRoot);
+            state.Parameters.AddWithValue("$now", now);
+            state.ExecuteNonQuery();
+        }
+
+        using (var rssPaths = connection.CreateCommand())
+        {
+            rssPaths.Transaction = transaction;
+            rssPaths.CommandText = """
+                UPDATE rss_feed_items AS i
+                   SET file_path=(
+                           SELECT mf.path FROM media_files mf
+                            WHERE mf.full_hash=i.content_hash COLLATE NOCASE
+                              AND mf.is_missing=0 AND mf.is_preferred=1
+                            ORDER BY mf.id LIMIT 1),
+                       file_name=(
+                           SELECT mf.original_filename FROM media_files mf
+                            WHERE mf.full_hash=i.content_hash COLLATE NOCASE
+                              AND mf.is_missing=0 AND mf.is_preferred=1
+                            ORDER BY mf.id LIMIT 1)
+                 WHERE trim(COALESCE(i.content_hash,''))<>''
+                   AND EXISTS(
+                           SELECT 1 FROM media_files mf
+                            WHERE mf.full_hash=i.content_hash COLLATE NOCASE
+                              AND mf.is_missing=0 AND mf.is_preferred=1);
+                """;
+            rssPaths.ExecuteNonQuery();
+        }
+
+        using (var rssFeeds = connection.CreateCommand())
+        {
+            rssFeeds.Transaction = transaction;
+            rssFeeds.CommandText = """
+                UPDATE rss_feed_subscriptions
+                   SET collection_id=COALESCE(
+                           collection_id,
+                           (SELECT assigned_collection_id FROM library_folders
+                             WHERE id=rss_feed_subscriptions.library_folder_id)),
+                       library_folder_id=$managed,updated_at=$now;
+                """;
+            rssFeeds.Parameters.AddWithValue("$managed", managedFolderId);
+            rssFeeds.Parameters.AddWithValue("$now", now);
+            rssFeeds.ExecuteNonQuery();
         }
 
         using (var check = connection.CreateCommand())
@@ -1134,15 +1231,6 @@ public sealed class MediaConsolidationService
                 throw new InvalidOperationException($"Consolidation destinations cannot pass through a symbolic link: {current.FullName}");
             current = current.Parent;
         }
-    }
-
-    private static string SafeComponent(string? value, string fallback, int maximumLength)
-    {
-        var candidate = string.IsNullOrWhiteSpace(value) ? fallback : value.Trim();
-        foreach (var character in Path.GetInvalidFileNameChars()) candidate = candidate.Replace(character, '-');
-        candidate = candidate.Trim(' ', '.');
-        if (string.IsNullOrWhiteSpace(candidate)) candidate = fallback;
-        return candidate.Length <= maximumLength ? candidate : candidate[..maximumLength].TrimEnd(' ', '.');
     }
 
     private static bool IsSafeAdoptionState(string value)

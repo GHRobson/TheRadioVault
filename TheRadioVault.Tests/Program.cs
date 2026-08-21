@@ -82,6 +82,8 @@ var tests = new (string Name, Action Run)[]
     ("Backup restore rehearsal validates a disposable clean-server restore", BackupRestoreRehearsalValidatesCleanRestore),
     ("Server diagnostics redact secrets paths and client identities", ServerDiagnosticsRedactPrivateState),
     ("Media consolidation rehearses without moving and commits without deleting", MediaConsolidationIsVerifiedAndNonDestructive),
+    ("Managed archive becomes the visible RSS destination after consolidation", ManagedArchiveBecomesVisibleRssDestination),
+    ("Managed archive RSS downloads use the canonical show and date layout", ManagedArchiveRssDownloadsUseCanonicalLayout),
     ("Media consolidation blocks changed sources and conflicting destinations", MediaConsolidationBlocksChangedFiles),
     ("Media consolidation holds alternates whose runtime cannot be ranked", MediaConsolidationHoldsUnknownRuntimeAlternates),
     ("Media consolidation requires a complete current inventory snapshot", MediaConsolidationRequiresCompleteInventory),
@@ -742,6 +744,236 @@ static void MediaConsolidationIsVerifiedAndNonDestructive()
         var resumed = service.Commit(plan, resumedRehearsal, plan.ConfirmationText);
         True(resumed.Completed);
         True(plan.Items.All(item => File.Exists(item.QuarantinePath)));
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void ManagedArchiveBecomesVisibleRssDestination()
+{
+    var root = Path.Combine(ConsolidationTestTempRoot(), "RadioVaultManagedArchiveRssTests", Guid.NewGuid().ToString("N"));
+    Directory.CreateDirectory(root);
+    try
+    {
+        var fixture = CreateMediaConsolidationFixture(root);
+        var managed = Path.Combine(root, "managed");
+        var quarantine = Path.Combine(root, "quarantine");
+        var winnerPath = fixture.Sources[2];
+        var winnerHash = TestSha256(winnerPath);
+        long sourceFolderId;
+        long collectionId;
+        using (var connection = fixture.Database.OpenConnection())
+        using (var setup = connection.CreateCommand())
+        {
+            setup.CommandText = """
+                SELECT id FROM library_folders WHERE lower(path)=lower($source);
+                """;
+            setup.Parameters.AddWithValue("$source", Path.GetDirectoryName(winnerPath)!);
+            sourceFolderId = Convert.ToInt64(setup.ExecuteScalar());
+            setup.Parameters.Clear();
+            setup.CommandText = "SELECT id FROM collections WHERE name='Bennington';";
+            collectionId = Convert.ToInt64(setup.ExecuteScalar());
+            setup.CommandText = """
+                INSERT INTO rss_feed_subscriptions(
+                    id,name,display_url,protected_source,library_folder_id,check_interval_minutes,
+                    enabled,import_existing_on_first_check,initialized,created_at,updated_at)
+                VALUES(9801,'Managed archive test','https://feeds.example/private.xml','test-protected-source',
+                       $folder,30,0,0,1,$now,$now);
+                INSERT INTO rss_feed_items(
+                    id,feed_id,stable_key,title,published_at,enclosure_hash,file_name,file_path,
+                    content_hash,status,first_seen_at,downloaded_at)
+                VALUES(9802,9801,'existing-winner','Bennington 2026-08-14',$now,'enclosure-winner',
+                       $name,$path,$hash,'Downloaded',$now,$now);
+                """;
+            setup.Parameters.AddWithValue("$folder", sourceFolderId);
+            setup.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.UtcDateTime.ToString("O"));
+            setup.Parameters.AddWithValue("$name", Path.GetFileName(winnerPath));
+            setup.Parameters.AddWithValue("$path", winnerPath);
+            setup.Parameters.AddWithValue("$hash", winnerHash);
+            setup.ExecuteNonQuery();
+        }
+
+        var consolidation = new MediaConsolidationService(fixture.Database);
+        var plan = consolidation.CreatePlan(managed, quarantine);
+        var rehearsal = consolidation.Rehearse(plan);
+        True(rehearsal.CanCommit, string.Join(Environment.NewLine, rehearsal.Problems));
+        var committed = consolidation.Commit(plan, rehearsal, plan.ConfirmationText);
+        True(committed.Completed);
+        var selected = plan.Items.Single(item => item.IsManagedCopy);
+
+        using (var connection = fixture.Database.OpenConnection())
+        using (var check = connection.CreateCommand())
+        {
+            check.CommandText = """
+                SELECT COUNT(*) FROM library_folders
+                 WHERE lower(path)=lower($managed) AND enabled=1 AND recursive=1 AND is_managed_archive=1;
+                """;
+            check.Parameters.AddWithValue("$managed", managed);
+            Equal(1L, Convert.ToInt64(check.ExecuteScalar()));
+            check.Parameters.Clear();
+            check.CommandText = """
+                SELECT COUNT(*)
+                  FROM rss_feed_subscriptions f
+                  JOIN library_folders lf ON lf.id=f.library_folder_id
+                 WHERE f.id=9801 AND lower(lf.path)=lower($managed)
+                   AND f.collection_id=$collection AND lf.is_managed_archive=1;
+                """;
+            check.Parameters.AddWithValue("$managed", managed);
+            check.Parameters.AddWithValue("$collection", collectionId);
+            Equal(1L, Convert.ToInt64(check.ExecuteScalar()));
+            check.Parameters.Clear();
+            check.CommandText = "SELECT file_path FROM rss_feed_items WHERE id=9802;";
+            Equal(selected.ManagedPath, Convert.ToString(check.ExecuteScalar()));
+        }
+
+        // Recreate the state left by the previous server build: consolidation
+        // completed, but the managed marker/state and RSS destination were not
+        // made durable. Also add one RSS download that arrived afterwards.
+        var latePath = Path.Combine(Path.GetDirectoryName(winnerPath)!, "Bennington 2026-08-15.mp3");
+        File.WriteAllBytes(latePath, Encoding.UTF8.GetBytes("post-consolidation-rss-audio"));
+        var lateHash = TestSha256(latePath);
+        using (var connection = fixture.Database.OpenConnection())
+        using (var reset = connection.CreateCommand())
+        {
+            reset.CommandText = """
+                UPDATE library_folders SET is_managed_archive=0;
+                DELETE FROM managed_archive_state;
+                UPDATE rss_feed_subscriptions SET library_folder_id=$source,collection_id=NULL WHERE id=9801;
+                UPDATE rss_feed_items SET file_name=$winner_name,file_path=$winner_path WHERE id=9802;
+                INSERT INTO episodes(
+                    id,collection_id,air_date,date_confidence,title,status,date_added,updated_at,broadcast_uid,part_number)
+                VALUES(9810,$collection,'2026-08-15','High','Post-consolidation RSS','Unplayed',$now,$now,
+                       'BENNINGTON-2026-08-15',1);
+                INSERT INTO media_files(
+                    id,episode_id,path,original_filename,file_size,modified_time,is_missing,last_seen_at,
+                    duration_ms,partial_hash,full_hash,storage_state,is_preferred)
+                VALUES(9811,9810,$late_path,$late_name,$late_bytes,$now,0,$now,1000,'late-rss-partial',$late_hash,
+                       'AvailableOffline',1);
+                INSERT INTO rss_feed_items(
+                    id,feed_id,stable_key,title,published_at,enclosure_hash,file_name,file_path,
+                    content_hash,status,first_seen_at,downloaded_at)
+                VALUES(9812,9801,'post-consolidation','Bennington 2026-08-15',$now,'enclosure-late',
+                       $late_name,$late_path,$late_hash,'Downloaded',$now,$now);
+                """;
+            reset.Parameters.AddWithValue("$source", sourceFolderId);
+            reset.Parameters.AddWithValue("$collection", collectionId);
+            reset.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.UtcDateTime.ToString("O"));
+            reset.Parameters.AddWithValue("$winner_name", Path.GetFileName(winnerPath));
+            reset.Parameters.AddWithValue("$winner_path", winnerPath);
+            reset.Parameters.AddWithValue("$late_path", latePath);
+            reset.Parameters.AddWithValue("$late_name", Path.GetFileName(latePath));
+            reset.Parameters.AddWithValue("$late_bytes", new FileInfo(latePath).Length);
+            reset.Parameters.AddWithValue("$late_hash", lateHash);
+            reset.ExecuteNonQuery();
+        }
+
+        var preferences = new WebServerPreferences
+        {
+            Enabled = false,
+            StartAutomatically = false,
+            SecureAccessEnabled = false,
+            Port = 18775,
+            SecurePort = 18776,
+            LanFederationEnabled = false
+        };
+        using (var runtime = new RadioVaultServerRuntime(fixture.Database.DatabasePath, preferences, honorAutomaticStart: false))
+        {
+            var folders = runtime.GetLibraryFoldersAsync().GetAwaiter().GetResult();
+            var managedFolder = folders.Single(folder => folder.IsManagedArchive);
+            Equal(Path.GetFullPath(managed), managedFolder.Path);
+            True(managedFolder.Enabled);
+            True(managedFolder.Recursive);
+            Equal("Managed archive · auto-detect shows", managedFolder.AssignmentDisplayName);
+
+            var feed = runtime.GetRssFeedsAsync().GetAwaiter().GetResult().Single(value => value.Id == 9801);
+            Equal(managedFolder.Id, feed.LibraryFolderId);
+            Equal(Path.GetFullPath(managed), feed.DestinationPath);
+            Equal("Bennington", feed.CollectionName);
+            True(feed.DestinationIsManagedArchive);
+        }
+
+        using (var connection = fixture.Database.OpenConnection())
+        using (var check = connection.CreateCommand())
+        {
+            check.CommandText = "SELECT file_path FROM rss_feed_items WHERE id=9802;";
+            Equal(selected.ManagedPath, Convert.ToString(check.ExecuteScalar()));
+            check.CommandText = "SELECT file_path FROM rss_feed_items WHERE id=9812;";
+            var migratedLatePath = Convert.ToString(check.ExecuteScalar())!;
+            True(migratedLatePath.StartsWith(Path.GetFullPath(managed) + Path.DirectorySeparatorChar,
+                StringComparison.OrdinalIgnoreCase));
+            True(File.Exists(migratedLatePath));
+            True(!File.Exists(latePath), "The post-consolidation RSS original was not moved out of the old folder.");
+            True(Directory.EnumerateFiles(quarantine, "*", SearchOption.AllDirectories)
+                    .Any(path => Path.GetFileName(path).EndsWith(Path.GetFileName(latePath), StringComparison.OrdinalIgnoreCase)),
+                "The migrated RSS original was not retained in quarantine for review.");
+        }
+    }
+    finally
+    {
+        Microsoft.Data.Sqlite.SqliteConnection.ClearAllPools();
+        try { if (Directory.Exists(root)) Directory.Delete(root, recursive: true); } catch { }
+    }
+}
+
+static void ManagedArchiveRssDownloadsUseCanonicalLayout()
+{
+    var root = Path.Combine(Path.GetTempPath(), "RadioVaultManagedRssLayoutTests", Guid.NewGuid().ToString("N"));
+    var managed = Path.Combine(root, "managed");
+    Directory.CreateDirectory(managed);
+    try
+    {
+        var database = new SqliteDatabase(Path.Combine(root, "managed-rss.sqlite"));
+        database.Initialize();
+        long folderId;
+        int collectionId;
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            command.CommandText = "SELECT id FROM collections WHERE name='Bennington';";
+            collectionId = Convert.ToInt32(command.ExecuteScalar());
+            command.CommandText = """
+                INSERT INTO library_folders(path,assigned_collection_id,recursive,enabled,is_managed_archive)
+                VALUES($path,$collection,1,1,1) RETURNING id;
+                """;
+            command.Parameters.AddWithValue("$path", managed);
+            command.Parameters.AddWithValue("$collection", collectionId);
+            folderId = Convert.ToInt64(command.ExecuteScalar());
+        }
+
+        var handler = new RssScenarioHandler { IncludeNewEpisode = true };
+        using var http = new HttpClient(handler);
+        var preferences = new WebServerPreferences
+        {
+            ServerInstanceId = Guid.NewGuid().ToString("D"),
+            CertificatePassword = Convert.ToHexString(System.Security.Cryptography.RandomNumberGenerator.GetBytes(24)).ToLowerInvariant()
+        };
+        var scans = 0;
+        using var service = new RssFeedIngestionService(
+            database,
+            preferences,
+            _ => { scans++; return Task.FromResult(true); },
+            http);
+        var feed = service.CreateAsync(new RssFeedSaveRequest(
+            "Managed Bennington feed",
+            new RssFeedSource("https://feeds.example/private.xml"),
+            folderId,
+            ImportExistingOnFirstCheck: true,
+            CollectionId: collectionId)).GetAwaiter().GetResult();
+        True(feed.DestinationIsManagedArchive);
+        Equal("Bennington", feed.CollectionName);
+
+        var result = service.CheckNowAsync(feed.Id).GetAwaiter().GetResult();
+        Equal(2, result.NewDownloads);
+        Equal(1, scans);
+        var downloaded = Directory.EnumerateFiles(managed, "*.mp3", SearchOption.AllDirectories).ToArray();
+        Equal(2, downloaded.Length);
+        True(downloaded.All(path => Path.GetRelativePath(managed, path).Split(Path.DirectorySeparatorChar) is
+            ["Bennington", "2026", "2026-08", _]));
+        True(!Directory.EnumerateFiles(managed, "*.mp3", SearchOption.TopDirectoryOnly).Any(),
+            "Managed RSS audio was left loose at the archive root.");
     }
     finally
     {
@@ -3099,7 +3331,7 @@ static void Alpha035BeginsWikiWithoutBreakingStableUpgrades()
 
     var foundation = File.ReadAllText(Path.Combine(SourceRoot(), "tools", "Test-AvaloniaFoundation.ps1"));
     True(foundation.Contains("foundationVersion = '0.35-alpha9-knowledge-portability'", StringComparison.Ordinal));
-    True(foundation.Contains("databaseSchema = 51", StringComparison.Ordinal));
+    True(foundation.Contains("databaseSchema = 52", StringComparison.Ordinal));
     True(foundation.Contains("lanCapabilityGeneration = 41", StringComparison.Ordinal));
     foreach (var marker in new[]
              {
